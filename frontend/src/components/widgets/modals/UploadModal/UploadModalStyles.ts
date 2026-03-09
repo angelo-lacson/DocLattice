@@ -312,7 +312,7 @@ export const FileItem = styled.div<{
   $status?: "pending" | "uploading" | "success" | "failed";
 }>`
   padding: var(--oc-spacing-xs) var(--oc-spacing-sm);
-  margin: 2px 0;
+  margin: calc(var(--oc-spacing-xs) / 2) 0;
   border-radius: var(--oc-radius-md);
   cursor: pointer;
   transition: all 0.15s ease;
@@ -401,7 +401,7 @@ export const FileItemDetails = styled.div`
   .file-meta {
     font-size: var(--oc-font-size-xs);
     color: var(--oc-fg-tertiary);
-    margin-top: 2px;
+    margin-top: calc(var(--oc-spacing-xs) / 2);
 
     &.error {
       color: var(--oc-error);
@@ -467,7 +467,7 @@ export const StepChip = styled.div<{
   display: flex;
   align-items: center;
   gap: var(--oc-spacing-xs);
-  padding: 6px var(--oc-spacing-sm);
+  padding: calc(var(--oc-spacing-xs) * 1.5) var(--oc-spacing-sm);
   border-radius: var(--oc-radius-full);
   font-size: var(--oc-font-size-xs);
   font-weight: 500;
@@ -479,8 +479,8 @@ export const StepChip = styled.div<{
   }
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    padding: 4px var(--oc-spacing-xs);
-    font-size: 11px;
+    padding: var(--oc-spacing-xs) var(--oc-spacing-xs);
+    font-size: var(--oc-font-size-xs);
 
     svg {
       width: 11px;
@@ -496,7 +496,7 @@ export const StepChip = styled.div<{
         `
       : $completed
       ? css`
-          background: var(--oc-success-bg, #f0fdf4);
+          background: var(--oc-success-bg);
           color: var(--oc-success);
         `
       : css`
@@ -533,6 +533,7 @@ export const CorpusCard = styled.div<{ $selected?: boolean }>`
     $selected &&
     css`
       background: ${accentAlpha(0.04)};
+      box-shadow: 0 0 0 1px ${accentAlpha(0.15)};
     `}
 
   &:hover {
@@ -603,17 +604,17 @@ export const CorpusCardMeta = styled.div`
 
 // Error message
 export const ErrorMessage = styled.div`
-  background: var(--oc-error-bg, #fef2f2);
-  border: 1px solid var(--oc-error, #ef4444);
+  background: var(--oc-error-bg);
+  border: 1px solid var(--oc-error);
   border-radius: var(--oc-radius-md);
   padding: var(--oc-spacing-sm) var(--oc-spacing-md);
   margin-bottom: var(--oc-spacing-md);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--oc-spacing-sm);
 
   svg {
-    color: var(--oc-error, #ef4444);
+    color: var(--oc-error);
     flex-shrink: 0;
     width: 16px;
     height: 16px;
@@ -624,7 +625,7 @@ export const ErrorMessage = styled.div`
 
     .header {
       font-weight: 600;
-      color: var(--oc-error, #ef4444);
+      color: var(--oc-error);
       font-size: var(--oc-font-size-xs);
     }
 
@@ -669,7 +670,7 @@ export const EmptyState = styled.div`
     font-size: var(--oc-font-size-sm);
     font-weight: 500;
     color: var(--oc-fg-secondary);
-    margin-bottom: 2px;
+    margin-bottom: calc(var(--oc-spacing-xs) / 2);
   }
 
   .description {
@@ -686,7 +687,7 @@ export const InlineCorpusItem = styled.div<{ $selected?: boolean }>`
     props.$selected ? accentAlpha(0.08) : "transparent"};
   border: 1px solid
     ${(props) => (props.$selected ? "var(--oc-accent)" : "transparent")};
-  margin-bottom: 2px;
+  margin-bottom: calc(var(--oc-spacing-xs) / 2);
   transition: all 0.15s ease;
 
   &:hover {
