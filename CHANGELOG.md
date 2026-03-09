@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Creative Commons license support for corpuses**: Corpuses can now have a license applied, choosing from standard Creative Commons licenses (CC BY, CC BY-SA, CC BY-NC, CC BY-NC-SA, CC BY-ND, CC BY-NC-ND, CC0) or a custom license with a URL. Changes include:
   - New `license` (CharField with SPDX identifiers) and `license_link` (URLField) fields on the Corpus model (`opencontractserver/corpuses/models.py`)
   - License constants in `opencontractserver/constants/licenses.py` and `frontend/src/assets/configurations/constants.ts`
-  - Database migration `0047_corpus_license_fields`
+  - Database migration `0047_corpus_license_fields` (single migration with URL validation)
   - GraphQL create/update mutations accept `license` and `licenseLink` arguments
   - New `LicenseSelector` frontend component (`frontend/src/components/widgets/CRUD/LicenseSelector.tsx`)
   - CorpusModal updated with License section for create/edit flows

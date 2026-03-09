@@ -473,7 +473,9 @@ class Corpus(TreeNode):
         """Validate the model before saving."""
         super().clean()
 
-        # CUSTOM license requires a license_link URL
+        # CUSTOM license requires a license_link URL.
+        # NOTE: This validation is intentionally duplicated in CorpusSerializer.validate()
+        # and CorpusModal.tsx isFormValid for defense-in-depth.
         if self.license == CUSTOM and not self.license_link:
             raise ValidationError(
                 {"license_link": "A URL is required when using a custom license."}

@@ -104,7 +104,7 @@ export const CorpusInfoSection: React.FC<CorpusInfoSectionProps> = ({
             <MetadataItem>
               <div className="label">Comments</div>
               <div className="value">
-                <StatusBadge variant="neutral">
+                <StatusBadge variant="public">
                   <MessageSquare size={14} />
                   Enabled
                 </StatusBadge>

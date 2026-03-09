@@ -1,6 +1,7 @@
 from typing import Any
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import URLValidator
 from drf_extra_fields.fields import Base64ImageField
 from rest_framework import serializers
@@ -71,6 +72,9 @@ class CorpusSerializer(serializers.ModelSerializer):
             "license_link",
             getattr(self.instance, "license_link", "") if self.instance else "",
         )
+        # CUSTOM license requires a license_link URL.
+        # NOTE: This validation is intentionally duplicated in Corpus.clean()
+        # and CorpusModal.tsx isFormValid for defense-in-depth.
         if license_val == "CUSTOM" and not license_link:
             raise serializers.ValidationError(
                 {"license_link": "A URL is required when using a custom license."}
@@ -80,7 +84,7 @@ class CorpusSerializer(serializers.ModelSerializer):
             validator = URLValidator(schemes=["http", "https"])
             try:
                 validator(license_link)
-            except Exception:
+            except DjangoValidationError:
                 raise serializers.ValidationError(
                     {"license_link": "Only http and https URLs are allowed."}
                 )

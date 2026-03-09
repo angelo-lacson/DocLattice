@@ -102,9 +102,7 @@ class TestCorpusLicenseCreate(TestCase):
         self.assertIsNone(result.get("errors"))
         self.assertTrue(result["data"]["createCorpus"]["ok"])
 
-        corpus = Corpus.objects.get(
-            creator=self.user, title="Custom Licensed Corpus"
-        )
+        corpus = Corpus.objects.get(creator=self.user, title="Custom Licensed Corpus")
         self.assertEqual(corpus.license, "CUSTOM")
         self.assertEqual(corpus.license_link, "https://example.com/my-license")
 
@@ -119,9 +117,7 @@ class TestCorpusLicenseCreate(TestCase):
         )
         self.assertIsNone(result.get("errors"))
         self.assertFalse(result["data"]["createCorpus"]["ok"])
-        self.assertIn(
-            "license_link", result["data"]["createCorpus"]["message"]
-        )
+        self.assertIn("license_link", result["data"]["createCorpus"]["message"])
 
     def test_create_with_no_license(self):
         result = self.client.execute(
@@ -198,9 +194,7 @@ class TestCorpusLicenseUpdate(TestCase):
         )
         self.assertIsNone(result.get("errors"))
         self.assertFalse(result["data"]["updateCorpus"]["ok"])
-        self.assertIn(
-            "license_link", result["data"]["updateCorpus"]["message"]
-        )
+        self.assertIn("license_link", result["data"]["updateCorpus"]["message"])
 
     def test_clear_license(self):
         self.corpus.license = "CC-BY-4.0"
@@ -224,9 +218,7 @@ class TestCorpusLicenseLinkScheme(TestCase):
     """Test that license_link only accepts http/https URLs."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="schemetest", password="testpass"
-        )
+        self.user = User.objects.create_user(username="schemetest", password="testpass")
         self.client = GrapheneClient(schema, context_value=TestContext(self.user))
 
     def test_ftp_url_rejected(self):
