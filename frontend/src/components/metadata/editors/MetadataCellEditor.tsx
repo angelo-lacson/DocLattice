@@ -219,6 +219,7 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
                   label: choice,
                 }))}
                 onChange={(value) => onChange(value)}
+                onClose={onBlur}
                 placeholder={`Select ${column.name.toLowerCase()}`}
                 fluid
                 disabled={readOnly}
@@ -381,10 +382,8 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
                 label: choice,
               })) || []
             }
-            onChange={(value) => {
-              onChange(value);
-              if (onBlur) setTimeout(onBlur, 100);
-            }}
+            onChange={(value) => onChange(value)}
+            onClose={onBlur}
             placeholder={`Select ${column.name.toLowerCase()}`}
             fluid
             disabled={readOnly}
