@@ -480,6 +480,9 @@ class Corpus(TreeNode):
             raise ValidationError(
                 {"license_link": "A URL is required when using a custom license."}
             )
+        # Clear stale license_link when license is not CUSTOM.
+        if self.license != CUSTOM:
+            self.license_link = ""
 
         # Validate post_processors is a list
         if not isinstance(self.post_processors, list):

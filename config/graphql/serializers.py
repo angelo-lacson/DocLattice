@@ -79,11 +79,16 @@ class CorpusSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"license_link": "A URL is required when using a custom license."}
             )
+        # Clear stale license_link when license is not CUSTOM.
+        # Prevents orphaned URLs from remaining in the DB after switching away
+        # from a custom license or clearing the license entirely.
+        if license_val != "CUSTOM" and "license" in attrs:
+            attrs["license_link"] = ""
         # Restrict license_link to http/https schemes
-        if license_link:
+        if license_link and attrs.get("license_link"):
             validator = URLValidator(schemes=["http", "https"])
             try:
-                validator(license_link)
+                validator(attrs["license_link"])
             except DjangoValidationError:
                 raise serializers.ValidationError(
                     {"license_link": "Only http and https URLs are allowed."}

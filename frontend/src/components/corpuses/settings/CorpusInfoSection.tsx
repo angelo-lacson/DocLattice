@@ -16,7 +16,7 @@ import {
   StatusBadge,
 } from "../styles/corpusSettingsStyles";
 
-const LicenseBadge = styled.a`
+const LicenseBadge = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
@@ -32,6 +32,7 @@ const LicenseBadge = styled.a`
 
   &[href]:hover {
     background: ${OS_LEGAL_COLORS.surfaceLight};
+    cursor: pointer;
   }
 `;
 

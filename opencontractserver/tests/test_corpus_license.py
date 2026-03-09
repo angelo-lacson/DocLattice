@@ -7,9 +7,13 @@ Covers:
 - Create corpus with CUSTOM license without URL (should fail)
 - Update corpus license fields
 - URL scheme restriction (only http/https)
+- Stale license_link cleared when switching away from CUSTOM
+- license_link without license is cleared
+- Model-level clean() validation
 """
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from graphene.test import Client as GrapheneClient
 from graphql_relay import to_global_id
@@ -246,3 +250,116 @@ class TestCorpusLicenseLinkScheme(TestCase):
         )
         self.assertIsNone(result.get("errors"))
         self.assertTrue(result["data"]["createCorpus"]["ok"])
+
+
+class TestCorpusLicenseStaleLinkClearing(TestCase):
+    """Test that stale license_link values are cleared by the backend."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="stalecleantest", password="testpass"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Stale Link Test Corpus",
+            description="A test corpus",
+            creator=self.user,
+            license="CUSTOM",
+            license_link="https://example.com/old-license",
+        )
+        set_permissions_for_obj_to_user(
+            self.user,
+            self.corpus,
+            [PermissionTypes.CRUD, PermissionTypes.PUBLISH, PermissionTypes.PERMISSION],
+        )
+        self.client = GrapheneClient(schema, context_value=TestContext(self.user))
+        self.global_id = to_global_id("CorpusType", self.corpus.id)
+
+    def test_switch_from_custom_to_standard_clears_link(self):
+        """Switching from CUSTOM to a standard license should clear license_link."""
+        result = self.client.execute(
+            UPDATE_MUTATION,
+            variable_values={
+                "id": self.global_id,
+                "license": "CC-BY-4.0",
+            },
+        )
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["updateCorpus"]["ok"])
+
+        self.corpus.refresh_from_db()
+        self.assertEqual(self.corpus.license, "CC-BY-4.0")
+        self.assertEqual(self.corpus.license_link, "")
+
+    def test_clear_license_clears_link(self):
+        """Clearing the license entirely should also clear license_link."""
+        result = self.client.execute(
+            UPDATE_MUTATION,
+            variable_values={
+                "id": self.global_id,
+                "license": "",
+            },
+        )
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["updateCorpus"]["ok"])
+
+        self.corpus.refresh_from_db()
+        self.assertEqual(self.corpus.license, "")
+        self.assertEqual(self.corpus.license_link, "")
+
+
+class TestCorpusLicenseModelClean(TestCase):
+    """Test model-level clean() validation for license fields."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="modelcleantest", password="testpass"
+        )
+
+    def test_clean_custom_without_link_raises(self):
+        """Model clean() should reject CUSTOM license without license_link."""
+        corpus = Corpus(
+            title="Model Clean Test",
+            description="Test",
+            creator=self.user,
+            license="CUSTOM",
+            license_link="",
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            corpus.full_clean()
+        self.assertIn("license_link", ctx.exception.message_dict)
+
+    def test_clean_custom_with_link_passes(self):
+        """Model clean() should accept CUSTOM license with valid license_link."""
+        corpus = Corpus(
+            title="Model Clean Test OK",
+            description="Test",
+            creator=self.user,
+            license="CUSTOM",
+            license_link="https://example.com/license",
+        )
+        # Should not raise
+        corpus.full_clean()
+
+    def test_clean_standard_license_clears_link(self):
+        """Model clean() should clear license_link for non-CUSTOM licenses."""
+        corpus = Corpus(
+            title="Model Clean Clear Test",
+            description="Test",
+            creator=self.user,
+            license="CC-BY-4.0",
+            license_link="https://stale.example.com",
+        )
+        corpus.full_clean()
+        self.assertEqual(corpus.license_link, "")
+
+    def test_clean_empty_license_clears_link(self):
+        """Model clean() should clear license_link when license is empty."""
+        corpus = Corpus(
+            title="Model Clean Empty Test",
+            description="Test",
+            creator=self.user,
+            license="",
+            license_link="https://orphan.example.com",
+        )
+        corpus.full_clean()
+        self.assertEqual(corpus.license_link, "")
