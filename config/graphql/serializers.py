@@ -1,6 +1,7 @@
 from typing import Any
 
 from django.contrib.auth import get_user_model
+from django.core.validators import URLValidator
 from drf_extra_fields.fields import Base64ImageField
 from rest_framework import serializers
 
@@ -59,6 +60,31 @@ class CorpusSerializer(serializers.ModelSerializer):
         # This prevents bypassing permission checks via serializer updates.
         # created_with_embedder is set automatically at creation and never changes.
         read_only_fields = ["id", "is_public", "created_with_embedder"]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        # For updates, merge incoming attrs with existing instance values
+        license_val = attrs.get(
+            "license", getattr(self.instance, "license", "") if self.instance else ""
+        )
+        license_link = attrs.get(
+            "license_link",
+            getattr(self.instance, "license_link", "") if self.instance else "",
+        )
+        if license_val == "CUSTOM" and not license_link:
+            raise serializers.ValidationError(
+                {"license_link": "A URL is required when using a custom license."}
+            )
+        # Restrict license_link to http/https schemes
+        if license_link:
+            validator = URLValidator(schemes=["http", "https"])
+            try:
+                validator(license_link)
+            except Exception:
+                raise serializers.ValidationError(
+                    {"license_link": "Only http and https URLs are allowed."}
+                )
+        return attrs
 
 
 class ExtractSerializer(serializers.ModelSerializer):

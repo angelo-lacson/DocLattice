@@ -9,6 +9,7 @@ import django
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
+from django.core.validators import URLValidator
 from django.db import transaction
 from django.utils import timezone
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
@@ -23,6 +24,7 @@ from opencontractserver.constants.document_processing import (
     PERSONAL_CORPUS_TITLE,
 )
 from opencontractserver.constants.licenses import (
+    CUSTOM,
     LICENSE_CHOICES,
     LICENSE_LINK_MAX_LENGTH,
     LICENSE_SPDX_MAX_LENGTH,
@@ -206,6 +208,7 @@ class Corpus(TreeNode):
         max_length=LICENSE_LINK_MAX_LENGTH,
         default="",
         blank=True,
+        validators=[URLValidator(schemes=["http", "https"])],
         help_text=(
             "URL to the full license text. Required when license is 'CUSTOM', "
             "optional for standard CC licenses."
@@ -469,6 +472,12 @@ class Corpus(TreeNode):
     def clean(self):
         """Validate the model before saving."""
         super().clean()
+
+        # CUSTOM license requires a license_link URL
+        if self.license == CUSTOM and not self.license_link:
+            raise ValidationError(
+                {"license_link": "A URL is required when using a custom license."}
+            )
 
         # Validate post_processors is a list
         if not isinstance(self.post_processors, list):

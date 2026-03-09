@@ -2,8 +2,10 @@
  * CorpusInfoSection - Metadata grid showing corpus information
  */
 import React from "react";
-import { Lock, Unlock, MessageSquare, Scale } from "lucide-react";
+import styled from "styled-components";
+import { Lock, Unlock, MessageSquare, Scale, ExternalLink } from "lucide-react";
 import { LICENSE_OPTIONS } from "../../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
   SettingsCard,
   SettingsCardHeader,
@@ -13,6 +15,25 @@ import {
   MetadataItem,
   StatusBadge,
 } from "../styles/corpusSettingsStyles";
+
+const LicenseBadge = styled.a`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 100px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  text-decoration: none;
+  transition: background 0.15s ease;
+
+  &[href]:hover {
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+  }
+`;
 
 interface CorpusInfoSectionProps {
   corpus: {
@@ -83,7 +104,7 @@ export const CorpusInfoSection: React.FC<CorpusInfoSectionProps> = ({
             <MetadataItem>
               <div className="label">Comments</div>
               <div className="value">
-                <StatusBadge variant="public">
+                <StatusBadge variant="neutral">
                   <MessageSquare size={14} />
                   Enabled
                 </StatusBadge>
@@ -95,11 +116,17 @@ export const CorpusInfoSection: React.FC<CorpusInfoSectionProps> = ({
             <MetadataItem>
               <div className="label">License</div>
               <div className="value">
-                <StatusBadge variant="public">
+                <LicenseBadge
+                  as={corpus.licenseLink ? "a" : "span"}
+                  href={corpus.licenseLink || undefined}
+                  target={corpus.licenseLink ? "_blank" : undefined}
+                  rel={corpus.licenseLink ? "noopener noreferrer" : undefined}
+                >
                   <Scale size={14} />
                   {LICENSE_OPTIONS.find((o) => o.value === corpus.license)
                     ?.label || corpus.license}
-                </StatusBadge>
+                  {corpus.licenseLink && <ExternalLink size={12} />}
+                </LicenseBadge>
               </div>
             </MetadataItem>
           )}

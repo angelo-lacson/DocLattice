@@ -487,8 +487,12 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     setPreferredEmbedder(values.preferredEmbedder || null);
   }, []);
 
-  // Form validation - both title and description are required
-  const isFormValid = title.trim().length > 0 && description.trim().length > 0;
+  // Form validation - title and description are required;
+  // CUSTOM license also requires a license URL.
+  const isFormValid =
+    title.trim().length > 0 &&
+    description.trim().length > 0 &&
+    (license !== "CUSTOM" || licenseLink.trim().length > 0);
 
   // Compute isDirty by comparing current values against original values
   // For CREATE mode, form is "dirty" (has submittable content) when valid
