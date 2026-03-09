@@ -564,6 +564,7 @@ export const RelationshipActionModal: React.FC<
                                   (label) => ({
                                     value: label.id,
                                     label: label.text || "",
+                                    icon: label.icon || undefined,
                                   })
                                 )}
                                 value={newLabelId ?? null}
