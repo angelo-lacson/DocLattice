@@ -226,8 +226,10 @@ export const MetadataItem = styled.div`
   }
 `;
 
-/** Badge for public/private status */
-export const StatusBadge = styled.span<{ variant: "public" | "private" }>`
+/** Badge for public/private/neutral status */
+export const StatusBadge = styled.span<{
+  variant: "public" | "private" | "neutral";
+}>`
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;

@@ -2212,6 +2212,8 @@ export const Corpuses = () => {
     if (formData.categories && formData.categories.length > 0) {
       variables.categories = formData.categories;
     }
+    // Create path: only send license fields when non-empty (server defaults apply).
+    // Update path (above) uses !== undefined to allow sending empty strings to clear values.
     if (formData.license) {
       variables.license = formData.license;
     }

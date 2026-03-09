@@ -487,8 +487,14 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     setPreferredEmbedder(values.preferredEmbedder || null);
   }, []);
 
-  // Form validation - both title and description are required
-  const isFormValid = title.trim().length > 0 && description.trim().length > 0;
+  // Form validation - title and description are required;
+  // CUSTOM license also requires a license URL.
+  // NOTE: This validation is intentionally duplicated in Corpus.clean() (backend model)
+  // and CorpusSerializer.validate() (GraphQL serializer) for defense-in-depth.
+  const isFormValid =
+    title.trim().length > 0 &&
+    description.trim().length > 0 &&
+    (license !== "CUSTOM" || licenseLink.trim().length > 0);
 
   // Compute isDirty by comparing current values against original values
   // For CREATE mode, form is "dirty" (has submittable content) when valid
@@ -541,6 +547,10 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       }
       if (license !== originalValues.license) {
         formData.license = license;
+        // Clear stale license_link when switching away from CUSTOM
+        if (originalValues.license === "CUSTOM" && license !== "CUSTOM") {
+          formData.licenseLink = "";
+        }
       }
       if (licenseLink !== originalValues.licenseLink) {
         formData.licenseLink = licenseLink;

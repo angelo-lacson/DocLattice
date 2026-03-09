@@ -9,6 +9,7 @@ import django
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
+from django.core.validators import URLValidator
 from django.db import transaction
 from django.utils import timezone
 from guardian.models import GroupObjectPermissionBase, UserObjectPermissionBase
@@ -23,6 +24,7 @@ from doclatticeserver.constants.document_processing import (
     PERSONAL_CORPUS_TITLE,
 )
 from doclatticeserver.constants.licenses import (
+    CUSTOM,
     LICENSE_CHOICES,
     LICENSE_LINK_MAX_LENGTH,
     LICENSE_SPDX_MAX_LENGTH,
@@ -206,6 +208,7 @@ class Corpus(TreeNode):
         max_length=LICENSE_LINK_MAX_LENGTH,
         default="",
         blank=True,
+        validators=[URLValidator(schemes=["http", "https"])],
         help_text=(
             "URL to the full license text. Required when license is 'CUSTOM', "
             "optional for standard CC licenses."
@@ -467,8 +470,28 @@ class Corpus(TreeNode):
         ).exists()
 
     def clean(self):
-        """Validate the model before saving."""
+        """Validate the model before saving.
+
+        NOTE: Django's save() does NOT call clean()/full_clean(). This method
+        runs in the admin, management commands, and explicit full_clean() calls
+        but NOT during API mutations. The serializer (CorpusSerializer.validate)
+        is the primary enforcement layer for the GraphQL API path.
+        """
         super().clean()
+
+        # Validate license against the allowlist.
+        valid_license_values = {choice[0] for choice in LICENSE_CHOICES}
+        if self.license and self.license not in valid_license_values:
+            raise ValidationError({"license": "Invalid license value."})
+
+        # CUSTOM license requires a license_link URL.
+        if self.license == CUSTOM and not self.license_link:
+            raise ValidationError(
+                {"license_link": "A URL is required when using a custom license."}
+            )
+        # Clear stale license_link when license is not CUSTOM.
+        if self.license != CUSTOM and self.license_link:
+            self.license_link = ""
 
         # Validate post_processors is a list
         if not isinstance(self.post_processors, list):

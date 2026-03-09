@@ -1,9 +1,13 @@
 import React from "react";
 import { Select } from "@os-legal/ui";
-import { LICENSE_OPTIONS } from "../../../assets/configurations/constants";
+import {
+  LICENSE_OPTIONS,
+  type LicenseValue,
+} from "../../../assets/configurations/constants";
 
 interface LicenseSelectorProps {
-  license: string;
+  /** Current license value — accepts any string for flexibility with form state. */
+  license: LicenseValue | (string & {});
   onChange: (value: string) => void;
   disabled?: boolean;
 }
