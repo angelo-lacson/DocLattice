@@ -1014,21 +1014,34 @@ export const DocumentRelationshipModal: React.FC<
                             </span>
                           )}
                           renderEmpty={() => (
-                            <span>Type to create a new label</span>
+                            <span
+                              style={{
+                                cursor: labelSearchTerm ? "pointer" : "default",
+                                color: labelSearchTerm
+                                  ? OS_LEGAL_COLORS.primaryBlue
+                                  : OS_LEGAL_COLORS.textSecondary,
+                                padding: "0.25rem 0",
+                                display: "block",
+                              }}
+                              onClick={
+                                labelSearchTerm
+                                  ? (e) => {
+                                      e.stopPropagation();
+                                      setNewLabelText(labelSearchTerm);
+                                      setShowCreateLabel(true);
+                                    }
+                                  : undefined
+                              }
+                            >
+                              {labelSearchTerm
+                                ? `Create label: "${labelSearchTerm}"`
+                                : "Type to create a new label"}
+                            </span>
                           )}
                           value={selectedLabelId ?? null}
                           onSearchChange={(query) => setLabelSearchTerm(query)}
                           onChange={(value) => {
-                            const existingLabel =
-                              filteredRelationshipLabels.find(
-                                (l) => l.id === value
-                              );
-                            if (existingLabel) {
-                              setSelectedLabelId(value as string);
-                            } else {
-                              setNewLabelText(value as string);
-                              setShowCreateLabel(true);
-                            }
+                            setSelectedLabelId(value as string);
                           }}
                         />
                       </div>

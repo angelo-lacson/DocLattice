@@ -280,7 +280,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
             placeholder="Select Time Period"
             clearable={false}
           />
-          <Dropdown
+          <Dropdown<number>
             mode="select"
             options={limitOptions}
             value={limit}

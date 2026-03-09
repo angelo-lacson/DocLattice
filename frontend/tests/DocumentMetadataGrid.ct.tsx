@@ -172,7 +172,7 @@ test.describe("DocumentMetadataGrid", () => {
     await page.waitForTimeout(300);
 
     // Should show dropdown - look for the entire dropdown element
-    const dropdown = page.locator(".ui.dropdown").first();
+    const dropdown = page.locator(".oc-dropdown").first();
     await expect(dropdown).toBeVisible({ timeout: 2000 });
 
     // Click outside to exit edit mode
@@ -367,11 +367,11 @@ test.describe("DocumentMetadataGrid", () => {
     await page.waitForTimeout(300);
 
     // Look for dropdown globally
-    const dropdown = page.locator(".ui.dropdown").first();
+    const dropdown = page.locator(".oc-dropdown").first();
     await expect(dropdown).toBeVisible({ timeout: 2000 });
 
-    // Type to search and select
-    const searchInput = dropdown.locator("input.search");
+    // Type to search and select - @os-legal/ui uses a standard input inside the dropdown
+    const searchInput = dropdown.locator("input").first();
     await searchInput.type("Completed");
     await page.waitForTimeout(100);
 

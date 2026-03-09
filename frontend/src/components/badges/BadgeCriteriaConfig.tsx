@@ -290,41 +290,63 @@ export const BadgeCriteriaConfig: React.FC<BadgeCriteriaConfigProps> = ({
               )}
 
               {field.fieldType === "text" && field.allowedValues && (
-                <Dropdown
-                  fluid
-                  mode="select"
-                  options={field.allowedValues.map((val) => ({
-                    value: val,
-                    label: val,
-                  }))}
-                  value={fieldValues[field.name] ?? null}
-                  onChange={(value) =>
-                    handleFieldChange(field.name, value as string)
+                <div
+                  style={
+                    validationErrors[field.name]
+                      ? {
+                          border: `1px solid ${OS_LEGAL_COLORS.danger}`,
+                          borderRadius: "4px",
+                        }
+                      : undefined
                   }
-                  placeholder={`Select ${field.label.toLowerCase()}`}
-                />
+                >
+                  <Dropdown
+                    fluid
+                    mode="select"
+                    options={field.allowedValues.map((val) => ({
+                      value: val,
+                      label: val,
+                    }))}
+                    value={fieldValues[field.name] ?? null}
+                    onChange={(value) =>
+                      handleFieldChange(field.name, value as string)
+                    }
+                    placeholder={`Select ${field.label.toLowerCase()}`}
+                  />
+                </div>
               )}
 
               {field.fieldType === "boolean" && (
-                <Dropdown
-                  fluid
-                  mode="select"
-                  options={[
-                    { value: "true", label: "Yes" },
-                    { value: "false", label: "No" },
-                  ]}
-                  value={
-                    fieldValues[field.name] === true
-                      ? "true"
-                      : fieldValues[field.name] === false
-                      ? "false"
-                      : null
+                <div
+                  style={
+                    validationErrors[field.name]
+                      ? {
+                          border: `1px solid ${OS_LEGAL_COLORS.danger}`,
+                          borderRadius: "4px",
+                        }
+                      : undefined
                   }
-                  onChange={(value) =>
-                    handleFieldChange(field.name, value === "true")
-                  }
-                  placeholder={`Select ${field.label.toLowerCase()}`}
-                />
+                >
+                  <Dropdown
+                    fluid
+                    mode="select"
+                    options={[
+                      { value: "true", label: "Yes" },
+                      { value: "false", label: "No" },
+                    ]}
+                    value={
+                      fieldValues[field.name] === true
+                        ? "true"
+                        : fieldValues[field.name] === false
+                        ? "false"
+                        : null
+                    }
+                    onChange={(value) =>
+                      handleFieldChange(field.name, value === "true")
+                    }
+                    placeholder={`Select ${field.label.toLowerCase()}`}
+                  />
+                </div>
               )}
 
               {validationErrors[field.name] && (
