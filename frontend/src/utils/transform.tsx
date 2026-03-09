@@ -361,8 +361,13 @@ export function normalizeTokensToPdfViewport(
   const pawlsWidth = pawlsPage.page.width;
   const pawlsHeight = pawlsPage.page.height;
 
-  // Cannot rescale if PAWLs reports zero dimensions (malformed data).
-  if (pawlsWidth === 0 || pawlsHeight === 0) {
+  // Cannot rescale if PAWLs or viewport reports zero dimensions (malformed data).
+  if (
+    pawlsWidth === 0 ||
+    pawlsHeight === 0 ||
+    viewportWidth === 0 ||
+    viewportHeight === 0
+  ) {
     return pawlsPage.tokens;
   }
 
