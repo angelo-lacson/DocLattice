@@ -63,6 +63,8 @@ describe("normalizeTokensToPdfViewport", () => {
         is_image: true,
         image_path: "/images/fig1.jpg",
         format: "jpeg",
+        original_width: 1024,
+        original_height: 768,
       },
     ];
     const pageData = makePageTokens(612, 792, imageTokens);
@@ -78,6 +80,23 @@ describe("normalizeTokensToPdfViewport", () => {
     expect(result[0].is_image).toBe(true);
     expect(result[0].image_path).toBe("/images/fig1.jpg");
     expect(result[0].format).toBe("jpeg");
+    // original_width/original_height are image pixel dimensions, not PDF
+    // coordinates — they must NOT be rescaled.
+    expect(result[0].original_width).toBe(1024);
+    expect(result[0].original_height).toBe(768);
+  });
+
+  it("returns tokens as-is when PAWLs page dimensions are zero", () => {
+    const pageData = makePageTokens(0, 0, sampleTokens);
+    const result = normalizeTokensToPdfViewport(pageData, 612, 792);
+    // Cannot rescale with zero dimensions — return original tokens untouched
+    expect(result).toBe(sampleTokens);
+  });
+
+  it("returns tokens as-is when only one PAWLs dimension is zero", () => {
+    const pageData = makePageTokens(612, 0, sampleTokens);
+    const result = normalizeTokensToPdfViewport(pageData, 612, 792);
+    expect(result).toBe(sampleTokens);
   });
 
   it("handles empty token arrays", () => {

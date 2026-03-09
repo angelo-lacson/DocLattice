@@ -14,6 +14,7 @@ import {
   RawServerAnnotationType,
   ServerAnnotationType,
 } from "../types/graphql-api";
+import { PAWLS_COORDINATE_EPSILON } from "../assets/configurations/constants";
 import { isSpanAnnotation } from "./annotationGuards";
 
 // https://gist.github.com/JamieMason/0566f8412af9fe6a1d470aa1e089a752
@@ -343,7 +344,7 @@ export function doOverlap(a: BoundingBox, b: BoundingBox): boolean {
  * drift progressively from the rendered PDF content.
  *
  * This function rescales token x/y/width/height so they align with the PDF.js
- * coordinate system at scale&nbsp;1.
+ * coordinate system at scale 1.
  *
  * @param pawlsPage  - The PAWLs page data containing `page` dimensions and `tokens`.
  * @param viewportWidth  - PDF.js viewport width at scale 1.
@@ -360,11 +361,15 @@ export function normalizeTokensToPdfViewport(
   const pawlsWidth = pawlsPage.page.width;
   const pawlsHeight = pawlsPage.page.height;
 
+  // Cannot rescale if PAWLs reports zero dimensions (malformed data).
+  if (pawlsWidth === 0 || pawlsHeight === 0) {
+    return pawlsPage.tokens;
+  }
+
   // If dimensions match (within a tiny epsilon) no rescaling is needed.
-  const EPSILON = 0.5; // half a PDF point tolerance
   if (
-    Math.abs(pawlsWidth - viewportWidth) < EPSILON &&
-    Math.abs(pawlsHeight - viewportHeight) < EPSILON
+    Math.abs(pawlsWidth - viewportWidth) < PAWLS_COORDINATE_EPSILON &&
+    Math.abs(pawlsHeight - viewportHeight) < PAWLS_COORDINATE_EPSILON
   ) {
     return pawlsPage.tokens;
   }
@@ -379,4 +384,56 @@ export function normalizeTokensToPdfViewport(
     width: t.width * scaleX,
     height: t.height * scaleY,
   }));
+}
+
+/**
+ * Resolves the token array for a single PDF page given the full PAWLs dataset.
+ *
+ * Validates the PAWLs data for the requested page index and, when valid,
+ * normalizes token coordinates to the PDF.js viewport coordinate space via
+ * {@link normalizeTokensToPdfViewport}.
+ *
+ * @param pawlsData - The full PAWLs dataset (array of per-page token data).
+ * @param pageIndex - Zero-based page index into `pawlsData`.
+ * @param viewportWidth  - PDF.js viewport width at scale 1.
+ * @param viewportHeight - PDF.js viewport height at scale 1.
+ * @param pageNum - One-based page number (used only for log messages).
+ * @returns The resolved (and possibly rescaled) token array for the page.
+ */
+export function resolvePageTokens(
+  pawlsData: PageTokens[] | null | undefined,
+  pageIndex: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  pageNum: number
+): Token[] {
+  if (
+    !pawlsData ||
+    !Array.isArray(pawlsData) ||
+    pageIndex >= pawlsData.length
+  ) {
+    console.warn(
+      `Page ${pageNum}: PAWLS data index out of bounds. Index: ${pageIndex}, Length: ${
+        pawlsData?.length ?? 0
+      }`
+    );
+    return [];
+  }
+
+  const pageData = pawlsData[pageIndex];
+
+  if (!pageData) {
+    return [];
+  }
+  if (typeof pageData.tokens === "undefined") {
+    return [];
+  }
+  if (!Array.isArray(pageData.tokens)) {
+    console.error(
+      `Page ${pageNum}: CRITICAL - pageData.tokens is not an array at index ${pageIndex}! Type: ${typeof pageData.tokens}`
+    );
+    return [];
+  }
+
+  return normalizeTokensToPdfViewport(pageData, viewportWidth, viewportHeight);
 }
