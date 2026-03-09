@@ -109,11 +109,14 @@ export const LabelSetSelector = ({
           mode="select"
           disabled={read_only}
           clearable
+          searchable="async"
           fluid
           upward={upward}
           options={options}
           style={{ ...style }}
           onChange={(value) => handleChange(value as string | null)}
+          onSearchChange={(query) => labelsetSearchTerm(query)}
+          loading={loading}
           placeholder="Choose a label set"
           value={labelSet?.id ?? null}
         />

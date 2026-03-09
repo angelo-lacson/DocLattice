@@ -73,7 +73,9 @@ export const CorpusDropdown: React.FC<CorpusDropdownProps> = ({
   };
 
   const handleSelectionChange = (value: string | string[] | null) => {
-    const selected = _.find(corpuses, { id: value as string });
+    // mode="select" always emits string | null, but the library types include string[]
+    const id = Array.isArray(value) ? value[0] : value;
+    const selected = id ? _.find(corpuses, { id }) : null;
     const resultCorpus = selected ? (selected as CorpusType) : null;
 
     // If onChange prop is provided, use it (controlled component behavior)
