@@ -157,6 +157,13 @@ test.describe("UploadModal - Bulk Mode", () => {
     // Drop zone should indicate ZIP files
     await expect(page.locator("text=Click to select a ZIP file")).toBeVisible();
 
+    // Wait for corpus list to render before screenshot
+    await expect(
+      page.locator('input[placeholder="Search corpuses..."]')
+    ).toBeVisible();
+
+    await docScreenshot(page, "corpus--bulk-upload-modal--initial");
+
     await component.unmount();
   });
 
@@ -327,10 +334,7 @@ test.describe("UploadModal - Corpus Selection", () => {
       </MockedProvider>
     );
 
-    // Wait for corpus list to load
-    await page.waitForTimeout(500);
-
-    // Corpus names should appear
+    // Wait for corpus names to render from GraphQL mock
     await expect(page.locator("text=Test Corpus").first()).toBeVisible({
       timeout: 5000,
     });
