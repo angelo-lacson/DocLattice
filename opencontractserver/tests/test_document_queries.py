@@ -55,7 +55,7 @@ class DocumentQueryTestCase(TestCase):
         """Ensure summaryContent, currentSummaryVersion and summaryRevisions work as expected."""
 
         query = """
-            query GetDocumentSummary($docId: String, $corpusId: ID!) {
+            query GetDocumentSummary($docId: ID, $corpusId: ID!) {
               document(id: $docId) {
                 id
                 summaryContent(corpusId: $corpusId)
@@ -99,7 +99,7 @@ class DocumentQueryTestCase(TestCase):
         unsummarised_doc_gid = to_global_id("DocumentType", unsummarised_doc.id)
 
         query = """
-            query GetDocumentSummary($docId: String, $corpusId: ID!) {
+            query GetDocumentSummary($docId: ID, $corpusId: ID!) {
               document(id: $docId) {
                 id
                 summaryContent(corpusId: $corpusId)

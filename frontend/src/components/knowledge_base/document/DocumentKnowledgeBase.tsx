@@ -82,7 +82,7 @@ import {
   CorpusState,
   useCorpusState,
 } from "../../annotator/context/CorpusAtom";
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { useInitialAnnotations } from "../../annotator/hooks/AnnotationHooks";
 import { EnhancedLabelSelector } from "../../annotator/labels/EnhancedLabelSelector";
 import { PDF } from "../../annotator/renderers/pdf/PDF";
@@ -90,6 +90,7 @@ import TxtAnnotatorWrapper from "../../annotator/components/wrappers/TxtAnnotato
 import {
   useAnnotationControls,
   selectedRelationsAtom,
+  initialZoomSetAtom,
 } from "../../annotator/context/UISettingsAtom";
 import { useNavigate, useLocation } from "react-router-dom";
 import { updateAnnotationSelectionParams } from "../../../utils/navigationUtils";
@@ -212,6 +213,13 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const uiSettingsConfig = React.useMemo(() => ({ width }), [width]);
   const { setProgress, zoomLevel, setShiftDown, setZoomLevel } =
     useUISettings(uiSettingsConfig);
+
+  // Reset initial zoom flag when navigating to a different document so the
+  // fit-to-width calculation in PDFPage fires again for the new document.
+  const setInitialZoomSet = useSetAtom(initialZoomSetAtom);
+  useEffect(() => {
+    setInitialZoomSet(false);
+  }, [documentId, setInitialZoomSet]);
 
   const navigate = useNavigate();
   const location = useLocation();

@@ -215,7 +215,7 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
         doc_global_id = to_global_id("DocumentType", self.doc.id)
 
         query = """
-            query GetDocStructuralAnnotations($id: String!) {
+            query GetDocStructuralAnnotations($id: ID!) {
                 document(id: $id) {
                     id
                     title
@@ -327,7 +327,7 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
         doc_global_id = to_global_id("DocumentType", self.doc.id)
 
         pre_migration_query = """
-            query GetDocStructuralAnnotations($id: String!) {
+            query GetDocStructuralAnnotations($id: ID!) {
                 document(id: $id) {
                     allStructuralAnnotations {
                         id
@@ -603,7 +603,7 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
         doc2_global_id = to_global_id("DocumentType", doc2.id)
 
         query = """
-            query GetDocStructuralAnnotations($id: String!) {
+            query GetDocStructuralAnnotations($id: ID!) {
                 document(id: $id) {
                     id
                     title
@@ -654,7 +654,7 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
         corpus_global_id = to_global_id("CorpusType", self.corpus.id)
 
         query = """
-            query GetDocAnnotations($id: String!, $corpusId: ID!) {
+            query GetDocAnnotations($id: ID!, $corpusId: ID!) {
                 document(id: $id) {
                     allAnnotations(corpusId: $corpusId, isStructural: true) {
                         id
@@ -720,7 +720,7 @@ class StructuralAnnotationGraphQLBackwardsCompatibilityTests(TransactionTestCase
         doc_global_id = to_global_id("DocumentType", empty_doc.id)
 
         query = """
-            query GetDocStructuralAnnotations($id: String!) {
+            query GetDocStructuralAnnotations($id: ID!) {
                 document(id: $id) {
                     allStructuralAnnotations {
                         rawText

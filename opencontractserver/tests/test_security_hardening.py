@@ -686,7 +686,7 @@ class TestDocumentSummaryResolverPermissions(TestCase):
     def test_outsider_cannot_read_summary_version_for_inaccessible_corpus(self):
         """Outsider gets version=0 for a corpus they cannot see."""
         query = """
-            query DocSummaryVersion($id: String!, $corpusId: ID!) {
+            query DocSummaryVersion($id: ID!, $corpusId: ID!) {
                 document(id: $id) {
                     currentSummaryVersion(corpusId: $corpusId)
                 }
@@ -708,7 +708,7 @@ class TestDocumentSummaryResolverPermissions(TestCase):
     def test_outsider_cannot_read_summary_content_for_inaccessible_corpus(self):
         """Outsider gets empty string for summary content in inaccessible corpus."""
         query = """
-            query DocSummaryContent($id: String!, $corpusId: ID!) {
+            query DocSummaryContent($id: ID!, $corpusId: ID!) {
                 document(id: $id) {
                     summaryContent(corpusId: $corpusId)
                 }
@@ -728,7 +728,7 @@ class TestDocumentSummaryResolverPermissions(TestCase):
     def test_owner_can_read_summary_version(self):
         """Owner can read summary version for their own corpus."""
         query = """
-            query DocSummaryVersion($id: String!, $corpusId: ID!) {
+            query DocSummaryVersion($id: ID!, $corpusId: ID!) {
                 document(id: $id) {
                     currentSummaryVersion(corpusId: $corpusId)
                 }

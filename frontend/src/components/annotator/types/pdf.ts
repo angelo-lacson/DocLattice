@@ -24,12 +24,16 @@ export const undefined_bounding_box = {
 };
 
 export class PDFPageInfo {
+  private readonly viewport: ReturnType<PDFPageProxy["getViewport"]>;
+
   constructor(
     public readonly page: PDFPageProxy,
     public readonly tokens: Token[] = [],
     public scale: number,
     public bounds?: BoundingBox
-  ) {}
+  ) {
+    this.viewport = page.getViewport({ scale: 1 });
+  }
 
   /**
    * Returns true if a token should participate in annotation selection.
@@ -43,7 +47,10 @@ export class PDFPageInfo {
     pageWidth: number,
     pageHeight: number
   ): boolean {
-    // Skip tokens with no meaningful text that aren't images
+    // Exclude all non-image tokens with empty text. While the page-spanning
+    // Docling tokens are the most problematic case, any empty-text token
+    // contributes no selectable content and would only inflate annotation
+    // bounding boxes without adding meaningful text to the selection.
     if (!t.text?.trim() && !t.is_image) return false;
 
     // Skip tokens that span the entire page (degenerate page captures)
@@ -84,7 +91,7 @@ export class PDFPageInfo {
     if (this.bounds === undefined) {
       throw new Error("Unknown Page Bounds");
     }
-    const viewport = this.page.getViewport({ scale: 1 });
+    const viewport = this.viewport;
     const ids: TokenId[] = [];
     const tokenBounds: BoundingBox[] = [];
     for (let i = 0; i < this.tokens.length; i++) {
@@ -140,7 +147,7 @@ export class PDFPageInfo {
       (token) => token.pageIndex === this.page.pageNumber - 1
     );
 
-    const viewport = this.page.getViewport({ scale: 1 });
+    const viewport = this.viewport;
     const tokenBounds: BoundingBox[] = [];
     for (let i = 0; i < this_page_tokens.length; i++) {
       const token = this.tokens[this_page_tokens[i].tokenIndex];
@@ -185,7 +192,7 @@ export class PDFPageInfo {
 
     // console.log("Get annotations for bounds", selection);
 
-    const viewport = this.page.getViewport({ scale: 1 });
+    const viewport = this.viewport;
     const ids: TokenId[] = [];
     const tokenBounds: BoundingBox[] = [];
     for (let i = 0; i < this.tokens.length; i++) {
