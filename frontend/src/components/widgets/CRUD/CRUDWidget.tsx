@@ -1,7 +1,5 @@
 import React, { useCallback, useMemo } from "react";
 import { Box } from "lucide-react";
-import Form from "@rjsf/semantic-ui";
-import validator from "@rjsf/validator-ajv8";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
   HorizontallyCenteredDiv,
@@ -9,6 +7,7 @@ import {
 } from "../../layout/Wrappers";
 import { FilePreviewAndUpload } from "../file-controls/FilePreviewAndUpload";
 import { CRUDProps, LooseObject } from "../../types";
+import { DynamicSchemaForm } from "../../forms/DynamicSchemaForm";
 
 /**
  * Props for the CRUDWidget component.
@@ -47,10 +46,6 @@ export const CRUDWidget = <T extends Record<string, any>>({
 
   /**
    * Cleans the form data by retaining only the properties defined in the data schema.
-   *
-   * @param {LooseObject} instanceData - The current instance data.
-   * @param {LooseObject} schema - The data schema defining the properties.
-   * @returns {Partial<T>} The cleaned form data.
    */
   const cleanFormData = useCallback(
     (instanceData: LooseObject, schema: LooseObject): Partial<T> => {
@@ -64,14 +59,9 @@ export const CRUDWidget = <T extends Record<string, any>>({
     []
   );
 
-  /**
-   * Handles changes in the form data and propagates them upwards.
-   *
-   * @param {Record<string, any>} param0 - The form data change event.
-   */
-  const handleChange = useCallback(
-    ({ formData }: Record<string, any>) => {
-      handleInstanceChange(formData as T);
+  const handleFormChange = useCallback(
+    (updatedData: Record<string, unknown>) => {
+      handleInstanceChange(updatedData as T);
     },
     [handleInstanceChange]
   );
@@ -171,22 +161,13 @@ export const CRUDWidget = <T extends Record<string, any>>({
                   />
                 </div>
               )}
-              <div>
-                <Form
-                  schema={dataSchema}
-                  uiSchema={uiSchema}
-                  validator={validator}
-                  onChange={handleChange}
-                  formData={formData}
-                  noHtml5Validate
-                  liveValidate
-                  showErrorList={false}
-                  className="responsive-form"
-                >
-                  {/* Empty child suppresses rjsf's default submit button */}
-                  <div />
-                </Form>
-              </div>
+              <DynamicSchemaForm
+                schema={dataSchema}
+                uiSchema={uiSchema}
+                formData={formData as Record<string, unknown>}
+                onChange={handleFormChange}
+                disabled={!canWrite}
+              />
             </div>
           </div>
         </VerticallyCenteredDiv>
