@@ -9,6 +9,7 @@ import {
 } from "../../../utils/transform";
 import { convertAnnotationTokensToText } from "../utils";
 import { RenderedSpanAnnotation, TokenId } from "./annotations";
+import { PAGE_SPANNING_TOKEN_THRESHOLD } from "../../../assets/configurations/constants";
 
 export type Optional<T> = T | undefined;
 
@@ -23,12 +24,45 @@ export const undefined_bounding_box = {
 };
 
 export class PDFPageInfo {
+  private readonly viewport: ReturnType<PDFPageProxy["getViewport"]>;
+
   constructor(
     public readonly page: PDFPageProxy,
     public readonly tokens: Token[] = [],
     public scale: number,
     public bounds?: BoundingBox
-  ) {}
+  ) {
+    this.viewport = page.getViewport({ scale: 1 });
+  }
+
+  /**
+   * Returns true if a token should participate in annotation selection.
+   * Filters out degenerate tokens such as page-level bounding boxes emitted
+   * by some parsers (e.g. Docling) which have empty text and cover the
+   * entire page.  Including them would cause every annotation's spanning
+   * bound to expand to the full page dimensions.
+   */
+  private isSelectableToken(
+    t: Token,
+    pageWidth: number,
+    pageHeight: number
+  ): boolean {
+    // Exclude all non-image tokens with empty text. While the page-spanning
+    // Docling tokens are the most problematic case, any empty-text token
+    // contributes no selectable content and would only inflate annotation
+    // bounding boxes without adding meaningful text to the selection.
+    if (!t.text?.trim() && !t.is_image) return false;
+
+    // Skip tokens that span the entire page (degenerate page captures)
+    if (
+      t.width >= pageWidth * PAGE_SPANNING_TOKEN_THRESHOLD &&
+      t.height >= pageHeight * PAGE_SPANNING_TOKEN_THRESHOLD
+    ) {
+      return false;
+    }
+
+    return true;
+  }
 
   getFreeFormAnnotationForBounds(
     selection: BoundingBox,
@@ -57,10 +91,15 @@ export class PDFPageInfo {
     if (this.bounds === undefined) {
       throw new Error("Unknown Page Bounds");
     }
+    const viewport = this.viewport;
     const ids: TokenId[] = [];
     const tokenBounds: BoundingBox[] = [];
-    // console.log("Handle page", this.page.pageNumber);
     for (let i = 0; i < this.tokens.length; i++) {
+      if (
+        !this.isSelectableToken(this.tokens[i], viewport.width, viewport.height)
+      )
+        continue;
+
       for (let j = 0; j < selections.length; j++) {
         const normalized_selection_bounds = normalizeBounds(selections[j]);
         const tokenBound = this.getTokenBounds(this.tokens[i]);
@@ -108,12 +147,14 @@ export class PDFPageInfo {
       (token) => token.pageIndex === this.page.pageNumber - 1
     );
 
+    const viewport = this.viewport;
     const tokenBounds: BoundingBox[] = [];
     for (let i = 0; i < this_page_tokens.length; i++) {
-      const tokenBound = this.getTokenBounds(
-        this.tokens[this_page_tokens[i].tokenIndex]
-      );
-      tokenBounds.push(tokenBound);
+      const token = this.tokens[this_page_tokens[i].tokenIndex];
+      if (!this.isSelectableToken(token, viewport.width, viewport.height))
+        continue;
+
+      tokenBounds.push(this.getTokenBounds(token));
     }
     const bounds = spanningBound(tokenBounds);
 
@@ -151,9 +192,15 @@ export class PDFPageInfo {
 
     // console.log("Get annotations for bounds", selection);
 
+    const viewport = this.viewport;
     const ids: TokenId[] = [];
     const tokenBounds: BoundingBox[] = [];
     for (let i = 0; i < this.tokens.length; i++) {
+      if (
+        !this.isSelectableToken(this.tokens[i], viewport.width, viewport.height)
+      )
+        continue;
+
       const tokenBound = this.getTokenBounds(this.tokens[i]);
 
       if (doOverlap(scaled(tokenBound, this.scale), selection)) {
