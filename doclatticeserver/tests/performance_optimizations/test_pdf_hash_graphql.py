@@ -45,7 +45,7 @@ class PDFHashGraphQLTestCase(GraphQLTestCase):
     def test_pdf_file_hash_field_in_document_query(self):
         """Test that pdf_file_hash field is available in DocumentType GraphQL query."""
         query = """
-            query GetDocument($id: String!) {
+            query GetDocument($id: ID!) {
                 document(id: $id) {
                     id
                     title
@@ -116,7 +116,7 @@ class PDFHashGraphQLTestCase(GraphQLTestCase):
         )
 
         query = """
-            query GetDocument($id: String!) {
+            query GetDocument($id: ID!) {
                 document(id: $id) {
                     id
                     title

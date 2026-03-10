@@ -330,6 +330,14 @@ export const KNOWN_ACRONYMS: Record<string, string> = {
 /** Half a PDF point tolerance for comparing PAWLs vs PDF.js page dimensions */
 export const PAWLS_COORDINATE_EPSILON = 0.5;
 
+/**
+ * Fraction of page dimensions above which a single token is considered
+ * a degenerate page-level element (e.g. full-page image capture from Docling).
+ * Such tokens are excluded from annotation overlap detection because they
+ * would cause every annotation's bounding box to span the entire page.
+ */
+export const PAGE_SPANNING_TOKEN_THRESHOLD = 0.9;
+
 // Corpus action trigger display labels
 // Maps backend trigger enum values (lowercase) to user-facing short labels
 export const TRIGGER_LABELS: Record<string, string> = {

@@ -151,7 +151,7 @@ class ComprehensivePermissionTestCase(TestCase):
 
     def test_nested_annotation_visibility(self):
         query = """
-        query($id: String!) {
+        query($id: ID!) {
           document(id: $id) {
             docAnnotations {
               edges {
