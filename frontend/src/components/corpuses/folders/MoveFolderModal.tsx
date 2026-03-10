@@ -1,11 +1,11 @@
 import React, { useCallback, useState, useMemo } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useMutation } from "@apollo/client";
-import { Dropdown } from "semantic-ui-react";
 import styled from "styled-components";
 import { X, Folder, Home } from "lucide-react";
 import {
   Button,
+  Dropdown,
   Modal,
   ModalHeader as OcModalHeader,
   ModalBody,
@@ -42,11 +42,6 @@ const StyledModalWrapper = styled.div`
   .oc-modal {
     max-width: 500px;
     width: 100%;
-  }
-
-  /* Ensure Semantic UI dropdowns appear above modal content */
-  .ui.dropdown .menu {
-    z-index: 1000 !important;
   }
 `;
 
@@ -154,10 +149,8 @@ export const MoveFolderModal: React.FC = () => {
     // Build dropdown options
     const options = [
       {
-        key: "__root__",
         value: "__root__",
-        text: "Corpus Root",
-        icon: "home",
+        label: "Corpus Root",
       },
     ];
 
@@ -167,10 +160,8 @@ export const MoveFolderModal: React.FC = () => {
       .sort((a, b) => (a.path || "").localeCompare(b.path || ""))
       .forEach((f) => {
         options.push({
-          key: f.id,
           value: f.id,
-          text: f.path || f.name,
-          icon: "folder",
+          label: f.path || f.name,
         });
       });
 
@@ -267,12 +258,13 @@ export const MoveFolderModal: React.FC = () => {
             <Dropdown
               placeholder="Select destination folder"
               fluid
-              selection
-              search
+              mode="select"
+              searchable="local"
               options={validDestinations}
               value={newParentId}
-              onChange={(_, data) => {
-                setNewParentId(data.value as string);
+              clearable={false}
+              onChange={(value) => {
+                setNewParentId(value as string);
                 setValidationError(null);
               }}
             />

@@ -5,10 +5,9 @@ import {
   ModalBody,
   ModalFooter,
   Button,
+  Dropdown,
   Input,
 } from "@os-legal/ui";
-// TODO: migrate to @os-legal/ui once Dropdown component is available
-import { Dropdown } from "semantic-ui-react";
 import styled from "styled-components";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { Database, Plus, Trash2, Save } from "lucide-react";
@@ -28,18 +27,18 @@ interface MetadataColumnModalProps {
 }
 
 const dataTypeOptions = [
-  { key: "STRING", value: "STRING", text: "Short Text" },
-  { key: "TEXT", value: "TEXT", text: "Long Text" },
-  { key: "INTEGER", value: "INTEGER", text: "Whole Number" },
-  { key: "FLOAT", value: "FLOAT", text: "Decimal Number" },
-  { key: "BOOLEAN", value: "BOOLEAN", text: "Yes/No" },
-  { key: "DATE", value: "DATE", text: "Date" },
-  { key: "DATETIME", value: "DATETIME", text: "Date & Time" },
-  { key: "CHOICE", value: "CHOICE", text: "Single Choice" },
-  { key: "MULTI_CHOICE", value: "MULTI_CHOICE", text: "Multiple Choice" },
-  { key: "URL", value: "URL", text: "Web Link" },
-  { key: "EMAIL", value: "EMAIL", text: "Email Address" },
-  { key: "JSON", value: "JSON", text: "JSON Data" },
+  { value: "STRING", label: "Short Text" },
+  { value: "TEXT", label: "Long Text" },
+  { value: "INTEGER", label: "Whole Number" },
+  { value: "FLOAT", label: "Decimal Number" },
+  { value: "BOOLEAN", label: "Yes/No" },
+  { value: "DATE", label: "Date" },
+  { value: "DATETIME", label: "Date & Time" },
+  { value: "CHOICE", label: "Single Choice" },
+  { value: "MULTI_CHOICE", label: "Multiple Choice" },
+  { value: "URL", label: "Web Link" },
+  { value: "EMAIL", label: "Email Address" },
+  { value: "JSON", label: "JSON Data" },
 ];
 
 const ValidationSection = styled.div`
@@ -73,12 +72,6 @@ const ErrorChip = styled.span`
   background: ${OS_LEGAL_COLORS.dangerSurface};
   border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
   border-radius: 4px;
-`;
-
-const DropdownWrapper = styled.div`
-  .ui.dropdown .menu {
-    z-index: 1000 !important;
-  }
 `;
 
 export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
@@ -380,96 +373,91 @@ export const MetadataColumnModal: React.FC<MetadataColumnModalProps> = ({
         onClose={onClose}
       />
       <ModalBody>
-        <DropdownWrapper>
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-          >
-            <Input
-              id="metadata-field-name"
-              label="Field Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Contract Status, Due Date, Priority"
-              error={errors.name}
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <Input
+            id="metadata-field-name"
+            label="Field Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., Contract Status, Due Date, Priority"
+            error={errors.name}
+          />
+
+          <div>
+            <label
+              id="metadata-data-type-label"
+              style={{
+                display: "block",
+                marginBottom: "0.5rem",
+                fontWeight: 500,
+              }}
+            >
+              Data Type
+            </label>
+            <Dropdown
+              mode="select"
+              fluid
+              options={dataTypeOptions}
+              value={dataType}
+              onChange={(value) => setDataType(value as MetadataDataType)}
+              disabled={!!column}
+              clearable={false}
+              aria-labelledby="metadata-data-type-label"
             />
-
-            <div>
-              <label
-                htmlFor="metadata-data-type"
-                style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  fontWeight: 500,
-                }}
-              >
-                Data Type
-              </label>
-              <Dropdown
-                id="metadata-data-type"
-                selection
-                fluid
-                options={dataTypeOptions}
-                value={dataType}
-                onChange={(_e, { value }) =>
-                  setDataType(value as MetadataDataType)
-                }
-                disabled={!!column} // Can't change type after creation
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="metadata-help-text"
-                style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  fontWeight: 500,
-                }}
-              >
-                Help Text
-              </label>
-              <StyledTextArea
-                id="metadata-help-text"
-                value={helpText}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                  setHelpText(e.target.value)
-                }
-                placeholder="Provide guidance for users filling out this field..."
-                rows={2}
-              />
-            </div>
-
-            <ValidationSection>
-              <h4>Validation Rules</h4>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  marginBottom: "1rem",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  id="metadata-required"
-                  checked={required}
-                  onChange={(e) => setRequired(e.target.checked)}
-                />
-                <label htmlFor="metadata-required">Required Field</label>
-              </div>
-
-              {renderValidationFields()}
-            </ValidationSection>
-
-            {dataType !== MetadataDataType.BOOLEAN &&
-              !["CHOICE", "MULTI_CHOICE"].includes(dataType) && (
-                <InfoMessage title="Default Value">
-                  You can set default values for individual documents when
-                  editing metadata.
-                </InfoMessage>
-              )}
           </div>
-        </DropdownWrapper>
+
+          <div>
+            <label
+              htmlFor="metadata-help-text"
+              style={{
+                display: "block",
+                marginBottom: "0.5rem",
+                fontWeight: 500,
+              }}
+            >
+              Help Text
+            </label>
+            <StyledTextArea
+              id="metadata-help-text"
+              value={helpText}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                setHelpText(e.target.value)
+              }
+              placeholder="Provide guidance for users filling out this field..."
+              rows={2}
+            />
+          </div>
+
+          <ValidationSection>
+            <h4>Validation Rules</h4>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                marginBottom: "1rem",
+              }}
+            >
+              <input
+                type="checkbox"
+                id="metadata-required"
+                checked={required}
+                onChange={(e) => setRequired(e.target.checked)}
+              />
+              <label htmlFor="metadata-required">Required Field</label>
+            </div>
+
+            {renderValidationFields()}
+          </ValidationSection>
+
+          {dataType !== MetadataDataType.BOOLEAN &&
+            !["CHOICE", "MULTI_CHOICE"].includes(dataType) && (
+              <InfoMessage title="Default Value">
+                You can set default values for individual documents when editing
+                metadata.
+              </InfoMessage>
+            )}
+        </div>
       </ModalBody>
       <ModalFooter>
         <Button variant="secondary" onClick={onClose}>

@@ -12,13 +12,7 @@
  * The result of the export is a file that is post-processed according to the user's selections here.
  */
 
-import {
-  SyntheticEvent,
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-} from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import styled from "styled-components";
 import {
   ApolloError,
@@ -27,7 +21,7 @@ import {
   useReactiveVar,
 } from "@apollo/client";
 import { toast } from "react-toastify";
-import { Dropdown, DropdownProps, DropdownItemProps } from "semantic-ui-react";
+import { Dropdown, DropdownOption } from "@os-legal/ui";
 import {
   Modal,
   ModalHeader,
@@ -90,11 +84,6 @@ const StyledModalWrapper = styled.div`
       border-radius: var(--oc-radius-lg) var(--oc-radius-lg) 0 0;
       animation: oc-slide-up-fade 0.3s var(--oc-easing-spring);
     }
-  }
-
-  /* Ensure Semantic UI dropdowns appear above modal content */
-  .ui.dropdown .menu {
-    z-index: 1000 !important;
   }
 
   .oc-modal-body {
@@ -392,25 +381,22 @@ export function SelectExportTypeModal({
   }, []);
 
   const handleSelectedProcessorsChange = useCallback(
-    (_event: SyntheticEvent<HTMLElement, Event>, data: DropdownProps): void => {
-      if (Array.isArray(data.value)) {
-        const newSelected = data.value as string[];
-        const newKwargs: { [key: string]: any } = {};
-        newSelected.forEach((procName) => {
-          newKwargs[procName] = postProcessorKwargs[procName] ?? {};
-        });
-        setPostProcessorKwargs(newKwargs);
-        setSelectedPostProcessors(newSelected);
-      }
+    (value: string | string[] | null): void => {
+      const selected = Array.isArray(value) ? value : [];
+      const newKwargs: { [key: string]: any } = {};
+      selected.forEach((procName: string) => {
+        newKwargs[procName] = postProcessorKwargs[procName] ?? {};
+      });
+      setPostProcessorKwargs(newKwargs);
+      setSelectedPostProcessors(selected);
     },
     [postProcessorKwargs]
   );
 
-  const postProcessorDropdownOptions = useMemo<DropdownItemProps[]>(() => {
+  const postProcessorDropdownOptions = useMemo<DropdownOption[]>(() => {
     return availablePostProcessors.map((pproc) => ({
-      key: pproc.name || "unknownPostProcessor",
-      text: pproc.name,
-      value: pproc.moduleName,
+      value: pproc.moduleName || "",
+      label: pproc.name || "Unknown Post-Processor",
     }));
   }, [availablePostProcessors]);
 
@@ -572,15 +558,13 @@ export function SelectExportTypeModal({
             </HintText>
 
             <Dropdown
+              mode="multiselect"
               fluid
-              multiple
-              search
-              selection
+              searchable="local"
               placeholder="Select post-processors..."
               options={postProcessorDropdownOptions}
               onChange={handleSelectedProcessorsChange}
               value={selectedPostProcessors}
-              data-testid="post-processor-dropdown"
             />
 
             {selectedPostProcessors.length > 0 && renderPostProcessorForms}

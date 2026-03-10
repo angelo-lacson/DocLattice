@@ -138,7 +138,7 @@ test.describe("DocumentRelationshipModal", () => {
     // The dropdown should be visible with placeholder text
     await expect(
       page
-        .locator(".ui.dropdown")
+        .locator(".oc-dropdown")
         .filter({ hasText: "Search or type to create" })
     ).toBeVisible();
   });

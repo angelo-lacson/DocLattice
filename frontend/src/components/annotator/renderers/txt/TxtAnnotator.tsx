@@ -17,8 +17,8 @@
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import styled, { keyframes, css } from "styled-components";
-import { Dropdown } from "semantic-ui-react";
 import {
+  Dropdown,
   Button,
   Modal,
   ModalHeader,
@@ -336,11 +336,6 @@ function buildCombinedBackgroundStyle(
 const StyledModalWrapper = styled.div`
   .oc-modal-body {
     overflow: visible;
-  }
-
-  /* Ensure Semantic UI dropdowns appear above modal content */
-  .ui.dropdown .menu {
-    z-index: 1000 !important;
   }
 `;
 
@@ -1263,14 +1258,13 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
           <ModalBody>
             {annotationToEdit && (
               <Dropdown
-                selection
+                mode="select"
                 options={availableLabels.map((label) => ({
-                  key: label.id,
-                  text: label.text,
                   value: label.id,
+                  label: label.text || "",
                 }))}
                 value={annotationToEdit.annotationLabel.id}
-                onChange={(e, { value }) => {
+                onChange={(value) => {
                   const newLabel = availableLabels.find(
                     (lbl) => lbl.id === value
                   );

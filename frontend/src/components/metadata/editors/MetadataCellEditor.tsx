@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
-import { Dropdown } from "semantic-ui-react";
+import { Dropdown } from "@os-legal/ui";
 import styled from "styled-components";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { CheckCircle, AlertCircle } from "lucide-react";
@@ -24,11 +24,6 @@ const EditorContainer = styled.div`
   width: 100%;
   position: relative;
 
-  .ui.dropdown {
-    width: 100%;
-  }
-
-  .ui.dropdown,
   textarea {
     padding: 0.5rem;
     font-size: 0.875rem;
@@ -196,19 +191,17 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
             return (
               <Dropdown
                 ref={inputRef}
-                selection
-                multiple
+                mode="multiselect"
+                searchable="local"
                 value={value || []}
                 options={config.choices.map((choice: string) => ({
-                  key: choice,
                   value: choice,
-                  text: choice,
+                  label: choice,
                 }))}
-                onChange={(e, { value }) => onChange(value)}
+                onChange={(value) => onChange(value)}
                 onBlur={onBlur}
                 placeholder={`Select ${column.name.toLowerCase()}`}
                 fluid
-                search
                 disabled={readOnly}
               />
             );
@@ -217,19 +210,18 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
             return (
               <Dropdown
                 ref={inputRef}
-                selection
-                value={value || ""}
+                mode="select"
+                searchable="local"
+                clearable
+                value={value || null}
                 options={config.choices.map((choice: string) => ({
-                  key: choice,
                   value: choice,
-                  text: choice,
+                  label: choice,
                 }))}
-                onChange={(e, { value }) => onChange(value)}
+                onChange={(value) => onChange(value)}
                 onBlur={onBlur}
                 placeholder={`Select ${column.name.toLowerCase()}`}
                 fluid
-                clearable
-                search
                 disabled={readOnly}
               />
             );
@@ -380,24 +372,20 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
         return (
           <Dropdown
             ref={inputRef}
-            selection
-            value={value || ""}
+            mode="select"
+            searchable="local"
+            clearable
+            value={value || null}
             options={
               config?.choices?.map((choice: string) => ({
-                key: choice,
                 value: choice,
-                text: choice,
+                label: choice,
               })) || []
             }
-            onChange={(e, { value }) => {
-              onChange(value);
-              if (onBlur) setTimeout(onBlur, 100);
-            }}
+            onChange={(value) => onChange(value)}
             onBlur={onBlur}
             placeholder={`Select ${column.name.toLowerCase()}`}
             fluid
-            clearable
-            search
             disabled={readOnly}
           />
         );
@@ -406,21 +394,19 @@ export const MetadataCellEditor: React.FC<MetadataCellEditorProps> = ({
         return (
           <Dropdown
             ref={inputRef}
-            selection
-            multiple
+            mode="multiselect"
+            searchable="local"
             value={value || []}
             options={
               config?.choices?.map((choice: string) => ({
-                key: choice,
                 value: choice,
-                text: choice,
+                label: choice,
               })) || []
             }
-            onChange={(e, { value }) => onChange(value)}
+            onChange={(value) => onChange(value)}
             onBlur={onBlur}
             placeholder={`Select ${column.name.toLowerCase()}`}
             fluid
-            search
             disabled={readOnly}
           />
         );
