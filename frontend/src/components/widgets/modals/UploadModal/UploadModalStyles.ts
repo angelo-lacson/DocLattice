@@ -115,21 +115,6 @@ export const HeaderIcon = styled.span`
   }
 `;
 
-// Form sections
-export const FormSection = styled.div`
-  border-radius: var(--oc-radius-lg);
-  padding: 0;
-  margin-bottom: var(--oc-spacing-md);
-
-  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    margin-bottom: var(--oc-spacing-sm);
-  }
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-`;
-
 export const SectionTitle = styled.h3`
   font-size: var(--oc-font-size-sm);
   font-weight: 500;
