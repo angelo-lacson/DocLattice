@@ -29,6 +29,12 @@ export interface ObjectCRUDModalProps extends CRUDProps {
   /** When true the form is over-laid with a loader and inputs are disabled */
   loading?: boolean;
   children?: React.ReactNode;
+  /** Render prop for form fields. Receives current data, onChange, and disabled flag. */
+  renderForm: (
+    formData: Record<string, any>,
+    onChange: (updates: Record<string, any>) => void,
+    disabled: boolean
+  ) => React.ReactNode;
 }
 
 /**
@@ -48,13 +54,12 @@ export function CRUDModal({
   acceptedFileTypes,
   oldInstance,
   modelName,
-  uiSchema,
-  dataSchema,
   propertyWidgets,
   onSubmit,
   onClose,
   loading = false,
   children,
+  renderForm,
 }: ObjectCRUDModalProps): JSX.Element {
   const [instanceObj, setInstanceObj] = useState<Record<string, any>>(
     oldInstance || {}
@@ -94,10 +99,6 @@ export function CRUDModal({
       ...changedFields,
     }));
   };
-
-  const appliedUISchema = useMemo(() => {
-    return canWrite ? { ...uiSchema } : { ...uiSchema, "ui:readonly": true };
-  }, [uiSchema, canWrite]);
 
   // Clone each widget so it can notify handleModelChange
   const listeningChildren: JSX.Element[] = useMemo(() => {
@@ -166,8 +167,6 @@ export function CRUDModal({
           mode={mode}
           instance={instanceObj}
           modelName={modelName}
-          uiSchema={appliedUISchema}
-          dataSchema={dataSchema}
           showHeader={false}
           handleInstanceChange={handleModelChange}
           hasFile={hasFile}
@@ -175,6 +174,7 @@ export function CRUDModal({
           fileLabel={fileLabel}
           fileIsImage={fileIsImage}
           acceptedFileTypes={acceptedFileTypes}
+          renderForm={renderForm}
         />
         <VerticallyCenteredDiv>{listeningChildren}</VerticallyCenteredDiv>
         {children}

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useMemo } from "react";
 import { Box } from "lucide-react";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
@@ -6,8 +6,7 @@ import {
   VerticallyCenteredDiv,
 } from "../../layout/Wrappers";
 import { FilePreviewAndUpload } from "../file-controls/FilePreviewAndUpload";
-import { CRUDProps, LooseObject } from "../../types";
-import { DynamicSchemaForm } from "../../forms/DynamicSchemaForm";
+import { CRUDProps } from "../../types";
 
 /**
  * Props for the CRUDWidget component.
@@ -18,6 +17,12 @@ interface CRUDWidgetProps<T extends Record<string, any>> extends CRUDProps {
   instance: T | Partial<T>;
   showHeader: boolean;
   handleInstanceChange: (updatedInstance: T) => void;
+  /** Render prop for form fields. Receives current data, onChange, and disabled flag. */
+  renderForm: (
+    formData: Record<string, any>,
+    onChange: (updates: Record<string, any>) => void,
+    disabled: boolean
+  ) => React.ReactNode;
 }
 
 /**
@@ -37,34 +42,11 @@ export const CRUDWidget = <T extends Record<string, any>>({
   fileLabel,
   fileIsImage,
   acceptedFileTypes,
-  uiSchema,
-  dataSchema,
   showHeader,
   handleInstanceChange,
+  renderForm,
 }: CRUDWidgetProps<T>): JSX.Element => {
   const canWrite = mode === "CREATE" || mode === "EDIT";
-
-  /**
-   * Cleans the form data by retaining only the properties defined in the data schema.
-   */
-  const cleanFormData = useCallback(
-    (instanceData: LooseObject, schema: LooseObject): Partial<T> => {
-      return Object.keys(schema.properties).reduce((acc, key) => {
-        if (key in instanceData) {
-          acc[key as keyof T] = instanceData[key];
-        }
-        return acc;
-      }, {} as Partial<T>);
-    },
-    []
-  );
-
-  const handleFormChange = useCallback(
-    (updatedData: Record<string, unknown>) => {
-      handleInstanceChange(updatedData as T);
-    },
-    [handleInstanceChange]
-  );
 
   const descriptiveName = useMemo(
     () => modelName.charAt(0).toUpperCase() + modelName.slice(1),
@@ -81,11 +63,6 @@ export const CRUDWidget = <T extends Record<string, any>>({
         return `Create ${descriptiveName}`;
     }
   }, [mode, descriptiveName, instance.title]);
-
-  const formData = useMemo(
-    () => cleanFormData(instance as T, dataSchema),
-    [instance, dataSchema, cleanFormData]
-  );
 
   return (
     <div style={{ marginBottom: "1rem" }}>
@@ -161,13 +138,12 @@ export const CRUDWidget = <T extends Record<string, any>>({
                   />
                 </div>
               )}
-              <DynamicSchemaForm
-                schema={dataSchema}
-                uiSchema={uiSchema}
-                formData={formData as Record<string, unknown>}
-                onChange={handleFormChange}
-                disabled={!canWrite}
-              />
+              {renderForm(
+                instance as Record<string, any>,
+                (updates) =>
+                  handleInstanceChange({ ...instance, ...updates } as T),
+                !canWrite
+              )}
             </div>
           </div>
         </VerticallyCenteredDiv>
