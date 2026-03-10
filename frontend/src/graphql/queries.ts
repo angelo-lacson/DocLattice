@@ -216,6 +216,8 @@ export const RESOLVE_CORPUS_BY_SLUGS_FULL = gql`
       }
       documentCount
       annotationCount
+      license
+      licenseLink
     }
   }
 `;
@@ -434,6 +436,8 @@ export const GET_CORPUS_WITH_HISTORY = gql`
       isPublic
       myPermissions
       documentCount
+      license
+      licenseLink
       creator {
         id
         email
@@ -656,6 +660,8 @@ export const GET_CORPUSES = gql`
             id
             name
           }
+          license
+          licenseLink
         }
       }
     }
