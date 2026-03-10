@@ -92,10 +92,7 @@ import { DiscoveryLanding } from "./views/DiscoveryLanding";
 import { CentralRouteManager } from "./routing/CentralRouteManager";
 import { CRUDModal } from "./components/widgets/CRUD/CRUDModal";
 import { updateAnnotationDisplayParams } from "./utils/navigationUtils";
-import {
-  editDocForm_Schema,
-  editDocForm_Ui_Schema,
-} from "./components/forms/schemas";
+import { DocumentFormFields } from "./components/forms/DocumentFormFields";
 import { useBadgeNotifications } from "./hooks/useBadgeNotifications";
 import { useBadgeCelebration } from "./hooks/useBadgeCelebration";
 import { BadgeCelebrationModal } from "./components/badges/BadgeCelebrationModal";
@@ -397,8 +394,6 @@ export const App = () => {
                 mode="EDIT"
                 oldInstance={document_to_edit ? document_to_edit : {}}
                 modelName="document"
-                uiSchema={editDocForm_Ui_Schema}
-                dataSchema={editDocForm_Schema}
                 onSubmit={handleUpdateDocument}
                 onClose={() => editingDocument(null)}
                 acceptedFileTypes="pdf"
@@ -406,20 +401,32 @@ export const App = () => {
                 fileField="pdfFile"
                 fileLabel="PDF File"
                 fileIsImage={false}
+                renderForm={(formData, onChange, disabled) => (
+                  <DocumentFormFields
+                    formData={formData}
+                    onChange={onChange}
+                    disabled={disabled}
+                  />
+                )}
               />
               <CRUDModal
                 open={document_to_view !== null}
                 mode="VIEW"
                 oldInstance={document_to_view ? document_to_view : {}}
                 modelName="document"
-                uiSchema={editDocForm_Ui_Schema}
-                dataSchema={editDocForm_Schema}
                 onClose={() => viewingDocument(null)}
                 acceptedFileTypes="pdf"
                 hasFile={true}
                 fileField="pdfFile"
                 fileLabel="PDF File"
                 fileIsImage={false}
+                renderForm={(formData, onChange, disabled) => (
+                  <DocumentFormFields
+                    formData={formData}
+                    onChange={onChange}
+                    disabled={disabled}
+                  />
+                )}
               />
               {/* Central routing state manager - handles ALL URL ↔ State sync */}
               <CentralRouteManager />

@@ -45,10 +45,7 @@ import {
   DELETE_LABELSET,
 } from "../graphql/mutations";
 import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
-import {
-  newLabelSetForm_Schema,
-  newLabelSetForm_Ui_Schema,
-} from "../components/forms/schemas";
+import { LabelSetFormFields } from "../components/forms/LabelSetFormFields";
 import { CRUDModal } from "../components/widgets/CRUD/CRUDModal";
 import { LabelSetListCard } from "../components/labelsets/LabelSetListCard";
 import { FetchMoreOnVisible } from "../components/widgets/infinite_scroll/FetchMoreOnVisible";
@@ -412,8 +409,6 @@ export const Labelsets = () => {
             mode="CREATE"
             oldInstance={{}}
             modelName="labelset"
-            uiSchema={newLabelSetForm_Ui_Schema}
-            dataSchema={newLabelSetForm_Schema}
             onSubmit={handleCreateLabelset}
             onClose={() => showNewLabelsetModal(false)}
             hasFile={true}
@@ -422,6 +417,13 @@ export const Labelsets = () => {
             fileIsImage={true}
             acceptedFileTypes="image/*"
             loading={create_labelset_loading}
+            renderForm={(formData, onChange, disabled) => (
+              <LabelSetFormFields
+                formData={formData}
+                onChange={onChange}
+                disabled={disabled}
+              />
+            )}
           />
         )}
 

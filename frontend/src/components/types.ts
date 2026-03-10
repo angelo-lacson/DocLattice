@@ -178,8 +178,6 @@ export interface CRUDProps {
   fileLabel: string;
   fileIsImage: boolean;
   acceptedFileTypes: string;
-  uiSchema: Record<string, any>;
-  dataSchema: Record<string, any>;
 }
 
 // Define a more flexible prop type for property widgets

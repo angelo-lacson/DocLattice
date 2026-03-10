@@ -43,7 +43,9 @@ import {
   GetPostprocessorsOutput,
 } from "../../../graphql/queries";
 
-import { DynamicSchemaForm } from "../../forms/DynamicSchemaForm";
+import Form from "@rjsf/core";
+import { RJSFSchema } from "@rjsf/utils";
+import validator from "@rjsf/validator-ajv8";
 
 import funsd_icon from "../../../assets/icons/FUNSD.png";
 import open_contracts_icon from "../../../assets/icons/oc_45_dark.png";
@@ -442,14 +444,20 @@ export function SelectExportTypeModal({
             <Settings size={14} />
             <h4>{procObj.title || procName} Inputs</h4>
           </ProcessorFormHeader>
-          <DynamicSchemaForm
+          <Form
             schema={{
               type: "object",
-              properties: procObj.inputSchema as Record<string, any>,
+              properties: procObj.inputSchema as RJSFSchema,
             }}
+            validator={validator}
             formData={postProcessorKwargs[procName] || {}}
-            onChange={(data) => onPostProcessorFormChange(procName, data)}
-          />
+            onChange={(e) => onPostProcessorFormChange(procName, e.formData)}
+            uiSchema={{
+              "ui:submitButtonOptions": { norender: true },
+            }}
+          >
+            <></>
+          </Form>
         </ProcessorFormCard>
       );
     });
