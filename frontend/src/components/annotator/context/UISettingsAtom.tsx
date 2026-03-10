@@ -51,6 +51,7 @@ export type QueryErrors = {
  * UI Settings Atoms
  */
 export const zoomLevelAtom = atom<number>(1);
+export const initialZoomSetAtom = atom<boolean>(false);
 export const isSidebarVisibleAtom = atom<boolean>(true);
 export const topbarVisibleAtom = atom<boolean>(false);
 export const sidebarWidthAtom = atom<number>(300);

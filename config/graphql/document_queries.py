@@ -45,7 +45,7 @@ class DocumentQueryMixin:
         # queries requesting only basic document fields.
         return Document.objects.visible_to_user(info.context.user, lightweight=True)
 
-    document = graphene.Field(DocumentType, id=graphene.String())
+    document = graphene.Field(DocumentType, id=graphene.ID())
 
     def resolve_document(self, info, **kwargs):
         document_id = kwargs.get("id")

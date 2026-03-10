@@ -1,7 +1,7 @@
 import { gql } from "@apollo/client";
 
 export const GET_DOCUMENT_SUMMARY_VERSIONS = gql`
-  query GetDocumentSummaryVersions($documentId: String!, $corpusId: ID!) {
+  query GetDocumentSummaryVersions($documentId: ID!, $corpusId: ID!) {
     document(id: $documentId) {
       id
       summaryContent(corpusId: $corpusId)
