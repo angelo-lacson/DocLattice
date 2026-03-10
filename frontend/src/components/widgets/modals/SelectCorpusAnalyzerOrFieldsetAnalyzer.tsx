@@ -33,9 +33,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import Form from "@rjsf/semantic-ui";
-import validator from "@rjsf/validator-ajv8";
-import { RJSFSchema, UiSchema } from "@rjsf/utils";
+import { DynamicSchemaForm } from "../../forms/DynamicSchemaForm";
 import {
   GET_ANALYZERS,
   GetAnalyzersInputs,
@@ -1414,16 +1412,16 @@ export const SelectAnalyzerOrFieldsetModal: React.FC<
                             border: "2px solid ${OS_LEGAL_COLORS.border}",
                           }}
                         >
-                          <Form
-                            schema={selectedAnalyzer.inputSchema as RJSFSchema}
-                            validator={validator}
-                            formData={analyzerInputData}
-                            onChange={(e: any) =>
-                              setAnalyzerInputData(e.formData)
+                          <DynamicSchemaForm
+                            schema={
+                              selectedAnalyzer.inputSchema as Record<
+                                string,
+                                any
+                              >
                             }
-                          >
-                            <></>
-                          </Form>
+                            formData={analyzerInputData}
+                            onChange={(data) => setAnalyzerInputData(data)}
+                          />
                         </div>
                       </FormField>
                     ) : (
