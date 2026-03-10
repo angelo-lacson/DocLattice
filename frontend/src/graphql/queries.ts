@@ -2225,7 +2225,7 @@ export interface GetDocumentAnnotationsAndRelationshipsOutput {
  */
 export const GET_DOCUMENT_ANNOTATIONS_AND_RELATIONSHIPS = gql`
   query GetDocumentAnnotationsAndRelationships(
-    $documentId: String!
+    $documentId: ID!
     $corpusId: ID!
     $analysisId: ID
   ) {
@@ -2920,7 +2920,7 @@ export interface GetDocumentDetailsOutput {
 }
 
 export const GET_DOCUMENT_DETAILS = gql`
-  query GetDocumentDetails($documentId: String!) {
+  query GetDocumentDetails($documentId: ID!) {
     document(id: $documentId) {
       id
       title
@@ -2951,7 +2951,7 @@ export interface GetDocumentKnowledgeAndAnnotationsOutput {
 
 export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
   query GetDocumentKnowledgeAndAnnotations(
-    $documentId: String!
+    $documentId: ID!
     $corpusId: ID!
     $analysisId: ID
   ) {
@@ -3118,7 +3118,7 @@ export interface GetDocumentAnnotationsOnlyOutput {
 
 export const GET_DOCUMENT_ANNOTATIONS_ONLY = gql`
   query GetDocumentAnnotationsOnly(
-    $documentId: String!
+    $documentId: ID!
     $corpusId: ID!
     $analysisId: ID
   ) {
@@ -3240,7 +3240,7 @@ export interface GetDocumentWithStructureOutput {
 }
 
 export const GET_DOCUMENT_WITH_STRUCTURE = gql`
-  query GetDocumentWithStructure($documentId: String!) {
+  query GetDocumentWithStructure($documentId: ID!) {
     document(id: $documentId) {
       id
       title
@@ -3771,7 +3771,7 @@ export interface GetCorpusByIdForRedirectOutput {
 }
 
 export const GET_DOCUMENT_BY_ID_FOR_REDIRECT = gql`
-  query GetDocumentByIdForRedirect($id: String!) {
+  query GetDocumentByIdForRedirect($id: ID!) {
     document(id: $id) {
       id
       slug

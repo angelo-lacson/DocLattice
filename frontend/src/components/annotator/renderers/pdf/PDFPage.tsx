@@ -18,6 +18,7 @@ import {
   useAnnotationDisplay,
   useZoomLevel,
   useAnnotationSelection,
+  initialZoomSetAtom,
 } from "../../context/UISettingsAtom";
 import { useAnnotationRefs } from "../../hooks/useAnnotationRefs";
 import SelectionLayer from "./SelectionLayer";
@@ -86,7 +87,7 @@ export const PDFPage = ({
     bottom: pageViewport.height,
   });
   const [hasPdfPageRendered, setPdfPageRendered] = useState(false);
-  const [initialZoomSet, setInitialZoomSet] = useState(false);
+  const [initialZoomSet, setInitialZoomSet] = useAtom(initialZoomSetAtom);
 
   const { showSelectedOnly, showBoundingBoxes } = useAnnotationDisplay();
   const { zoomLevel, setZoomLevel } = useZoomLevel();
