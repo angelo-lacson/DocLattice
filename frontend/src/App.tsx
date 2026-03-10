@@ -401,6 +401,13 @@ export const App = () => {
                 fileField="pdfFile"
                 fileLabel="PDF File"
                 fileIsImage={false}
+                validate={(data) => {
+                  const errors: string[] = [];
+                  if (!data.title?.trim()) errors.push("Title is required");
+                  if (!data.description?.trim())
+                    errors.push("Description is required");
+                  return errors;
+                }}
                 renderForm={(formData, onChange, disabled) => (
                   <DocumentFormFields
                     formData={formData}

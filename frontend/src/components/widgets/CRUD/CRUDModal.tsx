@@ -20,7 +20,9 @@ import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 /**
  * Props for the ObjectCRUDModal component.
  */
-export interface ObjectCRUDModalProps extends CRUDProps {
+export interface ObjectCRUDModalProps<
+  T extends Record<string, any> = Record<string, any>
+> extends CRUDProps {
   open: boolean;
   oldInstance: Record<string, any>;
   propertyWidgets?: PropertyWidgets;
@@ -31,10 +33,12 @@ export interface ObjectCRUDModalProps extends CRUDProps {
   children?: React.ReactNode;
   /** Render prop for form fields. Receives current data, onChange, and disabled flag. */
   renderForm: (
-    formData: Record<string, any>,
-    onChange: (updates: Record<string, any>) => void,
+    formData: T,
+    onChange: (updates: Partial<T>) => void,
     disabled: boolean
   ) => React.ReactNode;
+  /** Optional validation function. Returns an array of error messages, or empty array if valid. */
+  validate?: (formData: T) => string[];
 }
 
 /**
@@ -44,7 +48,7 @@ export interface ObjectCRUDModalProps extends CRUDProps {
  * @param {ObjectCRUDModalProps} props - The properties passed to the component.
  * @returns {JSX.Element} The rendered CRUD modal component.
  */
-export function CRUDModal({
+export function CRUDModal<T extends Record<string, any> = Record<string, any>>({
   open,
   mode,
   hasFile,
@@ -60,7 +64,8 @@ export function CRUDModal({
   loading = false,
   children,
   renderForm,
-}: ObjectCRUDModalProps): JSX.Element {
+  validate,
+}: ObjectCRUDModalProps<T>): JSX.Element {
   const [instanceObj, setInstanceObj] = useState<Record<string, any>>(
     oldInstance || {}
   );
@@ -69,6 +74,12 @@ export function CRUDModal({
   });
 
   const canWrite = mode !== "VIEW" && (mode === "CREATE" || mode === "EDIT");
+
+  const validationErrors = useMemo(
+    () => (validate ? validate(instanceObj as T) : []),
+    [validate, instanceObj]
+  );
+  const isValid = validationErrors.length === 0;
 
   useEffect(() => {
     setInstanceObj(oldInstance || {});
@@ -174,12 +185,32 @@ export function CRUDModal({
           fileLabel={fileLabel}
           fileIsImage={fileIsImage}
           acceptedFileTypes={acceptedFileTypes}
-          renderForm={renderForm}
+          renderForm={
+            renderForm as (
+              formData: Record<string, any>,
+              onChange: (updates: Partial<Record<string, any>>) => void,
+              disabled: boolean
+            ) => React.ReactNode
+          }
         />
         <VerticallyCenteredDiv>{listeningChildren}</VerticallyCenteredDiv>
         {children}
       </ModalBody>
       <ModalFooter>
+        {canWrite && validationErrors.length > 0 && (
+          <div
+            style={{
+              color: "var(--oc-color-error, #d32f2f)",
+              fontSize: "0.875rem",
+              textAlign: "center",
+              marginBottom: "0.5rem",
+            }}
+          >
+            {validationErrors.map((err, i) => (
+              <div key={i}>{err}</div>
+            ))}
+          </div>
+        )}
         <HorizontallyCenteredDiv>
           <Button
             variant="secondary"
@@ -189,19 +220,22 @@ export function CRUDModal({
           >
             Close
           </Button>
-          {canWrite && onSubmit && !_.isEqual(oldInstance, instanceObj) && (
-            <Button
-              variant="primary"
-              loading={loading}
-              disabled={loading}
-              leftIcon={<Check size={16} />}
-              onClick={() => {
-                onSubmit(mode === "EDIT" ? updatedFieldsObj : instanceObj);
-              }}
-            >
-              {mode === "EDIT" ? "Update" : "Create"}
-            </Button>
-          )}
+          {canWrite &&
+            onSubmit &&
+            isValid &&
+            !_.isEqual(oldInstance, instanceObj) && (
+              <Button
+                variant="primary"
+                loading={loading}
+                disabled={loading}
+                leftIcon={<Check size={16} />}
+                onClick={() => {
+                  onSubmit(mode === "EDIT" ? updatedFieldsObj : instanceObj);
+                }}
+              >
+                {mode === "EDIT" ? "Update" : "Create"}
+              </Button>
+            )}
         </HorizontallyCenteredDiv>
       </ModalFooter>
     </Modal>
