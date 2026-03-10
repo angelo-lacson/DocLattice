@@ -470,18 +470,27 @@ class Corpus(TreeNode):
         ).exists()
 
     def clean(self):
-        """Validate the model before saving."""
+        """Validate the model before saving.
+
+        NOTE: Django's save() does NOT call clean()/full_clean(). This method
+        runs in the admin, management commands, and explicit full_clean() calls
+        but NOT during API mutations. The serializer (CorpusSerializer.validate)
+        is the primary enforcement layer for the GraphQL API path.
+        """
         super().clean()
 
+        # Validate license against the allowlist.
+        valid_license_values = {choice[0] for choice in LICENSE_CHOICES}
+        if self.license and self.license not in valid_license_values:
+            raise ValidationError({"license": "Invalid license value."})
+
         # CUSTOM license requires a license_link URL.
-        # NOTE: This validation is intentionally duplicated in CorpusSerializer.validate()
-        # and CorpusModal.tsx isFormValid for defense-in-depth.
         if self.license == CUSTOM and not self.license_link:
             raise ValidationError(
                 {"license_link": "A URL is required when using a custom license."}
             )
         # Clear stale license_link when license is not CUSTOM.
-        if self.license != CUSTOM:
+        if self.license != CUSTOM and self.license_link:
             self.license_link = ""
 
         # Validate post_processors is a list

@@ -64,7 +64,8 @@ class CorpusSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        # For updates, merge incoming attrs with existing instance values
+
+        # Resolve effective values for partial updates by merging with instance.
         license_val = attrs.get(
             "license", getattr(self.instance, "license", "") if self.instance else ""
         )
@@ -72,27 +73,45 @@ class CorpusSerializer(serializers.ModelSerializer):
             "license_link",
             getattr(self.instance, "license_link", "") if self.instance else "",
         )
+
+        # Validate license against the allowlist.
+        # Django choices on CharField are not enforced at the DB level,
+        # and DRFMutation does not call model.full_clean(), so this
+        # serializer is the only active enforcement point for API mutations.
+        from opencontractserver.constants.licenses import LICENSE_CHOICES
+
+        valid_license_values = {choice[0] for choice in LICENSE_CHOICES}
+        if license_val and license_val not in valid_license_values:
+            raise serializers.ValidationError({"license": "Invalid license value."})
+
         # CUSTOM license requires a license_link URL.
-        # NOTE: This validation is intentionally duplicated in Corpus.clean()
-        # and CorpusModal.tsx isFormValid for defense-in-depth.
         if license_val == "CUSTOM" and not license_link:
             raise serializers.ValidationError(
                 {"license_link": "A URL is required when using a custom license."}
             )
-        # Clear stale license_link when license is not CUSTOM.
-        # Prevents orphaned URLs from remaining in the DB after switching away
-        # from a custom license or clearing the license entirely.
+
+        # Clear stale license_link when switching away from CUSTOM.
         if license_val != "CUSTOM" and "license" in attrs:
             attrs["license_link"] = ""
-        # Restrict license_link to http/https schemes
-        if license_link and attrs.get("license_link"):
+
+        # Reject license_link when the effective license is not CUSTOM.
+        # Prevents orphaned URLs from being stored alongside standard licenses.
+        if license_val != "CUSTOM" and attrs.get("license_link"):
+            raise serializers.ValidationError(
+                {"license_link": "license_link can only be set when license is CUSTOM."}
+            )
+
+        # Validate URL scheme on any license_link being written.
+        final_link = attrs.get("license_link")
+        if final_link:
             validator = URLValidator(schemes=["http", "https"])
             try:
-                validator(attrs["license_link"])
+                validator(final_link)
             except DjangoValidationError:
                 raise serializers.ValidationError(
                     {"license_link": "Only http and https URLs are allowed."}
                 )
+
         return attrs
 
 

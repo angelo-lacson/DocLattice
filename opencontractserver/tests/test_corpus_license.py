@@ -307,6 +307,172 @@ class TestCorpusLicenseStaleLinkClearing(TestCase):
         self.assertEqual(self.corpus.license_link, "")
 
 
+class TestCorpusLicenseInvalidValue(TestCase):
+    """Test that invalid license values are rejected."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="invalidlicensetest", password="testpass"
+        )
+        self.client = GrapheneClient(schema, context_value=TestContext(self.user))
+
+    def test_create_with_invalid_license_rejected(self):
+        """Creating a corpus with an invalid license value should fail."""
+        result = self.client.execute(
+            CREATE_MUTATION,
+            variable_values={
+                "title": "Invalid License Corpus",
+                "description": "A test corpus",
+                "license": "MIT",
+            },
+        )
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["createCorpus"]["ok"])
+        self.assertIn("license", result["data"]["createCorpus"]["message"])
+
+    def test_update_with_invalid_license_rejected(self):
+        """Updating a corpus with an invalid license value should fail."""
+        corpus = Corpus.objects.create(
+            title="Valid Corpus",
+            description="Test",
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user,
+            corpus,
+            [PermissionTypes.CRUD, PermissionTypes.PUBLISH, PermissionTypes.PERMISSION],
+        )
+        global_id = to_global_id("CorpusType", corpus.id)
+
+        result = self.client.execute(
+            UPDATE_MUTATION,
+            variable_values={
+                "id": global_id,
+                "license": "GPL-3.0",
+            },
+        )
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["updateCorpus"]["ok"])
+        self.assertIn("license", result["data"]["updateCorpus"]["message"])
+
+
+class TestCorpusLicenseOrphanedLink(TestCase):
+    """Test that license_link cannot be orphaned alongside a non-CUSTOM license."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="orphantest", password="testpass")
+        self.corpus = Corpus.objects.create(
+            title="Orphan Test Corpus",
+            description="A test corpus",
+            creator=self.user,
+            license="CC-BY-4.0",
+            license_link="",
+        )
+        set_permissions_for_obj_to_user(
+            self.user,
+            self.corpus,
+            [PermissionTypes.CRUD, PermissionTypes.PUBLISH, PermissionTypes.PERMISSION],
+        )
+        self.client = GrapheneClient(schema, context_value=TestContext(self.user))
+        self.global_id = to_global_id("CorpusType", self.corpus.id)
+
+    def test_license_link_without_license_when_not_custom_rejected(self):
+        """Sending licenseLink without license when existing license is not CUSTOM
+        should be rejected."""
+        result = self.client.execute(
+            UPDATE_MUTATION,
+            variable_values={
+                "id": self.global_id,
+                "licenseLink": "https://example.com/orphan",
+            },
+        )
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["updateCorpus"]["ok"])
+        self.assertIn("license_link", result["data"]["updateCorpus"]["message"])
+
+        # Verify the link was NOT saved
+        self.corpus.refresh_from_db()
+        self.assertEqual(self.corpus.license_link, "")
+
+
+class TestCorpusLicensePartialUpdate(TestCase):
+    """Test partial update scenarios for license fields."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="partialupdatetest", password="testpass"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Partial Update Corpus",
+            description="A test corpus",
+            creator=self.user,
+            license="CUSTOM",
+            license_link="https://example.com/original",
+        )
+        set_permissions_for_obj_to_user(
+            self.user,
+            self.corpus,
+            [PermissionTypes.CRUD, PermissionTypes.PUBLISH, PermissionTypes.PERMISSION],
+        )
+        self.client = GrapheneClient(schema, context_value=TestContext(self.user))
+        self.global_id = to_global_id("CorpusType", self.corpus.id)
+
+    def test_update_only_license_link_when_custom(self):
+        """Updating only licenseLink when license is already CUSTOM should work."""
+        result = self.client.execute(
+            UPDATE_MUTATION,
+            variable_values={
+                "id": self.global_id,
+                "licenseLink": "https://example.com/updated",
+            },
+        )
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["updateCorpus"]["ok"])
+
+        self.corpus.refresh_from_db()
+        self.assertEqual(self.corpus.license, "CUSTOM")
+        self.assertEqual(self.corpus.license_link, "https://example.com/updated")
+
+
+class TestCorpusLicenseURLValidation(TestCase):
+    """Test URL format validation for license_link."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="urlvalidtest", password="testpass"
+        )
+        self.client = GrapheneClient(schema, context_value=TestContext(self.user))
+
+    def test_http_url_accepted(self):
+        """HTTP scheme URLs should be accepted."""
+        result = self.client.execute(
+            CREATE_MUTATION,
+            variable_values={
+                "title": "HTTP License Corpus",
+                "description": "A test corpus",
+                "license": "CUSTOM",
+                "licenseLink": "http://example.com/license",
+            },
+        )
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["createCorpus"]["ok"])
+
+    def test_invalid_url_format_rejected(self):
+        """Non-URL strings should be rejected."""
+        result = self.client.execute(
+            CREATE_MUTATION,
+            variable_values={
+                "title": "Bad URL Corpus",
+                "description": "A test corpus",
+                "license": "CUSTOM",
+                "licenseLink": "not-a-url",
+            },
+        )
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["createCorpus"]["ok"])
+        self.assertIn("license_link", result["data"]["createCorpus"]["message"])
+
+
 class TestCorpusLicenseModelClean(TestCase):
     """Test model-level clean() validation for license fields."""
 
@@ -360,6 +526,30 @@ class TestCorpusLicenseModelClean(TestCase):
             creator=self.user,
             license="",
             license_link="https://orphan.example.com",
+        )
+        corpus.full_clean()
+        self.assertEqual(corpus.license_link, "")
+
+    def test_clean_invalid_license_raises(self):
+        """Model clean() should reject invalid license values."""
+        corpus = Corpus(
+            title="Model Clean Invalid Test",
+            description="Test",
+            creator=self.user,
+            license="MIT",
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            corpus.full_clean()
+        self.assertIn("license", ctx.exception.message_dict)
+
+    def test_clean_standard_license_without_link_preserves_empty(self):
+        """Model clean() should not modify license_link when it is already empty."""
+        corpus = Corpus(
+            title="Model Clean NoOp Test",
+            description="Test",
+            creator=self.user,
+            license="CC-BY-4.0",
+            license_link="",
         )
         corpus.full_clean()
         self.assertEqual(corpus.license_link, "")
