@@ -218,9 +218,6 @@ describe("CorpusDropdown", () => {
       ).not.toBeInTheDocument()
     );
     const dropdownElement = await screen.findByRole("combobox");
-    await waitFor(() =>
-      expect(dropdownElement).not.toHaveAttribute("aria-busy", "true")
-    );
 
     fireEvent.click(dropdownElement);
     const listbox = await screen.findByRole("listbox");
@@ -240,46 +237,48 @@ describe("CorpusDropdown", () => {
   });
 
   it("fetches corpuses based on search query", async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     render(
       <MockedProvider mocks={searchMocks} addTypename={false}>
         <CorpusDropdown />
       </MockedProvider>
     );
 
-    // Advance timers to resolve the initial mock in this test
-    vi.advanceTimersByTime(10);
+    // Wait for initial load
+    await vi.advanceTimersByTimeAsync(50);
 
-    await waitFor(async () => {
+    await waitFor(() => {
       expect(
         screen.queryByText("Error loading corpuses")
       ).not.toBeInTheDocument();
-      const dropdownElement = await screen.findByRole("combobox");
-      expect(dropdownElement).not.toHaveAttribute("aria-disabled", "true");
-      expect(dropdownElement).not.toHaveAttribute("aria-busy", "true");
-      const searchInput = screen.getByRole("textbox");
-      expect(searchInput).not.toBeDisabled();
-      fireEvent.change(searchInput, { target: { value: "Corpus 1" } });
     });
 
-    // Advance timers for debounce and mock fetch
-    vi.advanceTimersByTime(350);
+    // Click combobox to open dropdown (search input only renders when open)
+    const dropdownElement = screen.getByRole("combobox");
+    expect(dropdownElement).not.toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(dropdownElement);
 
-    await waitFor(() =>
+    // Find search input (os-legal/ui uses role="searchbox")
+    const searchInput = await screen.findByRole("searchbox");
+    expect(searchInput).not.toBeDisabled();
+    fireEvent.change(searchInput, { target: { value: "Corpus 1" } });
+
+    // Advance timers for debounce (300ms) and mock fetch
+    await vi.advanceTimersByTimeAsync(400);
+
+    await waitFor(() => {
       expect(
         screen.queryByText("Error loading corpuses")
-      ).not.toBeInTheDocument()
-    );
-    const corpus1Option = await screen.findByRole("option", {
-      name: /Corpus 1/i,
+      ).not.toBeInTheDocument();
     });
-    expect(corpus1Option).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByRole("combobox")).not.toHaveAttribute(
-        "aria-busy",
-        "true"
-      )
-    );
+
+    await waitFor(() => {
+      const corpus1Option = screen.queryByRole("option", {
+        name: /Corpus 1/i,
+      });
+      expect(corpus1Option).toBeInTheDocument();
+    });
+
     expect(
       screen.queryByRole("option", { name: /Corpus 2/i })
     ).not.toBeInTheDocument();

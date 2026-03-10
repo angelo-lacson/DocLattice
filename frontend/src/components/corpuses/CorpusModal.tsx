@@ -704,7 +704,6 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
                 labelSet={labelSetObj}
                 onChange={handleLabelSetChange}
                 upward
-                scrolling
               />
             </CorpusFormField>
 
@@ -714,7 +713,6 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
                 preferredEmbedder={preferredEmbedder || undefined}
                 onChange={handleEmbedderChange}
                 upward
-                scrolling
               />
             </CorpusFormField>
           </FormSection>

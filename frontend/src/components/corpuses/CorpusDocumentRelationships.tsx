@@ -1,9 +1,7 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import styled from "styled-components";
-// TODO: Migrate Dropdown to @os-legal/ui when available
-import { Dropdown } from "semantic-ui-react";
-import { Button, IconButton, Spinner } from "@os-legal/ui";
+import { Button, Dropdown, IconButton, Spinner } from "@os-legal/ui";
 import { AlertCircle, StickyNote } from "lucide-react";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { toast } from "react-toastify";
@@ -411,13 +409,9 @@ export const CorpusDocumentRelationships: React.FC<
 
   // Filter options for dropdown
   const filterOptions = [
-    { key: "all", text: "All Types", value: "ALL" },
-    {
-      key: "relationship",
-      text: "Labeled Relationships",
-      value: "RELATIONSHIP",
-    },
-    { key: "notes", text: "Notes", value: "NOTES" },
+    { value: "ALL", label: "All Types" },
+    { value: "RELATIONSHIP", label: "Labeled Relationships" },
+    { value: "NOTES", label: "Notes" },
   ];
 
   if (error) {
@@ -449,11 +443,11 @@ export const CorpusDocumentRelationships: React.FC<
         </Title>
         <FilterBar>
           <Dropdown
-            selection
-            compact
+            mode="select"
             options={filterOptions}
             value={filterType}
-            onChange={(_, { value }) => setFilterType(value as FilterType)}
+            onChange={(value) => setFilterType(value as FilterType)}
+            clearable={false}
           />
           <IconButton
             variant="ghost"
