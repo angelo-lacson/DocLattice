@@ -1,14 +1,6 @@
 import React, { useCallback } from "react";
 import { Input, Textarea } from "@os-legal/ui";
-import styled from "styled-components";
-
-const FormField = styled.div`
-  margin-bottom: var(--oc-spacing-md, 1rem);
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-`;
+import { FormField } from "./shared";
 
 interface DocumentFormFieldsProps {
   formData: Record<string, any>;

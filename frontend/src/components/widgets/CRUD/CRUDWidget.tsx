@@ -19,8 +19,8 @@ interface CRUDWidgetProps<T extends Record<string, any>> extends CRUDProps {
   handleInstanceChange: (updatedInstance: T) => void;
   /** Render prop for form fields. Receives current data, onChange, and disabled flag. */
   renderForm: (
-    formData: Record<string, any>,
-    onChange: (updates: Record<string, any>) => void,
+    formData: T,
+    onChange: (updates: Partial<T>) => void,
     disabled: boolean
   ) => React.ReactNode;
 }
@@ -139,7 +139,7 @@ export const CRUDWidget = <T extends Record<string, any>>({
                 </div>
               )}
               {renderForm(
-                instance as Record<string, any>,
+                instance as T,
                 (updates) =>
                   handleInstanceChange({ ...instance, ...updates } as T),
                 !canWrite

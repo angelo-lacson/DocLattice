@@ -417,6 +417,13 @@ export const Labelsets = () => {
             fileIsImage={true}
             acceptedFileTypes="image/*"
             loading={create_labelset_loading}
+            validate={(data) => {
+              const errors: string[] = [];
+              if (!data.title?.trim()) errors.push("Title is required");
+              if (!data.description?.trim())
+                errors.push("Description is required");
+              return errors;
+            }}
             renderForm={(formData, onChange, disabled) => (
               <LabelSetFormFields
                 formData={formData}
