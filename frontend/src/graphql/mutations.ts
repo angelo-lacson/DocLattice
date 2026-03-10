@@ -101,6 +101,8 @@ export interface UpdateCorpusInputs {
   corpusAgentInstructions?: string;
   documentAgentInstructions?: string;
   categories?: string[];
+  license?: string;
+  licenseLink?: string;
 }
 
 export interface UpdateCorpusOutputs {
@@ -129,6 +131,8 @@ export const UPDATE_CORPUS = gql`
     $corpusAgentInstructions: String
     $documentAgentInstructions: String
     $categories: [ID]
+    $license: String
+    $licenseLink: String
   ) {
     updateCorpus(
       id: $id
@@ -141,6 +145,8 @@ export const UPDATE_CORPUS = gql`
       corpusAgentInstructions: $corpusAgentInstructions
       documentAgentInstructions: $documentAgentInstructions
       categories: $categories
+      license: $license
+      licenseLink: $licenseLink
     ) {
       ok
       message
@@ -236,6 +242,8 @@ export interface CreateCorpusInputs {
   labelSet?: string;
   preferredEmbedder?: string;
   categories?: string[];
+  license?: string;
+  licenseLink?: string;
 }
 
 export interface CreateCorpusOutputs {
@@ -254,6 +262,8 @@ export const CREATE_CORPUS = gql`
     $preferredEmbedder: String
     $slug: String
     $categories: [ID]
+    $license: String
+    $licenseLink: String
   ) {
     createCorpus(
       description: $description
@@ -263,6 +273,8 @@ export const CREATE_CORPUS = gql`
       preferredEmbedder: $preferredEmbedder
       slug: $slug
       categories: $categories
+      license: $license
+      licenseLink: $licenseLink
     ) {
       ok
       message

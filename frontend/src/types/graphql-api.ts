@@ -319,6 +319,8 @@ export type RawCorpusType = Node & {
   conversations?: ConversationTypeConnection;
   // Note: categories is returned as a List (array), not a Connection, from the backend
   categories?: CorpusCategoryType[];
+  license?: Maybe<Scalars["String"]>;
+  licenseLink?: Maybe<Scalars["String"]>;
 };
 
 export type CorpusType = Omit<RawCorpusType, "myPermissions"> & {

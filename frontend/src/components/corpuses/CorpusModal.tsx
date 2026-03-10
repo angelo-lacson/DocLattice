@@ -10,9 +10,10 @@ import {
   Textarea,
   Spinner,
 } from "@os-legal/ui";
-import { Info, Image, Settings, PlusCircle, Pencil } from "lucide-react";
+import { Info, Image, Settings, Scale, PlusCircle, Pencil } from "lucide-react";
 import { LabelSetSelector } from "../widgets/CRUD/LabelSetSelector";
 import { EmbedderSelector } from "../widgets/CRUD/EmbedderSelector";
+import { LicenseSelector } from "../widgets/CRUD/LicenseSelector";
 import { FilePreviewAndUpload } from "../widgets/file-controls/FilePreviewAndUpload";
 import { CategorySelector } from "./CategorySelector";
 import { CorpusType, LabelSetType } from "../../types/graphql-api";
@@ -35,6 +36,8 @@ export interface CorpusFormData {
   labelSet?: string | null;
   preferredEmbedder?: string | null;
   categories?: string[];
+  license?: string;
+  licenseLink?: string;
 }
 
 export interface CorpusModalProps {
@@ -358,6 +361,8 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     null
   );
   const [categories, setCategories] = useState<string[]>([]);
+  const [license, setLicense] = useState("");
+  const [licenseLink, setLicenseLink] = useState("");
 
   // Track original values for change detection in EDIT mode
   const [originalValues, setOriginalValues] = useState<{
@@ -368,6 +373,8 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     labelSetId: string | null;
     preferredEmbedder: string | null;
     categories: string[];
+    license: string;
+    licenseLink: string;
   } | null>(null);
 
   // Track the previous open state to detect modal open transitions
@@ -394,6 +401,8 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       const corpusPreferredEmbedder = corpus.preferredEmbedder || null;
       const corpusCategories =
         corpus.categories?.map((category) => category.id).filter(Boolean) || [];
+      const corpusLicense = corpus.license || "";
+      const corpusLicenseLink = corpus.licenseLink || "";
 
       setTitle(corpusTitle);
       setSlug(corpusSlug);
@@ -403,6 +412,8 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       setLabelSetObj(corpus.labelSet || undefined);
       setPreferredEmbedder(corpusPreferredEmbedder);
       setCategories(corpusCategories);
+      setLicense(corpusLicense);
+      setLicenseLink(corpusLicenseLink);
 
       // Store original values for change detection
       setOriginalValues({
@@ -413,6 +424,8 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
         labelSetId: corpusLabelSetId,
         preferredEmbedder: corpusPreferredEmbedder,
         categories: corpusCategories,
+        license: corpusLicense,
+        licenseLink: corpusLicenseLink,
       });
     } else {
       // Reset for create mode
@@ -424,6 +437,8 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       setLabelSetObj(undefined);
       setPreferredEmbedder(null);
       setCategories([]);
+      setLicense("");
+      setLicenseLink("");
       setOriginalValues(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -472,8 +487,14 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     setPreferredEmbedder(values.preferredEmbedder || null);
   }, []);
 
-  // Form validation - both title and description are required
-  const isFormValid = title.trim().length > 0 && description.trim().length > 0;
+  // Form validation - title and description are required;
+  // CUSTOM license also requires a license URL.
+  // NOTE: This validation is intentionally duplicated in Corpus.clean() (backend model)
+  // and CorpusSerializer.validate() (GraphQL serializer) for defense-in-depth.
+  const isFormValid =
+    title.trim().length > 0 &&
+    description.trim().length > 0 &&
+    (license !== "CUSTOM" || licenseLink.trim().length > 0);
 
   // Compute isDirty by comparing current values against original values
   // For CREATE mode, form is "dirty" (has submittable content) when valid
@@ -487,7 +508,9 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
         icon !== originalValues.icon ||
         labelSetId !== originalValues.labelSetId ||
         preferredEmbedder !== originalValues.preferredEmbedder ||
-        !arraysEqualUnordered(categories, originalValues.categories));
+        !arraysEqualUnordered(categories, originalValues.categories) ||
+        license !== originalValues.license ||
+        licenseLink !== originalValues.licenseLink);
 
   const canSubmit = isFormValid && isDirty && !loading;
 
@@ -522,6 +545,16 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       if (!arraysEqualUnordered(categories, originalValues.categories)) {
         formData.categories = categories;
       }
+      if (license !== originalValues.license) {
+        formData.license = license;
+        // Clear stale license_link when switching away from CUSTOM
+        if (originalValues.license === "CUSTOM" && license !== "CUSTOM") {
+          formData.licenseLink = "";
+        }
+      }
+      if (licenseLink !== originalValues.licenseLink) {
+        formData.licenseLink = licenseLink;
+      }
     } else {
       // Include all for create mode
       formData.title = title.trim();
@@ -531,6 +564,8 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
       formData.labelSet = labelSetId;
       formData.preferredEmbedder = preferredEmbedder;
       formData.categories = categories;
+      formData.license = license;
+      formData.licenseLink = licenseLink;
     }
 
     onSubmit(formData);
@@ -547,6 +582,8 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
     labelSetId,
     preferredEmbedder,
     categories,
+    license,
+    licenseLink,
   ]);
 
   // Get header text based on mode
@@ -681,6 +718,40 @@ export const CorpusModal: React.FC<CorpusModalProps> = ({
                 </p>
               </IconHelpText>
             </IconUploadWrapper>
+          </FormSection>
+
+          {/* License Section */}
+          <FormSection>
+            <SectionTitle>
+              <Scale />
+              License
+            </SectionTitle>
+
+            <CorpusFormField>
+              <LicenseSelector
+                license={license}
+                onChange={setLicense}
+                disabled={isReadOnly || loading}
+              />
+            </CorpusFormField>
+
+            {license === "CUSTOM" && (
+              <CorpusFormField>
+                <Input
+                  id="corpus-license-link"
+                  label="License URL *"
+                  placeholder="https://example.com/license"
+                  value={licenseLink}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setLicenseLink(e.target.value)
+                  }
+                  disabled={loading || isReadOnly}
+                  helperText="Link to the full text of your custom license"
+                  size="lg"
+                  fullWidth
+                />
+              </CorpusFormField>
+            )}
           </FormSection>
 
           {/* Settings Section */}

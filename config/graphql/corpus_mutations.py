@@ -140,6 +140,13 @@ class CreateCorpusMutation(DRFMutation):
         categories = graphene.List(
             graphene.ID, required=False, description="Category IDs to assign"
         )
+        license = graphene.String(
+            required=False, description="SPDX license identifier (e.g. CC-BY-4.0)"
+        )
+        license_link = graphene.String(
+            required=False,
+            description="URL to full license text (required for CUSTOM license)",
+        )
 
     @classmethod
     def mutate(cls, root, info, *args, **kwargs):
@@ -190,6 +197,13 @@ class UpdateCorpusMutation(DRFMutation):
             graphene.ID,
             required=False,
             description="Category IDs to assign (replaces existing)",
+        )
+        license = graphene.String(
+            required=False, description="SPDX license identifier (e.g. CC-BY-4.0)"
+        )
+        license_link = graphene.String(
+            required=False,
+            description="URL to full license text (required for CUSTOM license)",
         )
 
     @classmethod

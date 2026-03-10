@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-03-09
 
+### Added
+
+- **Creative Commons license support for corpuses**: Corpuses can now have a license applied, choosing from standard Creative Commons licenses (CC BY, CC BY-SA, CC BY-NC, CC BY-NC-SA, CC BY-ND, CC BY-NC-ND, CC0) or a custom license with a URL. Changes include:
+  - New `license` (CharField with SPDX identifiers) and `license_link` (URLField) fields on the Corpus model (`opencontractserver/corpuses/models.py`)
+  - License constants in `opencontractserver/constants/licenses.py` and `frontend/src/assets/configurations/constants.ts`
+  - Database migration `0047_corpus_license_fields` (single migration with URL validation)
+  - GraphQL create/update mutations accept `license` and `licenseLink` arguments
+  - New `LicenseSelector` frontend component (`frontend/src/components/widgets/CRUD/LicenseSelector.tsx`)
+  - CorpusModal updated with License section for create/edit flows
+  - CorpusInfoSection displays the selected license in corpus settings
+
 ### Fixed
 
 - **Auth0 SDK blocked by CSP on admin login page** (Closes #1077): The admin login template loads the Auth0 SPA SDK from `cdn.jsdelivr.net`, but the Content-Security-Policy `script-src` directive did not include this origin, causing browsers to block the script. Added `https://cdn.jsdelivr.net` to `script-src` when Auth0 is enabled. (`config/settings/base.py`)

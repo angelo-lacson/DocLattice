@@ -2148,6 +2148,12 @@ export const Corpuses = () => {
     if (formData.categories !== undefined) {
       variables.categories = formData.categories;
     }
+    if (formData.license !== undefined) {
+      variables.license = formData.license;
+    }
+    if (formData.licenseLink !== undefined) {
+      variables.licenseLink = formData.licenseLink;
+    }
 
     tryMutateCorpus({ variables });
   };
@@ -2205,6 +2211,14 @@ export const Corpuses = () => {
     }
     if (formData.categories && formData.categories.length > 0) {
       variables.categories = formData.categories;
+    }
+    // Create path: only send license fields when non-empty (server defaults apply).
+    // Update path (above) uses !== undefined to allow sending empty strings to clear values.
+    if (formData.license) {
+      variables.license = formData.license;
+    }
+    if (formData.licenseLink) {
+      variables.licenseLink = formData.licenseLink;
     }
 
     tryCreateCorpus({ variables })
