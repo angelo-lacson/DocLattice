@@ -508,6 +508,33 @@ const EmptyStateIcon = styled.div`
   }
 `;
 
+const RjsfFormContainer = styled.div`
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 2px solid ${OS_LEGAL_COLORS.border};
+
+  /* Style RJSF core form fields */
+  .rjsf .form-group.field {
+    margin-bottom: var(--oc-spacing-sm, 0.5rem);
+  }
+
+  .rjsf .form-control {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid ${OS_LEGAL_COLORS.border};
+    border-radius: 4px;
+    font-size: 0.875rem;
+  }
+
+  .rjsf .control-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+`;
+
 // Other existing styled components
 const FormField = styled.div`
   margin-bottom: 1.5rem;
@@ -1406,15 +1433,9 @@ export const SelectAnalyzerOrFieldsetModal: React.FC<
                             </div>
                           </InfoContent>
                         </InfoBox>
-                        <div
-                          style={{
-                            background: OS_LEGAL_COLORS.surfaceHover,
-                            borderRadius: "12px",
-                            padding: "1.5rem",
-                            border: "2px solid ${OS_LEGAL_COLORS.border}",
-                          }}
-                        >
+                        <RjsfFormContainer>
                           <Form
+                            id="analyzer-input-form"
                             schema={selectedAnalyzer.inputSchema as RJSFSchema}
                             validator={validator}
                             formData={analyzerInputData}
@@ -1424,7 +1445,7 @@ export const SelectAnalyzerOrFieldsetModal: React.FC<
                           >
                             <></>
                           </Form>
-                        </div>
+                        </RjsfFormContainer>
                       </FormField>
                     ) : (
                       <InfoBox>

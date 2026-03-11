@@ -46,6 +46,7 @@ import {
 } from "../graphql/mutations";
 import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
 import { LabelSetFormFields } from "../components/forms/LabelSetFormFields";
+import { validateTitleAndDescription } from "../components/forms/shared";
 import { CRUDModal } from "../components/widgets/CRUD/CRUDModal";
 import { LabelSetListCard } from "../components/labelsets/LabelSetListCard";
 import { FetchMoreOnVisible } from "../components/widgets/infinite_scroll/FetchMoreOnVisible";
@@ -417,13 +418,7 @@ export const Labelsets = () => {
             fileIsImage={true}
             acceptedFileTypes="image/*"
             loading={create_labelset_loading}
-            validate={(data) => {
-              const errors: string[] = [];
-              if (!data.title?.trim()) errors.push("Title is required");
-              if (!data.description?.trim())
-                errors.push("Description is required");
-              return errors;
-            }}
+            validate={validateTitleAndDescription}
             renderForm={(formData, onChange, disabled) => (
               <LabelSetFormFields
                 formData={formData}

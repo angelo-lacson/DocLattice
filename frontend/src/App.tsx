@@ -93,6 +93,7 @@ import { CentralRouteManager } from "./routing/CentralRouteManager";
 import { CRUDModal } from "./components/widgets/CRUD/CRUDModal";
 import { updateAnnotationDisplayParams } from "./utils/navigationUtils";
 import { DocumentFormFields } from "./components/forms/DocumentFormFields";
+import { validateTitleAndDescription } from "./components/forms/shared";
 import { useBadgeNotifications } from "./hooks/useBadgeNotifications";
 import { useBadgeCelebration } from "./hooks/useBadgeCelebration";
 import { BadgeCelebrationModal } from "./components/badges/BadgeCelebrationModal";
@@ -401,13 +402,7 @@ export const App = () => {
                 fileField="pdfFile"
                 fileLabel="PDF File"
                 fileIsImage={false}
-                validate={(data) => {
-                  const errors: string[] = [];
-                  if (!data.title?.trim()) errors.push("Title is required");
-                  if (!data.description?.trim())
-                    errors.push("Description is required");
-                  return errors;
-                }}
+                validate={validateTitleAndDescription}
                 renderForm={(formData, onChange, disabled) => (
                   <DocumentFormFields
                     formData={formData}
