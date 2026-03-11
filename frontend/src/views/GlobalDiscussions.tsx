@@ -3,7 +3,9 @@ import { useSearchParams } from "react-router-dom";
 import styled from "styled-components";
 import { accentAlpha } from "../assets/configurations/osLegalStyles";
 import { motion } from "framer-motion";
-import { MessageSquare, Database, FileText, Plus, Search } from "lucide-react";
+import { MessageSquare, Database, FileText, Plus } from "lucide-react";
+import { FilterTabs, SearchBox } from "@os-legal/ui";
+import type { FilterTabItem } from "@os-legal/ui";
 import { useQuery } from "@apollo/client";
 import {
   GET_CONVERSATIONS,
@@ -15,8 +17,6 @@ import {
   CORPUS_COLORS,
   CORPUS_FONTS,
   CORPUS_RADII,
-  CORPUS_SHADOWS,
-  CORPUS_TRANSITIONS,
   mediaQuery,
 } from "../components/threads/styles/discussionStyles";
 import { ModernLoadingDisplay } from "../components/widgets/ModernLoadingDisplay";
@@ -92,80 +92,10 @@ const FilterBar = styled.div`
   flex-wrap: wrap;
 `;
 
-const TabContainer = styled.div`
-  display: flex;
-  gap: 0.25rem;
-  background: ${CORPUS_COLORS.slate[100]};
-  padding: 0.25rem;
-  border-radius: ${CORPUS_RADII.lg};
-  border: 1px solid ${CORPUS_COLORS.slate[200]};
-`;
-
-const Tab = styled(motion.button)<{ $isActive: boolean }>`
-  padding: 0.625rem 1.25rem;
-  border-radius: ${CORPUS_RADII.md};
-  border: none;
-  background: ${(props) =>
-    props.$isActive ? CORPUS_COLORS.white : "transparent"};
-  color: ${(props) =>
-    props.$isActive ? CORPUS_COLORS.slate[800] : CORPUS_COLORS.slate[600]};
-  font-family: ${CORPUS_FONTS.sans};
-  font-weight: ${(props) => (props.$isActive ? "600" : "500")};
-  font-size: 0.9375rem;
-  cursor: pointer;
-  transition: all ${CORPUS_TRANSITIONS.fast};
-  box-shadow: ${(props) => (props.$isActive ? CORPUS_SHADOWS.sm : "none")};
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-
-  &:hover {
-    background: ${(props) =>
-      props.$isActive ? CORPUS_COLORS.white : "rgba(255,255,255,0.6)"};
-  }
-
-  ${mediaQuery.mobile} {
-    padding: 0.5rem 0.875rem;
-    font-size: 0.875rem;
-  }
-`;
-
-const SearchInputContainer = styled.div`
+const SearchContainer = styled.div`
   flex: 1;
   min-width: 12.5rem;
   max-width: 25rem;
-  position: relative;
-`;
-
-const SearchIconStyled = styled(Search)`
-  position: absolute;
-  left: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: ${CORPUS_COLORS.slate[400]};
-  pointer-events: none;
-`;
-
-const SearchInput = styled.input`
-  width: 100%;
-  padding: 0.625rem 1rem 0.625rem 2.75rem;
-  border: 1px solid ${CORPUS_COLORS.slate[200]};
-  border-radius: ${CORPUS_RADII.md};
-  font-family: ${CORPUS_FONTS.sans};
-  font-size: 0.9375rem;
-  color: ${CORPUS_COLORS.slate[800]};
-  background: ${CORPUS_COLORS.white};
-  transition: all ${CORPUS_TRANSITIONS.fast};
-
-  &:focus {
-    outline: none;
-    border-color: ${CORPUS_COLORS.teal[500]};
-    box-shadow: 0 0 0 3px ${CORPUS_COLORS.teal[50]};
-  }
-
-  &::placeholder {
-    color: ${CORPUS_COLORS.slate[400]};
-  }
 `;
 
 const FAB = styled(motion.button)`
@@ -379,6 +309,13 @@ export const GlobalDiscussions: React.FC = () => {
     }
   }, [searchParams]);
 
+  const filterItems: FilterTabItem[] = [
+    { id: "all", label: "All" },
+    { id: "corpus", label: "Corpus" },
+    { id: "document", label: "Document" },
+    { id: "general", label: "General" },
+  ];
+
   return (
     <Container>
       <Header>
@@ -387,53 +324,19 @@ export const GlobalDiscussions: React.FC = () => {
         </TitleRow>
 
         <FilterBar>
-          <TabContainer>
-            <Tab
-              $isActive={activeTab === "all"}
-              onClick={() => setActiveTab("all")}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <MessageSquare size={16} />
-              All
-            </Tab>
-            <Tab
-              $isActive={activeTab === "corpus"}
-              onClick={() => setActiveTab("corpus")}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Database size={16} />
-              Corpus
-            </Tab>
-            <Tab
-              $isActive={activeTab === "document"}
-              onClick={() => setActiveTab("document")}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <FileText size={16} />
-              Document
-            </Tab>
-            <Tab
-              $isActive={activeTab === "general"}
-              onClick={() => setActiveTab("general")}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <MessageSquare size={16} />
-              General
-            </Tab>
-          </TabContainer>
+          <FilterTabs
+            items={filterItems}
+            value={activeTab}
+            onChange={(id) => setActiveTab(id as FilterTab)}
+          />
 
-          <SearchInputContainer>
-            <SearchIconStyled size={18} />
-            <SearchInput
+          <SearchContainer>
+            <SearchBox
               placeholder="Search discussions..."
               value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
+              onChange={setSearchInput}
             />
-          </SearchInputContainer>
+          </SearchContainer>
         </FilterBar>
       </Header>
 
