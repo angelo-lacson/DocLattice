@@ -5,7 +5,7 @@
  * for social media link previews.
  */
 
-import type { Env, OGMetadata } from "./types";
+import type { Env, OGMetadata, LabeledData } from "./types";
 import { getEntityTypeLabel } from "./parser";
 
 /**
@@ -26,6 +26,23 @@ function escapeHtml(str: string): string {
 function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
   return str.slice(0, maxLength - 3) + "...";
+}
+
+/**
+ * Generate Twitter labeled data meta tags (up to 2 pairs supported by Twitter)
+ */
+function buildTwitterLabelTags(labeledData?: LabeledData[]): string {
+  if (!labeledData || labeledData.length === 0) return "";
+
+  // Twitter supports at most label1/data1 and label2/data2
+  return labeledData
+    .slice(0, 2)
+    .map(
+      (item, i) =>
+        `  <meta name="twitter:label${i + 1}" content="${escapeHtml(item.label)}">\n` +
+        `  <meta name="twitter:data${i + 1}" content="${escapeHtml(item.value)}">`
+    )
+    .join("\n");
 }
 
 /**
@@ -76,6 +93,7 @@ export function generateOGHtml(
   <meta name="twitter:description" content="${description}">
   <meta name="twitter:image" content="${escapeHtml(image)}">
   <meta name="twitter:image:alt" content="${fullTitle}">
+${buildTwitterLabelTags(metadata.labeledData)}
 
   <!-- Additional SEO -->
   <meta name="description" content="${description}">

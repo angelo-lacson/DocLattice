@@ -33,6 +33,9 @@ class OGDocumentMetadataType(graphene.ObjectType):
     corpus_title = graphene.String(
         description="Title of parent corpus (if document is in a corpus)"
     )
+    corpus_description = graphene.String(
+        description="Description of parent corpus (if document is in a corpus)"
+    )
     creator_name = graphene.String(description="Username of document creator")
     is_public = graphene.Boolean(description="Always True for returned entities")
 
