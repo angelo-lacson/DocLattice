@@ -135,18 +135,16 @@ test.describe("CRUDModal", () => {
       timeout: 5000,
     });
 
-    // No Update button initially because the form hasn't changed
-    await expect(
-      page.getByRole("button", { name: "Update" })
-    ).not.toBeVisible();
+    // Update button is visible but disabled (no changes yet)
+    const updateButton = page.getByRole("button", { name: "Update" });
+    await expect(updateButton).toBeVisible();
+    await expect(updateButton).toBeDisabled();
 
     // Make a change — type a new title
     await page.getByLabel("Title *").fill("Updated Title");
 
-    // Now the Update button should appear
-    await expect(page.getByRole("button", { name: "Update" })).toBeVisible({
-      timeout: 5000,
-    });
+    // Now the Update button should be enabled
+    await expect(updateButton).toBeEnabled({ timeout: 5000 });
 
     await docScreenshot(page, "crud--modal-document--edit-with-changes");
 
@@ -177,10 +175,10 @@ test.describe("CRUDModal", () => {
     // Clear the title field — this should trigger validation failure
     await page.getByLabel("Title *").fill("");
 
-    // Even though we made a change, validation fails so no Update button
-    await expect(
-      page.getByRole("button", { name: "Update" })
-    ).not.toBeVisible();
+    // Button is visible but disabled when validation fails
+    const updateButton = page.getByRole("button", { name: "Update" });
+    await expect(updateButton).toBeVisible();
+    await expect(updateButton).toBeDisabled();
 
     // The validation error message should be visible
     await expect(page.getByText("Title is required")).toBeVisible();
