@@ -5,9 +5,7 @@ import React, {
   useRef,
   useMemo,
 } from "react";
-// TODO: migrate to @os-legal/ui once Table component is available
-import { Table } from "semantic-ui-react";
-import { Button } from "@os-legal/ui";
+import { Button, Table } from "@os-legal/ui";
 import { Loader2, Circle } from "lucide-react";
 import { useQuery, useMutation, useLazyQuery } from "@apollo/client";
 import { toast } from "react-toastify";
@@ -72,69 +70,14 @@ const GridWrapper = styled.div`
   -webkit-overflow-scrolling: touch;
 `;
 
-const StyledTable = styled(Table)`
-  &.ui.table {
-    margin: 0;
-    border: none;
-    border-radius: 0;
+const DocumentNameCell = styled.span`
+  font-weight: 600;
+  cursor: pointer;
+  color: ${OS_LEGAL_COLORS.primaryBlue};
 
-    thead {
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      background: white;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-
-      th {
-        background: ${OS_LEGAL_COLORS.surfaceHover};
-        font-weight: 600;
-        color: ${OS_LEGAL_COLORS.textTertiary};
-        text-transform: uppercase;
-        font-size: 0.75rem;
-        letter-spacing: 0.05em;
-        white-space: nowrap;
-        position: relative;
-
-        &:first-child {
-          position: sticky;
-          left: 0;
-          z-index: 11;
-          background: ${OS_LEGAL_COLORS.surfaceHover};
-          box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
-        }
-      }
-    }
-
-    tbody {
-      tr {
-        transition: background-color 0.2s ease;
-
-        &:hover {
-          background-color: ${OS_LEGAL_COLORS.surfaceHover};
-        }
-
-        td {
-          padding: 0.5rem;
-          border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
-
-          &:first-child {
-            position: sticky;
-            left: 0;
-            background: white;
-            box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
-            z-index: 5;
-            font-weight: 600;
-            cursor: pointer;
-            color: ${OS_LEGAL_COLORS.primaryBlue};
-
-            &:hover {
-              color: #2563eb;
-              text-decoration: underline;
-            }
-          }
-        }
-      }
-    }
+  &:hover {
+    color: #2563eb;
+    text-decoration: underline;
   }
 `;
 
@@ -561,12 +504,12 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
   return (
     <GridContainer>
       <GridWrapper id="document-metadata-grid-wrapper">
-        <StyledTable celled compact>
-          <Table.Header>
+        <Table variant="bordered" size="sm" stickyHeader>
+          <Table.Head>
             <Table.Row>
-              <Table.HeaderCell width={3}>Document</Table.HeaderCell>
+              <Table.HeadCell sticky="left">Document</Table.HeadCell>
               {columns.map((column) => (
-                <Table.HeaderCell key={column.id}>
+                <Table.HeadCell key={column.id}>
                   {column.name}
                   {column.validationConfig?.required && (
                     <span
@@ -578,15 +521,18 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
                       *
                     </span>
                   )}
-                </Table.HeaderCell>
+                </Table.HeadCell>
               ))}
             </Table.Row>
-          </Table.Header>
+          </Table.Head>
           <Table.Body>
             {documents.map((document) => (
               <Table.Row key={document.id}>
-                <Table.Cell onClick={() => onDocumentClick?.(document)}>
-                  {document.title}
+                <Table.Cell
+                  sticky="left"
+                  onClick={() => onDocumentClick?.(document)}
+                >
+                  <DocumentNameCell>{document.title}</DocumentNameCell>
                 </Table.Cell>
                 {columns.map((column) => {
                   const isEditing =
@@ -666,7 +612,7 @@ export const DocumentMetadataGrid: React.FC<DocumentMetadataGridProps> = ({
               </Table.Row>
             ))}
           </Table.Body>
-        </StyledTable>
+        </Table>
         {hasMore && fetchMore && (
           <PaginationFooter>
             <PaginationInfo>

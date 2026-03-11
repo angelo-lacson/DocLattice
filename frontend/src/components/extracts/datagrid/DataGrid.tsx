@@ -9,8 +9,8 @@ import React, {
 } from "react";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
-// TODO: migrate to @os-legal/ui once Table, Popup, Modal, and Button components are available
-import { Button, Popup, Modal, Table } from "semantic-ui-react";
+// TODO: migrate Button, Popup, Modal to @os-legal/ui
+import { Button, Popup, Modal } from "semantic-ui-react";
 import {
   Trash2,
   FileText,
@@ -19,7 +19,7 @@ import {
   ChevronDown,
   Edit,
 } from "lucide-react";
-import { Spinner } from "@os-legal/ui";
+import { Spinner, Table } from "@os-legal/ui";
 import {
   REQUEST_APPROVE_DATACELL,
   REQUEST_EDIT_DATACELL,
@@ -889,14 +889,14 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                 </p>
               </div>
             ) : (
-              <Table celled compact>
-                <Table.Header style={styles.stickyHeader}>
+              <Table variant="bordered" size="sm" stickyHeader>
+                <Table.Head>
                   <Table.Row>
                     {!extract.started && (
-                      <Table.HeaderCell
+                      <Table.HeadCell
+                        sticky="left"
                         style={{
                           ...styles.headerCell,
-                          ...styles.frozenHeaderColumn,
                           width: "50px",
                         }}
                       >
@@ -916,12 +916,12 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                           onChange={handleSelectAll}
                           disabled={loading}
                         />
-                      </Table.HeaderCell>
+                      </Table.HeadCell>
                     )}
-                    <Table.HeaderCell
+                    <Table.HeadCell
+                      sticky="left"
                       style={{
                         ...styles.headerCell,
-                        ...styles.frozenHeaderColumn,
                         minWidth: "250px",
                       }}
                       onClick={() => handleSort("documentTitle")}
@@ -939,9 +939,9 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                             style={{ marginLeft: "8px", opacity: 0.6 }}
                           />
                         ))}
-                    </Table.HeaderCell>
+                    </Table.HeadCell>
                     {columns.map((column) => (
-                      <Table.HeaderCell
+                      <Table.HeadCell
                         key={column.id}
                         style={{ ...styles.headerCell, minWidth: "180px" }}
                         onClick={() => handleSort(column.id)}
@@ -1012,10 +1012,10 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                             </span>
                           )}
                         </div>
-                      </Table.HeaderCell>
+                      </Table.HeadCell>
                     ))}
                     {!extract.started && (
-                      <Table.HeaderCell
+                      <Table.HeadCell
                         style={{ ...styles.headerCell, width: "80px" }}
                       >
                         <Popup
@@ -1030,10 +1030,10 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                             </button>
                           }
                         />
-                      </Table.HeaderCell>
+                      </Table.HeadCell>
                     )}
                   </Table.Row>
-                </Table.Header>
+                </Table.Head>
 
                 <Table.Body>
                   {sortedRows.map((row) => {
@@ -1048,12 +1048,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                         }}
                       >
                         {!extract.started && (
-                          <Table.Cell
-                            style={{
-                              ...styles.tableCell,
-                              ...styles.frozenColumn,
-                            }}
-                          >
+                          <Table.Cell sticky="left" style={styles.tableCell}>
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -1062,12 +1057,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                             />
                           </Table.Cell>
                         )}
-                        <Table.Cell
-                          style={{
-                            ...styles.tableCell,
-                            ...styles.frozenColumn,
-                          }}
-                        >
+                        <Table.Cell sticky="left" style={styles.tableCell}>
                           <TruncatedText
                             text={row.documentTitle || ""}
                             limit={100}

@@ -7,15 +7,8 @@
  */
 import React, { useMemo, useState } from "react";
 import { gql, useQuery, useMutation } from "@apollo/client";
-import {
-  Button,
-  Modal,
-  Form,
-  Table,
-  Dropdown,
-  Confirm,
-} from "semantic-ui-react";
-import { Input } from "@os-legal/ui";
+import { Button, Modal, Form, Dropdown, Confirm } from "semantic-ui-react";
+import { Input, Table } from "@os-legal/ui";
 import { Copy, Check, Key, Plus } from "lucide-react";
 import { toast } from "react-toastify";
 import styled from "styled-components";
@@ -439,18 +432,18 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
           )}
 
           {!loadingTokens && !tokensError && tokens.length > 0 && (
-            <Table basic="very" celled>
-              <Table.Header>
+            <Table variant="minimal">
+              <Table.Head>
                 <Table.Row>
-                  <Table.HeaderCell>Key Prefix</Table.HeaderCell>
-                  <Table.HeaderCell>Worker Account</Table.HeaderCell>
-                  <Table.HeaderCell>Status</Table.HeaderCell>
-                  <Table.HeaderCell>Expiry</Table.HeaderCell>
-                  <Table.HeaderCell>Rate Limit</Table.HeaderCell>
-                  <Table.HeaderCell>Uploads</Table.HeaderCell>
-                  <Table.HeaderCell>Actions</Table.HeaderCell>
+                  <Table.HeadCell>Key Prefix</Table.HeadCell>
+                  <Table.HeadCell>Worker Account</Table.HeadCell>
+                  <Table.HeadCell>Status</Table.HeadCell>
+                  <Table.HeadCell>Expiry</Table.HeadCell>
+                  <Table.HeadCell>Rate Limit</Table.HeadCell>
+                  <Table.HeadCell>Uploads</Table.HeadCell>
+                  <Table.HeadCell>Actions</Table.HeadCell>
                 </Table.Row>
-              </Table.Header>
+              </Table.Head>
               <Table.Body>
                 {tokens.map((token) => {
                   const status = getTokenStatus(token);

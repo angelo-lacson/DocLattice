@@ -1,5 +1,3 @@
-// TODO: migrate to @os-legal/ui once Table component is available
-import { Table } from "semantic-ui-react";
 import { Loader2, Trash2, Download } from "lucide-react";
 import { IconButton } from "@os-legal/ui";
 import { ExportObject } from "../../types/graphql-api";
@@ -39,19 +37,19 @@ export function ExportItemRow({ onDelete, item, key }: ExportItemRowProps) {
   }
 
   return (
-    <Table.Row key={key}>
-      <Table.Cell>{item.name}</Table.Cell>
-      <Table.Cell>
+    <tr key={key}>
+      <td>{item.name}</td>
+      <td>
         <DateTimeWidget timeString={requestedTime} dateString={requestedDate} />
-      </Table.Cell>
-      <Table.Cell textAlign="center">
+      </td>
+      <td style={{ textAlign: "center" }}>
         {!item.started ? (
           <Loader2 size={24} style={{ animation: "spin 1s linear infinite" }} />
         ) : (
           <DateTimeWidget timeString={startedTime} dateString={startedDate} />
         )}
-      </Table.Cell>
-      <Table.Cell textAlign="center">
+      </td>
+      <td style={{ textAlign: "center" }}>
         {!item.finished || !item.started ? (
           <Loader2 size={24} style={{ animation: "spin 1s linear infinite" }} />
         ) : (
@@ -60,8 +58,8 @@ export function ExportItemRow({ onDelete, item, key }: ExportItemRowProps) {
             dateString={completedDate}
           />
         )}
-      </Table.Cell>
-      <Table.Cell textAlign="center">
+      </td>
+      <td style={{ textAlign: "center" }}>
         <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
           <IconButton
             aria-label="Delete export"
@@ -84,7 +82,7 @@ export function ExportItemRow({ onDelete, item, key }: ExportItemRowProps) {
             </IconButton>
           )}
         </div>
-      </Table.Cell>
-    </Table.Row>
+      </td>
+    </tr>
   );
 }
