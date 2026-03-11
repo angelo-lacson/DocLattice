@@ -1,5 +1,6 @@
 import React from "react";
 import styled, { keyframes } from "styled-components";
+import { Z_INDEX } from "../../assets/configurations/constants";
 
 /* ============================================================================
  * Animations
@@ -39,7 +40,7 @@ const OverlayContainer = styled.div<{ $active: boolean; $inverted?: boolean }>`
   background: ${(props) =>
     props.$inverted ? "rgba(0, 0, 0, 0.85)" : "rgba(255, 255, 255, 0.85)"};
   backdrop-filter: blur(4px);
-  z-index: 1000;
+  z-index: ${Z_INDEX.OVERLAY};
   animation: ${fadeIn} 0.2s ease-in-out;
 `;
 

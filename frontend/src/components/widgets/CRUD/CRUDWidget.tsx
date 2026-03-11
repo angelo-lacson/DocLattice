@@ -1,14 +1,12 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useMemo } from "react";
 import { Box } from "lucide-react";
-import Form from "@rjsf/semantic-ui";
-import validator from "@rjsf/validator-ajv8";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import {
   HorizontallyCenteredDiv,
   VerticallyCenteredDiv,
 } from "../../layout/Wrappers";
 import { FilePreviewAndUpload } from "../file-controls/FilePreviewAndUpload";
-import { CRUDProps, LooseObject } from "../../types";
+import { CRUDProps } from "../../types";
 
 /**
  * Props for the CRUDWidget component.
@@ -19,6 +17,12 @@ interface CRUDWidgetProps<T extends Record<string, any>> extends CRUDProps {
   instance: T | Partial<T>;
   showHeader: boolean;
   handleInstanceChange: (updatedInstance: T) => void;
+  /** Render prop for form fields. Receives current data, onChange, and disabled flag. */
+  renderForm: (
+    formData: T,
+    onChange: (updates: Partial<T>) => void,
+    disabled: boolean
+  ) => React.ReactNode;
 }
 
 /**
@@ -38,43 +42,11 @@ export const CRUDWidget = <T extends Record<string, any>>({
   fileLabel,
   fileIsImage,
   acceptedFileTypes,
-  uiSchema,
-  dataSchema,
   showHeader,
   handleInstanceChange,
+  renderForm,
 }: CRUDWidgetProps<T>): JSX.Element => {
   const canWrite = mode === "CREATE" || mode === "EDIT";
-
-  /**
-   * Cleans the form data by retaining only the properties defined in the data schema.
-   *
-   * @param {LooseObject} instanceData - The current instance data.
-   * @param {LooseObject} schema - The data schema defining the properties.
-   * @returns {Partial<T>} The cleaned form data.
-   */
-  const cleanFormData = useCallback(
-    (instanceData: LooseObject, schema: LooseObject): Partial<T> => {
-      return Object.keys(schema.properties).reduce((acc, key) => {
-        if (key in instanceData) {
-          acc[key as keyof T] = instanceData[key];
-        }
-        return acc;
-      }, {} as Partial<T>);
-    },
-    []
-  );
-
-  /**
-   * Handles changes in the form data and propagates them upwards.
-   *
-   * @param {Record<string, any>} param0 - The form data change event.
-   */
-  const handleChange = useCallback(
-    ({ formData }: Record<string, any>) => {
-      handleInstanceChange(formData as T);
-    },
-    [handleInstanceChange]
-  );
 
   const descriptiveName = useMemo(
     () => modelName.charAt(0).toUpperCase() + modelName.slice(1),
@@ -91,11 +63,6 @@ export const CRUDWidget = <T extends Record<string, any>>({
         return `Create ${descriptiveName}`;
     }
   }, [mode, descriptiveName, instance.title]);
-
-  const formData = useMemo(
-    () => cleanFormData(instance as T, dataSchema),
-    [instance, dataSchema, cleanFormData]
-  );
 
   return (
     <div style={{ marginBottom: "1rem" }}>
@@ -171,22 +138,12 @@ export const CRUDWidget = <T extends Record<string, any>>({
                   />
                 </div>
               )}
-              <div>
-                <Form
-                  schema={dataSchema}
-                  uiSchema={uiSchema}
-                  validator={validator}
-                  onChange={handleChange}
-                  formData={formData}
-                  noHtml5Validate
-                  liveValidate
-                  showErrorList={false}
-                  className="responsive-form"
-                >
-                  {/* Empty child suppresses rjsf's default submit button */}
-                  <div />
-                </Form>
-              </div>
+              {renderForm(
+                instance as T,
+                (updates) =>
+                  handleInstanceChange({ ...instance, ...updates } as T),
+                !canWrite
+              )}
             </div>
           </div>
         </VerticallyCenteredDiv>

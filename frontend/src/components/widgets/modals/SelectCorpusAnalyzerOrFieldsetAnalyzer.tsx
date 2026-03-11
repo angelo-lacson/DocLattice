@@ -33,9 +33,9 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import Form from "@rjsf/semantic-ui";
+import Form from "@rjsf/core";
+import { RJSFSchema } from "@rjsf/utils";
 import validator from "@rjsf/validator-ajv8";
-import { RJSFSchema, UiSchema } from "@rjsf/utils";
 import {
   GET_ANALYZERS,
   GetAnalyzersInputs,
@@ -505,6 +505,33 @@ const EmptyStateIcon = styled.div`
     width: 40px;
     height: 40px;
     color: ${OS_LEGAL_COLORS.textMuted};
+  }
+`;
+
+const RjsfFormContainer = styled.div`
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 2px solid ${OS_LEGAL_COLORS.border};
+
+  /* Style RJSF core form fields */
+  .rjsf .form-group.field {
+    margin-bottom: var(--oc-spacing-sm, 0.5rem);
+  }
+
+  .rjsf .form-control {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid ${OS_LEGAL_COLORS.border};
+    border-radius: 4px;
+    font-size: 0.875rem;
+  }
+
+  .rjsf .control-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
   }
 `;
 
@@ -1406,15 +1433,9 @@ export const SelectAnalyzerOrFieldsetModal: React.FC<
                             </div>
                           </InfoContent>
                         </InfoBox>
-                        <div
-                          style={{
-                            background: OS_LEGAL_COLORS.surfaceHover,
-                            borderRadius: "12px",
-                            padding: "1.5rem",
-                            border: "2px solid ${OS_LEGAL_COLORS.border}",
-                          }}
-                        >
+                        <RjsfFormContainer>
                           <Form
+                            id="analyzer-input-form"
                             schema={selectedAnalyzer.inputSchema as RJSFSchema}
                             validator={validator}
                             formData={analyzerInputData}
@@ -1424,7 +1445,7 @@ export const SelectAnalyzerOrFieldsetModal: React.FC<
                           >
                             <></>
                           </Form>
-                        </div>
+                        </RjsfFormContainer>
                       </FormField>
                     ) : (
                       <InfoBox>
