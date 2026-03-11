@@ -16,11 +16,21 @@ import {
   VerticallyCenteredDiv,
 } from "../../layout/Wrappers";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
+import styled from "styled-components";
+
+const ValidationErrors = styled.div`
+  color: var(--oc-color-error, ${OS_LEGAL_COLORS.danger});
+  font-size: var(--oc-font-size-sm, 0.875rem);
+  text-align: center;
+  margin-bottom: var(--oc-spacing-sm, 0.5rem);
+`;
 
 /**
  * Props for the ObjectCRUDModal component.
  */
-export interface ObjectCRUDModalProps extends CRUDProps {
+export interface ObjectCRUDModalProps<
+  T extends Record<string, any> = Record<string, any>
+> extends CRUDProps {
   open: boolean;
   oldInstance: Record<string, any>;
   propertyWidgets?: PropertyWidgets;
@@ -29,6 +39,14 @@ export interface ObjectCRUDModalProps extends CRUDProps {
   /** When true the form is over-laid with a loader and inputs are disabled */
   loading?: boolean;
   children?: React.ReactNode;
+  /** Render prop for form fields. Receives current data, onChange, and disabled flag. */
+  renderForm: (
+    formData: T,
+    onChange: (updates: Partial<T>) => void,
+    disabled: boolean
+  ) => React.ReactNode;
+  /** Optional validation function. Returns an array of error messages, or empty array if valid. */
+  validate?: (formData: T) => string[];
 }
 
 /**
@@ -38,7 +56,7 @@ export interface ObjectCRUDModalProps extends CRUDProps {
  * @param {ObjectCRUDModalProps} props - The properties passed to the component.
  * @returns {JSX.Element} The rendered CRUD modal component.
  */
-export function CRUDModal({
+export function CRUDModal<T extends Record<string, any> = Record<string, any>>({
   open,
   mode,
   hasFile,
@@ -48,14 +66,14 @@ export function CRUDModal({
   acceptedFileTypes,
   oldInstance,
   modelName,
-  uiSchema,
-  dataSchema,
   propertyWidgets,
   onSubmit,
   onClose,
   loading = false,
   children,
-}: ObjectCRUDModalProps): JSX.Element {
+  renderForm,
+  validate,
+}: ObjectCRUDModalProps<T>): JSX.Element {
   const [instanceObj, setInstanceObj] = useState<Record<string, any>>(
     oldInstance || {}
   );
@@ -64,6 +82,12 @@ export function CRUDModal({
   });
 
   const canWrite = mode !== "VIEW" && (mode === "CREATE" || mode === "EDIT");
+
+  const validationErrors = useMemo(
+    () => (validate ? validate(instanceObj as T) : []),
+    [validate, instanceObj]
+  );
+  const isValid = validationErrors.length === 0;
 
   useEffect(() => {
     setInstanceObj(oldInstance || {});
@@ -94,10 +118,6 @@ export function CRUDModal({
       ...changedFields,
     }));
   };
-
-  const appliedUISchema = useMemo(() => {
-    return canWrite ? { ...uiSchema } : { ...uiSchema, "ui:readonly": true };
-  }, [uiSchema, canWrite]);
 
   // Clone each widget so it can notify handleModelChange
   const listeningChildren: JSX.Element[] = useMemo(() => {
@@ -162,24 +182,32 @@ export function CRUDModal({
       <ModalBody style={{ position: "relative", overflow: "auto" }}>
         {/* Overlay while the mutation is running */}
         <LoadingOverlay active={loading} inverted content="Saving..." />
-        <CRUDWidget
+        <CRUDWidget<T>
           mode={mode}
-          instance={instanceObj}
+          instance={instanceObj as T}
           modelName={modelName}
-          uiSchema={appliedUISchema}
-          dataSchema={dataSchema}
           showHeader={false}
-          handleInstanceChange={handleModelChange}
+          handleInstanceChange={handleModelChange as (inst: T) => void}
           hasFile={hasFile}
           fileField={fileField}
           fileLabel={fileLabel}
           fileIsImage={fileIsImage}
           acceptedFileTypes={acceptedFileTypes}
+          renderForm={renderForm}
         />
         <VerticallyCenteredDiv>{listeningChildren}</VerticallyCenteredDiv>
         {children}
       </ModalBody>
       <ModalFooter>
+        {canWrite &&
+          validationErrors.length > 0 &&
+          !_.isEqual(oldInstance, instanceObj) && (
+            <ValidationErrors>
+              {validationErrors.map((err, i) => (
+                <div key={i}>{err}</div>
+              ))}
+            </ValidationErrors>
+          )}
         <HorizontallyCenteredDiv>
           <Button
             variant="secondary"
@@ -189,11 +217,13 @@ export function CRUDModal({
           >
             Close
           </Button>
-          {canWrite && onSubmit && !_.isEqual(oldInstance, instanceObj) && (
+          {canWrite && onSubmit && (
             <Button
               variant="primary"
               loading={loading}
-              disabled={loading}
+              disabled={
+                loading || !isValid || _.isEqual(oldInstance, instanceObj)
+              }
               leftIcon={<Check size={16} />}
               onClick={() => {
                 onSubmit(mode === "EDIT" ? updatedFieldsObj : instanceObj);

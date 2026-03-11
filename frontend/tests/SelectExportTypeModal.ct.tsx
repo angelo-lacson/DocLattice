@@ -233,6 +233,51 @@ test.describe("SelectExportTypeModal - Post-Processors", () => {
   });
 });
 
+test.describe("SelectExportTypeModal - RJSF Form Styling", () => {
+  test("should render styled RJSF form when post-processor with schema is selected", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <MockedProvider
+        mocks={[postProcessorsMock, postProcessorsMock]}
+        addTypename={false}
+      >
+        <SelectExportTypeModal open={true} onClose={() => {}} />
+      </MockedProvider>
+    );
+
+    // Wait for post-processors to load
+    await expect(page.locator("text=Select post-processors...")).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Click the dropdown to open it
+    await page.locator("text=Select post-processors...").click();
+
+    // Select the SummaryPostProcessor (has inputSchema with maxLength + includeMetadata)
+    await page.getByRole("option", { name: "SummaryPostProcessor" }).click();
+
+    // Close the dropdown by clicking outside it
+    await page.locator("text=Post-Processing Options").click();
+
+    // The RJSF form should now render with Max Length and Include Metadata fields
+    await expect(page.locator("text=Summary Generator Inputs")).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.locator("label:has-text('Max Length')")).toBeVisible();
+    await expect(
+      page.locator("label:has-text('Include Metadata')")
+    ).toBeVisible();
+
+    await docScreenshot(page, "export--config-modal--rjsf-processor-form");
+
+    // Skip unmount: RJSF Form's internal <fieldset id="root"> conflicts
+    // with Playwright CT's #root container, causing ambiguous locator.
+    // The Form now uses a custom id prop to avoid this in production.
+  });
+});
+
 test.describe("SelectExportTypeModal - Mobile Responsiveness", () => {
   test.use({ viewport: { width: 375, height: 667 } }); // iPhone SE
 
