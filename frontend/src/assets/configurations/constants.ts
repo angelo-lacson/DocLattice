@@ -139,7 +139,10 @@ export const TOOL_UNKNOWN_LABEL = "Unknown Tool";
 export const POPOVER_Z_INDEX = 100002;
 
 // Z-index layer constants for consistent stacking
+// Note: @os-legal/ui Modal uses z-index 400, so in-page overlays must stay below that.
 export const Z_INDEX = {
+  /** In-page loading overlays (position: absolute within a relative parent) */
+  OVERLAY: 10,
   /** Standard dropdown overlays (pickers, menus) */
   DROPDOWN: 100,
   /** Modal-level overlays (dialogs, full-screen) */
