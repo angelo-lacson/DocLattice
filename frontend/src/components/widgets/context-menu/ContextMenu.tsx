@@ -1,6 +1,9 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import styled from "styled-components";
-import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
+import {
+  OS_LEGAL_COLORS,
+  OS_LEGAL_TYPOGRAPHY,
+} from "../../../assets/configurations/osLegalStyles";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -13,8 +16,8 @@ export interface ContextMenuItem {
   icon?: React.ReactNode;
   /** Display label */
   label: string;
-  /** Click handler */
-  onClick: (e: React.MouseEvent) => void;
+  /** Click handler — accepts both mouse and keyboard events */
+  onClick: (e: React.MouseEvent | React.KeyboardEvent) => void;
   /** Visual variant — "danger" shows red text/hover */
   variant?: "default" | "primary" | "danger";
   /** Whether to show this item */
@@ -51,12 +54,12 @@ const MenuContainer = styled.div`
   position: fixed;
   z-index: 9999;
   min-width: 200px;
-  background: #fff;
+  background: ${OS_LEGAL_COLORS.surface};
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border-radius: 8px;
   border: 1px solid ${OS_LEGAL_COLORS.border};
   padding: 4px 0;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
 `;
 
 const MenuHeader = styled.div`
@@ -74,7 +77,9 @@ const MenuHeader = styled.div`
   max-width: 260px;
 `;
 
-const MenuItem = styled.div<{ $variant?: "default" | "primary" | "danger" }>`
+const MenuItemStyled = styled.div<{
+  $variant?: "default" | "primary" | "danger";
+}>`
   padding: 10px 14px;
   font-size: 14px;
   display: flex;
@@ -109,7 +114,6 @@ const MenuItem = styled.div<{ $variant?: "default" | "primary" | "danger" }>`
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const MENU_WIDTH = 200;
 const VIEWPORT_PADDING = 8;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -124,14 +128,25 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   "aria-label": ariaLabel = "Context menu",
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  const [boundedPosition, setBoundedPosition] = useState({
+    left: position.x,
+    top: position.y,
+  });
 
-  // Bound position to viewport
-  const getBoundedPosition = useCallback(() => {
+  const visibleItems = items.filter((item) => item.visible !== false);
+
+  // Measure actual menu dimensions after mount and adjust position
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!menu) return;
+
     let { x, y } = position;
-    const menuHeight = menuRef.current?.offsetHeight ?? 200;
+    const menuWidth = menu.offsetWidth;
+    const menuHeight = menu.offsetHeight;
 
-    if (x + MENU_WIDTH > window.innerWidth - VIEWPORT_PADDING) {
-      x = window.innerWidth - MENU_WIDTH - VIEWPORT_PADDING;
+    if (x + menuWidth > window.innerWidth - VIEWPORT_PADDING) {
+      x = window.innerWidth - menuWidth - VIEWPORT_PADDING;
     }
     if (y + menuHeight > window.innerHeight - VIEWPORT_PADDING) {
       y = window.innerHeight - menuHeight - VIEWPORT_PADDING;
@@ -139,40 +154,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     if (x < VIEWPORT_PADDING) x = VIEWPORT_PADDING;
     if (y < VIEWPORT_PADDING) y = VIEWPORT_PADDING;
 
-    return { left: x, top: y };
+    setBoundedPosition({ left: x, top: y });
   }, [position]);
-
-  // Keyboard navigation
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-        return;
-      }
-
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.preventDefault();
-        const menuItems =
-          menuRef.current?.querySelectorAll('[role="menuitem"]');
-        if (!menuItems?.length) return;
-
-        const currentIndex = Array.from(menuItems).findIndex(
-          (item) => item === document.activeElement
-        );
-        let nextIndex: number;
-        if (e.key === "ArrowDown") {
-          nextIndex =
-            currentIndex < menuItems.length - 1 ? currentIndex + 1 : 0;
-        } else {
-          nextIndex =
-            currentIndex > 0 ? currentIndex - 1 : menuItems.length - 1;
-        }
-        (menuItems[nextIndex] as HTMLElement).focus();
-      }
-    },
-    [onClose]
-  );
 
   // Focus first item on mount
   useEffect(() => {
@@ -185,8 +168,29 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     return () => clearTimeout(timer);
   }, []);
 
-  const visibleItems = items.filter((item) => item.visible !== false);
-  const bounded = getBoundedPosition();
+  // Keyboard navigation with roving tabindex
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onClose();
+      return;
+    }
+
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const menuItems = menuRef.current?.querySelectorAll('[role="menuitem"]');
+      if (!menuItems?.length) return;
+
+      let nextIndex: number;
+      if (e.key === "ArrowDown") {
+        nextIndex = focusedIndex < menuItems.length - 1 ? focusedIndex + 1 : 0;
+      } else {
+        nextIndex = focusedIndex > 0 ? focusedIndex - 1 : menuItems.length - 1;
+      }
+      setFocusedIndex(nextIndex);
+      (menuItems[nextIndex] as HTMLElement).focus();
+    }
+  };
 
   return (
     <>
@@ -195,15 +199,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         ref={menuRef}
         role="menu"
         aria-label={ariaLabel}
-        style={{ left: bounded.left, top: bounded.top }}
+        style={{ left: boundedPosition.left, top: boundedPosition.top }}
         onKeyDown={handleKeyDown}
       >
         {header && <MenuHeader title={header}>{header}</MenuHeader>}
-        {visibleItems.map((item) => (
-          <MenuItem
+        {visibleItems.map((item, index) => (
+          <MenuItemStyled
             key={item.key}
             role="menuitem"
-            tabIndex={0}
+            tabIndex={index === focusedIndex ? 0 : -1}
             $variant={item.variant}
             onClick={(e) => {
               e.stopPropagation();
@@ -212,13 +216,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                item.onClick(e as unknown as React.MouseEvent);
+                item.onClick(e);
               }
             }}
+            onFocus={() => setFocusedIndex(index)}
           >
             {item.icon}
             {item.label}
-          </MenuItem>
+          </MenuItemStyled>
         ))}
       </MenuContainer>
     </>
