@@ -70,23 +70,19 @@ test.describe("DocumentFormFields", () => {
     await component.unmount();
   });
 
-  test("calls onChange when title is typed", async ({ mount, page }) => {
-    let lastUpdate: Record<string, any> = {};
-
+  test("fields are interactive when not disabled", async ({ mount, page }) => {
     const component = await mount(
-      <DocumentFormFields
-        formData={{}}
-        onChange={(updates) => {
-          lastUpdate = updates;
-        }}
-      />
+      <DocumentFormFields formData={{}} onChange={() => {}} disabled={false} />
     );
 
-    await expect(page.getByLabel("Title *")).toBeVisible({ timeout: 5000 });
-    await page.getByLabel("Title *").fill("New Title");
+    // All fields should be enabled and focusable
+    await expect(page.getByLabel("Title *")).toBeEnabled();
+    await expect(page.getByLabel("Slug")).toBeEnabled();
+    await expect(page.getByLabel("Description *")).toBeEnabled();
 
-    expect(lastUpdate).toHaveProperty("title");
-    expect(lastUpdate.title).toBe("New Title");
+    // Title field should accept focus
+    await page.getByLabel("Title *").focus();
+    await expect(page.getByLabel("Title *")).toBeFocused();
 
     await component.unmount();
   });

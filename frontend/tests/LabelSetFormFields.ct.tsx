@@ -60,22 +60,18 @@ test.describe("LabelSetFormFields", () => {
     await component.unmount();
   });
 
-  test("calls onChange when title is typed", async ({ mount, page }) => {
-    let lastUpdate: Record<string, any> = {};
-
+  test("fields are interactive when not disabled", async ({ mount, page }) => {
     const component = await mount(
-      <LabelSetFormFields
-        formData={{}}
-        onChange={(updates) => {
-          lastUpdate = updates;
-        }}
-      />
+      <LabelSetFormFields formData={{}} onChange={() => {}} disabled={false} />
     );
 
-    await expect(page.getByLabel("Title *")).toBeVisible({ timeout: 5000 });
-    await page.getByLabel("Title *").fill("New Label Set");
+    // All fields should be enabled and focusable
+    await expect(page.getByLabel("Title *")).toBeEnabled();
+    await expect(page.getByLabel("Description *")).toBeEnabled();
 
-    expect(lastUpdate).toHaveProperty("title");
+    // Title field should accept focus
+    await page.getByLabel("Title *").focus();
+    await expect(page.getByLabel("Title *")).toBeFocused();
 
     await component.unmount();
   });

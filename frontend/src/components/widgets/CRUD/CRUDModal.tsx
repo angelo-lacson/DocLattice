@@ -197,20 +197,22 @@ export function CRUDModal<T extends Record<string, any> = Record<string, any>>({
         {children}
       </ModalBody>
       <ModalFooter>
-        {canWrite && validationErrors.length > 0 && (
-          <div
-            style={{
-              color: "var(--oc-color-error, #d32f2f)",
-              fontSize: "0.875rem",
-              textAlign: "center",
-              marginBottom: "0.5rem",
-            }}
-          >
-            {validationErrors.map((err, i) => (
-              <div key={i}>{err}</div>
-            ))}
-          </div>
-        )}
+        {canWrite &&
+          validationErrors.length > 0 &&
+          !_.isEqual(oldInstance, instanceObj) && (
+            <div
+              style={{
+                color: "var(--oc-color-error, #d32f2f)",
+                fontSize: "0.875rem",
+                textAlign: "center",
+                marginBottom: "0.5rem",
+              }}
+            >
+              {validationErrors.map((err, i) => (
+                <div key={i}>{err}</div>
+              ))}
+            </div>
+          )}
         <HorizontallyCenteredDiv>
           <Button
             variant="secondary"

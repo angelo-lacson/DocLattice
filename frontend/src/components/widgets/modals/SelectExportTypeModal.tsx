@@ -219,9 +219,24 @@ const ProcessorFormCard = styled.div`
   background: var(--oc-bg-surface);
   margin-top: var(--oc-spacing-md);
 
-  /* Style RJSF form fields inside the card */
-  .ui.form .field {
+  /* Style RJSF core form fields inside the card */
+  .rjsf .form-group.field {
     margin-bottom: var(--oc-spacing-sm);
+  }
+
+  .rjsf .form-control {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--oc-border-default, #ddd);
+    border-radius: var(--oc-radius-sm, 4px);
+    font-size: var(--oc-font-size-sm, 0.875rem);
+  }
+
+  .rjsf .control-label {
+    display: block;
+    font-size: var(--oc-font-size-sm, 0.875rem);
+    font-weight: 600;
+    margin-bottom: 0.25rem;
   }
 `;
 
@@ -445,6 +460,7 @@ export function SelectExportTypeModal({
             <h4>{procObj.title || procName} Inputs</h4>
           </ProcessorFormHeader>
           <Form
+            id={`postprocessor-${procName}`}
             schema={{
               type: "object",
               properties: procObj.inputSchema as RJSFSchema,
