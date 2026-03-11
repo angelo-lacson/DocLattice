@@ -16,6 +16,14 @@ import {
   VerticallyCenteredDiv,
 } from "../../layout/Wrappers";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
+import styled from "styled-components";
+
+const ValidationErrors = styled.div`
+  color: var(--oc-color-error, ${OS_LEGAL_COLORS.danger});
+  font-size: var(--oc-font-size-sm, 0.875rem);
+  text-align: center;
+  margin-bottom: var(--oc-spacing-sm, 0.5rem);
+`;
 
 /**
  * Props for the ObjectCRUDModal component.
@@ -174,24 +182,18 @@ export function CRUDModal<T extends Record<string, any> = Record<string, any>>({
       <ModalBody style={{ position: "relative", overflow: "auto" }}>
         {/* Overlay while the mutation is running */}
         <LoadingOverlay active={loading} inverted content="Saving..." />
-        <CRUDWidget
+        <CRUDWidget<T>
           mode={mode}
-          instance={instanceObj}
+          instance={instanceObj as T}
           modelName={modelName}
           showHeader={false}
-          handleInstanceChange={handleModelChange}
+          handleInstanceChange={handleModelChange as (inst: T) => void}
           hasFile={hasFile}
           fileField={fileField}
           fileLabel={fileLabel}
           fileIsImage={fileIsImage}
           acceptedFileTypes={acceptedFileTypes}
-          renderForm={
-            renderForm as (
-              formData: Record<string, any>,
-              onChange: (updates: Partial<Record<string, any>>) => void,
-              disabled: boolean
-            ) => React.ReactNode
-          }
+          renderForm={renderForm}
         />
         <VerticallyCenteredDiv>{listeningChildren}</VerticallyCenteredDiv>
         {children}
@@ -200,18 +202,11 @@ export function CRUDModal<T extends Record<string, any> = Record<string, any>>({
         {canWrite &&
           validationErrors.length > 0 &&
           !_.isEqual(oldInstance, instanceObj) && (
-            <div
-              style={{
-                color: "var(--oc-color-error, #d32f2f)",
-                fontSize: "0.875rem",
-                textAlign: "center",
-                marginBottom: "0.5rem",
-              }}
-            >
+            <ValidationErrors>
               {validationErrors.map((err, i) => (
                 <div key={i}>{err}</div>
               ))}
-            </div>
+            </ValidationErrors>
           )}
         <HorizontallyCenteredDiv>
           <Button
@@ -222,22 +217,21 @@ export function CRUDModal<T extends Record<string, any> = Record<string, any>>({
           >
             Close
           </Button>
-          {canWrite &&
-            onSubmit &&
-            isValid &&
-            !_.isEqual(oldInstance, instanceObj) && (
-              <Button
-                variant="primary"
-                loading={loading}
-                disabled={loading}
-                leftIcon={<Check size={16} />}
-                onClick={() => {
-                  onSubmit(mode === "EDIT" ? updatedFieldsObj : instanceObj);
-                }}
-              >
-                {mode === "EDIT" ? "Update" : "Create"}
-              </Button>
-            )}
+          {canWrite && onSubmit && (
+            <Button
+              variant="primary"
+              loading={loading}
+              disabled={
+                loading || !isValid || _.isEqual(oldInstance, instanceObj)
+              }
+              leftIcon={<Check size={16} />}
+              onClick={() => {
+                onSubmit(mode === "EDIT" ? updatedFieldsObj : instanceObj);
+              }}
+            >
+              {mode === "EDIT" ? "Update" : "Create"}
+            </Button>
+          )}
         </HorizontallyCenteredDiv>
       </ModalFooter>
     </Modal>
