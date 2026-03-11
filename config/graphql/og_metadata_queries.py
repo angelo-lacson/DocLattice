@@ -129,6 +129,7 @@ class OGMetadataQueryMixin:
                 description=document.description or "",
                 icon_url=icon_url,
                 corpus_title=None,
+                corpus_description=None,
                 creator_name=document.creator.username,
                 is_public=True,
             )
@@ -168,6 +169,7 @@ class OGMetadataQueryMixin:
                 description=document.description or "",
                 icon_url=icon_url,
                 corpus_title=corpus.title,
+                corpus_description=corpus.description or "",
                 creator_name=document.creator.username,
                 is_public=True,
             )
