@@ -1,5 +1,5 @@
 import { Loader2, Trash2, Download } from "lucide-react";
-import { IconButton } from "@os-legal/ui";
+import { IconButton, Table } from "@os-legal/ui";
 import { ExportObject } from "../../types/graphql-api";
 import { DateTimeWidget } from "../widgets/data-display/DateTimeWidget";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
@@ -7,11 +7,10 @@ import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 interface ExportItemRowProps {
   style?: Record<string, any>;
   item: ExportObject;
-  key: string;
   onDelete: (args?: any) => void | any;
 }
 
-export function ExportItemRow({ onDelete, item, key }: ExportItemRowProps) {
+export function ExportItemRow({ onDelete, item }: ExportItemRowProps) {
   let requestedTime = "";
   let requestedDate = "N/A";
   if (item.created) {
@@ -37,19 +36,19 @@ export function ExportItemRow({ onDelete, item, key }: ExportItemRowProps) {
   }
 
   return (
-    <tr key={key}>
-      <td>{item.name}</td>
-      <td>
+    <Table.Row>
+      <Table.Cell>{item.name}</Table.Cell>
+      <Table.Cell>
         <DateTimeWidget timeString={requestedTime} dateString={requestedDate} />
-      </td>
-      <td style={{ textAlign: "center" }}>
+      </Table.Cell>
+      <Table.Cell align="center">
         {!item.started ? (
           <Loader2 size={24} style={{ animation: "spin 1s linear infinite" }} />
         ) : (
           <DateTimeWidget timeString={startedTime} dateString={startedDate} />
         )}
-      </td>
-      <td style={{ textAlign: "center" }}>
+      </Table.Cell>
+      <Table.Cell align="center">
         {!item.finished || !item.started ? (
           <Loader2 size={24} style={{ animation: "spin 1s linear infinite" }} />
         ) : (
@@ -58,8 +57,8 @@ export function ExportItemRow({ onDelete, item, key }: ExportItemRowProps) {
             dateString={completedDate}
           />
         )}
-      </td>
-      <td style={{ textAlign: "center" }}>
+      </Table.Cell>
+      <Table.Cell align="center">
         <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
           <IconButton
             aria-label="Delete export"
@@ -82,7 +81,7 @@ export function ExportItemRow({ onDelete, item, key }: ExportItemRowProps) {
             </IconButton>
           )}
         </div>
-      </td>
-    </tr>
+      </Table.Cell>
+    </Table.Row>
   );
 }

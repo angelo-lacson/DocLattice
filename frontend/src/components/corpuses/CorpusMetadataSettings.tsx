@@ -481,7 +481,9 @@ export const CorpusMetadataSettings = ({
           <Table>
             <Table.Head>
               <Table.Row>
-                <Table.HeadCell>Order</Table.HeadCell>
+                <Table.HeadCell style={{ width: "6.25%" }}>
+                  Order
+                </Table.HeadCell>
                 <Table.HeadCell>Field Name</Table.HeadCell>
                 <Table.HeadCell>Data Type</Table.HeadCell>
                 <Table.HeadCell>Validation</Table.HeadCell>

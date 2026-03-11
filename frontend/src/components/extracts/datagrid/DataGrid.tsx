@@ -185,22 +185,6 @@ const styles = {
     fontSize: "0.9375rem",
     backgroundColor: "#fafbfc",
   },
-  frozenColumn: {
-    position: "sticky" as const,
-    left: 0,
-    backgroundColor: "#ffffff",
-    zIndex: 5,
-    boxShadow: "3px 0 6px rgba(0,0,0,0.05)",
-    borderRight: `1px solid ${OS_LEGAL_COLORS.border}`,
-  },
-  frozenHeaderColumn: {
-    position: "sticky" as const,
-    left: 0,
-    backgroundColor: `${OS_LEGAL_COLORS.surfaceHover} !important`,
-    zIndex: 11,
-    boxShadow: "3px 0 6px rgba(0,0,0,0.05)",
-    borderRight: `1px solid ${OS_LEGAL_COLORS.border}`,
-  },
   statusCell: {
     display: "flex",
     alignItems: "center",

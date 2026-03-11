@@ -76,7 +76,7 @@ const DocumentNameCell = styled.span`
   color: ${OS_LEGAL_COLORS.primaryBlue};
 
   &:hover {
-    color: #2563eb;
+    color: ${OS_LEGAL_COLORS.primaryBlueHover};
     text-decoration: underline;
   }
 `;

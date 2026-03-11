@@ -90,6 +90,10 @@ const UserRow = styled(Table.Row)<{ $isCurrentUser?: boolean }>`
     background-color: rgba(102, 126, 234, 0.1) !important;
     font-weight: 600;
   `}
+
+  &:hover {
+    background-color: ${OS_LEGAL_COLORS.surfaceHover} !important;
+  }
 `;
 
 const FilterBar = styled.div`
@@ -312,9 +316,15 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
               <Table variant="minimal">
                 <Table.Head>
                   <Table.Row>
-                    <Table.HeadCell>Rank</Table.HeadCell>
-                    <Table.HeadCell>User</Table.HeadCell>
-                    <Table.HeadCell>Score</Table.HeadCell>
+                    <Table.HeadCell style={{ width: "6.25%" }}>
+                      Rank
+                    </Table.HeadCell>
+                    <Table.HeadCell style={{ width: "18.75%" }}>
+                      User
+                    </Table.HeadCell>
+                    <Table.HeadCell style={{ width: "12.5%" }}>
+                      Score
+                    </Table.HeadCell>
                     <Table.HeadCell>Details</Table.HeadCell>
                   </Table.Row>
                 </Table.Head>
