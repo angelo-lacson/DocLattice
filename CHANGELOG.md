@@ -5,10 +5,17 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-09
+## [Unreleased] - 2026-03-11
 
 ### Added
 
+- **Richer social media link previews for corpus and document links**: Improved the Cloudflare OG worker to generate better social tags. Changes include:
+  - Corpus descriptions are now included in OG/Twitter description tags, combined with document count (e.g. "Corpus description — 15 documents")
+  - Document-in-corpus links now surface the parent corpus description when the document lacks its own description
+  - Added Twitter structured data tags (`twitter:label1`/`twitter:data1`, `twitter:label2`/`twitter:data2`) showing author, document count, corpus name, etc.
+  - New `corpus_description` field on `OGDocumentMetadataType` GraphQL type (`config/graphql/og_metadata_types.py`)
+  - Backend resolver returns corpus description for document-in-corpus queries (`config/graphql/og_metadata_queries.py`)
+  - Fixed pre-existing TypeScript type errors in worker test suite and metadata extraction
 - **Creative Commons license support for corpuses**: Corpuses can now have a license applied, choosing from standard Creative Commons licenses (CC BY, CC BY-SA, CC BY-NC, CC BY-NC-SA, CC BY-ND, CC BY-NC-ND, CC0) or a custom license with a URL. Changes include:
   - New `license` (CharField with SPDX identifiers) and `license_link` (URLField) fields on the Corpus model (`opencontractserver/corpuses/models.py`)
   - License constants in `opencontractserver/constants/licenses.py` and `frontend/src/assets/configurations/constants.ts`

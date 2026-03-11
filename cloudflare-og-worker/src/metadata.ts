@@ -10,6 +10,7 @@ import type {
   EntityType,
   ParsedRoute,
   OGMetadata,
+  LabeledData,
   GraphQLResponse,
   OGCorpusData,
   OGDocumentData,
@@ -58,6 +59,7 @@ const QUERIES: Record<EntityType, string> = {
         description
         iconUrl
         corpusTitle
+        corpusDescription
         creatorName
         isPublic
       }
@@ -154,11 +156,64 @@ export async function fetchOGMetadata(
 }
 
 /**
+ * Build a pluralized document count string (e.g. "1 document", "5 documents")
+ */
+function formatDocCount(count: number): string {
+  return `${count} document${count !== 1 ? "s" : ""}`;
+}
+
+/**
+ * Compose a corpus description that leads with the user-provided description
+ * and appends the document count for additional context.
+ */
+function composeCorpusDescription(
+  userDescription: string | undefined | null,
+  documentCount: number
+): string {
+  const docCountStr = formatDocCount(documentCount);
+  const desc = userDescription?.trim();
+  if (desc) {
+    return `${desc} \u2014 ${docCountStr}`;
+  }
+  return `A corpus with ${docCountStr}`;
+}
+
+/**
+ * Compose a document-in-corpus description that provides corpus context
+ * when the document itself lacks a description.
+ */
+function composeDocInCorpusDescription(
+  docDescription: string | undefined | null,
+  corpusTitle: string | undefined | null,
+  corpusDescription: string | undefined | null
+): string {
+  const docDesc = docDescription?.trim();
+  const corpusDesc = corpusDescription?.trim();
+
+  if (docDesc) {
+    // Document has its own description; append corpus context
+    if (corpusTitle) {
+      return `${docDesc} \u2014 from ${corpusTitle}`;
+    }
+    return docDesc;
+  }
+
+  // No document description — use corpus context
+  if (corpusTitle && corpusDesc) {
+    return `From ${corpusTitle}: ${corpusDesc}`;
+  }
+  if (corpusTitle) {
+    return `Document in ${corpusTitle}`;
+  }
+  return "Document on OpenContracts";
+}
+
+/**
  * Extract and normalize metadata from GraphQL response
  */
 function extractMetadata(
   type: EntityType,
-  data: Record<string, unknown>,
+  data: unknown,
   env: Env
 ): OGMetadata | null {
   switch (type) {
@@ -166,22 +221,36 @@ function extractMetadata(
       const corpus = (data as OGCorpusData).ogCorpusMetadata;
       if (!corpus || !corpus.isPublic) return null;
 
+      const labeledData: LabeledData[] = [
+        { label: "Documents", value: formatDocCount(corpus.documentCount) },
+        { label: "Author", value: corpus.creatorName },
+      ];
+
       return {
         title: corpus.title,
-        description:
-          corpus.description ||
-          `A corpus with ${corpus.documentCount} documents`,
+        description: composeCorpusDescription(
+          corpus.description,
+          corpus.documentCount
+        ),
         image: corpus.iconUrl || `${env.OG_IMAGE_BASE}/corpus-og.png`,
         type,
         entityName: corpus.title,
         creatorName: corpus.creatorName,
         documentCount: corpus.documentCount,
+        labeledData,
       };
     }
 
     case "document": {
       const doc = (data as OGDocumentData).ogDocumentMetadata;
       if (!doc || !doc.isPublic) return null;
+
+      const labeledData: LabeledData[] = [
+        { label: "Author", value: doc.creatorName },
+      ];
+      if (doc.corpusTitle) {
+        labeledData.unshift({ label: "Corpus", value: doc.corpusTitle });
+      }
 
       return {
         title: doc.title,
@@ -191,6 +260,7 @@ function extractMetadata(
         entityName: doc.title,
         creatorName: doc.creatorName,
         corpusTitle: doc.corpusTitle || undefined,
+        labeledData,
       };
     }
 
@@ -201,18 +271,26 @@ function extractMetadata(
       ).ogDocumentInCorpusMetadata;
       if (!doc || !doc.isPublic) return null;
 
+      const labeledData: LabeledData[] = [
+        { label: "Author", value: doc.creatorName },
+      ];
+      if (doc.corpusTitle) {
+        labeledData.unshift({ label: "Corpus", value: doc.corpusTitle });
+      }
+
       return {
         title: doc.title,
-        description:
-          doc.description ||
-          (doc.corpusTitle
-            ? `Document in ${doc.corpusTitle}`
-            : "Document on OpenContracts"),
+        description: composeDocInCorpusDescription(
+          doc.description,
+          doc.corpusTitle,
+          doc.corpusDescription
+        ),
         image: doc.iconUrl || `${env.OG_IMAGE_BASE}/document-og.png`,
         type,
         entityName: doc.title,
         creatorName: doc.creatorName,
         corpusTitle: doc.corpusTitle || undefined,
+        labeledData,
       };
     }
 
@@ -220,20 +298,32 @@ function extractMetadata(
       const thread = (data as OGThreadData).ogThreadMetadata;
       if (!thread || !thread.isPublic) return null;
 
+      const messageStr = `${thread.messageCount} message${thread.messageCount !== 1 ? "s" : ""}`;
+      const labeledData: LabeledData[] = [
+        { label: "Corpus", value: thread.corpusTitle },
+        { label: "Messages", value: messageStr },
+      ];
+
       return {
         title: thread.title || "Discussion",
-        description: `Discussion in ${thread.corpusTitle} with ${thread.messageCount} messages`,
+        description: `Discussion in ${thread.corpusTitle} \u2014 ${messageStr}`,
         image: `${env.OG_IMAGE_BASE}/discussion-og.png`,
         type,
         entityName: thread.title || "Discussion",
         creatorName: thread.creatorName,
         corpusTitle: thread.corpusTitle,
+        labeledData,
       };
     }
 
     case "extract": {
       const extract = (data as OGExtractData).ogExtractMetadata;
       if (!extract || !extract.isPublic) return null;
+
+      const labeledData: LabeledData[] = [
+        { label: "Fieldset", value: extract.fieldsetName },
+        { label: "Corpus", value: extract.corpusTitle },
+      ];
 
       return {
         title: extract.name,
@@ -243,6 +333,7 @@ function extractMetadata(
         entityName: extract.name,
         creatorName: extract.creatorName,
         corpusTitle: extract.corpusTitle,
+        labeledData,
       };
     }
 

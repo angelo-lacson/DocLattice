@@ -37,6 +37,14 @@ export interface ParsedRoute {
 }
 
 /**
+ * Labeled data pair for Twitter structured card previews
+ */
+export interface LabeledData {
+  label: string;
+  value: string;
+}
+
+/**
  * Open Graph metadata for social media previews
  */
 export interface OGMetadata {
@@ -48,6 +56,8 @@ export interface OGMetadata {
   creatorName: string;
   documentCount?: number;
   corpusTitle?: string;
+  /** Structured key-value pairs for Twitter summary cards */
+  labeledData?: LabeledData[];
 }
 
 /**
@@ -85,6 +95,7 @@ export interface OGDocumentData {
     description: string;
     iconUrl: string | null;
     corpusTitle: string | null;
+    corpusDescription: string | null;
     creatorName: string;
     isPublic: boolean;
   } | null;
