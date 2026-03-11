@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Tab, Menu } from "semantic-ui-react";
+import { Tab } from "semantic-ui-react";
 import _ from "lodash";
 import { toast } from "react-toastify";
 import {
