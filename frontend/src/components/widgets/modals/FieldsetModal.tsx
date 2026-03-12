@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery } from "@apollo/client";
 import { toast } from "react-toastify";
 import styled from "styled-components";
@@ -860,7 +861,7 @@ export const FieldsetModal: React.FC<FieldsetModalProps> = ({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <>
       <ModalOverlay
         initial={{ opacity: 0 }}
@@ -1043,6 +1044,7 @@ export const FieldsetModal: React.FC<FieldsetModalProps> = ({
         }}
         onSubmit={handleColumnSubmit}
       />
-    </>
+    </>,
+    document.body
   );
 };
