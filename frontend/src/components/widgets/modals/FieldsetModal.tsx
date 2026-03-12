@@ -22,18 +22,17 @@ import {
 } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Button } from "@os-legal/ui";
 import {
   X,
   Database,
   Plus,
   GripVertical,
   ChevronDown,
-  ChevronUp,
   Edit3,
   Trash2,
   AlertCircle,
   Save,
-  Loader2,
 } from "lucide-react";
 import {
   REQUEST_CREATE_FIELDSET,
@@ -64,56 +63,66 @@ import {
 } from "../../../types/graphql-api";
 import { CreateColumnModal } from "./CreateColumnModal";
 
-// Styled Components
-const ModalOverlay = styled(motion.div)`
+// Styled Components — aligned with CreateExtractModal gold standard
+const ModalOverlay = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 999999;
-  padding: 1rem;
+  z-index: 1000;
+  padding: 2rem;
 `;
 
 const ModalContainer = styled(motion.div)`
   background: white;
-  border-radius: 24px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
   max-width: 800px;
   width: 100%;
-  max-height: 90vh;
+  max-height: 85vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+
+  @media (max-width: 768px) {
+    max-width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
 `;
 
 const ModalHeader = styled.div`
-  padding: 2rem 2rem 1.5rem;
+  padding: 2rem 2.5rem 1.75rem;
   border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  position: relative;
   background: linear-gradient(
-    180deg,
-    ${OS_LEGAL_COLORS.surfaceHover} 0%,
-    rgba(250, 251, 252, 0) 100%
+    to bottom,
+    #fbfcfd 0%,
+    ${OS_LEGAL_COLORS.gray50} 100%
   );
 `;
 
-const HeaderTitle = styled.h2`
+const ModalTitle = styled.h2`
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.625rem;
   font-weight: 700;
   color: ${OS_LEGAL_COLORS.textPrimary};
+  letter-spacing: -0.025em;
   display: flex;
   align-items: center;
   gap: 0.75rem;
 `;
 
-const HeaderSubtitle = styled.p`
-  margin: 0.5rem 0 0;
-  color: ${OS_LEGAL_COLORS.textSecondary};
+const ModalSubtitle = styled.p`
+  margin: 0.625rem 0 0;
   font-size: 0.9375rem;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   line-height: 1.5;
+  max-width: 85%;
 `;
 
 const CloseButton = styled(motion.button)`
@@ -122,14 +131,15 @@ const CloseButton = styled(motion.button)`
   right: 1.5rem;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
-  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: 10px;
+  border: none;
   background: white;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 
   svg {
     width: 20px;
@@ -138,74 +148,111 @@ const CloseButton = styled(motion.button)`
   }
 
   &:hover {
-    background: ${OS_LEGAL_COLORS.surfaceHover};
-    border-color: ${OS_LEGAL_COLORS.borderHover};
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+
     svg {
       color: ${OS_LEGAL_COLORS.textTertiary};
     }
   }
 `;
 
-const ModalContent = styled.div`
-  padding: 2rem;
+const ModalBody = styled.div`
   flex: 1;
   overflow-y: auto;
+  padding: 2rem 2.5rem;
+  background: white;
+
+  @media (max-width: 768px) {
+    padding: 1.5rem;
+  }
 `;
 
 const FormSection = styled.div`
-  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin-bottom: 1.75rem;
 `;
 
 const Label = styled.label`
-  display: block;
   font-size: 0.875rem;
   font-weight: 600;
   color: ${OS_LEGAL_COLORS.textPrimary};
-  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  letter-spacing: 0.025em;
 `;
 
 const Input = styled.input`
   width: 100%;
-  padding: 0.875rem 1rem;
-  border: 2px solid ${OS_LEGAL_COLORS.border};
-  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  border: 1.5px solid ${OS_LEGAL_COLORS.border};
+  border-radius: 10px;
   font-size: 0.9375rem;
   transition: all 0.2s ease;
-  background: white;
+  background: #ffffff;
+  color: ${OS_LEGAL_COLORS.textPrimary};
+  box-sizing: border-box;
+
+  &:hover:not(:focus) {
+    border-color: ${OS_LEGAL_COLORS.borderHover};
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+  }
 
   &:focus {
     outline: none;
     border-color: ${OS_LEGAL_COLORS.primaryBlue};
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    box-shadow: 0 0 0 3.5px rgba(59, 130, 246, 0.12);
+    background: #ffffff;
+  }
+
+  &::placeholder {
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 
   &:disabled {
     background: ${OS_LEGAL_COLORS.surfaceHover};
     cursor: not-allowed;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
 const TextArea = styled.textarea`
   width: 100%;
-  padding: 0.875rem 1rem;
-  border: 2px solid ${OS_LEGAL_COLORS.border};
-  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  border: 1.5px solid ${OS_LEGAL_COLORS.border};
+  border-radius: 10px;
   font-size: 0.9375rem;
   font-family: inherit;
   resize: vertical;
   min-height: 100px;
   transition: all 0.2s ease;
-  background: white;
+  background: #ffffff;
+  color: ${OS_LEGAL_COLORS.textPrimary};
+  box-sizing: border-box;
+
+  &:hover:not(:focus) {
+    border-color: ${OS_LEGAL_COLORS.borderHover};
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+  }
 
   &:focus {
     outline: none;
     border-color: ${OS_LEGAL_COLORS.primaryBlue};
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    box-shadow: 0 0 0 3.5px rgba(59, 130, 246, 0.12);
+    background: #ffffff;
+  }
+
+  &::placeholder {
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 
   &:disabled {
     background: ${OS_LEGAL_COLORS.surfaceHover};
     cursor: not-allowed;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
@@ -237,9 +284,9 @@ const AddColumnButton = styled(motion.button).attrs({
   background: ${OS_LEGAL_COLORS.primaryBlue};
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
 
@@ -257,8 +304,8 @@ const ColumnsList = styled.div`
 const EmptyState = styled.div`
   text-align: center;
   padding: 3rem 1rem;
-  border: 2px dashed ${OS_LEGAL_COLORS.border};
-  border-radius: 12px;
+  border: 1.5px dashed ${OS_LEGAL_COLORS.border};
+  border-radius: 10px;
   background: ${OS_LEGAL_COLORS.surfaceHover};
 `;
 
@@ -269,91 +316,64 @@ const EmptyStateText = styled.p`
 `;
 
 const ModalFooter = styled.div`
-  padding: 1.5rem 2rem;
+  padding: 1.5rem 2.5rem 1.75rem;
   border-top: 1px solid ${OS_LEGAL_COLORS.border};
-  background: ${OS_LEGAL_COLORS.surfaceHover};
+  background: linear-gradient(
+    to top,
+    #fbfcfd 0%,
+    ${OS_LEGAL_COLORS.gray50} 100%
+  );
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
+
+  @media (max-width: 640px) {
+    flex-direction: column-reverse;
+    padding: 1.25rem 1.5rem;
+  }
 `;
 
-const ValidationMessage = styled.div`
+const FooterInfo = styled.div`
+  font-size: 0.8125rem;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: ${OS_LEGAL_COLORS.danger};
-  font-size: 0.875rem;
 
   svg {
     width: 16px;
     height: 16px;
+  }
+
+  @media (max-width: 640px) {
+    text-align: center;
   }
 `;
 
 const ButtonGroup = styled.div`
   display: flex;
   gap: 0.75rem;
-`;
 
-const Button = styled(motion.button)<{ $variant?: "primary" | "secondary" }>`
-  padding: 0.75rem 1.5rem;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 0.9375rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-
-  ${(props) =>
-    props.$variant === "primary"
-      ? `
-    background: ${OS_LEGAL_COLORS.primaryBlue};
-    color: white;
-    border: 2px solid ${OS_LEGAL_COLORS.primaryBlue};
-
-    &:hover:not(:disabled) {
-      background: ${OS_LEGAL_COLORS.primaryBlueHover};
-      border-color: ${OS_LEGAL_COLORS.primaryBlueHover};
-    }
-
-    &:disabled {
-      background: ${OS_LEGAL_COLORS.textMuted};
-      border-color: ${OS_LEGAL_COLORS.textMuted};
-      cursor: not-allowed;
-    }
-  `
-      : `
-    background: white;
-    color: ${OS_LEGAL_COLORS.textSecondary};
-    border: 2px solid ${OS_LEGAL_COLORS.border};
-
-    &:hover:not(:disabled) {
-      background: ${OS_LEGAL_COLORS.surfaceHover};
-      border-color: ${OS_LEGAL_COLORS.borderHover};
-      color: ${OS_LEGAL_COLORS.textTertiary};
-    }
-  `}
-`;
-
-const SpinningLoader = styled(motion.div)`
-  color: ${OS_LEGAL_COLORS.primaryBlue};
+  @media (max-width: 640px) {
+    width: 100%;
+    flex-direction: column-reverse;
+  }
 `;
 
 // Collapsible Column Card Component
 const ColumnCard = styled(motion.div)<{ $isDragging?: boolean }>`
   background: white;
-  border: 2px solid
+  border: 1.5px solid
     ${(props) =>
       props.$isDragging ? OS_LEGAL_COLORS.primaryBlue : OS_LEGAL_COLORS.border};
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
   transition: all 0.2s ease;
   box-shadow: ${(props) =>
     props.$isDragging
       ? "0 10px 30px -10px rgba(59, 130, 246, 0.3)"
-      : "0 1px 3px 0 rgba(0, 0, 0, 0.1)"};
+      : "0 1px 3px 0 rgba(0, 0, 0, 0.06)"};
 `;
 
 const ColumnHeader = styled.div`
@@ -409,17 +429,18 @@ const ColumnActions = styled.div`
   gap: 0.5rem;
 `;
 
-const IconButton = styled(motion.button)`
+const IconBtn = styled(motion.button)`
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border: none;
   background: white;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 
   svg {
     width: 16px;
@@ -428,8 +449,8 @@ const IconButton = styled(motion.button)`
   }
 
   &:hover {
-    background: ${OS_LEGAL_COLORS.surfaceHover};
-    border-color: ${OS_LEGAL_COLORS.borderHover};
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
     svg {
       color: ${OS_LEGAL_COLORS.textTertiary};
     }
@@ -529,20 +550,20 @@ const CollapsibleColumnCard: React.FC<CollapsibleColumnCardProps> = ({
           <ColumnType>{column.outputType}</ColumnType>
         </ColumnInfo>
         <ColumnActions onClick={(e) => e.stopPropagation()}>
-          <IconButton
+          <IconBtn
             onClick={() => onEdit(column)}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
             <Edit3 />
-          </IconButton>
-          <IconButton
+          </IconBtn>
+          <IconBtn
             onClick={() => onDelete(column.id)}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
             <Trash2 />
-          </IconButton>
+          </IconBtn>
         </ColumnActions>
         <ExpandIcon $expanded={expanded}>
           <ChevronDown />
@@ -863,12 +884,7 @@ export const FieldsetModal: React.FC<FieldsetModalProps> = ({
 
   return createPortal(
     <>
-      <ModalOverlay
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-      >
+      <ModalOverlay onClick={onClose}>
         <ModalContainer
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -876,13 +892,13 @@ export const FieldsetModal: React.FC<FieldsetModalProps> = ({
           onClick={(e) => e.stopPropagation()}
         >
           <ModalHeader>
-            <HeaderTitle>
+            <ModalTitle>
               <Database size={24} />
               {isEditMode ? "Edit Fieldset" : "Create New Fieldset"}
-            </HeaderTitle>
-            <HeaderSubtitle>
+            </ModalTitle>
+            <ModalSubtitle>
               Define the structure for extracting data from documents
-            </HeaderSubtitle>
+            </ModalSubtitle>
             <CloseButton
               onClick={onClose}
               whileHover={{ scale: 1.05 }}
@@ -892,7 +908,7 @@ export const FieldsetModal: React.FC<FieldsetModalProps> = ({
             </CloseButton>
           </ModalHeader>
 
-          <ModalContent>
+          <ModalBody>
             <FormSection>
               <Label>Name</Label>
               <Input
@@ -982,53 +998,39 @@ export const FieldsetModal: React.FC<FieldsetModalProps> = ({
                 </DndContext>
               )}
             </ColumnsSection>
-          </ModalContent>
+          </ModalBody>
 
           <ModalFooter>
-            {!canSave && (
-              <ValidationMessage>
-                <AlertCircle />
-                {!name.trim()
-                  ? "Please provide a fieldset name"
-                  : "Please add at least one column"}
-              </ValidationMessage>
-            )}
-            {canSave && <div />}
+            <FooterInfo>
+              {!canSave ? (
+                <>
+                  <AlertCircle />
+                  {!name.trim()
+                    ? "Please provide a fieldset name"
+                    : "Please add at least one column"}
+                </>
+              ) : isEditMode ? (
+                "Editing existing fieldset definition"
+              ) : (
+                "All required fields must be filled before submitting"
+              )}
+            </FooterInfo>
             <ButtonGroup>
               <Button
+                variant="secondary"
                 onClick={onClose}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                disabled={isLoading}
               >
                 Cancel
               </Button>
               <Button
-                $variant="primary"
+                variant="primary"
                 onClick={handleSave}
+                loading={isLoading}
                 disabled={!canSave || isLoading}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                leftIcon={<Save size={16} />}
               >
-                {isLoading ? (
-                  <>
-                    <SpinningLoader
-                      animate={{ rotate: 360 }}
-                      transition={{
-                        duration: 1,
-                        repeat: Infinity,
-                        ease: "linear",
-                      }}
-                    >
-                      <Loader2 size={18} />
-                    </SpinningLoader>
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save size={18} />
-                    {isEditMode ? "Update Fieldset" : "Create Fieldset"}
-                  </>
-                )}
+                {isEditMode ? "Update Fieldset" : "Create Fieldset"}
               </Button>
             </ButtonGroup>
           </ModalFooter>
