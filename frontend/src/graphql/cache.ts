@@ -102,6 +102,11 @@ export const cache = new InMemoryCache({
           keyArgs: ["corpusId"],
           merge: false,
         },
+        // Corpus-specific version list for version selector UI
+        corpusVersions: {
+          keyArgs: ["corpusId"],
+          merge: false,
+        },
         // Version metadata fields with corpus context
         versionNumber: {
           keyArgs: ["corpusId"],
