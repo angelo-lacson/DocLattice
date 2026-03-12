@@ -192,6 +192,13 @@ const LoadingContainer = styled.div`
 
 type FilterTab = "all" | "corpus" | "document" | "general";
 
+const FILTER_ITEMS: FilterTabItem[] = [
+  { id: "all", label: "All" },
+  { id: "corpus", label: "Corpus" },
+  { id: "document", label: "Document" },
+  { id: "general", label: "General" },
+];
+
 /**
  * Thread section component - handles its own query
  */
@@ -309,13 +316,6 @@ export const GlobalDiscussions: React.FC = () => {
     }
   }, [searchParams]);
 
-  const filterItems: FilterTabItem[] = [
-    { id: "all", label: "All" },
-    { id: "corpus", label: "Corpus" },
-    { id: "document", label: "Document" },
-    { id: "general", label: "General" },
-  ];
-
   return (
     <Container>
       <Header>
@@ -325,7 +325,7 @@ export const GlobalDiscussions: React.FC = () => {
 
         <FilterBar>
           <FilterTabs
-            items={filterItems}
+            items={FILTER_ITEMS}
             value={activeTab}
             onChange={(id) => setActiveTab(id as FilterTab)}
           />
@@ -334,7 +334,7 @@ export const GlobalDiscussions: React.FC = () => {
             <SearchBox
               placeholder="Search discussions..."
               value={searchInput}
-              onChange={setSearchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
           </SearchContainer>
         </FilterBar>
