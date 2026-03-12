@@ -621,6 +621,7 @@ export const FieldsetModal: React.FC<FieldsetModalProps> = ({
   existingFieldset,
   mode = "create",
 }) => {
+  const [isMounted, setIsMounted] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [columns, setColumns] = useState<ColumnTypeFromAPI[]>([]);
@@ -631,6 +632,18 @@ export const FieldsetModal: React.FC<FieldsetModalProps> = ({
   const [isDirty, setIsDirty] = useState(false);
 
   const isEditMode = mode === "edit" && existingFieldset;
+
+  // Delay mount slightly so any phantom click from the trigger button
+  // (e.g. dropdown option removed mid-click) is absorbed before the
+  // overlay becomes interactive.
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => setIsMounted(true), 50);
+      return () => clearTimeout(timer);
+    } else {
+      setIsMounted(false);
+    }
+  }, [open]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -880,7 +893,7 @@ export const FieldsetModal: React.FC<FieldsetModalProps> = ({
 
   const canSave = name.trim() && columns.length > 0;
 
-  if (!open) return null;
+  if (!open || !isMounted) return null;
 
   return createPortal(
     <>
