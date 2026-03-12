@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   gql,
   Reference,
@@ -1095,7 +1096,7 @@ export const SelectAnalyzerOrFieldsetModal: React.FC<
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <ModalOverlay
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -1584,6 +1585,7 @@ export const SelectAnalyzerOrFieldsetModal: React.FC<
           )}
         </AnimatePresence>
       </ModalContainer>
-    </ModalOverlay>
+    </ModalOverlay>,
+    window.document.body
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import styled from "styled-components";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
@@ -22,6 +23,8 @@ import {
 } from "../../../graphql/mutations";
 import { toast } from "react-toastify";
 
+// Uses createPortal to render at document.body, bypassing ancestor
+// overflow:hidden containers that would clip position:fixed content.
 // TODO: Migrate to @os-legal/ui Modal when available — currently uses custom
 // ModalOverlay/ModalContainer for framer-motion animation support
 const ModalOverlay = styled.div`
@@ -491,7 +494,7 @@ export const CreateExtractModal: React.FC<ExtractModalProps> = ({
 
   const isLoading = isSubmitting || createExtractLoading;
 
-  return (
+  return createPortal(
     <ModalOverlay onClick={handleClose}>
       <ModalContainer
         initial={{ opacity: 0, scale: 0.95 }}
@@ -622,6 +625,7 @@ export const CreateExtractModal: React.FC<ExtractModalProps> = ({
           content="Creating your extract..."
         />
       </ModalContainer>
-    </ModalOverlay>
+    </ModalOverlay>,
+    document.body
   );
 };
