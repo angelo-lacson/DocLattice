@@ -689,6 +689,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         hasTimeline:
           assistantMsg.hasTimeline ??
           (timelineData ? timelineData.length > 0 : false),
+        timeline: timelineData || assistantMsg.timeline || [],
       };
 
       return updatedMessages;
@@ -743,6 +744,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
           content,
           timestamp: messageTimestamp,
           sources: mappedSources.length ? mappedSources : existingMsg.sources,
+          timeline: timelineData || existingMsg.timeline,
         };
         const updatedMessages = [...prev.messages];
         updatedMessages[existingIndex] = updatedMsg;
@@ -760,6 +762,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               content,
               timestamp: messageTimestamp,
               sources: mappedSources,
+              timeline: timelineData || [],
             },
           ],
           selectedMessageId: overrideId ? prev.selectedMessageId : messageId,
