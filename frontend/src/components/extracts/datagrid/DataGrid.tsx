@@ -1089,11 +1089,17 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                   bottom: "16px",
                   left: "16px",
                   zIndex: 1000,
+                  width: "40px",
+                  height: "40px",
                   borderRadius: "50%",
+                  background: OS_LEGAL_COLORS.primaryBlue,
+                  color: "#ffffff",
+                  boxShadow: "0 4px 12px rgba(59, 130, 246, 0.35)",
+                  border: "none",
                 }}
                 disabled={loading}
               >
-                <Plus size={16} />
+                <Plus size={18} />
               </IconButton>
             </Tooltip>
           )}

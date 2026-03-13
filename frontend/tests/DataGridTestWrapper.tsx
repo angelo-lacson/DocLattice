@@ -3,27 +3,6 @@ import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { InMemoryCache } from "@apollo/client";
 import { MemoryRouter } from "react-router-dom";
 import { ExtractDataGrid } from "../src/components/extracts/datagrid/DataGrid";
-
-// Error boundary to surface render errors visibly instead of blank screen
-class ErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { error: string | null }
-> {
-  state = { error: null as string | null };
-  static getDerivedStateFromError(error: Error) {
-    return { error: `${error.name}: ${error.message}` };
-  }
-  render() {
-    if (this.state.error) {
-      return (
-        <pre data-testid="error-boundary" style={{ color: "red" }}>
-          {this.state.error}
-        </pre>
-      );
-    }
-    return this.props.children;
-  }
-}
 import {
   REQUEST_APPROVE_DATACELL,
   REQUEST_EDIT_DATACELL,
@@ -44,6 +23,30 @@ import {
   ExtractType,
   PageInfo,
 } from "../src/types/graphql-api";
+
+// ---------------------------------------------------------------------------
+// Error boundary to surface render errors visibly instead of blank screen
+// ---------------------------------------------------------------------------
+
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: string | null }
+> {
+  state = { error: null as string | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error: `${error.name}: ${error.message}` };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <pre data-testid="error-boundary" style={{ color: "red" }}>
+          {this.state.error}
+        </pre>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Default mock data
