@@ -4,6 +4,7 @@ import {
   OS_LEGAL_COLORS,
   OS_LEGAL_TYPOGRAPHY,
 } from "../../../assets/configurations/osLegalStyles";
+import { Z_INDEX } from "../../../assets/configurations/constants";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -47,12 +48,12 @@ const MenuOverlay = styled.div`
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 9998;
+  z-index: ${Z_INDEX.CONTEXT_MENU_OVERLAY};
 `;
 
 const MenuContainer = styled.div`
   position: fixed;
-  z-index: 9999;
+  z-index: ${Z_INDEX.CONTEXT_MENU};
   min-width: 200px;
   background: ${OS_LEGAL_COLORS.surface};
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -128,20 +129,22 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   "aria-label": ariaLabel = "Context menu",
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
-  const [focusedIndex, setFocusedIndex] = useState(0);
+  const visibleItems = items.filter((item) => item.visible !== false);
+  const [focusedIndex, setFocusedIndex] = useState(
+    visibleItems.length > 0 ? 0 : -1
+  );
   const [boundedPosition, setBoundedPosition] = useState({
     left: position.x,
     top: position.y,
   });
-
-  const visibleItems = items.filter((item) => item.visible !== false);
 
   // Measure actual menu dimensions after mount and adjust position
   useLayoutEffect(() => {
     const menu = menuRef.current;
     if (!menu) return;
 
-    let { x, y } = position;
+    let x = position.x;
+    let y = position.y;
     const menuWidth = menu.offsetWidth;
     const menuHeight = menu.offsetHeight;
 
@@ -155,7 +158,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     if (y < VIEWPORT_PADDING) y = VIEWPORT_PADDING;
 
     setBoundedPosition({ left: x, top: y });
-  }, [position]);
+  }, [position.x, position.y]);
 
   // Focus first item on mount
   useEffect(() => {
@@ -194,7 +197,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
   return (
     <>
-      <MenuOverlay onClick={onClose} />
+      <MenuOverlay onClick={onClose} aria-hidden="true" />
       <MenuContainer
         ref={menuRef}
         role="menu"
