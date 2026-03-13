@@ -617,3 +617,38 @@ export const NavigationTitle = styled.span`
   font-weight: 600;
   color: #1a202c;
 `;
+
+export const ContextExhaustedBanner = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(
+    135deg,
+    ${OS_LEGAL_COLORS.warningSurface} 0%,
+    #fef3c7 100%
+  );
+  border-top: 1px solid ${OS_LEGAL_COLORS.warningBorder};
+  font-size: 0.8125rem;
+  color: ${OS_LEGAL_COLORS.warningText};
+  flex-shrink: 0;
+
+  button {
+    padding: 0.375rem 0.75rem;
+    border: 1px solid ${OS_LEGAL_COLORS.warningBorder};
+    border-radius: 6px;
+    background: white;
+    color: ${OS_LEGAL_COLORS.warningText};
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+
+    &:hover {
+      background: ${OS_LEGAL_COLORS.warningSurface};
+      border-color: ${OS_LEGAL_COLORS.warningText};
+    }
+  }
+`;

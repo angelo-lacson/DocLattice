@@ -66,6 +66,7 @@ import type {
 
 import {
   ChatContainer,
+  ContextExhaustedBanner,
   ConversationIndicator,
   ChatNavigationHeader,
   BackButton,
@@ -142,6 +143,9 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
 
   // Track whether the assistant is currently generating a response
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+  // Track whether the anonymous session context has been exhausted
+  const [contextExhausted, setContextExhausted] = useState(false);
 
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | undefined
@@ -435,6 +439,11 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
             }
             break;
           case "ASYNC_ERROR":
+            if (data?.error_type === "CONTEXT_EXHAUSTED") {
+              setContextExhausted(true);
+              setIsProcessing(false);
+              break;
+            }
             setWsError(data?.error || "Agent error");
             finalizeStreamingResponse(
               data?.error || "Error",
@@ -546,6 +555,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
    * Start a brand-new chat (unselect existing conversation).
    */
   const startNewChat = useCallback((): void => {
+    setContextExhausted(false);
     setIsNewChat(true);
     setSelectedConversationId(undefined);
     setShowLoad(false);
@@ -1256,6 +1266,20 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                   )}
                 </div>
               )}
+              {/* Context exhausted banner */}
+              {contextExhausted && (
+                <ContextExhaustedBanner>
+                  <span>This conversation has reached its context limit.</span>
+                  <button
+                    onClick={() => {
+                      setContextExhausted(false);
+                      startNewChat();
+                    }}
+                  >
+                    Start New Chat
+                  </button>
+                </ContextExhaustedBanner>
+              )}
               {/* Input */}
               <ChatInputWrapper>
                 <EnhancedChatInputContainer
@@ -1310,7 +1334,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                             : "Type your corpus query..."
                           : "Waiting for connection..."
                       }
-                      disabled={!wsReady || isProcessing}
+                      disabled={!wsReady || isProcessing || contextExhausted}
                       onKeyPress={(e: { key: string }) => {
                         if (e.key === "Enter") {
                           sendMessageOverSocket();
@@ -1318,7 +1342,12 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                       }}
                     />
                     <EnhancedSendButton
-                      disabled={!wsReady || !newMessage.trim() || isProcessing}
+                      disabled={
+                        !wsReady ||
+                        !newMessage.trim() ||
+                        isProcessing ||
+                        contextExhausted
+                      }
                       onClick={sendMessageOverSocket}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
