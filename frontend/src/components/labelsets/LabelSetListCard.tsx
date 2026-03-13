@@ -197,7 +197,7 @@ export const LabelSetListCard: React.FC<LabelSetListCardProps> = ({
       {isMenuOpen && menuPosition && (
         <ContextMenu
           position={menuPosition}
-          onClose={() => onCloseMenu?.()}
+          onClose={onCloseMenu ?? (() => {})}
           aria-label="Label set actions"
           items={
             [

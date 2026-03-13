@@ -147,6 +147,10 @@ export const Z_INDEX = {
   DROPDOWN: 100,
   /** Modal-level overlays (dialogs, full-screen) */
   MODAL: 1000,
+  /** Full-viewport transparent overlay behind context menus (click-outside capture) */
+  CONTEXT_MENU_OVERLAY: 9998,
+  /** Floating context menu container */
+  CONTEXT_MENU: 9999,
 } as const;
 /** Gap in pixels between the badge and the popover */
 export const POPOVER_GAP = 8;

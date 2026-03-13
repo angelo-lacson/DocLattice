@@ -202,7 +202,7 @@ export const ExtractListCard: React.FC<ExtractListCardProps> = ({
       {isMenuOpen && menuPosition && (
         <ContextMenu
           position={menuPosition}
-          onClose={() => onCloseMenu?.()}
+          onClose={onCloseMenu ?? (() => {})}
           aria-label="Extract actions"
           items={
             [
