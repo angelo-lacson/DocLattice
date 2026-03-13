@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import styled from "styled-components";
-import { accentAlpha } from "../assets/configurations/osLegalStyles";
+import {
+  accentAlpha,
+  OS_LEGAL_COLORS,
+} from "../assets/configurations/osLegalStyles";
 import { motion } from "framer-motion";
 import { MessageSquare, Database, FileText, Plus } from "lucide-react";
 import { FilterTabs, SearchBox } from "@os-legal/ui";
@@ -61,49 +64,58 @@ const Container = styled.div`
 `;
 
 const Header = styled.div`
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.5rem;
 `;
 
 const TitleRow = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.25rem;
 `;
 
 const Title = styled.h1`
   font-family: ${CORPUS_FONTS.serif};
-  font-size: 2.25rem;
-  font-weight: 600;
+  font-size: 2rem;
+  font-weight: 700;
   color: ${CORPUS_COLORS.slate[900]};
   margin: 0;
   letter-spacing: -0.02em;
 
   ${mediaQuery.mobile} {
-    font-size: 1.75rem;
+    font-size: 1.5rem;
   }
 `;
 
 const FilterBar = styled.div`
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   align-items: center;
   margin-bottom: 1.5rem;
   flex-wrap: wrap;
+
+  ${mediaQuery.mobile} {
+    gap: 0.5rem;
+  }
 `;
 
 const SearchContainer = styled.div`
   flex: 1;
   min-width: 12.5rem;
-  max-width: 25rem;
+  max-width: 20rem;
+
+  ${mediaQuery.mobile} {
+    min-width: 100%;
+    max-width: none;
+  }
 `;
 
 const FAB = styled(motion.button)`
   position: fixed;
   bottom: 2rem;
   right: 2rem;
-  width: 3.5rem;
-  height: 3.5rem;
+  width: 3rem;
+  height: 3rem;
   border-radius: ${CORPUS_RADII.xl};
   background: linear-gradient(
     135deg,
@@ -130,33 +142,38 @@ const FAB = styled(motion.button)`
 `;
 
 const SectionContainer = styled(motion.div)`
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
 `;
 
 const SectionHeader = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.625rem;
   border-bottom: 1px solid ${CORPUS_COLORS.slate[200]};
 `;
 
 const SectionIcon = styled.div<{ $color: string }>`
-  width: 2rem;
-  height: 2rem;
-  border-radius: ${CORPUS_RADII.md};
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: ${CORPUS_RADII.sm};
   background: ${(props) => props.$color};
   display: flex;
   align-items: center;
   justify-content: center;
   color: ${CORPUS_COLORS.white};
   flex-shrink: 0;
+
+  svg {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
 `;
 
 const SectionTitle = styled.h2`
   font-family: ${CORPUS_FONTS.serif};
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 600;
   color: ${CORPUS_COLORS.slate[800]};
   margin: 0;
@@ -164,8 +181,8 @@ const SectionTitle = styled.h2`
 
 const SectionCount = styled.span`
   font-family: ${CORPUS_FONTS.sans};
-  font-size: 0.875rem;
-  color: ${CORPUS_COLORS.slate[500]};
+  font-size: 0.8125rem;
+  color: ${CORPUS_COLORS.slate[400]};
   font-weight: 500;
   margin-left: auto;
 `;
@@ -178,10 +195,10 @@ const ThreadGrid = styled.div`
 
 const EmptyState = styled.div`
   text-align: center;
-  padding: 3rem 1.5rem;
-  color: ${CORPUS_COLORS.slate[500]};
+  padding: 1.5rem 1rem;
+  color: ${CORPUS_COLORS.slate[400]};
   font-family: ${CORPUS_FONTS.sans};
-  font-size: 0.9375rem;
+  font-size: 0.8125rem;
 `;
 
 const LoadingContainer = styled.div`
@@ -192,11 +209,18 @@ const LoadingContainer = styled.div`
 
 type FilterTab = "all" | "corpus" | "document" | "general";
 
+const VALID_FILTER_TABS = new Set<FilterTab>([
+  "all",
+  "corpus",
+  "document",
+  "general",
+]);
+
 const FILTER_ITEMS: FilterTabItem[] = [
-  { id: "all", label: "All" },
-  { id: "corpus", label: "Corpus" },
-  { id: "document", label: "Document" },
-  { id: "general", label: "General" },
+  { id: "all", label: "All", icon: <MessageSquare size={14} /> },
+  { id: "corpus", label: "Corpus", icon: <Database size={14} /> },
+  { id: "document", label: "Document", icon: <FileText size={14} /> },
+  { id: "general", label: "General", icon: <MessageSquare size={14} /> },
 ];
 
 /**
@@ -271,7 +295,11 @@ const ThreadSection: React.FC<ThreadSectionProps> = ({
       <SectionHeader>
         <SectionIcon $color={iconColor}>{icon}</SectionIcon>
         <SectionTitle>{title}</SectionTitle>
-        <SectionCount>{loading ? "..." : `${totalCount} threads`}</SectionCount>
+        <SectionCount>
+          {loading
+            ? "..."
+            : `${totalCount} ${totalCount === 1 ? "thread" : "threads"}`}
+        </SectionCount>
       </SectionHeader>
 
       {loading && !data ? (
@@ -285,7 +313,11 @@ const ThreadSection: React.FC<ThreadSectionProps> = ({
               <ThreadListItem key={thread.id} thread={thread} />
             ))
           ) : (
-            <EmptyState>No discussions found</EmptyState>
+            <EmptyState>
+              {searchQuery
+                ? "No discussions match your search"
+                : "No discussions yet"}
+            </EmptyState>
           )}
         </ThreadGrid>
       )}
@@ -327,7 +359,11 @@ export const GlobalDiscussions: React.FC = () => {
           <FilterTabs
             items={FILTER_ITEMS}
             value={activeTab}
-            onChange={(id) => setActiveTab(id as FilterTab)}
+            onChange={(id) => {
+              if (VALID_FILTER_TABS.has(id as FilterTab)) {
+                setActiveTab(id as FilterTab);
+              }
+            }}
           />
 
           <SearchContainer>
@@ -335,6 +371,8 @@ export const GlobalDiscussions: React.FC = () => {
               placeholder="Search discussions..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
+              onSubmit={(value) => setSearchInput(value)}
+              hideButton
             />
           </SearchContainer>
         </FilterBar>
@@ -344,8 +382,8 @@ export const GlobalDiscussions: React.FC = () => {
       {(activeTab === "all" || activeTab === "corpus") && (
         <ThreadSection
           title="Corpus Discussions"
-          icon={<Database size={18} />}
-          iconColor="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+          icon={<Database size={14} />}
+          iconColor={`linear-gradient(135deg, ${CORPUS_COLORS.teal[600]} 0%, ${CORPUS_COLORS.teal[800]} 100%)`}
           filterType="corpus"
           searchQuery={debouncedSearch}
         />
@@ -355,8 +393,8 @@ export const GlobalDiscussions: React.FC = () => {
       {(activeTab === "all" || activeTab === "document") && (
         <ThreadSection
           title="Document Discussions"
-          icon={<FileText size={18} />}
-          iconColor="linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
+          icon={<FileText size={14} />}
+          iconColor={`linear-gradient(135deg, ${OS_LEGAL_COLORS.primaryBlue} 0%, ${OS_LEGAL_COLORS.blueDark} 100%)`}
           filterType="document"
           searchQuery={debouncedSearch}
         />
@@ -366,8 +404,8 @@ export const GlobalDiscussions: React.FC = () => {
       {(activeTab === "all" || activeTab === "general") && (
         <ThreadSection
           title="General Discussions"
-          icon={<MessageSquare size={18} />}
-          iconColor="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
+          icon={<MessageSquare size={14} />}
+          iconColor={`linear-gradient(135deg, ${CORPUS_COLORS.slate[500]} 0%, ${CORPUS_COLORS.slate[700]} 100%)`}
           filterType="general"
           searchQuery={debouncedSearch}
         />
@@ -379,7 +417,7 @@ export const GlobalDiscussions: React.FC = () => {
         whileTap={{ scale: 0.9 }}
         aria-label="Create new discussion"
       >
-        <Plus size={28} />
+        <Plus size={22} />
       </FAB>
 
       {/* Placeholder — CreateThread modal not yet implemented */}
