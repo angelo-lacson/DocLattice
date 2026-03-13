@@ -1,5 +1,6 @@
 import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
+import { docScreenshot } from "./utils/docScreenshot";
 import { MetadataTestWrapper } from "./MetadataTestWrapper";
 import { CorpusMetadataSettings } from "../src/components/corpuses/CorpusMetadataSettings";
 import {
@@ -63,6 +64,8 @@ test.describe("CorpusMetadataSettings", () => {
 
     // Check validation info
     await expect(page.getByText("Min: 0")).toBeVisible();
+
+    await docScreenshot(page, "corpus--metadata-settings--table-view");
   });
 
   test("shows empty state when no columns", async ({ mount, page }) => {
