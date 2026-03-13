@@ -67,6 +67,10 @@ export const STATUS_FILTERS = {
 
 export type StatusFilter = (typeof STATUS_FILTERS)[keyof typeof STATUS_FILTERS];
 
+// Context menu layout constants
+/** Minimum gap (px) between context menu edges and viewport edges */
+export const CONTEXT_MENU_VIEWPORT_PADDING = 8;
+
 // Selection action menu approximate dimensions (used for viewport clamping)
 export const SELECTION_MENU = {
   APPROX_WIDTH: 200,

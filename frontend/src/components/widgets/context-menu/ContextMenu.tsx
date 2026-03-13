@@ -4,7 +4,10 @@ import {
   OS_LEGAL_COLORS,
   OS_LEGAL_TYPOGRAPHY,
 } from "../../../assets/configurations/osLegalStyles";
-import { Z_INDEX } from "../../../assets/configurations/constants";
+import {
+  CONTEXT_MENU_VIEWPORT_PADDING as VIEWPORT_PADDING,
+  Z_INDEX,
+} from "../../../assets/configurations/constants";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -78,7 +81,7 @@ const MenuHeader = styled.div`
   max-width: 260px;
 `;
 
-const MenuItemStyled = styled.div<{
+const MenuItemStyled = styled.button<{
   $variant?: "default" | "primary" | "danger";
 }>`
   padding: 10px 14px;
@@ -88,6 +91,11 @@ const MenuItemStyled = styled.div<{
   gap: 10px;
   cursor: pointer;
   transition: background 0.1s;
+  width: 100%;
+  border: none;
+  background: none;
+  text-align: left;
+  font-family: inherit;
   color: ${(props) =>
     props.$variant === "danger"
       ? OS_LEGAL_COLORS.danger
@@ -112,11 +120,6 @@ const MenuItemStyled = styled.div<{
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CONSTANTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const VIEWPORT_PADDING = 8;
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -137,6 +140,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     left: position.x,
     top: position.y,
   });
+
+  // Reset focused index if visible items change while the menu is open
+  useEffect(() => {
+    setFocusedIndex(visibleItems.length > 0 ? 0 : -1);
+  }, [visibleItems.length]);
 
   // Measure actual menu dimensions after mount and adjust position
   useLayoutEffect(() => {
@@ -173,7 +181,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
   // Keyboard navigation with roving tabindex
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
+    if (e.key === "Escape" || e.key === "Tab") {
       e.preventDefault();
       onClose();
       return;
@@ -209,18 +217,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         {visibleItems.map((item, index) => (
           <MenuItemStyled
             key={item.key}
+            type="button"
             role="menuitem"
             tabIndex={index === focusedIndex ? 0 : -1}
             $variant={item.variant}
             onClick={(e) => {
-              e.stopPropagation();
               item.onClick(e);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                item.onClick(e);
-              }
             }}
             onFocus={() => setFocusedIndex(index)}
           >
