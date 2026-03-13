@@ -20,7 +20,10 @@ from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.utils import timezone
 
-from opencontractserver.constants.context_guardrails import CHARS_PER_TOKEN_ESTIMATE
+from opencontractserver.constants.context_guardrails import (
+    CHARS_PER_TOKEN_ESTIMATE,
+    EPHEMERAL_CONTEXT_EXHAUSTION_RATIO,
+)
 from opencontractserver.conversations.models import (
     ChatMessage,
     Conversation,
@@ -409,7 +412,7 @@ class CoreAgent(Protocol):
         """Get conversation metadata including ID, title, and user info."""
         ...
 
-    async def get_conversation_messages(self) -> list[ChatMessage]:
+    async def get_conversation_messages(self) -> list:
         """Get all messages in the current conversation."""
         ...
 
@@ -565,7 +568,7 @@ class CoreAgentBase(ABC):
             "description": conv.description,
         }
 
-    async def get_conversation_messages(self) -> list[ChatMessage]:
+    async def get_conversation_messages(self) -> list:
         """Get all messages in the current conversation."""
         return await self.conversation_manager.get_conversation_messages()
 
@@ -1121,7 +1124,10 @@ class CoreConversationManager:
         if self._ephemeral_token_estimate == 0:
             return False
         context_window = get_context_window_for_model(self.config.model_name)
-        return self._ephemeral_token_estimate > context_window * 0.9
+        return (
+            self._ephemeral_token_estimate
+            > context_window * EPHEMERAL_CONTEXT_EXHAUSTION_RATIO
+        )
 
     @classmethod
     async def create_for_document(
@@ -1248,7 +1254,7 @@ class CoreConversationManager:
 
         return manager
 
-    async def get_conversation_messages(self) -> list[ChatMessage]:
+    async def get_conversation_messages(self) -> list:
         """Get messages in the conversation, honouring compaction cutoff.
 
         If the conversation has a ``compacted_before_message_id`` set, only
@@ -1350,8 +1356,21 @@ class CoreConversationManager:
 
     async def update_message_content(self, message_id: int, content: str) -> None:
         """Update only the content of a message."""
-        # For anonymous conversations, don't store messages
-        if not self.conversation or message_id == 0:
+        if not self.conversation:
+            # Ephemeral branch — find the message by ID and update its content,
+            # adjusting the running token estimate accordingly.
+            if not message_id:
+                return
+            for msg in self._ephemeral_messages:
+                if msg.id == message_id:
+                    old_len = len(msg.content)
+                    msg.content = content
+                    new_len = len(content)
+                    delta = int((new_len - old_len) / CHARS_PER_TOKEN_ESTIMATE)
+                    self._ephemeral_token_estimate = max(
+                        0, self._ephemeral_token_estimate + delta
+                    )
+                    break
             return
 
         message = await ChatMessage.objects.aget(id=message_id)
@@ -1378,6 +1397,7 @@ class CoreConversationManager:
                     id=message_id,
                     content=content,
                     msg_type="LLM",
+                    created=timezone.now(),
                 )
             )
             self._ephemeral_token_estimate += max(
@@ -1410,8 +1430,8 @@ class CoreConversationManager:
 
     async def cancel_message(self, message_id: int, reason: str = "Cancelled") -> None:
         """Cancel a placeholder message."""
-        # For anonymous conversations, don't store messages
-        if not self.conversation or message_id == 0:
+        if not self.conversation:
+            # Ephemeral sessions have no placeholder rows to cancel.
             return
 
         message = await ChatMessage.objects.aget(id=message_id)
@@ -1433,6 +1453,7 @@ class CoreConversationManager:
                     id=msg_id,
                     content=content,
                     msg_type="HUMAN",
+                    created=timezone.now(),
                 )
             )
             self._ephemeral_token_estimate += max(
@@ -1460,9 +1481,22 @@ class CoreConversationManager:
         metadata: dict[str, Any] = None,
     ) -> int:
         """Store an LLM message in the conversation."""
-        # For anonymous conversations, don't store messages
         if not self.conversation:
-            return 0  # Return a placeholder ID for anonymous conversations
+            # Ephemeral in-memory storage for anonymous sessions.
+            msg_id = self._ephemeral_next_id
+            self._ephemeral_next_id += 1
+            self._ephemeral_messages.append(
+                SimpleNamespace(
+                    id=msg_id,
+                    content=content,
+                    msg_type="LLM",
+                    created=timezone.now(),
+                )
+            )
+            self._ephemeral_token_estimate += max(
+                1, int(len(content) / CHARS_PER_TOKEN_ESTIMATE)
+            )
+            return msg_id
 
         data = {
             "state": MessageState.COMPLETED,
@@ -1535,8 +1569,8 @@ class CoreConversationManager:
         ``error`` fields to detect failed runs and render a proper error
         bubble instead of crashing the stream.
         """
-        # Anonymous (non-persistent) conversations – nothing to store.
-        if not self.conversation or message_id == 0:
+        # Ephemeral (non-persistent) conversations – nothing to store.
+        if not self.conversation:
             return
 
         from opencontractserver.conversations.models import ChatMessage
