@@ -12,6 +12,8 @@ import {
   REQUEST_GET_EXTRACT,
   RequestGetExtractInput,
   RequestGetExtractOutput,
+  GET_EXTRACTS,
+  GetExtractsOutput,
 } from "../../../graphql/queries";
 import { CorpusDropdown } from "../selectors/CorpusDropdown";
 import { UnifiedFieldsetSelector } from "../selectors/UnifiedFieldsetSelector";
@@ -430,7 +432,51 @@ export const CreateExtractModal: React.FC<ExtractModalProps> = ({
   const [createExtract, { loading: createExtractLoading }] = useMutation<
     RequestCreateExtractOutputType,
     RequestCreateExtractInputType
-  >(REQUEST_CREATE_EXTRACT);
+  >(REQUEST_CREATE_EXTRACT, {
+    update(cache, { data: mutationData }) {
+      if (!mutationData?.createExtract.ok || !mutationData.createExtract.obj)
+        return;
+
+      const newExtract = mutationData.createExtract.obj;
+      const effectiveCorpusId = corpusId ?? selected_corpus?.id;
+
+      // Build the list of cache queries to update (corpus-specific + global)
+      const queriesToUpdate: Record<string, any>[] = [{ searchText: "" }, {}];
+      if (effectiveCorpusId) {
+        queriesToUpdate.push({
+          corpusId: effectiveCorpusId,
+          corpusAction_Isnull: true,
+        });
+        queriesToUpdate.push({ corpusId: effectiveCorpusId });
+      }
+
+      for (const variables of queriesToUpdate) {
+        try {
+          const existing = cache.readQuery<GetExtractsOutput>({
+            query: GET_EXTRACTS,
+            variables,
+          });
+          if (existing) {
+            cache.writeQuery({
+              query: GET_EXTRACTS,
+              variables,
+              data: {
+                extracts: {
+                  ...existing.extracts,
+                  edges: [
+                    { __typename: "ExtractTypeEdge", node: newExtract },
+                    ...existing.extracts.edges,
+                  ],
+                },
+              },
+            });
+          }
+        } catch {
+          // Cache miss for this variable combo — skip
+        }
+      }
+    },
+  });
 
   useEffect(() => {
     if (data?.extract) {
@@ -454,9 +500,10 @@ export const CreateExtractModal: React.FC<ExtractModalProps> = ({
     if (!extractId && name.trim()) {
       try {
         setIsSubmitting(true);
+        const effectiveCorpusId = corpusId ?? selected_corpus?.id;
         const { data } = await createExtract({
           variables: {
-            ...(selected_corpus?.id ? { corpusId: selected_corpus?.id } : {}),
+            ...(effectiveCorpusId ? { corpusId: effectiveCorpusId } : {}),
             ...(localSelectedFieldset?.id
               ? { fieldsetId: localSelectedFieldset?.id }
               : {}),
