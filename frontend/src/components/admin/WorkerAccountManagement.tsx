@@ -1,8 +1,6 @@
 import React, { useState } from "react";
 import { gql, useQuery, useMutation, useReactiveVar } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
-// TODO: migrate to @os-legal/ui once Table component is available
-import { Table } from "semantic-ui-react";
 import {
   Button,
   Input,
@@ -10,6 +8,7 @@ import {
   ModalHeader,
   ModalBody,
   ModalFooter,
+  Table,
 } from "@os-legal/ui";
 import styled from "styled-components";
 import { toast } from "react-toastify";
@@ -322,18 +321,18 @@ export const WorkerAccountManagement: React.FC = () => {
             pipelines.
           </InfoMessage>
         ) : (
-          <Table basic="very" celled>
-            <Table.Header>
+          <Table variant="minimal">
+            <Table.Head>
               <Table.Row>
-                <Table.HeaderCell>Name</Table.HeaderCell>
-                <Table.HeaderCell>Description</Table.HeaderCell>
-                <Table.HeaderCell>Status</Table.HeaderCell>
-                <Table.HeaderCell>Tokens</Table.HeaderCell>
-                <Table.HeaderCell>Creator</Table.HeaderCell>
-                <Table.HeaderCell>Created</Table.HeaderCell>
-                <Table.HeaderCell>Actions</Table.HeaderCell>
+                <Table.HeadCell>Name</Table.HeadCell>
+                <Table.HeadCell>Description</Table.HeadCell>
+                <Table.HeadCell>Status</Table.HeadCell>
+                <Table.HeadCell>Tokens</Table.HeadCell>
+                <Table.HeadCell>Creator</Table.HeadCell>
+                <Table.HeadCell>Created</Table.HeadCell>
+                <Table.HeadCell>Actions</Table.HeadCell>
               </Table.Row>
-            </Table.Header>
+            </Table.Head>
             <Table.Body>
               {accounts.map((account) => (
                 <Table.Row key={account.id}>

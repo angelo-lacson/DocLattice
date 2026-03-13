@@ -13,7 +13,11 @@ import {
   showCreateExtractModal,
   showDeleteExtractModal,
 } from "../src/graphql/cache";
-import { GET_EXTRACTS } from "../src/graphql/queries";
+import {
+  GET_EXTRACTS,
+  GET_CORPUSES,
+  GET_FIELDSETS,
+} from "../src/graphql/queries";
 import { REQUEST_DELETE_EXTRACT } from "../src/graphql/mutations";
 import { ExtractType, PageInfo } from "../src/types/graphql-api";
 
@@ -86,6 +90,36 @@ const createMocks = (
     },
   };
 
+  // Mock GET_CORPUSES for CreateExtractModal's CorpusDropdown
+  const corpusesMock: MockedResponse = {
+    request: { query: GET_CORPUSES },
+    variableMatcher: () => true,
+    result: {
+      data: {
+        corpuses: {
+          edges: [],
+          pageInfo: defaultPageInfo,
+          __typename: "CorpusTypeConnection",
+        },
+      },
+    },
+  };
+
+  // Mock GET_FIELDSETS for CreateExtractModal's UnifiedFieldsetSelector
+  const fieldsetsMock: MockedResponse = {
+    request: { query: GET_FIELDSETS },
+    variableMatcher: () => true,
+    result: {
+      data: {
+        fieldsets: {
+          edges: [],
+          pageInfo: defaultPageInfo,
+          __typename: "FieldsetTypeConnection",
+        },
+      },
+    },
+  };
+
   // Return multiple copies for refetches
   return [
     extractsMock,
@@ -93,6 +127,12 @@ const createMocks = (
     { ...extractsMock },
     { ...extractsMock },
     deleteMock,
+    corpusesMock,
+    { ...corpusesMock },
+    { ...corpusesMock },
+    fieldsetsMock,
+    { ...fieldsetsMock },
+    { ...fieldsetsMock },
   ];
 };
 

@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { useQuery, useMutation } from "@apollo/client";
-import { Table } from "semantic-ui-react";
 import { Plus, Check, X, Trash2 } from "lucide-react";
 import {
   Button,
@@ -11,6 +10,7 @@ import {
   ModalHeader,
   ModalBody,
   ModalFooter,
+  Table,
 } from "@os-legal/ui";
 import styled from "styled-components";
 import { StyledTextArea } from "../widgets/modals/styled";
@@ -196,16 +196,16 @@ export const BadgeManagement: React.FC<BadgeManagementProps> = ({
           </Button>
         </div>
 
-        <Table celled>
-          <Table.Header>
+        <Table variant="bordered">
+          <Table.Head>
             <Table.Row>
-              <Table.HeaderCell>Badge</Table.HeaderCell>
-              <Table.HeaderCell>Type</Table.HeaderCell>
-              <Table.HeaderCell>Description</Table.HeaderCell>
-              <Table.HeaderCell>Auto-Award</Table.HeaderCell>
-              <Table.HeaderCell>Actions</Table.HeaderCell>
+              <Table.HeadCell>Badge</Table.HeadCell>
+              <Table.HeadCell>Type</Table.HeadCell>
+              <Table.HeadCell>Description</Table.HeadCell>
+              <Table.HeadCell>Auto-Award</Table.HeadCell>
+              <Table.HeadCell>Actions</Table.HeadCell>
             </Table.Row>
-          </Table.Header>
+          </Table.Head>
           <Table.Body>
             {badges.map((badge) => (
               <Table.Row key={badge.id}>
