@@ -79,6 +79,7 @@ export const StyledModalWrapper = styled.div`
   .oc-modal-footer {
     background: var(--oc-bg-surface);
     border-top: 1px solid var(--oc-border-default);
+    padding-top: var(--oc-spacing-lg);
 
     @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
       position: sticky;
