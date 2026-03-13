@@ -202,7 +202,7 @@ const SectionLabel = styled.div`
   padding: 0.25rem 0.5rem;
 `;
 
-const Option = styled(motion.button)`
+const Option = styled(motion.button).attrs({ type: "button" })`
   width: 100%;
   padding: 0.5rem 0.75rem;
   border: none;
@@ -262,7 +262,7 @@ const CreateOption = styled(Option)`
   }
 `;
 
-const EditButton = styled(motion.button)`
+const EditButton = styled(motion.button).attrs({ type: "button" })`
   padding: 0.25rem;
   border: none;
   background: none;

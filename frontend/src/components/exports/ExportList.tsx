@@ -1,9 +1,9 @@
+import { Table } from "@os-legal/ui";
 import { ExportObject } from "../../types/graphql-api";
 import { PageInfo } from "../../types/graphql-api";
 import { FetchMoreOnVisible } from "../widgets/infinite_scroll/FetchMoreOnVisible";
 import { ExportItemRow } from "./ExportItemRow";
 import { LoadingOverlay } from "../common/LoadingOverlay";
-import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 interface ExportListProps {
   items: ExportObject[] | undefined;
@@ -23,24 +23,6 @@ const styles = {
     borderRadius: "12px",
     boxShadow:
       "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse" as const,
-    minHeight: "20vh",
-  },
-  header: {
-    backgroundColor: OS_LEGAL_COLORS.surfaceHover,
-    borderBottom: `1px solid ${OS_LEGAL_COLORS.border}`,
-  },
-  headerCell: {
-    padding: "1rem",
-    fontWeight: 600,
-    color: "#1a202c",
-    textAlign: "left" as const,
-  },
-  body: {
-    backgroundColor: "#ffffff",
   },
 };
 
@@ -75,26 +57,18 @@ export function ExportList({
     >
       <LoadingOverlay active={loading} content="Loading Exports..." />
 
-      <table style={styles.table}>
-        <thead style={styles.header}>
-          <tr>
-            <th style={styles.headerCell}>Description</th>
-            <th style={{ ...styles.headerCell, textAlign: "center" }}>
-              Requested
-            </th>
-            <th style={{ ...styles.headerCell, textAlign: "center" }}>
-              Started
-            </th>
-            <th style={{ ...styles.headerCell, textAlign: "center" }}>
-              Completed
-            </th>
-            <th style={{ ...styles.headerCell, textAlign: "center" }}>
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody style={styles.body}>{export_rows}</tbody>
-      </table>
+      <Table variant="bordered">
+        <Table.Head>
+          <Table.Row>
+            <Table.HeadCell>Description</Table.HeadCell>
+            <Table.HeadCell align="center">Requested</Table.HeadCell>
+            <Table.HeadCell align="center">Started</Table.HeadCell>
+            <Table.HeadCell align="center">Completed</Table.HeadCell>
+            <Table.HeadCell align="center">Actions</Table.HeadCell>
+          </Table.Row>
+        </Table.Head>
+        <Table.Body>{export_rows}</Table.Body>
+      </Table>
 
       <FetchMoreOnVisible fetchNextPage={handleUpdate} />
     </div>

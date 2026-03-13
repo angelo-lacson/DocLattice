@@ -324,6 +324,7 @@ export const TableSvgIcon = ({ size = 40 }: { size?: number }) => (
 export interface ExtractDetailContentHandle {
   exportToCsv: () => void;
   refetch: () => void;
+  startExtract: () => void;
 }
 
 // Props
@@ -391,12 +392,6 @@ export const ExtractDetailContent = forwardRef<
       onExtractLoaded?.(extractData.extract);
     }
   }, [extractData, onExtractLoaded]);
-
-  // Expose imperative methods
-  useImperativeHandle(ref, () => ({
-    exportToCsv: () => dataGridRef.current?.exportToCsv(),
-    refetch: () => refetch(),
-  }));
 
   // Mutations
   const [addDocsToExtract, { loading: addDocsLoading }] = useMutation<
@@ -487,6 +482,17 @@ export const ExtractDetailContent = forwardRef<
     },
     onError: () => toast.error("Could not start extract."),
   });
+
+  // Expose imperative methods
+  useImperativeHandle(ref, () => ({
+    exportToCsv: () => dataGridRef.current?.exportToCsv(),
+    refetch: () => refetch(),
+    startExtract: () => {
+      if (extract) {
+        startExtract({ variables: { extractId: extract.id } });
+      }
+    },
+  }));
 
   // Handlers
   const handleAddDocIds = useCallback(
