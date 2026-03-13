@@ -194,6 +194,8 @@ test.describe("GlobalAgentManagement Component", () => {
     // Check status badge
     await expect(page.locator("text=Active")).toBeVisible();
 
+    await docScreenshot(page, "admin--global-agents--table-view");
+
     await component.unmount();
   });
 
@@ -364,6 +366,8 @@ test.describe("CorpusAgentManagement Component", () => {
 
     // Check slug is displayed
     await expect(page.locator("text=legal-analyst")).toBeVisible();
+
+    await docScreenshot(page, "admin--corpus-agents--table-view");
 
     await component.unmount();
   });

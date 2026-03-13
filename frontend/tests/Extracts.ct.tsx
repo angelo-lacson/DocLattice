@@ -329,6 +329,35 @@ test.describe("Extracts View - New Extract Button", () => {
 
     await component.unmount();
   });
+
+  test("should open CreateExtractModal when New Extract button is clicked", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <ExtractsTestWrapper extracts={allExtracts} />
+    );
+
+    // Wait for extracts to load
+    await expect(page.locator("text=Running Extract")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Click "New Extract" button
+    await page.locator("text=New Extract").click();
+
+    // Modal should appear with "Create New Extract" title
+    await expect(page.locator("text=Create New Extract")).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Modal form fields should be visible
+    await expect(
+      page.locator('input[placeholder*="Enter a descriptive name"]')
+    ).toBeVisible();
+
+    await component.unmount();
+  });
 });
 
 test.describe("Extracts View - Permission-based UI", () => {

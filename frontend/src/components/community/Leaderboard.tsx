@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { useQuery } from "@apollo/client";
-import { Table } from "semantic-ui-react";
-import { Dropdown, StatBlock } from "@os-legal/ui";
+import { Dropdown, StatBlock, Table } from "@os-legal/ui";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import {
@@ -91,6 +90,10 @@ const UserRow = styled(Table.Row)<{ $isCurrentUser?: boolean }>`
     background-color: rgba(102, 126, 234, 0.1) !important;
     font-weight: 600;
   `}
+
+  &:hover {
+    background-color: ${OS_LEGAL_COLORS.surfaceHover} !important;
+  }
 `;
 
 const FilterBar = styled.div`
@@ -310,15 +313,21 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
             )}
 
             <TableWrapper>
-              <Table basic="very" celled selectable>
-                <Table.Header>
+              <Table variant="minimal">
+                <Table.Head>
                   <Table.Row>
-                    <Table.HeaderCell width={1}>Rank</Table.HeaderCell>
-                    <Table.HeaderCell>User</Table.HeaderCell>
-                    <Table.HeaderCell width={3}>Score</Table.HeaderCell>
-                    <Table.HeaderCell width={2}>Details</Table.HeaderCell>
+                    <Table.HeadCell style={{ width: "6.25%" }}>
+                      Rank
+                    </Table.HeadCell>
+                    <Table.HeadCell style={{ width: "18.75%" }}>
+                      User
+                    </Table.HeadCell>
+                    <Table.HeadCell style={{ width: "12.5%" }}>
+                      Score
+                    </Table.HeadCell>
+                    <Table.HeadCell>Details</Table.HeadCell>
                   </Table.Row>
-                </Table.Header>
+                </Table.Head>
 
                 <Table.Body>
                   {leaderboard.entries.map((entry: LeaderboardEntry) => (
