@@ -130,7 +130,12 @@ export const CorpusExtractDetail: React.FC<CorpusExtractDetailProps> = ({
     contentRef.current?.refetch();
   };
 
+  const handleStartExtract = () => {
+    contentRef.current?.startExtract();
+  };
+
   const statusProps = extract ? getExtractStatus(extract) : null;
+  const canStart = extract && !extract.started;
   const isRunning = extract?.started && !extract?.finished && !extract?.error;
 
   return (
@@ -146,6 +151,11 @@ export const CorpusExtractDetail: React.FC<CorpusExtractDetailProps> = ({
           )}
         </HeaderMain>
         <Actions>
+          {canStart && (
+            <IconButton aria-label="Start extract" onClick={handleStartExtract}>
+              <Play size={14} />
+            </IconButton>
+          )}
           <IconButton aria-label="Refresh" onClick={handleRefresh}>
             <RefreshCw size={14} />
           </IconButton>

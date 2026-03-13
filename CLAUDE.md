@@ -373,6 +373,105 @@ await releaseScreenshot(page, "v3.0.0.b3", "landing-page", { fullPage: true });
 - `docScreenshot` → README, quickstart, guides (always fresh)
 - `releaseScreenshot` → Release notes (frozen at release time)
 
+### Authenticated Playwright Testing (Live Frontend Debugging)
+
+When you need to interact with the running frontend as an authenticated user (e.g., debugging why a query returns empty results), use Django admin session cookies to authenticate GraphQL requests.
+
+**Architecture context**: The frontend uses Auth0 for authentication, but the Django backend also accepts session cookie auth. Apollo Client sends GraphQL requests directly to `http://localhost:8000/graphql/` (cross-origin from the Vite dev server at `localhost:5173`). Since `fetch` defaults to `credentials: 'same-origin'`, browser cookies aren't sent cross-origin. The workaround is to inject the session cookie into request headers via Playwright's route interception.
+
+**Step 1: Set a password for the superuser** (one-time setup):
+```bash
+docker compose -f local.yml exec django python manage.py shell -c "
+from django.contrib.auth import get_user_model
+User = get_user_model()
+u = User.objects.filter(is_superuser=True).first()
+u.set_password('testpass123')
+u.save()
+print(f'Password set for {u.username}')
+"
+```
+
+**Step 2: Playwright script pattern**:
+```javascript
+const { chromium } = require('playwright');
+
+(async () => {
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  // Collect console messages for debugging
+  const consoleMsgs = [];
+  page.on('console', msg => consoleMsgs.push('[' + msg.type() + '] ' + msg.text()));
+
+  // 1. Login to Django admin to get session cookie
+  await page.goto('http://localhost:8000/admin/login/');
+  await page.fill('#id_username', '<superuser-username>');
+  await page.fill('#id_password', 'testpass123');
+  await page.click('input[type=submit]');
+  await page.waitForTimeout(2000);
+
+  // 2. Extract the session cookie
+  const cookies = await context.cookies();
+  const sessionCookie = cookies.find(c => c.name === 'sessionid');
+
+  // 3. Intercept GraphQL requests to inject the session cookie
+  //    (needed because Apollo sends cross-origin requests to :8000)
+  await page.route('**/graphql/**', async (route) => {
+    const headers = {
+      ...route.request().headers(),
+      'Cookie': 'sessionid=' + sessionCookie.value,
+    };
+    await route.continue({ headers });
+  });
+
+  // 4. Navigate to the frontend page under test
+  await page.goto('http://localhost:5173/extracts');
+  await page.waitForTimeout(5000);
+
+  // 5. Inspect results
+  const bodyText = await page.textContent('body');
+  console.log(bodyText);
+
+  await browser.close();
+})();
+```
+
+**Run from the frontend directory** (where `playwright` is a dependency):
+```bash
+cd frontend && node /path/to/script.js
+```
+
+**Key details**:
+- The Django admin login sets a `sessionid` cookie for `localhost`
+- `page.route('**/graphql/**')` intercepts Apollo's requests to `localhost:8000/graphql/` and injects the cookie header
+- The AuthGate will still show anonymous state (no Auth0 session), but GraphQL queries execute as the authenticated Django user
+- This is useful for verifying backend query results, permission filtering, and data flow through the real frontend
+- For verifying just the GraphQL response without the full frontend, `curl` with the session cookie also works:
+  ```bash
+  curl -s -X POST http://localhost:8000/graphql/ \
+    -H "Content-Type: application/json" \
+    -H "Cookie: sessionid=<session-key>" \
+    -d '{"query":"query { extracts { edges { node { id name } } } }"}' | python3 -m json.tool
+  ```
+
+**Alternative — create a session programmatically** (no admin login needed):
+```bash
+docker compose -f local.yml exec django python manage.py shell -c "
+from django.contrib.sessions.backends.db import SessionStore
+from django.contrib.auth import get_user_model
+User = get_user_model()
+user = User.objects.filter(is_superuser=True).first()
+session = SessionStore()
+session['_auth_user_id'] = str(user.pk)
+session['_auth_user_backend'] = 'django.contrib.auth.backends.ModelBackend'
+session['_auth_user_hash'] = user.get_session_auth_hash()
+session.save()
+print(f'Session key: {session.session_key}')
+"
+```
+Then use the printed session key directly in curl or Playwright route interception.
+
 ## Documentation Locations
 
 - **Permissioning**: `docs/permissioning/consolidated_permissioning_guide.md`
@@ -459,7 +558,8 @@ Run manually: `pre-commit run --all-files`
 12. **Jotai state not updating**: Ensure atoms are properly imported and used with useAtom hook
 13. **Writing sync agent tools**: All agent tools must be async. The `PydanticAIToolWrapper` accepts sync functions but calls them directly (no thread pool) — sync Django ORM calls will raise `SynchronousOnlyOperation`. Use the `a`-prefixed async versions in `core_tools.py`.
 14. **PydanticAI `system_prompt` silently dropped**: When creating `PydanticAIAgent`, use `instructions=` NOT `system_prompt=`. The `system_prompt` parameter is only included when `message_history` is `None`, but OpenContracts' `chat()` persists a HUMAN message before calling pydantic-ai's `run()`, so history is always non-empty. This causes the system prompt to be silently dropped. See `docs/architecture/llms/README.md` for full details.
-15. **Corrupted Docker iptables chains** (RARE): If you see `Chain 'DOCKER-ISOLATION-STAGE-2' does not exist` errors, Docker's iptables chains have been corrupted during docker cycling. Run this nuclear fix:
+15. **Apollo cache `keyArgs` must use field argument names, not variable names**: In `cache.ts`, `relayStylePagination(["corpus", "name_Contains"])` uses the GraphQL **field argument** names (e.g., `extracts(corpus: $id, name_Contains: $text)`), NOT the variable names (`$id`, `$text`). Mismatched keyArgs silently fail to isolate cache entries, causing queries with different filters to share stale cached results.
+16. **Corrupted Docker iptables chains** (RARE): If you see `Chain 'DOCKER-ISOLATION-STAGE-2' does not exist` errors, Docker's iptables chains have been corrupted during docker cycling. Run this nuclear fix:
     ```bash
     sudo systemctl stop docker && sudo systemctl stop docker.socket && sudo ip link delete docker0 2>/dev/null || true && sudo iptables -t nat -F && sudo iptables -t nat -X && sudo iptables -t filter -F && sudo iptables -t filter -X 2>/dev/null || true && sudo iptables -t mangle -F && sudo iptables -t mangle -X && sudo iptables -t filter -N INPUT 2>/dev/null || true && sudo iptables -t filter -N FORWARD 2>/dev/null || true && sudo iptables -t filter -N OUTPUT 2>/dev/null || true && sudo iptables -P INPUT ACCEPT && sudo iptables -P FORWARD ACCEPT && sudo iptables -P OUTPUT ACCEPT && sudo systemctl start docker
     ```
