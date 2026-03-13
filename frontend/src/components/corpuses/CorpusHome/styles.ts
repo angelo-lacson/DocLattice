@@ -217,8 +217,10 @@ export const LandingDescription = styled.p`
   }
 `;
 
-/** Hero image avatar — circular crop with soft radial blur at the edges.
- *  Uses radial-gradient mask so any aspect ratio looks good. */
+/** Hero image avatar — circular crop with soft-vignette fade at the edges.
+ *  The container's border-radius clips to a circle; the radial-gradient mask
+ *  on the img adds an intentional feathered edge so the photo fades rather
+ *  than ending with a hard pixel boundary. */
 export const HeroImageBand = styled.div`
   width: 200px;
   height: 200px;
@@ -232,6 +234,7 @@ export const HeroImageBand = styled.div`
     height: 100%;
     object-fit: cover;
     display: block;
+    /* Soft vignette — feathers the photo edges inside the circular crop */
     mask-image: radial-gradient(circle, black 55%, transparent 75%);
     -webkit-mask-image: radial-gradient(circle, black 55%, transparent 75%);
   }
