@@ -551,6 +551,8 @@ export const App = () => {
               style={{
                 flexShrink: 0,
                 position: "relative",
+                // Negative margin collapses the gap between the content area
+                // and the footer so they appear visually flush.
                 marginTop: "-1.5rem",
               }}
             >
