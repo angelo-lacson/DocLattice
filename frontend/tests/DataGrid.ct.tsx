@@ -2,35 +2,11 @@ import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
 import { DataGridTestWrapper } from "./DataGridTestWrapper";
 import { docScreenshot } from "./utils/docScreenshot";
-import {
-  ExtractType,
-  ColumnType,
-  DatacellType,
-  DocumentType,
-} from "../src/types/graphql-api";
+import { ExtractType } from "../src/types/graphql-api";
 
 test.describe("ExtractDataGrid", () => {
   test("renders table with columns and documents", async ({ mount, page }) => {
-    // Collect console messages for debugging
-    const consoleMessages: string[] = [];
-    page.on("console", (msg) => consoleMessages.push(msg.text()));
-    page.on("pageerror", (err) =>
-      consoleMessages.push(`PAGE ERROR: ${err.message}`)
-    );
-
     const component = await mount(<DataGridTestWrapper />);
-
-    // Wait for initial render then debug
-    await page.waitForTimeout(2000);
-    await page.screenshot({ path: "test-results/datagrid-debug.png" });
-
-    // Check for error boundary
-    const errorBoundary = page.locator('[data-testid="error-boundary"]');
-    if (await errorBoundary.isVisible()) {
-      const errorText = await errorBoundary.textContent();
-      console.log("ERROR BOUNDARY:", errorText);
-    }
-    console.log("CONSOLE MESSAGES:", consoleMessages.join("\n"));
 
     // Headers should be visible
     await expect(page.locator("text=Document").first()).toBeVisible({
