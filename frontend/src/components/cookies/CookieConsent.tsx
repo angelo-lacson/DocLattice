@@ -44,6 +44,7 @@ const StyledModalWrapper = styled.div`
   .oc-modal-footer {
     background: ${OS_LEGAL_COLORS.darkSurface};
     border-top: 1px solid ${OS_LEGAL_COLORS.darkSurfaceBorder};
+    padding-top: var(--oc-spacing-lg);
     display: flex;
     justify-content: center;
   }
