@@ -546,15 +546,17 @@ export const App = () => {
               </AuthGate>
             </div>
           </div>
-          <div
-            style={{
-              flexShrink: 0,
-              position: "relative",
-              marginTop: "-1.5rem",
-            }}
-          >
-            <Footer />
-          </div>
+          {!opened_corpus && (
+            <div
+              style={{
+                flexShrink: 0,
+                position: "relative",
+                marginTop: "-1.5rem",
+              }}
+            >
+              <Footer />
+            </div>
+          )}
         </div>
       </ThemeProvider>
     </div>
