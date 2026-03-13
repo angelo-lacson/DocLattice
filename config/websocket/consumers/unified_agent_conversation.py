@@ -411,6 +411,22 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
             if self.agent is None:
                 await self._initialize_agent()
 
+            # Check for context exhaustion (anonymous ephemeral sessions only)
+            if (
+                self.agent
+                and hasattr(self.agent, "conversation_manager")
+                and self.agent.conversation_manager.context_exhausted
+            ):
+                await self._send_safe(
+                    msg_type="ASYNC_ERROR",
+                    content="This conversation has reached its context limit. "
+                    "Please start a new chat to continue.",
+                    data={
+                        "error_type": "CONTEXT_EXHAUSTED",
+                    },
+                )
+                return
+
             # Generate title for new conversations (authenticated users only) in background
             if is_new_conversation and self.user_id:
                 asyncio.create_task(self._async_set_conversation_title(user_query))
