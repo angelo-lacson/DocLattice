@@ -1341,6 +1341,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               onCreatedAtGteChange={setCreatedAtGte}
               createdAtLte={createdAtLte}
               onCreatedAtLteChange={setCreatedAtLte}
+              onBack={onClose}
             />
           )}
         </AnimatePresence>

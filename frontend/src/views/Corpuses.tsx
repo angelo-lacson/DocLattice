@@ -629,6 +629,10 @@ const CorpusQueryView = ({
             setShowLoad={() => {}}
             onMessageSelect={() => {}}
             onSourceNavigate={onSourceNavigate}
+            onClose={() => {
+              resetToSearch();
+              showQueryViewState("ASK");
+            }}
           />
         </div>
       </motion.div>
