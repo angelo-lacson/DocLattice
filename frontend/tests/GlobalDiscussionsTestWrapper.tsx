@@ -1,4 +1,5 @@
 import React from "react";
+import { InMemoryCache } from "@apollo/client";
 import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { Provider as JotaiProvider } from "jotai";
 import { MemoryRouter } from "react-router-dom";
@@ -22,7 +23,11 @@ export function GlobalDiscussionsTestWrapper({
 }: GlobalDiscussionsTestWrapperProps) {
   return (
     <MemoryRouter initialEntries={[initialRoute]}>
-      <MockedProvider mocks={mocks} addTypename={true}>
+      <MockedProvider
+        mocks={mocks}
+        addTypename={true}
+        cache={new InMemoryCache()}
+      >
         <JotaiProvider>{children}</JotaiProvider>
       </MockedProvider>
     </MemoryRouter>

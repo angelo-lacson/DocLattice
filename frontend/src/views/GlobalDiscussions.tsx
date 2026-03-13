@@ -6,7 +6,13 @@ import {
   OS_LEGAL_COLORS,
 } from "../assets/configurations/osLegalStyles";
 import { motion } from "framer-motion";
-import { MessageSquare, Database, FileText, Plus } from "lucide-react";
+import {
+  MessageSquare,
+  MessageCircle,
+  Database,
+  FileText,
+  Plus,
+} from "lucide-react";
 import { FilterTabs, SearchBox } from "@os-legal/ui";
 import type { FilterTabItem } from "@os-legal/ui";
 import { useQuery } from "@apollo/client";
@@ -23,6 +29,7 @@ import {
   mediaQuery,
 } from "../components/threads/styles/discussionStyles";
 import { ModernLoadingDisplay } from "../components/widgets/ModernLoadingDisplay";
+import { FILTER_TAB_ICON_SIZE } from "../assets/configurations/constants";
 
 // Custom hook for debounced value
 function useDebouncedValue<T>(value: T, delay: number): T {
@@ -217,10 +224,26 @@ const VALID_FILTER_TABS = new Set<FilterTab>([
 ]);
 
 const FILTER_ITEMS: FilterTabItem[] = [
-  { id: "all", label: "All", icon: <MessageSquare size={14} /> },
-  { id: "corpus", label: "Corpus", icon: <Database size={14} /> },
-  { id: "document", label: "Document", icon: <FileText size={14} /> },
-  { id: "general", label: "General", icon: <MessageSquare size={14} /> },
+  {
+    id: "all",
+    label: "All",
+    icon: <MessageSquare size={FILTER_TAB_ICON_SIZE} />,
+  },
+  {
+    id: "corpus",
+    label: "Corpus",
+    icon: <Database size={FILTER_TAB_ICON_SIZE} />,
+  },
+  {
+    id: "document",
+    label: "Document",
+    icon: <FileText size={FILTER_TAB_ICON_SIZE} />,
+  },
+  {
+    id: "general",
+    label: "General",
+    icon: <MessageCircle size={FILTER_TAB_ICON_SIZE} />,
+  },
 ];
 
 /**
@@ -371,7 +394,6 @@ export const GlobalDiscussions: React.FC = () => {
               placeholder="Search discussions..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              onSubmit={(value) => setSearchInput(value)}
               hideButton
             />
           </SearchContainer>
@@ -382,7 +404,7 @@ export const GlobalDiscussions: React.FC = () => {
       {(activeTab === "all" || activeTab === "corpus") && (
         <ThreadSection
           title="Corpus Discussions"
-          icon={<Database size={14} />}
+          icon={<Database size={FILTER_TAB_ICON_SIZE} />}
           iconColor={`linear-gradient(135deg, ${CORPUS_COLORS.teal[600]} 0%, ${CORPUS_COLORS.teal[800]} 100%)`}
           filterType="corpus"
           searchQuery={debouncedSearch}
@@ -393,7 +415,7 @@ export const GlobalDiscussions: React.FC = () => {
       {(activeTab === "all" || activeTab === "document") && (
         <ThreadSection
           title="Document Discussions"
-          icon={<FileText size={14} />}
+          icon={<FileText size={FILTER_TAB_ICON_SIZE} />}
           iconColor={`linear-gradient(135deg, ${OS_LEGAL_COLORS.primaryBlue} 0%, ${OS_LEGAL_COLORS.blueDark} 100%)`}
           filterType="document"
           searchQuery={debouncedSearch}
@@ -404,7 +426,7 @@ export const GlobalDiscussions: React.FC = () => {
       {(activeTab === "all" || activeTab === "general") && (
         <ThreadSection
           title="General Discussions"
-          icon={<MessageSquare size={14} />}
+          icon={<MessageCircle size={FILTER_TAB_ICON_SIZE} />}
           iconColor={`linear-gradient(135deg, ${CORPUS_COLORS.slate[500]} 0%, ${CORPUS_COLORS.slate[700]} 100%)`}
           filterType="general"
           searchQuery={debouncedSearch}

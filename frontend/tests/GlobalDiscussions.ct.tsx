@@ -336,11 +336,7 @@ test.describe("GlobalDiscussions", () => {
   });
 
   test("filters to corpus tab only", async ({ mount, page }) => {
-    const mocks = [
-      ...buildAllSectionMocks(),
-      // Duplicate for refetch when switching back/forth
-      ...buildAllSectionMocks(),
-    ];
+    const mocks = buildAllSectionMocks();
 
     await mount(
       <GlobalDiscussionsTestWrapper mocks={mocks}>
@@ -396,26 +392,81 @@ test.describe("GlobalDiscussions", () => {
     await docScreenshot(page, "discussions--global--document-tab");
   });
 
-  test("search box accepts input", async ({ mount, page }) => {
-    const mocks = buildAllSectionMocks();
+  test("search box filters discussions", async ({ mount, page }) => {
+    // Initial mocks (no search filter)
+    const initialMocks = buildAllSectionMocks();
+
+    // Search-filtered mocks: only corpus section returns results for "NDA"
+    const searchMocks = [
+      {
+        request: {
+          query: GET_CONVERSATIONS,
+          variables: {
+            conversationType: "THREAD",
+            limit: 20,
+            hasCorpus: true,
+            hasDocument: false,
+            title_Contains: "NDA",
+          },
+        },
+        result: { data: corpusThreads },
+      },
+      {
+        request: {
+          query: GET_CONVERSATIONS,
+          variables: {
+            conversationType: "THREAD",
+            limit: 20,
+            hasDocument: true,
+            title_Contains: "NDA",
+          },
+        },
+        result: { data: emptyResult },
+      },
+      {
+        request: {
+          query: GET_CONVERSATIONS,
+          variables: {
+            conversationType: "THREAD",
+            limit: 20,
+            hasCorpus: false,
+            hasDocument: false,
+            title_Contains: "NDA",
+          },
+        },
+        result: { data: emptyResult },
+      },
+    ];
 
     await mount(
-      <GlobalDiscussionsTestWrapper mocks={mocks}>
+      <GlobalDiscussionsTestWrapper mocks={[...initialMocks, ...searchMocks]}>
         <GlobalDiscussions />
       </GlobalDiscussionsTestWrapper>
     );
 
-    // Wait for initial render
+    // Wait for initial data to load
+    await expect(page.getByText("NDA template clause review")).toBeVisible({
+      timeout: 10000,
+    });
     await expect(
-      page.getByRole("heading", { name: "Discussions", exact: true })
+      page.getByText("Best practices for tagging legal provisions")
     ).toBeVisible();
 
     // Type into search box
     const searchInput = page.getByPlaceholder("Search discussions...");
     await searchInput.fill("NDA");
-
-    // Verify the input accepted the value
     await expect(searchInput).toHaveValue("NDA");
+
+    // Wait for debounced search to take effect — filtered results should show
+    // Corpus section should still show NDA thread
+    await expect(page.getByText("NDA template clause review")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Document and General sections should show empty state after search
+    await expect(
+      page.getByText("No discussions match your search").first()
+    ).toBeVisible({ timeout: 10000 });
 
     await docScreenshot(page, "discussions--global--search-active");
   });

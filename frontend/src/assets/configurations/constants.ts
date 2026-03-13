@@ -8,6 +8,8 @@ export const DESKTOP_BREAKPOINT = 769;
 // Icon defaults
 /** Default pixel size for DynamicIcon width and height */
 export const DYNAMIC_ICON_DEFAULT_SIZE = 16;
+/** Icon size for FilterTabItem icons in tab bars */
+export const FILTER_TAB_ICON_SIZE = 14;
 
 // Mention search configuration
 // Debounce delay before firing search queries (ms)
