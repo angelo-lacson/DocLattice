@@ -4,7 +4,10 @@ import {
   OS_LEGAL_COLORS,
   OS_LEGAL_TYPOGRAPHY,
 } from "../../../assets/configurations/osLegalStyles";
-import { Z_INDEX } from "../../../assets/configurations/constants";
+import {
+  CONTEXT_MENU_VIEWPORT_PADDING as VIEWPORT_PADDING,
+  Z_INDEX,
+} from "../../../assets/configurations/constants";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -112,11 +115,6 @@ const MenuItemStyled = styled.div<{
 `;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CONSTANTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const VIEWPORT_PADDING = 8;
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
