@@ -5,10 +5,17 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-09
+## [Unreleased] - 2026-03-11
 
 ### Added
 
+- **Richer social media link previews for corpus and document links**: Improved the Cloudflare OG worker to generate better social tags. Changes include:
+  - Corpus descriptions are now included in OG/Twitter description tags, combined with document count (e.g. "Corpus description — 15 documents")
+  - Document-in-corpus links now surface the parent corpus description when the document lacks its own description
+  - Added Twitter structured data tags (`twitter:label1`/`twitter:data1`, `twitter:label2`/`twitter:data2`) showing author, document count, corpus name, etc.
+  - New `corpus_description` field on `OGDocumentMetadataType` GraphQL type (`config/graphql/og_metadata_types.py`)
+  - Backend resolver returns corpus description for document-in-corpus queries (`config/graphql/og_metadata_queries.py`)
+  - Fixed pre-existing TypeScript type errors in worker test suite and metadata extraction
 - **Creative Commons license support for corpuses**: Corpuses can now have a license applied, choosing from standard Creative Commons licenses (CC BY, CC BY-SA, CC BY-NC, CC BY-NC-SA, CC BY-ND, CC BY-NC-ND, CC0) or a custom license with a URL. Changes include:
   - New `license` (CharField with SPDX identifiers) and `license_link` (URLField) fields on the Corpus model (`opencontractserver/corpuses/models.py`)
   - License constants in `opencontractserver/constants/licenses.py` and `frontend/src/assets/configurations/constants.ts`
@@ -27,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dropdown test selectors outdated after @os-legal/ui upgrade**: Updated CSS selectors in `DocumentMetadataGrid.ct.tsx` from `.oc-select-trigger`/`.oc-select-search` to `.oc-dropdown__trigger`/`.oc-dropdown__search-input` to match the v0.1.13 Dropdown component's class names. Changed Enter-key selection to direct `.oc-dropdown__option` click. (`frontend/tests/DocumentMetadataGrid.ct.tsx`)
 
 ### Changed
+
+- **SUI Tab migration to @os-legal/ui FilterTabs** (Closes #1022 — tab portion): Removed unused `Tab` and `Menu` imports from `semantic-ui-react` in `frontend/src/views/Corpuses.tsx`. Replaced custom styled `Tab`/`TabContainer` components and custom `SearchInput` in `frontend/src/views/GlobalDiscussions.tsx` with `FilterTabs` and `SearchBox` from `@os-legal/ui`, consistent with the rest of the codebase.
 
 - **Migrated frontend from Semantic UI React to @os-legal/ui design system**: Replaced Modal, Button, Input, and other UI components across the entire frontend with `@os-legal/ui` equivalents. Updated icon system from Semantic UI icons to lucide-react. Introduced `OS_LEGAL_COLORS`, `OS_LEGAL_TYPOGRAPHY`, and `OS_LEGAL_SPACING` design tokens for consistent styling. Upgraded `@os-legal/ui` from 0.1.8 to 0.1.14.
 - **Replaced hardcoded hex colors with design system tokens**: Consolidated ~50 color tokens and replaced hardcoded hex color literals across 150+ files with `OS_LEGAL_COLORS` constants from `osLegalStyles.ts`.

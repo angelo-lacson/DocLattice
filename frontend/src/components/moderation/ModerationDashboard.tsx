@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@apollo/client";
-import { Table } from "semantic-ui-react";
 import {
   Button,
   Dropdown,
@@ -9,6 +8,7 @@ import {
   ModalBody,
   ModalFooter,
   StatBlock,
+  Table,
   Textarea,
 } from "@os-legal/ui";
 import {
@@ -472,17 +472,17 @@ export const ModerationDashboard: React.FC<ModerationDashboardProps> = ({
           <InfoMessage>No moderation actions found</InfoMessage>
         ) : (
           <>
-            <Table celled striped>
-              <Table.Header>
+            <Table variant="bordered" striped>
+              <Table.Head>
                 <Table.Row>
-                  <Table.HeaderCell>Action</Table.HeaderCell>
-                  <Table.HeaderCell>Target</Table.HeaderCell>
-                  <Table.HeaderCell>Moderator</Table.HeaderCell>
-                  <Table.HeaderCell>Reason</Table.HeaderCell>
-                  <Table.HeaderCell>Time</Table.HeaderCell>
-                  <Table.HeaderCell>Actions</Table.HeaderCell>
+                  <Table.HeadCell>Action</Table.HeadCell>
+                  <Table.HeadCell>Target</Table.HeadCell>
+                  <Table.HeadCell>Moderator</Table.HeadCell>
+                  <Table.HeadCell>Reason</Table.HeadCell>
+                  <Table.HeadCell>Time</Table.HeadCell>
+                  <Table.HeadCell>Actions</Table.HeadCell>
                 </Table.Row>
-              </Table.Header>
+              </Table.Head>
               <Table.Body>
                 {actions.map(({ node }) => {
                   const { bg: actionBg, color: actionColor } = getActionColors(

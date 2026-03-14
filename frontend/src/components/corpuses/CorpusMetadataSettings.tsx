@@ -3,9 +3,7 @@
  * Restyled to use OS-Legal design system
  */
 import React, { useState, useEffect } from "react";
-// TODO: migrate to @os-legal/ui once Table component is available
-import { Table } from "semantic-ui-react";
-import { Button, IconButton, Tooltip } from "@os-legal/ui";
+import { Button, IconButton, Table, Tooltip } from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { useQuery, useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
@@ -125,45 +123,13 @@ const EmptyState = styled.div`
   }
 `;
 
-const StyledTable = styled(Table)`
-  &.ui.table {
-    border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
-    overflow: hidden;
-    box-shadow: ${OS_LEGAL_SHADOWS.card};
-    border: 1px solid ${OS_LEGAL_COLORS.border};
-    background: ${OS_LEGAL_COLORS.surface};
-    font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
-
-    thead th {
-      background: ${OS_LEGAL_COLORS.surfaceHover};
-      font-weight: 600;
-      color: ${OS_LEGAL_COLORS.textSecondary};
-      text-transform: uppercase;
-      font-size: 0.75rem;
-      letter-spacing: 0.05em;
-      padding: 0.875rem 1rem;
-      border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
-    }
-
-    tbody tr {
-      transition: background 0.15s ease;
-      border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
-
-      &:last-child {
-        border-bottom: none;
-      }
-
-      &:hover {
-        background: ${OS_LEGAL_COLORS.surfaceHover};
-      }
-
-      td {
-        padding: 0.875rem 1rem;
-        color: ${OS_LEGAL_COLORS.textPrimary};
-        font-size: 0.875rem;
-      }
-    }
-  }
+const StyledTableWrapper = styled.div`
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
+  overflow: hidden;
+  box-shadow: ${OS_LEGAL_SHADOWS.card};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.surface};
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
 `;
 
 const OrderButtons = styled.div`
@@ -511,114 +477,118 @@ export const CorpusMetadataSettings = ({
           </AddFieldButton>
         </EmptyState>
       ) : (
-        <StyledTable>
-          <Table.Header>
-            <Table.Row>
-              <Table.HeaderCell width={1}>Order</Table.HeaderCell>
-              <Table.HeaderCell>Field Name</Table.HeaderCell>
-              <Table.HeaderCell>Data Type</Table.HeaderCell>
-              <Table.HeaderCell>Validation</Table.HeaderCell>
-              <Table.HeaderCell>Help Text</Table.HeaderCell>
-              <Table.HeaderCell textAlign="center">Actions</Table.HeaderCell>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {columns.map((column, index) => (
-              <Table.Row key={column.id} data-testid="metadata-column-row">
-                <Table.Cell>
-                  <OrderButtons>
-                    <IconButton
-                      size="sm"
-                      variant="ghost"
-                      disabled={index === 0}
-                      onClick={() => moveColumn(index, "up")}
-                      aria-label="Move up"
-                    >
-                      <ChevronUp size={14} />
-                    </IconButton>
-                    <IconButton
-                      size="sm"
-                      variant="ghost"
-                      disabled={index === columns.length - 1}
-                      onClick={() => moveColumn(index, "down")}
-                      aria-label="Move down"
-                    >
-                      <ChevronDown size={14} />
-                    </IconButton>
-                  </OrderButtons>
-                </Table.Cell>
-                <Table.Cell>
-                  <strong>{column.name}</strong>
-                  {column.validationConfig?.required && (
-                    <RequiredBadge>Required</RequiredBadge>
-                  )}
-                </Table.Cell>
-                <Table.Cell>
-                  <DataTypeBadge dataType={column.dataType}>
-                    {column.dataType}
-                  </DataTypeBadge>
-                </Table.Cell>
-                <Table.Cell>
-                  <ValidationInfo>
-                    {column.validationConfig?.choices && (
-                      <div>
-                        Choices: {column.validationConfig.choices.join(", ")}
-                      </div>
-                    )}
-                    {column.validationConfig?.max_length && (
-                      <div>
-                        Max length: {column.validationConfig.max_length}
-                      </div>
-                    )}
-                    {column.validationConfig?.min_value !== undefined && (
-                      <div>
-                        Min:{" "}
-                        {column.validationConfig.min_value.toLocaleString()}
-                      </div>
-                    )}
-                    {column.validationConfig?.max_value !== undefined && (
-                      <div>
-                        Max:{" "}
-                        {column.validationConfig.max_value.toLocaleString()}
-                      </div>
-                    )}
-                    {(!column.validationConfig ||
-                      Object.keys(column.validationConfig).length === 0) &&
-                      "—"}
-                  </ValidationInfo>
-                </Table.Cell>
-                <Table.Cell>{column.helpText || "—"}</Table.Cell>
-                <Table.Cell textAlign="center">
-                  <ActionButtonGroup>
-                    <Tooltip content="Edit field">
-                      <IconButton
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditModal(column)}
-                        aria-label="Edit field"
-                      >
-                        <Edit size={14} />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip content="Delete field">
-                      <IconButton
-                        variant="danger"
-                        size="sm"
-                        onClick={() => {
-                          setColumnToDelete(column.id);
-                          setDeleteConfirmOpen(true);
-                        }}
-                        aria-label="Delete field"
-                      >
-                        <Trash2 size={14} />
-                      </IconButton>
-                    </Tooltip>
-                  </ActionButtonGroup>
-                </Table.Cell>
+        <StyledTableWrapper>
+          <Table>
+            <Table.Head>
+              <Table.Row>
+                <Table.HeadCell style={{ width: "6.25%" }}>
+                  Order
+                </Table.HeadCell>
+                <Table.HeadCell>Field Name</Table.HeadCell>
+                <Table.HeadCell>Data Type</Table.HeadCell>
+                <Table.HeadCell>Validation</Table.HeadCell>
+                <Table.HeadCell>Help Text</Table.HeadCell>
+                <Table.HeadCell align="center">Actions</Table.HeadCell>
               </Table.Row>
-            ))}
-          </Table.Body>
-        </StyledTable>
+            </Table.Head>
+            <Table.Body>
+              {columns.map((column, index) => (
+                <Table.Row key={column.id} data-testid="metadata-column-row">
+                  <Table.Cell>
+                    <OrderButtons>
+                      <IconButton
+                        size="sm"
+                        variant="ghost"
+                        disabled={index === 0}
+                        onClick={() => moveColumn(index, "up")}
+                        aria-label="Move up"
+                      >
+                        <ChevronUp size={14} />
+                      </IconButton>
+                      <IconButton
+                        size="sm"
+                        variant="ghost"
+                        disabled={index === columns.length - 1}
+                        onClick={() => moveColumn(index, "down")}
+                        aria-label="Move down"
+                      >
+                        <ChevronDown size={14} />
+                      </IconButton>
+                    </OrderButtons>
+                  </Table.Cell>
+                  <Table.Cell>
+                    <strong>{column.name}</strong>
+                    {column.validationConfig?.required && (
+                      <RequiredBadge>Required</RequiredBadge>
+                    )}
+                  </Table.Cell>
+                  <Table.Cell>
+                    <DataTypeBadge dataType={column.dataType}>
+                      {column.dataType}
+                    </DataTypeBadge>
+                  </Table.Cell>
+                  <Table.Cell>
+                    <ValidationInfo>
+                      {column.validationConfig?.choices && (
+                        <div>
+                          Choices: {column.validationConfig.choices.join(", ")}
+                        </div>
+                      )}
+                      {column.validationConfig?.max_length && (
+                        <div>
+                          Max length: {column.validationConfig.max_length}
+                        </div>
+                      )}
+                      {column.validationConfig?.min_value !== undefined && (
+                        <div>
+                          Min:{" "}
+                          {column.validationConfig.min_value.toLocaleString()}
+                        </div>
+                      )}
+                      {column.validationConfig?.max_value !== undefined && (
+                        <div>
+                          Max:{" "}
+                          {column.validationConfig.max_value.toLocaleString()}
+                        </div>
+                      )}
+                      {(!column.validationConfig ||
+                        Object.keys(column.validationConfig).length === 0) &&
+                        "—"}
+                    </ValidationInfo>
+                  </Table.Cell>
+                  <Table.Cell>{column.helpText || "—"}</Table.Cell>
+                  <Table.Cell align="center">
+                    <ActionButtonGroup>
+                      <Tooltip content="Edit field">
+                        <IconButton
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditModal(column)}
+                          aria-label="Edit field"
+                        >
+                          <Edit size={14} />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip content="Delete field">
+                        <IconButton
+                          variant="danger"
+                          size="sm"
+                          onClick={() => {
+                            setColumnToDelete(column.id);
+                            setDeleteConfirmOpen(true);
+                          }}
+                          aria-label="Delete field"
+                        >
+                          <Trash2 size={14} />
+                        </IconButton>
+                      </Tooltip>
+                    </ActionButtonGroup>
+                  </Table.Cell>
+                </Table.Row>
+              ))}
+            </Table.Body>
+          </Table>
+        </StyledTableWrapper>
       )}
 
       <MetadataColumnModal

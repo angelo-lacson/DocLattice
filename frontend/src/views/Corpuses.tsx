@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Tab } from "semantic-ui-react";
 import _ from "lodash";
 import { toast } from "react-toastify";
 import {
@@ -40,6 +39,7 @@ import { SearchBox, FilterTabs } from "@os-legal/ui";
 import type { FilterTabItem } from "@os-legal/ui";
 
 import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
+import { CreateExtractModal } from "../components/widgets/modals/CreateExtractModal";
 import {
   CreateAndSearchBar,
   DropdownActionProps,
@@ -73,6 +73,7 @@ import {
   selectedExtractIds,
   selectedThreadId,
   corpusPowerUserMode,
+  showCreateExtractModal,
 } from "../graphql/cache";
 import {
   updateTabParam,
@@ -1614,6 +1615,7 @@ export const Corpuses = () => {
   const currentUser = useReactiveVar(userObj);
   const annotation_search_term = useReactiveVar(annotationContentSearchTerm);
   const show_query_view_state = useReactiveVar(showQueryViewState);
+  const show_create_extract_modal = useReactiveVar(showCreateExtractModal);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -3030,6 +3032,12 @@ export const Corpuses = () => {
           ) : (
             <></>
           )}
+
+          <CreateExtractModal
+            open={show_create_extract_modal}
+            onClose={() => showCreateExtractModal(false)}
+            corpusId={opened_corpus?.id}
+          />
         </>
       }
       SearchBar={
