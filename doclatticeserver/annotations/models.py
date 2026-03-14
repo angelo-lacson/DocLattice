@@ -43,6 +43,11 @@ from doclatticeserver.shared.mixins import HasEmbeddingMixin
 from doclatticeserver.shared.Models import BaseOCModel
 from doclatticeserver.shared.utils import calc_oc_file_path
 
+from .compact_json import (
+    compact_annotation_json,
+    is_compact_format,
+    is_span_format,
+)
 from .json_types import MultipageAnnotationJson, SpanAnnotationJson
 
 User = get_user_model()
@@ -1022,8 +1027,6 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
                 raise ValueError(
                     "TOKEN_LABEL annotations must store MultipageAnnotationJson (dict)."
                 )
-            from doclatticeserver.annotations.compact_json import is_compact_format
-
             if is_compact_format(self.json):
                 # v2 compact format: {"v": 2, "p": {"0": {"b": [...], "t": "..."}}}
                 pages = self.json.get("p", {})
@@ -1136,14 +1139,14 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
             and isinstance(self.json, dict)
             and self.json
         ):
-            from doclatticeserver.annotations.compact_json import (
-                compact_annotation_json,
-                is_compact_format,
-                is_span_format,
-            )
-
             if not is_compact_format(self.json) and not is_span_format(self.json):
-                self.json = compact_annotation_json(self.json)
+                try:
+                    self.json = compact_annotation_json(self.json)
+                except Exception:
+                    logger.exception(
+                        "Failed to compact annotation JSON for pk=%s; storing as-is",
+                        self.pk,
+                    )
 
         # Maintain timestamp consistency
         if not self.pk:

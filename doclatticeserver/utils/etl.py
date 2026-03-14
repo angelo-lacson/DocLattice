@@ -12,7 +12,11 @@ from django.db.models import Q
 from pydantic import TypeAdapter, ValidationError, create_model
 from typing_extensions import TypedDict
 
-from doclatticeserver.annotations.compact_json import compact_annotation_json
+from doclatticeserver.annotations.compact_json import (
+    compact_annotation_json,
+    expand_annotation_json,
+    is_span_format,
+)
 from doclatticeserver.annotations.models import (
     DOC_TYPE_LABEL,
     RELATIONSHIP_LABEL,
@@ -337,13 +341,13 @@ def build_document_export(
                     annot_export["content_modalities"] = annot.content_modalities
                 labelled_text.append(annot_export)
 
-                from doclatticeserver.annotations.compact_json import (
-                    expand_annotation_json,
-                )
-
                 annotation_json: dict[str, DocLatticeSinglePageAnnotationType] = (
                     expand_annotation_json(annot.json, raw_text=annot.raw_text or "")
                 )
+
+                # Span annotations ({start, end}) don't have page-keyed structure
+                if is_span_format(annotation_json):
+                    continue
 
                 for targ_page_num in annotation_json:
                     logger.info(

@@ -58,7 +58,9 @@ import { getPermissions } from "../../../utils/transform";
 import { SpanAnnotationJson } from "../../types";
 import { AnnotationLabelType } from "../../../types/graphql-api";
 import { useCorpusState } from "../context/CorpusAtom";
+import { expandAnnotationJson } from "../../../utils/compactAnnotationJson";
 import { isTextFileType } from "../../../utils/files";
+import { MultipageAnnotationJson } from "../../types";
 
 /**
  * Hook to manage PdfAnnotations state.
@@ -307,9 +309,20 @@ export function useCreateAnnotation() {
     const hasTokens =
       annotation instanceof ServerTokenAnnotation &&
       annotation.json &&
-      Object.values(annotation.json).some(
-        (pageData) => pageData?.tokensJsons && pageData.tokensJsons.length > 0
-      );
+      (() => {
+        const expanded = expandAnnotationJson(
+          annotation.json,
+          annotation.rawText || ""
+        );
+        if (!expanded || typeof expanded !== "object") return false;
+        // Span annotations have tokens implicitly
+        if ("start" in expanded && "end" in expanded) return true;
+        return Object.values(
+          expanded as Record<string, { tokensJsons?: unknown[] }>
+        ).some(
+          (pageData) => pageData?.tokensJsons && pageData.tokensJsons.length > 0
+        );
+      })();
     const hasText = annotation.rawText && annotation.rawText.trim().length > 0;
 
     console.log("[handleCreateAnnotation] Validating annotation:", {
@@ -428,7 +441,10 @@ export function useCreateAnnotation() {
             createdAnnotationData.annotationLabel,
             createdAnnotationData.rawText,
             false,
-            createdAnnotationData.json,
+            expandAnnotationJson(
+              createdAnnotationData.json ?? {},
+              createdAnnotationData.rawText ?? ""
+            ) as MultipageAnnotationJson,
             getPermissions(createdAnnotationData.myPermissions || []),
             false,
             false,
@@ -544,7 +560,10 @@ export function useUpdateAnnotation() {
               annotation.annotationLabel,
               annotation.rawText,
               false,
-              annotation.json,
+              expandAnnotationJson(
+                annotation.json ?? {},
+                annotation.rawText ?? ""
+              ) as MultipageAnnotationJson,
               getPermissions(annotation.myPermissions || []),
               false,
               false,

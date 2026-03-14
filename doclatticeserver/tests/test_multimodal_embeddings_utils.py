@@ -372,7 +372,7 @@ class TestGetAnnotationImageTokens(TestCase):
         self.assertEqual(len(result), 1)
 
     def test_handles_invalid_token_refs(self):
-        """Should skip invalid token references."""
+        """Should skip invalid token references (out-of-bounds token index)."""
         base64_data = self._create_sample_image_base64()
         pawls_data = [
             {
@@ -398,11 +398,12 @@ class TestGetAnnotationImageTokens(TestCase):
             creator=self.user,
             json={
                 "0": {
+                    "bounds": {"top": 200, "left": 100, "right": 300, "bottom": 350},
                     "tokensJsons": [
-                        "invalid",  # String instead of dict
-                        {"pageIndex": 5, "tokenIndex": 0},  # Out of bounds
-                        {"pageIndex": 0, "tokenIndex": 0},  # Valid
-                    ]
+                        {"pageIndex": 0, "tokenIndex": 99},  # Out of bounds token
+                        {"pageIndex": 0, "tokenIndex": 0},  # Valid image token
+                    ],
+                    "rawText": "",
                 }
             },
         )

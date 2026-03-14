@@ -9,6 +9,8 @@ import json
 
 from django.contrib.auth.models import AnonymousUser
 
+from doclatticeserver.annotations.compact_json import expand_annotation_json
+
 
 def get_corpus_resource(corpus_slug: str) -> str:
     """
@@ -157,7 +159,9 @@ def get_annotation_resource(
             "page": annotation.page,
             "raw_text": annotation.raw_text or "",
             "annotation_label": label_data,
-            "json": annotation.json,
+            "json": expand_annotation_json(
+                annotation.json, raw_text=annotation.raw_text or ""
+            ),
             "structural": annotation.structural,
             "created": annotation.created.isoformat() if annotation.created else None,
         }

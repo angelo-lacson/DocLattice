@@ -12,6 +12,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from doclatticeserver.annotations.compact_json import expand_annotation_json
 from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.documents.models import Document
 from doclatticeserver.types.enums import PermissionTypes
@@ -371,8 +372,10 @@ def get_annotation_images(annotation_id: int) -> list[ImageData]:
         if not pawls_data:
             return []
 
-        # Get tokensJsons from annotation's json field
-        annotation_json = annotation.json or {}
+        # Expand v2 compact JSON to v1 for uniform processing
+        annotation_json = expand_annotation_json(
+            annotation.json or {}, raw_text=annotation.raw_text or ""
+        )
 
         images: list[ImageData] = []
         for page_key, page_data in annotation_json.items():

@@ -37,12 +37,17 @@ Both formats are accepted everywhere; v1 is returned from
 
 from __future__ import annotations
 
-from typing import Any, Union
+import logging
+from typing import Any
 
-# Maximum span for a single range segment (safety guard).
-MAX_RANGE_SPAN = 10_000
-# Maximum total tokens across all pages (safety guard).
-MAX_TOTAL_TOKENS = 50_000
+from doclatticeserver.constants.annotations import (
+    COMPACT_JSON_MAX_RANGE_SPAN as MAX_RANGE_SPAN,
+)
+from doclatticeserver.constants.annotations import (
+    COMPACT_JSON_MAX_TOTAL_TOKENS as MAX_TOTAL_TOKENS,
+)
+
+logger = logging.getLogger(__name__)
 
 # ── Range encoding ──────────────────────────────────────────────
 
@@ -58,7 +63,9 @@ def encode_token_ranges(indices: list[int]) -> str:
     """
     if not indices:
         return ""
-    sorted_idx = sorted(indices)
+    sorted_idx = sorted(i for i in set(indices) if i >= 0)
+    if not sorted_idx:
+        return ""
     ranges: list[str] = []
     start = end = sorted_idx[0]
     for i in range(1, len(sorted_idx)):
@@ -84,6 +91,7 @@ def decode_token_ranges(range_str: str) -> list[int]:
         return []
     tokens: list[int] = []
     total = 0
+    truncated = False
     for part in range_str.split(","):
         if "-" in part:
             pieces = part.split("-", 1)
@@ -96,16 +104,26 @@ def decode_token_ranges(range_str: str) -> list[int]:
                 continue
             total += span + 1
             if total > MAX_TOTAL_TOKENS:
+                truncated = True
                 break
             tokens.extend(range(start, end + 1))
         else:
             try:
-                tokens.append(int(part))
-                total += 1
-                if total > MAX_TOTAL_TOKENS:
-                    break
+                val = int(part)
             except ValueError:
                 continue
+            total += 1
+            if total > MAX_TOTAL_TOKENS:
+                truncated = True
+                break
+            tokens.append(val)
+    if truncated:
+        logger.warning(
+            "decode_token_ranges truncated at %d tokens (limit %d): %s...",
+            len(tokens),
+            MAX_TOTAL_TOKENS,
+            range_str[:80],
+        )
     return tokens
 
 
@@ -114,35 +132,43 @@ def decode_token_ranges(range_str: str) -> list[int]:
 
 def is_compact_format(json_data: Any) -> bool:
     """Return ``True`` if *json_data* uses the v2 compact layout."""
-    return isinstance(json_data, dict) and json_data.get("v") == 2
+    return (
+        isinstance(json_data, dict)
+        and json_data.get("v") == 2
+        and isinstance(json_data.get("p"), dict)
+    )
 
 
 def is_span_format(json_data: Any) -> bool:
     """Return ``True`` if *json_data* is a span annotation (``{start, end}``)."""
-    return (
-        isinstance(json_data, dict)
-        and "start" in json_data
-        and "end" in json_data
-        and len(json_data) <= 3  # start, end, optional text
-    )
+    if (
+        not isinstance(json_data, dict)
+        or "start" not in json_data
+        or "end" not in json_data
+    ):
+        return False
+    # Only allow known span keys to avoid false positives on page-keyed dicts
+    return set(json_data.keys()) <= {"start", "end", "text"}
 
 
 # ── Compact (v1 → v2) ──────────────────────────────────────────
 
 
 def compact_annotation_json(
-    v1_json: dict[str, Any],
-) -> dict[str, Any]:
+    v1_json: dict[str, Any] | None,
+) -> dict[str, Any] | None:
     """Convert a v1 multipage annotation JSON to v2 compact format.
 
     Span annotations (``{start, end}``) are returned unchanged.
     Already-compact v2 data is returned unchanged.
 
     Args:
-        v1_json: The annotation JSON in v1 format (page-keyed dict).
+        v1_json: The annotation JSON in v1 format (page-keyed dict),
+            or ``None``/falsy (returned as-is).
 
     Returns:
-        The annotation JSON in v2 compact format.
+        The annotation JSON in v2 compact format, or ``None`` if input
+        was ``None``.
     """
     if not v1_json or not isinstance(v1_json, dict):
         return v1_json
@@ -171,6 +197,8 @@ def compact_annotation_json(
                 bounds.get("right", 0),
                 bounds.get("bottom", 0),
             ]
+        else:
+            compact_page["b"] = [0, 0, 0, 0]
 
         # Compact token refs: [{pageIndex, tokenIndex}, ...] → range string
         tokens_jsons = page_data.get("tokensJsons")
@@ -194,7 +222,7 @@ def compact_annotation_json(
 def expand_annotation_json(
     json_data: Any,
     raw_text: str = "",
-) -> Union[dict[str, Any], Any]:
+) -> dict[str, Any] | Any:
     """Normalize annotation JSON to canonical v1 format.
 
     Accepts both v1 and v2 formats. If already v1, returns as-is.
@@ -246,7 +274,10 @@ def expand_annotation_json(
 
         # Expand token refs: range string → [{pageIndex, tokenIndex}, ...]
         t = page_data.get("t", "")
-        page_idx = int(page_key) if str(page_key).isdigit() else 0
+        try:
+            page_idx = int(page_key)
+        except (ValueError, TypeError):
+            page_idx = 0
         if isinstance(t, str):
             indices = decode_token_ranges(t)
         elif isinstance(t, list):

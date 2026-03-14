@@ -201,21 +201,11 @@ export type TextSearchSpanResult = {
 
 export type MultipageAnnotationJson = Record<number, SinglePageAnnotationJson>;
 
-/** Compact v2 per-page annotation data. */
-export type CompactPageData = {
-  /** Bounds: [top, left, right, bottom] */
-  b: [number, number, number, number];
-  /** Token indices as range-encoded string, e.g. "35-37,40" */
-  t: string;
-};
-
-/** Compact v2 multipage annotation JSON. */
-export type CompactAnnotationJson = {
-  /** Version marker — always 2 */
-  v: 2;
-  /** Pages keyed by page index string */
-  p: Record<string, CompactPageData>;
-};
+// Compact v2 types — canonical definitions in utils/compactAnnotationJson.ts
+export type {
+  CompactPageData,
+  CompactAnnotationJson,
+} from "../utils/compactAnnotationJson";
 
 export interface PageProps {
   pageInfo: PDFPageInfo;

@@ -12,6 +12,10 @@
  */
 
 import {
+  COMPACT_JSON_MAX_RANGE_SPAN,
+  COMPACT_JSON_MAX_TOTAL_TOKENS,
+} from "../assets/configurations/constants";
+import {
   BoundingBox,
   MultipageAnnotationJson,
   SinglePageAnnotationJson,
@@ -20,11 +24,8 @@ import {
 } from "../components/types";
 
 // ═══════════════════════════════════════════════════════════════
-// Safety limits
+// Safety limits (from project constants)
 // ═══════════════════════════════════════════════════════════════
-
-const MAX_RANGE_SPAN = 10_000;
-const MAX_TOTAL_TOKENS = 50_000;
 
 // ═══════════════════════════════════════════════════════════════
 // Compact v2 types
@@ -56,7 +57,10 @@ export interface CompactAnnotationJson {
  */
 export function encodeTokenRanges(tokens: number[]): string {
   if (tokens.length === 0) return "";
-  const sorted = [...tokens].sort((a, b) => a - b);
+  const sorted = [...new Set(tokens)]
+    .filter((t) => t >= 0)
+    .sort((a, b) => a - b);
+  if (sorted.length === 0) return "";
   const ranges: string[] = [];
   let rangeStart = sorted[0];
   let rangeEnd = sorted[0];
@@ -86,28 +90,48 @@ export function decodeTokenRanges(rangeStr: string): number[] {
   if (!rangeStr) return [];
   const tokens: number[] = [];
   let total = 0;
+  let truncated = false;
   const parts = rangeStr.split(",");
 
   for (const part of parts) {
     if (part.includes("-")) {
-      const [startStr, endStr] = part.split("-");
+      const idx = part.indexOf("-");
+      const startStr = part.slice(0, idx);
+      const endStr = part.slice(idx + 1);
       const start = parseInt(startStr, 10);
       const end = parseInt(endStr, 10);
       if (isNaN(start) || isNaN(end)) continue;
-      if (end - start > MAX_RANGE_SPAN || end - start < 0) continue;
+      if (end - start > COMPACT_JSON_MAX_RANGE_SPAN || end - start < 0)
+        continue;
       total += end - start + 1;
-      if (total > MAX_TOTAL_TOKENS) break;
+      if (total > COMPACT_JSON_MAX_TOTAL_TOKENS) {
+        truncated = true;
+        break;
+      }
       for (let i = start; i <= end; i++) {
         tokens.push(i);
       }
     } else {
       const num = parseInt(part, 10);
       if (!isNaN(num)) {
-        tokens.push(num);
         total += 1;
-        if (total > MAX_TOTAL_TOKENS) break;
+        if (total > COMPACT_JSON_MAX_TOTAL_TOKENS) {
+          truncated = true;
+          break;
+        }
+        tokens.push(num);
       }
     }
+  }
+  if (truncated) {
+    console.warn(
+      `decodeTokenRanges truncated at ${
+        tokens.length
+      } tokens (limit ${COMPACT_JSON_MAX_TOTAL_TOKENS}): ${rangeStr.slice(
+        0,
+        80
+      )}...`
+    );
   }
   return tokens;
 }
@@ -123,7 +147,8 @@ export function isCompactFormat(
   return (
     json != null &&
     (json as Record<string, unknown>).v === 2 &&
-    typeof (json as Record<string, unknown>).p === "object"
+    typeof (json as Record<string, unknown>).p === "object" &&
+    (json as Record<string, unknown>).p !== null
   );
 }
 
@@ -131,7 +156,14 @@ export function isCompactFormat(
 export function isSpanFormat(
   json: Record<string, unknown> | SpanAnnotationJson
 ): json is SpanAnnotationJson {
-  return json != null && "start" in json && "end" in json;
+  if (json == null || !("start" in json) || !("end" in json)) return false;
+  // Only allow known span keys to avoid false positives on page-keyed dicts
+  const keys = new Set(Object.keys(json));
+  const allowedKeys = new Set(["start", "end", "text"]);
+  for (const key of keys) {
+    if (!allowedKeys.has(key)) return false;
+  }
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -214,7 +246,11 @@ export function expandAnnotationJson(
 
     // Expand token refs
     const indices =
-      typeof pageData.t === "string" ? decodeTokenRanges(pageData.t) : [];
+      typeof pageData.t === "string"
+        ? decodeTokenRanges(pageData.t)
+        : Array.isArray(pageData.t)
+        ? (pageData.t as number[])
+        : [];
     const tokensJsons: TokenId[] = indices.map((tokenIndex) => ({
       pageIndex: actualPageIdx,
       tokenIndex,
