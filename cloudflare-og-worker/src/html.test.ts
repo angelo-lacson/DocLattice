@@ -20,6 +20,8 @@ describe("generateOGHtml", () => {
     type: "corpus",
     title: "Test Corpus",
     description: "A test description",
+    image: null,
+    entityName: "Test Corpus",
     creatorName: "TestUser",
   };
 
@@ -175,12 +177,88 @@ describe("generateGenericOGHtml", () => {
   });
 });
 
+describe("Twitter labeled data", () => {
+  it("renders twitter:label1 and twitter:data1 tags", () => {
+    const metadata: OGMetadata = {
+      type: "corpus",
+      title: "Test",
+      description: "Test",
+      image: null,
+      entityName: "Test",
+      creatorName: "User",
+      labeledData: [
+        { label: "Documents", value: "15 documents" },
+        { label: "Author", value: "TestUser" },
+      ],
+    };
+    const html = generateOGHtml(metadata, "https://example.com", mockEnv);
+
+    expect(html).toContain('twitter:label1" content="Documents"');
+    expect(html).toContain('twitter:data1" content="15 documents"');
+    expect(html).toContain('twitter:label2" content="Author"');
+    expect(html).toContain('twitter:data2" content="TestUser"');
+  });
+
+  it("limits labeled data to 2 pairs", () => {
+    const metadata: OGMetadata = {
+      type: "corpus",
+      title: "Test",
+      description: "Test",
+      image: null,
+      entityName: "Test",
+      creatorName: "User",
+      labeledData: [
+        { label: "One", value: "1" },
+        { label: "Two", value: "2" },
+        { label: "Three", value: "3" },
+      ],
+    };
+    const html = generateOGHtml(metadata, "https://example.com", mockEnv);
+
+    expect(html).toContain("twitter:label1");
+    expect(html).toContain("twitter:label2");
+    expect(html).not.toContain("twitter:label3");
+  });
+
+  it("omits labeled data tags when not provided", () => {
+    const metadata: OGMetadata = {
+      type: "corpus",
+      title: "Test",
+      description: "Test",
+      image: null,
+      entityName: "Test",
+      creatorName: "User",
+    };
+    const html = generateOGHtml(metadata, "https://example.com", mockEnv);
+
+    expect(html).not.toContain("twitter:label1");
+  });
+
+  it("escapes HTML in labeled data values", () => {
+    const metadata: OGMetadata = {
+      type: "corpus",
+      title: "Test",
+      description: "Test",
+      image: null,
+      entityName: "Test",
+      creatorName: "User",
+      labeledData: [{ label: "Test<br>", value: "Val&ue" }],
+    };
+    const html = generateOGHtml(metadata, "https://example.com", mockEnv);
+
+    expect(html).toContain("&lt;br&gt;");
+    expect(html).toContain("&amp;");
+  });
+});
+
 describe("XSS prevention", () => {
   it("prevents script injection via title", () => {
     const metadata: OGMetadata = {
       type: "corpus",
       title: '"><script>alert(1)</script><meta name="',
       description: "Test",
+      image: null,
+      entityName: "Test",
       creatorName: "User",
     };
     const html = generateOGHtml(metadata, "https://example.com", mockEnv);
@@ -193,6 +271,8 @@ describe("XSS prevention", () => {
       type: "corpus",
       title: '" onload="alert(1)',
       description: "Test",
+      image: null,
+      entityName: "Test",
       creatorName: "User",
     };
     const html = generateOGHtml(metadata, "https://example.com", mockEnv);
@@ -206,6 +286,8 @@ describe("XSS prevention", () => {
         type: "corpus",
         title: "Test",
         description: "Test",
+        image: null,
+        entityName: "Test",
         creatorName: "User",
       },
       'javascript:alert("XSS")',
@@ -222,6 +304,8 @@ describe("XSS prevention", () => {
       type: "corpus",
       title: "Test's Title",
       description: "Test",
+      image: null,
+      entityName: "Test",
       creatorName: "User",
     };
     const html = generateOGHtml(metadata, "https://example.com", mockEnv);
@@ -234,6 +318,8 @@ describe("XSS prevention", () => {
       type: "corpus",
       title: "Test & Title",
       description: "Test",
+      image: null,
+      entityName: "Test",
       creatorName: "User",
     };
     const html = generateOGHtml(metadata, "https://example.com", mockEnv);

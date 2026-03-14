@@ -269,6 +269,7 @@ class OGDocumentInCorpusMetadataTestCase(TestCase):
         # Public corpus with public document
         cls.public_corpus = Corpus.objects.create(
             title="Public Corpus",
+            description="Corpus for analyzing legal contracts",
             creator=cls.user,
             is_public=True,
         )
@@ -309,7 +310,8 @@ class OGDocumentInCorpusMetadataTestCase(TestCase):
         self.client = Client(schema, context_value=self.request)
 
     def test_public_doc_in_public_corpus_returns_metadata(self):
-        """Test that public doc in public corpus returns metadata."""
+        """Test that public doc in public corpus returns metadata
+        including corpus description for social tag context."""
         query = """
             query GetOGDocInCorpus(
                 $userSlug: String!,
@@ -324,6 +326,7 @@ class OGDocumentInCorpusMetadataTestCase(TestCase):
                     title
                     description
                     corpusTitle
+                    corpusDescription
                     creatorName
                     isPublic
                 }
@@ -343,6 +346,9 @@ class OGDocumentInCorpusMetadataTestCase(TestCase):
         self.assertIsNotNone(data)
         self.assertEqual(data["title"], "Public Doc in Corpus")
         self.assertEqual(data["corpusTitle"], "Public Corpus")
+        self.assertEqual(
+            data["corpusDescription"], "Corpus for analyzing legal contracts"
+        )
         self.assertEqual(data["creatorName"], "og_doc_corpus_user")
 
     def test_private_doc_in_public_corpus_returns_none(self):

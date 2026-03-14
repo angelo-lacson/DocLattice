@@ -1,5 +1,6 @@
 import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
+import { docScreenshot } from "./utils/docScreenshot";
 import { MetadataTestWrapper } from "./MetadataTestWrapper";
 import { DocumentMetadataGrid } from "../src/components/documents/DocumentMetadataGrid";
 import {
@@ -74,6 +75,8 @@ test.describe("DocumentMetadataGrid", () => {
     await expect(page.getByRole("cell", { name: "50,000" })).toBeVisible(); // Formatted number with comma
     await expect(page.getByRole("cell", { name: "Active" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "No" })).toBeVisible(); // Boolean as Yes/No
+
+    await docScreenshot(page, "documents--metadata-grid--with-data");
   });
 
   test("inline editing with click", async ({ mount, page }) => {

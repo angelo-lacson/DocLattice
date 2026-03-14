@@ -336,7 +336,7 @@ test.describe("Metadata Performance", () => {
     await expect(loadMoreBtn).toBeEnabled();
 
     // Verify that pagination controls are properly integrated
-    await expect(page.locator(".ui.table")).toBeVisible();
+    await expect(page.locator(".oc-table")).toBeVisible();
     const cells = await page.locator(".metadata-grid-cell").count();
     expect(cells).toBeGreaterThan(0); // Should have metadata cells
   });

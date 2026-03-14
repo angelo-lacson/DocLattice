@@ -102,6 +102,11 @@ export const cache = new InMemoryCache({
           keyArgs: ["corpusId"],
           merge: false,
         },
+        // Corpus-specific version list for version selector UI
+        corpusVersions: {
+          keyArgs: ["corpusId"],
+          merge: false,
+        },
         // Version metadata fields with corpus context
         versionNumber: {
           keyArgs: ["corpusId"],
@@ -275,7 +280,11 @@ export const cache = new InMemoryCache({
         labelsets: relayStylePagination(),
         annotationLabels: relayStylePagination(),
         relationshipLabels: relayStylePagination(),
-        extracts: relayStylePagination(),
+        extracts: relayStylePagination([
+          "corpus",
+          "corpusAction_Isnull",
+          "name_Contains",
+        ]),
         columns: relayStylePagination(),
         // Document relationships - cache by corpus/document context
         documentRelationships: relayStylePagination(["corpusId", "documentId"]),
