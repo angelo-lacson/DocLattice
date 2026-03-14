@@ -1354,23 +1354,28 @@ class CoreConversationManager:
         )
         return message.id
 
+    def _ephemeral_update_content(self, message_id: int, content: str) -> bool:
+        """Update content of an ephemeral message, adjusting token estimate.
+
+        Returns True if the message was found and updated, False otherwise.
+        """
+        for msg in self._ephemeral_messages:
+            if msg.id == message_id:
+                old_len = len(msg.content)
+                msg.content = content
+                delta = int((len(content) - old_len) / CHARS_PER_TOKEN_ESTIMATE)
+                self._ephemeral_token_estimate = max(
+                    0, self._ephemeral_token_estimate + delta
+                )
+                return True
+        return False
+
     async def update_message_content(self, message_id: int, content: str) -> None:
         """Update only the content of a message."""
         if not self.conversation:
-            # Ephemeral branch — find the message by ID and update its content,
-            # adjusting the running token estimate accordingly.
             if not message_id:
                 return
-            for msg in self._ephemeral_messages:
-                if msg.id == message_id:
-                    old_len = len(msg.content)
-                    msg.content = content
-                    new_len = len(content)
-                    delta = int((new_len - old_len) / CHARS_PER_TOKEN_ESTIMATE)
-                    self._ephemeral_token_estimate = max(
-                        0, self._ephemeral_token_estimate + delta
-                    )
-                    break
+            self._ephemeral_update_content(message_id, content)
             return
 
         message = await ChatMessage.objects.aget(id=message_id)
@@ -1398,6 +1403,8 @@ class CoreConversationManager:
                     content=content,
                     msg_type="LLM",
                     created=timezone.now(),
+                    sources=sources or [],
+                    metadata=metadata or {},
                 )
             )
             self._ephemeral_token_estimate += max(
@@ -1491,6 +1498,8 @@ class CoreConversationManager:
                     content=content,
                     msg_type="LLM",
                     created=timezone.now(),
+                    sources=sources or [],
+                    metadata=metadata or {},
                 )
             )
             self._ephemeral_token_estimate += max(
@@ -1530,17 +1539,14 @@ class CoreConversationManager:
         if not self.conversation:
             if not message_id:
                 return
-            # Ephemeral branch — find the message by ID and update its content,
-            # adjusting the running token estimate accordingly.
+            self._ephemeral_update_content(message_id, content)
+            # Also update sources/metadata on the ephemeral message.
             for msg in self._ephemeral_messages:
                 if msg.id == message_id:
-                    old_len = len(msg.content)
-                    msg.content = content
-                    new_len = len(content)
-                    delta = int((new_len - old_len) / CHARS_PER_TOKEN_ESTIMATE)
-                    self._ephemeral_token_estimate = max(
-                        0, self._ephemeral_token_estimate + delta
-                    )
+                    if sources is not None:
+                        msg.sources = sources
+                    if metadata is not None:
+                        msg.metadata = metadata
                     break
             return
 

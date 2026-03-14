@@ -551,6 +551,60 @@ class TestEphemeralConversationManager(TestCase):
         self.assertGreater(est_after_llm, est_after_user)
 
     # ------------------------------------------------------------------
+    # store_llm_message
+    # ------------------------------------------------------------------
+
+    async def test_store_llm_message_appends_to_buffer(self):
+        manager = self._make_ephemeral_manager()
+        msg_id = await manager.store_llm_message("LLM says hi")
+        self.assertEqual(len(manager._ephemeral_messages), 1)
+        msg = manager._ephemeral_messages[0]
+        self.assertEqual(msg.id, msg_id)
+        self.assertEqual(msg.content, "LLM says hi")
+        self.assertEqual(msg.msg_type, "LLM")
+
+    async def test_store_llm_message_retains_sources_and_metadata(self):
+        from opencontractserver.llms.agents.core_agents import SourceNode
+
+        manager = self._make_ephemeral_manager()
+        src = SourceNode(annotation_id=42, content="excerpt")
+        meta = {"key": "value"}
+        await manager.store_llm_message("response", sources=[src], metadata=meta)
+        msg = manager._ephemeral_messages[0]
+        self.assertEqual(msg.sources, [src])
+        self.assertEqual(msg.metadata, meta)
+
+    # ------------------------------------------------------------------
+    # sources/metadata retention in complete_message and update_message
+    # ------------------------------------------------------------------
+
+    async def test_complete_message_retains_sources_and_metadata(self):
+        from opencontractserver.llms.agents.core_agents import SourceNode
+
+        manager = self._make_ephemeral_manager()
+        msg_id = await manager.create_placeholder_message("LLM")
+        src = SourceNode(annotation_id=7, content="text")
+        meta = {"timeline": [{"step": 1}]}
+        await manager.complete_message(msg_id, "done", sources=[src], metadata=meta)
+        msg = manager._ephemeral_messages[0]
+        self.assertEqual(msg.sources, [src])
+        self.assertEqual(msg.metadata, meta)
+
+    async def test_update_message_retains_sources_and_metadata(self):
+        from opencontractserver.llms.agents.core_agents import SourceNode
+
+        manager = self._make_ephemeral_manager()
+        msg_id = await manager.store_user_message("original")
+        src = SourceNode(annotation_id=99, content="snip")
+        await manager.update_message(
+            msg_id, "updated", sources=[src], metadata={"a": 1}
+        )
+        msg = manager._ephemeral_messages[0]
+        self.assertEqual(msg.content, "updated")
+        self.assertEqual(msg.sources, [src])
+        self.assertEqual(msg.metadata, {"a": 1})
+
+    # ------------------------------------------------------------------
     # Task 4: context_exhausted property
     # ------------------------------------------------------------------
 

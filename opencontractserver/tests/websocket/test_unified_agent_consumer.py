@@ -49,6 +49,7 @@ class _StubAgent:
     def __init__(self, gen_factory, conversation_id=None):
         self._gen_factory = gen_factory
         self._conversation_id = conversation_id
+        self.conversation_manager = None
 
     def stream(self, user_query: str):
         return self._gen_factory()
