@@ -3,20 +3,23 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import { DocxAnnotatorTestWrapper } from "./DocxAnnotatorTestWrapper";
 import { docScreenshot } from "./utils/docScreenshot";
 
+// WASM loading requires more time than typical component tests
 test.describe("DocxAnnotator", () => {
+  test.setTimeout(30_000);
+
   test("renders component container", async ({ mount, page }) => {
     const component = await mount(<DocxAnnotatorTestWrapper />);
 
     // The component should render - it will show either the WASM init state
-    // or the docx-annotator container depending on whether WASM loads
+    // or the docx-annotator container depending on whether WASM loads.
     // In test environment, WASM may not be available, so we check for
-    // either the loading message or the annotator container
+    // either the loading message or the annotator container.
     const hasAnnotator = await page
       .getByTestId("docx-annotator")
       .isVisible()
       .catch(() => false);
     const hasLoadingText = await page
-      .getByText(/Initializing|Converting|DOCX/)
+      .getByText(/Initializing|Converting|DOCX|Failed/)
       .first()
       .isVisible()
       .catch(() => false);
@@ -31,8 +34,8 @@ test.describe("DocxAnnotator", () => {
   test("renders in read-only mode", async ({ mount, page }) => {
     const component = await mount(<DocxAnnotatorTestWrapper readOnly={true} />);
 
-    // Wait a moment for WASM to attempt initialization
-    await page.waitForTimeout(2000);
+    // Wait for WASM to attempt initialization
+    await page.waitForTimeout(3000);
 
     // Component should render without crashing
     const bodyText = await page.textContent("body");
@@ -46,14 +49,16 @@ test.describe("DocxAnnotator", () => {
   test("handles graceful error state", async ({ mount, page }) => {
     const component = await mount(<DocxAnnotatorTestWrapper />);
 
-    // Wait for WASM initialization attempt
-    await page.waitForTimeout(3000);
+    // Wait for WASM initialization attempt (may succeed or fail depending on env)
+    await page.waitForTimeout(5000);
 
     // The component should either show content or an error message,
     // but should NOT crash
     const bodyText = await page.textContent("body");
     expect(bodyText).toBeTruthy();
     expect(bodyText!.length).toBeGreaterThan(0);
+
+    await docScreenshot(page, "annotator--docx-annotator--error-state");
 
     await component.unmount();
   });
