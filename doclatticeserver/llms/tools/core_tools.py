@@ -1483,8 +1483,6 @@ def duplicate_annotations_with_label(
             duplicate = Annotation.objects.create(
                 page=ann.page,
                 raw_text=ann.raw_text,
-                tokens_jsons=ann.tokens_jsons,
-                bounding_box=ann.bounding_box,
                 json=ann.json,
                 parent=ann.parent,
                 annotation_type=ann.annotation_type,

@@ -101,45 +101,10 @@ export interface LabelSet {
   description?: string;
 }
 
-export interface OCAnnotation {
-  id: string;
-  page: number;
-  tokensJsons: Token[];
-  boundingBox: BoundingBox;
-  rawText: string;
-  annotationLabel: {
-    id: string;
-  };
-  document: {
-    id: string;
-  };
-  corpus: {
-    id: string;
-  };
-  sourceNodeInRelationships?: {
-    edges: {
-      node: {
-        id: string;
-      };
-    };
-  };
-  creator?: OCUser;
-}
-
 export interface OCUser {
   id: string;
   email?: string;
   username?: string;
-}
-
-export interface NewAnnotationInputs {
-  boundingBox: BoundingBox;
-  tokensJsons: Token[];
-  page: number;
-  rawText: string;
-  corpusId: string;
-  documentId: string;
-  labelId: string;
 }
 
 export interface LooseObject {
@@ -235,6 +200,22 @@ export type TextSearchSpanResult = {
 };
 
 export type MultipageAnnotationJson = Record<number, SinglePageAnnotationJson>;
+
+/** Compact v2 per-page annotation data. */
+export type CompactPageData = {
+  /** Bounds: [top, left, right, bottom] */
+  b: [number, number, number, number];
+  /** Token indices as range-encoded string, e.g. "35-37,40" */
+  t: string;
+};
+
+/** Compact v2 multipage annotation JSON. */
+export type CompactAnnotationJson = {
+  /** Version marker — always 2 */
+  v: 2;
+  /** Pages keyed by page index string */
+  p: Record<string, CompactPageData>;
+};
 
 export interface PageProps {
   pageInfo: PDFPageInfo;

@@ -642,7 +642,7 @@ class StructuralMigrationCommandTests(TransactionTestCase):
         self.assertIsNone(other_doc.structural_annotation_set)
 
     def test_migrate_preserves_annotation_content_fields(self):
-        """raw_text, page, bounding_box, tokens unchanged after migration."""
+        """raw_text, page, json unchanged after migration."""
         original_text = self.struct_annot1.raw_text
         original_page = self.struct_annot1.page
 
