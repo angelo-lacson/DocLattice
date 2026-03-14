@@ -152,14 +152,21 @@ def update_annotation_modalities(
     if document is None:
         document = getattr(annotation, "document", None)
 
-    # Get tokens from annotation's json field
+    # Get tokens from annotation's json field (handles both v1 and v2 formats)
     annotation_json = annotation.json or {}
     all_tokens = []
 
-    for page_key, page_data in annotation_json.items():
-        if isinstance(page_data, dict):
-            tokens = page_data.get("tokensJsons", [])
-            all_tokens.extend(tokens)
+    from opencontractserver.annotations.compact_json import expand_annotation_json
+
+    expanded = expand_annotation_json(
+        annotation_json, raw_text=getattr(annotation, "raw_text", "") or ""
+    )
+
+    if isinstance(expanded, dict) and "start" not in expanded:
+        for page_key, page_data in expanded.items():
+            if isinstance(page_data, dict):
+                tokens = page_data.get("tokensJsons", [])
+                all_tokens.extend(tokens)
 
     # Compute modalities
     modalities = compute_content_modalities(

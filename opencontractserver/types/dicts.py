@@ -172,6 +172,31 @@ class OpenContractsSinglePageAnnotationType(TypedDict):
     rawText: str
 
 
+class CompactPageAnnotationType(TypedDict):
+    """
+    Compact v2 per-page annotation data. Replaces
+    :class:`OpenContractsSinglePageAnnotationType` in the v2 format.
+
+    - ``b``: Bounds as ``[top, left, right, bottom]`` array.
+    - ``t``: Token indices as range-encoded string (e.g. ``"35-37,40"``).
+    """
+
+    b: list[float | int]
+    t: str
+
+
+class CompactAnnotationJsonType(TypedDict):
+    """
+    Compact v2 multipage annotation JSON.
+
+    Stored in ``Annotation.json`` when the compact format is used.
+    Detected by ``"v": 2`` marker.
+    """
+
+    v: int  # Always 2
+    p: dict[str, CompactPageAnnotationType]
+
+
 class TextSpanData(TypedDict):
     """
     Stores start and end indices of a span

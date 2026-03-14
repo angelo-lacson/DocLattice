@@ -29,9 +29,7 @@ from pgvector.django import HnswIndex, VectorField
 
 from opencontractserver.constants.search import HNSW_EF_CONSTRUCTION, HNSW_M
 from opencontractserver.shared.defaults import (
-    empty_bounding_box,
     jsonfield_default_value,
-    jsonfield_empty_array,
 )
 from opencontractserver.shared.fields import NullableJSONField
 
@@ -712,8 +710,6 @@ class StructuralAnnotationSet(BaseOCModel):
             ).only(
                 "page",
                 "raw_text",
-                "tokens_jsons",
-                "bounding_box",
                 "json",
                 "annotation_type",
                 "annotation_label",
@@ -729,8 +725,6 @@ class StructuralAnnotationSet(BaseOCModel):
                 structural_set=new_set,
                 page=a.page,
                 raw_text=a.raw_text,
-                tokens_jsons=a.tokens_jsons,
-                bounding_box=a.bounding_box,
                 json=a.json,
                 annotation_type=a.annotation_type,
                 annotation_label=a.annotation_label,
@@ -844,10 +838,6 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
     page = django.db.models.IntegerField(default=1, blank=False)
     raw_text = django.db.models.TextField(null=True, blank=True)
     search_vector = SearchVectorField(null=True)
-    tokens_jsons = NullableJSONField(
-        default=jsonfield_empty_array, null=True, blank=True
-    )
-    bounding_box = NullableJSONField(default=empty_bounding_box, null=True)
     json = NullableJSONField(default=jsonfield_default_value, null=False)
 
     # New parent field for hierarchical relationships
@@ -1032,17 +1022,32 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
                 raise ValueError(
                     "TOKEN_LABEL annotations must store MultipageAnnotationJson (dict)."
                 )
-            # Spot-check: page key + expected sub-keys in first entry
-            for page, page_obj in list(self.json.items())[:1]:
-                if not isinstance(page, (int, str)):
-                    raise ValueError("Page keys must be int-convertible.")
-                if not (
-                    isinstance(page_obj, dict)
-                    and {"bounds", "tokensJsons", "rawText"}.issubset(page_obj.keys())
-                ):
-                    raise ValueError(
-                        "Each page entry must contain 'bounds', 'tokensJsons', and 'rawText'."
-                    )
+            from opencontractserver.annotations.compact_json import is_compact_format
+
+            if is_compact_format(self.json):
+                # v2 compact format: {"v": 2, "p": {"0": {"b": [...], "t": "..."}}}
+                pages = self.json.get("p", {})
+                for page_key, page_obj in list(pages.items())[:1]:
+                    if not isinstance(page_obj, dict):
+                        raise ValueError("v2 page entries must be dicts.")
+                    if "b" not in page_obj or "t" not in page_obj:
+                        raise ValueError(
+                            "v2 page entries must contain 'b' (bounds) and 't' (tokens)."
+                        )
+            else:
+                # v1 legacy format: {"0": {"bounds": ..., "tokensJsons": ..., "rawText": ...}}
+                for page, page_obj in list(self.json.items())[:1]:
+                    if not isinstance(page, (int, str)):
+                        raise ValueError("Page keys must be int-convertible.")
+                    if not (
+                        isinstance(page_obj, dict)
+                        and {"bounds", "tokensJsons", "rawText"}.issubset(
+                            page_obj.keys()
+                        )
+                    ):
+                        raise ValueError(
+                            "Each page entry must contain 'bounds', 'tokensJsons', and 'rawText'."
+                        )
 
         elif self.annotation_type == SPAN_LABEL:
             if not (
@@ -1110,10 +1115,12 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
     # ------------------------------------------------------------------
 
     def save(self, *args, **kwargs):
-        """Override save to optionally validate `json` integrity.
+        """Override save to optionally validate `json` integrity and
+        auto-compact the annotation JSON to v2 format.
 
-        *No additional queries* are executed; the validation inspects the in-memory
-        `.json` payload only, therefore the cost is negligible.
+        *No additional queries* are executed; the validation and compaction
+        inspect the in-memory `.json` payload only, therefore the cost is
+        negligible.
         """
 
         # Re-use the same flag used in `clean`.
@@ -1122,6 +1129,21 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
         if getattr(settings, "VALIDATE_ANNOTATION_JSON", settings.DEBUG):
             # Ensure that `clean()` is executed even if external callers forget.
             self.clean()
+
+        # Auto-compact annotation JSON to v2 format on save (lazy migration).
+        if (
+            self.annotation_type == TOKEN_LABEL
+            and isinstance(self.json, dict)
+            and self.json
+        ):
+            from opencontractserver.annotations.compact_json import (
+                compact_annotation_json,
+                is_compact_format,
+                is_span_format,
+            )
+
+            if not is_compact_format(self.json) and not is_span_format(self.json):
+                self.json = compact_annotation_json(self.json)
 
         # Maintain timestamp consistency
         if not self.pk:

@@ -108,8 +108,20 @@ class Command(BaseCommand):
                 return ["IMAGE"]
             return ["TEXT"]
 
-        # Get tokens referenced by this annotation
-        if not annotation.tokens_jsons:
+        # Extract token references from the json field (handles v1 and v2 formats)
+        from opencontractserver.annotations.compact_json import expand_annotation_json
+
+        expanded_json = expand_annotation_json(
+            annotation.json or {}, raw_text=annotation.raw_text or ""
+        )
+
+        all_token_refs = []
+        if isinstance(expanded_json, dict) and "start" not in expanded_json:
+            for _page_key, page_data in expanded_json.items():
+                if isinstance(page_data, dict):
+                    all_token_refs.extend(page_data.get("tokensJsons", []))
+
+        if not all_token_refs:
             # No tokens referenced, use label as hint
             label_text = annotation.annotation_label.text.lower()
             if any(
@@ -123,7 +135,7 @@ class Command(BaseCommand):
         has_text = False
         has_image = False
 
-        for token_ref in annotation.tokens_jsons:
+        for token_ref in all_token_refs:
             page_idx = token_ref.get("pageIndex", 0)
             token_idx = token_ref.get("tokenIndex")
 
