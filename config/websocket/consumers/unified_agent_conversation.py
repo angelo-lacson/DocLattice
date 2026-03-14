@@ -414,7 +414,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
             # Check for context exhaustion (anonymous ephemeral sessions only)
             if (
                 self.agent
-                and hasattr(self.agent, "conversation_manager")
+                and getattr(self.agent, "conversation_manager", None) is not None
                 and self.agent.conversation_manager.context_exhausted
             ):
                 await self._send_safe(

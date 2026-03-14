@@ -1270,14 +1270,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               {contextExhausted && (
                 <ContextExhaustedBanner>
                   <span>This conversation has reached its context limit.</span>
-                  <button
-                    onClick={() => {
-                      setContextExhausted(false);
-                      startNewChat();
-                    }}
-                  >
-                    Start New Chat
-                  </button>
+                  <button onClick={() => startNewChat()}>Start New Chat</button>
                 </ContextExhaustedBanner>
               )}
               {/* Input */}
@@ -1335,7 +1328,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                           : "Waiting for connection..."
                       }
                       disabled={!wsReady || isProcessing || contextExhausted}
-                      onKeyPress={(e: { key: string }) => {
+                      onKeyDown={(e: { key: string }) => {
                         if (e.key === "Enter") {
                           sendMessageOverSocket();
                         }
