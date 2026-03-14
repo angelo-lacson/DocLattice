@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 from typing_extensions import NotRequired, TypedDict
 
@@ -193,7 +193,7 @@ class CompactAnnotationJsonType(TypedDict):
     Detected by ``"v": 2`` marker.
     """
 
-    v: int  # Always 2
+    v: Literal[2]
     p: dict[str, CompactPageAnnotationType]
 
 
@@ -230,7 +230,9 @@ class OpenContractsAnnotationPythonType(TypedDict):
     rawText: str
     page: int
     annotation_json: Union[
-        dict[Union[int, str], OpenContractsSinglePageAnnotationType], TextSpanData
+        dict[Union[int, str], OpenContractsSinglePageAnnotationType],
+        CompactAnnotationJsonType,
+        TextSpanData,
     ]
     parent_id: Optional[Union[str, int]]
     annotation_type: Optional[str]

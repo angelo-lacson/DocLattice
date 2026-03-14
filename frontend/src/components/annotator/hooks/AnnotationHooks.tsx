@@ -58,7 +58,9 @@ import { getPermissions } from "../../../utils/transform";
 import { SpanAnnotationJson } from "../../types";
 import { AnnotationLabelType } from "../../../types/graphql-api";
 import { useCorpusState } from "../context/CorpusAtom";
+import { expandAnnotationJson } from "../../../utils/compactAnnotationJson";
 import { isTextFileType } from "../../../utils/files";
+import { MultipageAnnotationJson } from "../../types";
 
 /**
  * Hook to manage PdfAnnotations state.
@@ -428,7 +430,10 @@ export function useCreateAnnotation() {
             createdAnnotationData.annotationLabel,
             createdAnnotationData.rawText,
             false,
-            createdAnnotationData.json,
+            expandAnnotationJson(
+              createdAnnotationData.json ?? {},
+              createdAnnotationData.rawText ?? ""
+            ) as MultipageAnnotationJson,
             getPermissions(createdAnnotationData.myPermissions || []),
             false,
             false,
@@ -544,7 +549,10 @@ export function useUpdateAnnotation() {
               annotation.annotationLabel,
               annotation.rawText,
               false,
-              annotation.json,
+              expandAnnotationJson(
+                annotation.json ?? {},
+                annotation.rawText ?? ""
+              ) as MultipageAnnotationJson,
               getPermissions(annotation.myPermissions || []),
               false,
               false,

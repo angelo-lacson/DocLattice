@@ -1070,7 +1070,6 @@ class MCPResourcesAnnotationTest(TestCase):
             corpus=cls.corpus,
             creator=cls.owner,
             is_public=True,
-            bounding_box={"x": 10, "y": 20, "width": 100, "height": 50},
         )
 
     def test_get_annotation_resource(self):
@@ -1087,7 +1086,6 @@ class MCPResourcesAnnotationTest(TestCase):
         self.assertEqual(data["raw_text"], "Annotation text for resource")
         self.assertEqual(data["annotation_label"]["text"], "Resource Label")
         self.assertEqual(data["annotation_label"]["color"], "#AABBCC")
-        self.assertEqual(data["bounding_box"]["x"], 10)
 
 
 class MCPResourcesThreadTest(TestCase):

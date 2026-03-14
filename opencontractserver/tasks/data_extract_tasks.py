@@ -5,6 +5,7 @@ import os
 
 from asgiref.sync import sync_to_async
 
+from opencontractserver.annotations.compact_json import expand_annotation_json
 from opencontractserver.extracts.models import Datacell
 from opencontractserver.shared.decorators import celery_task_with_async_to_sync
 
@@ -533,7 +534,9 @@ def annotation_window(document_id: int, annotation_id: str, window_size: str) ->
             if not isinstance(pawls_pages, list):
                 return "Error: pawls_parse_file is not a list of PawlsPagePythonType."
 
-            anno_json = annotation.json
+            anno_json = expand_annotation_json(
+                annotation.json, raw_text=annotation.raw_text or ""
+            )
             if not isinstance(anno_json, dict):
                 return "Error: Annotation.json is not a dictionary for PDF."
 

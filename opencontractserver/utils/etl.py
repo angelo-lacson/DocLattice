@@ -12,7 +12,10 @@ from django.db.models import Q
 from pydantic import TypeAdapter, ValidationError, create_model
 from typing_extensions import TypedDict
 
-from opencontractserver.annotations.compact_json import compact_annotation_json
+from opencontractserver.annotations.compact_json import (
+    compact_annotation_json,
+    expand_annotation_json,
+)
 from opencontractserver.annotations.models import (
     DOC_TYPE_LABEL,
     RELATIONSHIP_LABEL,
@@ -336,10 +339,6 @@ def build_document_export(
                 if annot.content_modalities:
                     annot_export["content_modalities"] = annot.content_modalities
                 labelled_text.append(annot_export)
-
-                from opencontractserver.annotations.compact_json import (
-                    expand_annotation_json,
-                )
 
                 annotation_json: dict[str, OpenContractsSinglePageAnnotationType] = (
                     expand_annotation_json(annot.json, raw_text=annot.raw_text or "")

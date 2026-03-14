@@ -37,12 +37,14 @@ Both formats are accepted everywhere; v1 is returned from
 
 from __future__ import annotations
 
-from typing import Any, Union
+from typing import Any
 
-# Maximum span for a single range segment (safety guard).
-MAX_RANGE_SPAN = 10_000
-# Maximum total tokens across all pages (safety guard).
-MAX_TOTAL_TOKENS = 50_000
+from opencontractserver.constants.annotations import (
+    COMPACT_JSON_MAX_RANGE_SPAN as MAX_RANGE_SPAN,
+)
+from opencontractserver.constants.annotations import (
+    COMPACT_JSON_MAX_TOTAL_TOKENS as MAX_TOTAL_TOKENS,
+)
 
 # ── Range encoding ──────────────────────────────────────────────
 
@@ -194,7 +196,7 @@ def compact_annotation_json(
 def expand_annotation_json(
     json_data: Any,
     raw_text: str = "",
-) -> Union[dict[str, Any], Any]:
+) -> dict[str, Any] | Any:
     """Normalize annotation JSON to canonical v1 format.
 
     Accepts both v1 and v2 formats. If already v1, returns as-is.

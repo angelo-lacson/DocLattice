@@ -12,6 +12,10 @@
  */
 
 import {
+  COMPACT_JSON_MAX_RANGE_SPAN,
+  COMPACT_JSON_MAX_TOTAL_TOKENS,
+} from "../assets/configurations/constants";
+import {
   BoundingBox,
   MultipageAnnotationJson,
   SinglePageAnnotationJson,
@@ -23,8 +27,8 @@ import {
 // Safety limits
 // ═══════════════════════════════════════════════════════════════
 
-const MAX_RANGE_SPAN = 10_000;
-const MAX_TOTAL_TOKENS = 50_000;
+const MAX_RANGE_SPAN = COMPACT_JSON_MAX_RANGE_SPAN;
+const MAX_TOTAL_TOKENS = COMPACT_JSON_MAX_TOTAL_TOKENS;
 
 // ═══════════════════════════════════════════════════════════════
 // Compact v2 types
@@ -90,7 +94,9 @@ export function decodeTokenRanges(rangeStr: string): number[] {
 
   for (const part of parts) {
     if (part.includes("-")) {
-      const [startStr, endStr] = part.split("-");
+      const idx = part.indexOf("-");
+      const startStr = part.slice(0, idx);
+      const endStr = part.slice(idx + 1);
       const start = parseInt(startStr, 10);
       const end = parseInt(endStr, 10);
       if (isNaN(start) || isNaN(end)) continue;
@@ -131,7 +137,12 @@ export function isCompactFormat(
 export function isSpanFormat(
   json: Record<string, unknown> | SpanAnnotationJson
 ): json is SpanAnnotationJson {
-  return json != null && "start" in json && "end" in json;
+  return (
+    json != null &&
+    "start" in json &&
+    "end" in json &&
+    Object.keys(json).length <= 3
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════
