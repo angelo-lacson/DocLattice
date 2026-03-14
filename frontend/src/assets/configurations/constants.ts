@@ -239,6 +239,12 @@ export const PIPELINE_UI = {
  */
 export const LEGACY_TEXT_MIME_TYPE = "application/txt";
 
+/**
+ * Standard MIME type for DOCX (Word) documents.
+ */
+export const DOCX_MIME_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
 // Supported MIME types for pipeline configuration
 export const SUPPORTED_MIME_TYPES = [
   { value: "application/pdf", label: "PDF", shortLabel: "PDF" },

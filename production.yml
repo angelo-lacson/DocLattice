@@ -98,6 +98,10 @@ services:
     image: jscrudato/docsling-local
     container_name: docling-parser
 
+  docxodus-parser:
+    image: jscrudato/docxodus-service
+    container_name: docxodus-parser
+
   celeryworker:
     <<: *django
     image: opencontractserver_production_celeryworker
