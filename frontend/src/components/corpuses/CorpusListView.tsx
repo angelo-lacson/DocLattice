@@ -640,6 +640,8 @@ export const CorpusListView: React.FC<CorpusListViewProps> = ({
                             type="button"
                             className="oc-collection-card__menu-button"
                             aria-label="Open menu"
+                            aria-haspopup="menu"
+                            aria-expanded={openMenuId === corpus.id}
                             onClick={(e) => handleOpenContextMenu(e, corpus.id)}
                           >
                             <KebabIcon />

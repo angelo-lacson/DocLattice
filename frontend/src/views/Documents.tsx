@@ -1457,6 +1457,9 @@ export const Documents = () => {
                           <span>{formatRelativeTime(doc.created)}</span>
                         </CardUploader>
                         <CardMenuButton
+                          aria-label="Open menu"
+                          aria-haspopup="menu"
+                          aria-expanded={contextMenu?.document.id === doc.id}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleContextMenu(e, doc);
@@ -1539,6 +1542,9 @@ export const Documents = () => {
                       </ListItemUploader>
                       <ListItemActions>
                         <CardMenuButton
+                          aria-label="Open menu"
+                          aria-haspopup="menu"
+                          aria-expanded={contextMenu?.document.id === doc.id}
                           onClick={(e) => {
                             e.stopPropagation();
                             handleContextMenu(e, doc);
@@ -1595,6 +1601,9 @@ export const Documents = () => {
                         {doc.backendLock ? "Processing" : "Processed"}
                       </Chip>
                       <CardMenuButton
+                        aria-label="Open menu"
+                        aria-haspopup="menu"
+                        aria-expanded={contextMenu?.document.id === doc.id}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleContextMenu(e, doc);

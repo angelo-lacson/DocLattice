@@ -185,6 +185,8 @@ export const LabelSetListCard: React.FC<LabelSetListCardProps> = ({
               type="button"
               className="oc-collection-card__menu-button"
               aria-label="Open menu"
+              aria-haspopup="menu"
+              aria-expanded={isMenuOpen}
               onClick={handleMenuButtonClick}
             >
               <KebabIcon />
