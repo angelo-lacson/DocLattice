@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from urllib.parse import quote
 
@@ -49,7 +50,7 @@ class _StubAgent:
     def __init__(self, gen_factory, conversation_id=None):
         self._gen_factory = gen_factory
         self._conversation_id = conversation_id
-        self.conversation_manager = None
+        self.conversation_manager = SimpleNamespace(context_exhausted=False)
 
     def stream(self, user_query: str):
         return self._gen_factory()

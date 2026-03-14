@@ -1461,6 +1461,8 @@ class CoreConversationManager:
                     content=content,
                     msg_type="HUMAN",
                     created=timezone.now(),
+                    sources=[],
+                    metadata={},
                 )
             )
             self._ephemeral_token_estimate += max(
