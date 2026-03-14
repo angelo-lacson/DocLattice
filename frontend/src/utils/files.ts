@@ -1,5 +1,8 @@
 import Axios from "axios";
-import { LEGACY_TEXT_MIME_TYPE } from "../assets/configurations/constants";
+import {
+  LEGACY_TEXT_MIME_TYPE,
+  DOCX_MIME_TYPE,
+} from "../assets/configurations/constants";
 
 /**
  * Check if a file type string represents a text-based document.
@@ -14,6 +17,12 @@ export const isTextFileType = (fileType: string | null | undefined): boolean =>
  */
 export const isPdfFileType = (fileType: string | null | undefined): boolean =>
   fileType === "application/pdf";
+
+/**
+ * Check if a file type string represents a DOCX document.
+ */
+export const isDocxFileType = (fileType: string | null | undefined): boolean =>
+  fileType === DOCX_MIME_TYPE;
 
 export const downloadFile = async (url: string): Promise<void> => {
   try {

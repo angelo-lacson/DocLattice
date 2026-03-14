@@ -36,6 +36,7 @@ import {
 import { useFeatureAvailability } from "../../../hooks/useFeatureAvailability";
 import {
   getDocumentRawText,
+  getDocxBytes,
   getPawlsLayer,
   getCachedPDFUrl,
 } from "../../annotator/api/cachedRest";
@@ -87,6 +88,7 @@ import { useInitialAnnotations } from "../../annotator/hooks/AnnotationHooks";
 import { EnhancedLabelSelector } from "../../annotator/labels/EnhancedLabelSelector";
 import { PDF } from "../../annotator/renderers/pdf/PDF";
 import TxtAnnotatorWrapper from "../../annotator/components/wrappers/TxtAnnotatorWrapper";
+import DocxAnnotatorWrapper from "../../annotator/components/wrappers/DocxAnnotatorWrapper";
 import {
   useAnnotationControls,
   selectedRelationsAtom,
@@ -122,9 +124,16 @@ import { FullScreenModal } from "./LayoutComponents";
 import { SafeMarkdown } from "../markdown/SafeMarkdown";
 import { useAnnotationSelection } from "../../annotator/context/UISettingsAtom";
 import { useChatSourceState } from "../../annotator/context/ChatSourceAtom";
-import { isTextFileType, isPdfFileType } from "../../../utils/files";
+import {
+  isTextFileType,
+  isPdfFileType,
+  isDocxFileType,
+} from "../../../utils/files";
 import { useCreateAnnotation } from "../../annotator/hooks/AnnotationHooks";
-import { useScrollContainerRef } from "../../annotator/context/DocumentAtom";
+import {
+  useDocxBytes,
+  useScrollContainerRef,
+} from "../../annotator/context/DocumentAtom";
 import { useChatPanelWidth } from "../../annotator/context/UISettingsAtom";
 import { FloatingSummaryPreview } from "./floating_summary_preview/FloatingSummaryPreview";
 import { ZoomControls } from "./ZoomControls";
@@ -417,6 +426,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const { setDocumentType } = useDocumentType();
   const { setDocument } = useDocumentState();
   const { setDocText } = useDocText();
+  const { setDocxBytes } = useDocxBytes();
   const {
     pageTokenTextMaps: pageTextMaps,
     setPageTokenTextMaps: setPageTextMaps,
@@ -925,6 +935,51 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               }`
             );
           });
+      } else if (
+        isDocxFileType(data.document.fileType) &&
+        data.document.pdfFile
+      ) {
+        routingLogger.debug("\n=== DOCUMENT LOAD START ===");
+        routingLogger.debug("Type: DOCX");
+        routingLogger.debug("Document ID:", data.document.id);
+        routingLogger.debug("Hash:", data.document.pdfFileHash || "no hash");
+        routingLogger.debug("DOCX URL:", data.document.pdfFile);
+        setViewState(ViewState.LOADING);
+        const docId = data.document.id;
+        const textHash = data.document.pdfFileHash;
+
+        // Load both the raw DOCX bytes (for WASM rendering) and
+        // the extracted text (for annotation offsets and search)
+        const docxPromise = getDocxBytes(data.document.pdfFile);
+        const textPromise = data.document.txtExtractFile
+          ? getDocumentRawText(
+              data.document.txtExtractFile,
+              docId,
+              textHash ?? undefined
+            )
+          : Promise.resolve("");
+
+        Promise.all([docxPromise, textPromise])
+          .then(([bytes, txt]) => {
+            routingLogger.debug(
+              "[DOCX Load] Batching DOCX completion state updates"
+            );
+            unstable_batchedUpdates(() => {
+              setDocxBytes(bytes);
+              setDocText(txt);
+              setViewState(ViewState.LOADED);
+            });
+            routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
+          })
+          .catch((err) => {
+            setViewState(ViewState.ERROR);
+            routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
+            toast.error(
+              `Error loading DOCX content: ${
+                err instanceof Error ? err.message : String(err)
+              }`
+            );
+          });
       } else {
         console.warn(
           "onCompleted: Unsupported file type or missing file path.",
@@ -1113,6 +1168,41 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
               toast.error(
                 `Error loading text content: ${
+                  err instanceof Error ? err.message : String(err)
+                }`
+              );
+            });
+        } else if (
+          isDocxFileType(data.document.fileType) &&
+          data.document.pdfFile
+        ) {
+          routingLogger.debug("\n=== DOCUMENT LOAD START ===");
+          routingLogger.debug("Type: DOCX (document-only)");
+          routingLogger.debug("Document ID:", data.document.id);
+          setViewState(ViewState.LOADING);
+
+          const docxPromise = getDocxBytes(data.document.pdfFile);
+          const textPromise = data.document.txtExtractFile
+            ? getDocumentRawText(data.document.txtExtractFile)
+            : Promise.resolve("");
+
+          Promise.all([docxPromise, textPromise])
+            .then(([bytes, txt]) => {
+              routingLogger.debug(
+                "[DOCX Load] Batching DOCX completion state updates (document-only)"
+              );
+              unstable_batchedUpdates(() => {
+                setDocxBytes(bytes);
+                setDocText(txt);
+                setViewState(ViewState.LOADED);
+              });
+              routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
+            })
+            .catch((err) => {
+              setViewState(ViewState.ERROR);
+              routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
+              toast.error(
+                `Error loading DOCX content: ${
                   err instanceof Error ? err.message : String(err)
                 }`
               );
@@ -1538,6 +1628,41 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             icon={<FileText size={40} />}
             title="Error Loading Text"
             description="Could not load the text file."
+          />
+        )}
+      </PDFContainer>
+    );
+  } else if (isDocxFileType(metadata.fileType)) {
+    viewerContent = (
+      <PDFContainer id="pdf-container" ref={containerRefCallback}>
+        {viewState === ViewState.LOADED ? (
+          <DocxAnnotatorWrapper readOnly={!canEdit} allowInput={canEdit} />
+        ) : viewState === ViewState.LOADING ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "100%",
+              gap: "0.5rem",
+            }}
+          >
+            <Spinner size={24} />
+            <span
+              style={{
+                color: OS_LEGAL_COLORS.textSecondary,
+                fontSize: "0.875rem",
+              }}
+            >
+              Loading DOCX...
+            </span>
+          </div>
+        ) : (
+          <EmptyState
+            icon={<FileText size={40} />}
+            title="Error Loading DOCX"
+            description="Could not load the Word document."
           />
         )}
       </PDFContainer>

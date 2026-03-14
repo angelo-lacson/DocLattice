@@ -3916,6 +3916,11 @@ dir-glob@^3.0.1:
   dependencies:
     path-type "^4.0.0"
 
+docxodus@^5.4.2:
+  version "5.4.2"
+  resolved "https://registry.yarnpkg.com/docxodus/-/docxodus-5.4.2.tgz#b338c0eb7513309f10d595de277aa55fff2f49b3"
+  integrity sha512-XVal7QewtC0JwOfFIsjtdJN7i6o0N/VSCtoBiOzuNEYK7INjxNYU3Rz5ws4durOZroyggt7q9/dVSJOE+lTl4Q==
+
 dom-accessibility-api@^0.5.9:
   version "0.5.16"
   resolved "https://registry.yarnpkg.com/dom-accessibility-api/-/dom-accessibility-api-0.5.16.tgz#5a7429e6066eb3664d911e33fb0e45de8eb08453"
@@ -6540,6 +6545,11 @@ react-countup@^6.5.3:
   integrity sha512-udnqVQitxC7QWADSPDOxVWULkLvKUWrDapn5i53HE4DPRVgs+Y5rr4bo25qEl8jSh+0l2cToJgGMx+clxPM3+w==
   dependencies:
     countup.js "^2.8.0"
+
+react-docxodus-viewer@^0.4.1:
+  version "0.4.1"
+  resolved "https://registry.yarnpkg.com/react-docxodus-viewer/-/react-docxodus-viewer-0.4.1.tgz#9f799225e1a4dfde2503c79337586dcfe36f5446"
+  integrity sha512-5Z1H6QsE9u2+gELlKg5cvgx4Tn19+TjvODmKNh7V2AE5AVve3RtGqU4oGP2GSZt33HJTrSKfxEsqcu1nPqMgYg==
 
 react-dom@18:
   version "18.3.1"

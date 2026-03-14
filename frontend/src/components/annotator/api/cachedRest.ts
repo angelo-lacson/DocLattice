@@ -151,6 +151,16 @@ export async function getCachedPDFUrl(
 }
 
 /**
+ * Get DOCX document bytes (as Uint8Array) for WASM rendering.
+ * Fetches from server, returns raw bytes.
+ */
+export async function getDocxBytes(url: string): Promise<Uint8Array> {
+  console.log(`Loading DOCX bytes from: ${url}`);
+  const response = await axios.get(url, { responseType: "arraybuffer" });
+  return new Uint8Array(response.data);
+}
+
+/**
  * Prevalidate if cache is up to date without loading the full document
  */
 export async function validateDocumentCache(
