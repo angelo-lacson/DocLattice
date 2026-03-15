@@ -1288,7 +1288,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               {contextExhausted && (
                 <ContextExhaustedBanner>
                   <span>This conversation has reached its context limit.</span>
-                  <button onClick={() => startNewChat()}>Start New Chat</button>
+                  <Button onClick={startNewChat}>Start New Chat</Button>
                 </ContextExhaustedBanner>
               )}
               {/* Input */}

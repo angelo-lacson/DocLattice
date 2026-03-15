@@ -21,7 +21,6 @@ from django.conf import settings
 from django.utils import timezone
 
 from opencontractserver.constants.context_guardrails import (
-    CHARS_PER_TOKEN_ESTIMATE,
     EPHEMERAL_CONTEXT_EXHAUSTION_RATIO,
 )
 from opencontractserver.conversations.models import (
@@ -34,6 +33,7 @@ from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.llms.context_guardrails import (
     CompactionConfig,
+    estimate_token_count,
     get_context_window_for_model,
 )
 from opencontractserver.llms.tools.tool_factory import CoreTool
@@ -1143,19 +1143,24 @@ class CoreConversationManager:
         """Create conversation manager for document agent with enhanced options."""
         conversation = None
 
-        # For anonymous users, public corpuses, or when caller disabled storage, avoid DB persistence.
-        if user_id is None or (
-            not config.store_user_messages and not config.store_llm_messages
-        ):
+        # Anonymous users get an ephemeral in-memory conversation so
+        # multi-turn context works without DB persistence.
+        if user_id is None:
             logger.debug(
-                f"Creating ephemeral (non-stored) conversation for public/anonymous user on document {document.id}"
+                f"Creating ephemeral (non-stored) conversation for anonymous user on document {document.id}"
             )
-            # Enable in-memory ephemeral buffering so multi-turn context works
-            # for anonymous users even without a DB conversation.
             config.store_user_messages = True
             config.store_llm_messages = True
-            # Return manager with no conversation - everything will be in-memory only
             return cls(None, None, config)
+
+        # Authenticated caller explicitly disabled storage — respect the
+        # flags and return a no-op manager (no DB row, no ephemeral buffer).
+        if not config.store_user_messages and not config.store_llm_messages:
+            logger.debug(
+                "Creating non-stored conversation (caller disabled storage) "
+                f"for user {user_id} on document {document.id}"
+            )
+            return cls(None, user_id, config)
 
         # For authenticated users, handle conversation persistence normally
         if override_conversation:
@@ -1205,19 +1210,24 @@ class CoreConversationManager:
         """Create conversation manager for corpus agent with enhanced options."""
         conversation = None
 
-        # For anonymous users, public corpuses, or when caller disabled storage, avoid DB persistence.
-        if user_id is None or (
-            not config.store_user_messages and not config.store_llm_messages
-        ):
+        # Anonymous users get an ephemeral in-memory conversation so
+        # multi-turn context works without DB persistence.
+        if user_id is None:
             logger.debug(
-                f"Creating ephemeral (non-stored) conversation for public/anonymous user on corpus {corpus.id}"
+                f"Creating ephemeral (non-stored) conversation for anonymous user on corpus {corpus.id}"
             )
-            # Enable in-memory ephemeral buffering so multi-turn context works
-            # for anonymous users even without a DB conversation.
             config.store_user_messages = True
             config.store_llm_messages = True
-            # Return manager with no conversation - everything will be in-memory only
             return cls(None, None, config)
+
+        # Authenticated caller explicitly disabled storage — respect the
+        # flags and return a no-op manager (no DB row, no ephemeral buffer).
+        if not config.store_user_messages and not config.store_llm_messages:
+            logger.debug(
+                "Creating non-stored conversation (caller disabled storage) "
+                f"for user {user_id} on corpus {corpus.id}"
+            )
+            return cls(None, user_id, config)
 
         # For authenticated users, handle conversation persistence normally
         if override_conversation:
@@ -1354,19 +1364,30 @@ class CoreConversationManager:
         )
         return message.id
 
-    def _ephemeral_update_content(self, message_id: int, content: str) -> bool:
-        """Update content of an ephemeral message, adjusting token estimate.
+    def _ephemeral_update(
+        self,
+        message_id: int,
+        content: str,
+        sources: list["SourceNode"] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> bool:
+        """Update an ephemeral message in a single pass.
 
+        Adjusts the token estimate based on content length delta.
         Returns True if the message was found and updated, False otherwise.
         """
         for msg in self._ephemeral_messages:
             if msg.id == message_id:
-                old_len = len(msg.content)
+                old_tokens = estimate_token_count(msg.content)
                 msg.content = content
-                delta = int((len(content) - old_len) / CHARS_PER_TOKEN_ESTIMATE)
+                new_tokens = estimate_token_count(content)
                 self._ephemeral_token_estimate = max(
-                    0, self._ephemeral_token_estimate + delta
+                    0, self._ephemeral_token_estimate + (new_tokens - old_tokens)
                 )
+                if sources is not None:
+                    msg.sources = sources
+                if metadata is not None:
+                    msg.metadata = metadata
                 return True
         return False
 
@@ -1375,7 +1396,7 @@ class CoreConversationManager:
         if not self.conversation:
             if not message_id:
                 return
-            self._ephemeral_update_content(message_id, content)
+            self._ephemeral_update(message_id, content)
             return
 
         message = await ChatMessage.objects.aget(id=message_id)
@@ -1389,6 +1410,7 @@ class CoreConversationManager:
         content: str,
         sources: list[SourceNode] = None,
         metadata: dict[str, Any] = None,
+        msg_type: str = "LLM",
     ) -> None:
         """Complete a message with content, sources, and metadata in one operation."""
 
@@ -1401,15 +1423,13 @@ class CoreConversationManager:
                 SimpleNamespace(
                     id=message_id,
                     content=content,
-                    msg_type="LLM",
+                    msg_type=msg_type,
                     created=timezone.now(),
                     sources=sources or [],
                     metadata=metadata or {},
                 )
             )
-            self._ephemeral_token_estimate += max(
-                1, int(len(content) / CHARS_PER_TOKEN_ESTIMATE)
-            )
+            self._ephemeral_token_estimate += estimate_token_count(content)
             return
 
         message = await ChatMessage.objects.aget(id=message_id)
@@ -1465,9 +1485,7 @@ class CoreConversationManager:
                     metadata={},
                 )
             )
-            self._ephemeral_token_estimate += max(
-                1, int(len(content) / CHARS_PER_TOKEN_ESTIMATE)
-            )
+            self._ephemeral_token_estimate += estimate_token_count(content)
             return msg_id
 
         message = await ChatMessage.objects.acreate(
@@ -1504,9 +1522,7 @@ class CoreConversationManager:
                     metadata=metadata or {},
                 )
             )
-            self._ephemeral_token_estimate += max(
-                1, int(len(content) / CHARS_PER_TOKEN_ESTIMATE)
-            )
+            self._ephemeral_token_estimate += estimate_token_count(content)
             return msg_id
 
         data = {
@@ -1541,15 +1557,7 @@ class CoreConversationManager:
         if not self.conversation:
             if not message_id:
                 return
-            self._ephemeral_update_content(message_id, content)
-            # Also update sources/metadata on the ephemeral message.
-            for msg in self._ephemeral_messages:
-                if msg.id == message_id:
-                    if sources is not None:
-                        msg.sources = sources
-                    if metadata is not None:
-                        msg.metadata = metadata
-                    break
+            self._ephemeral_update(message_id, content, sources, metadata)
             return
 
         message = await ChatMessage.objects.aget(id=message_id)
