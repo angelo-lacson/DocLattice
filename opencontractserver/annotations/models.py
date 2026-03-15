@@ -730,7 +730,7 @@ class StructuralAnnotationSet(BaseOCModel):
                 structural_set=new_set,
                 page=a.page,
                 raw_text=a.raw_text,
-                json=a.json,
+                json=compact_annotation_json(a.json) if a.json else a.json,
                 annotation_type=a.annotation_type,
                 annotation_label=a.annotation_label,
                 structural=True,
@@ -1055,12 +1055,16 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
         elif self.annotation_type == SPAN_LABEL:
             if not (
                 isinstance(self.json, dict)
-                and set(self.json.keys()) == {"start", "end"}
+                and set(self.json.keys()) <= {"start", "end", "text"}
+                and "start" in self.json
+                and "end" in self.json
                 and isinstance(self.json["start"], int)
                 and isinstance(self.json["end"], int)
+                and isinstance(self.json.get("text", ""), str)
             ):
                 raise ValueError(
-                    "SPAN_LABEL annotations must store SpanAnnotationJson with 'start' and 'end' ints."
+                    "SPAN_LABEL annotations must store SpanAnnotationJson with 'start' and 'end' ints"
+                    " and an optional 'text' string."
                 )
 
         # Other annotation types are free-form – no validation.
