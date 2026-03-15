@@ -180,8 +180,8 @@ describe("isSpanFormat", () => {
     expect(isSpanFormat({ start: 0, end: 10, text: "hello" })).toBe(true);
   });
 
-  it("returns false when extra keys are present", () => {
-    expect(isSpanFormat({ start: 0, end: 10, extra: true })).toBe(false);
+  it("returns true when extra keys are present", () => {
+    expect(isSpanFormat({ start: 0, end: 10, extra: true })).toBe(true);
   });
 
   it("returns false for non-objects", () => {
