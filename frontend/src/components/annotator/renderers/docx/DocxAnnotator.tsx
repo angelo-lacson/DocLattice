@@ -295,11 +295,13 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
 
       const selectedText = selection.toString().trim();
 
-      // Find matching offsets in the document text
+      // Find matching offsets in the document text.
+      // TODO: When the same text appears multiple times, this picks the first
+      // occurrence. A more robust approach would use DOM selection offsets
+      // (selection.getRangeAt(0)) to disambiguate, similar to TxtAnnotator.
       const occurrences = findTextOccurrences(docText, selectedText);
       if (occurrences.length === 0) return;
 
-      // Use the first occurrence
       const match = occurrences[0];
 
       const menuPos = clampMenuPosition(e.clientX, e.clientY);
@@ -380,7 +382,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     const selectedStyles = selectedAnnotations
       .map(
         (id) => `
-      [data-annotation-id="${id}"] {
+      [data-annotation-id="${CSS.escape(id)}"] {
         outline: 2px solid ${OS_LEGAL_COLORS.primaryBlue} !important;
         outline-offset: 1px;
         background-color: rgba(59, 130, 246, 0.15) !important;

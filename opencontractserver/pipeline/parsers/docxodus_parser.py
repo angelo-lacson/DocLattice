@@ -67,6 +67,7 @@ class DocxodusServiceParser(BaseParser):
                 "pipeline_setting": PipelineSetting(
                     setting_type=SettingType.OPTIONAL,
                     description="Force Google Cloud Run IAM authentication",
+                    env_var="DOCXODUS_USE_CLOUD_RUN_IAM_AUTH",
                 )
             },
         )
@@ -99,9 +100,7 @@ class DocxodusServiceParser(BaseParser):
         """
         from opencontractserver.documents.models import Document
 
-        logger.info(
-            f"DocxodusServiceParser - Parsing doc {doc_id} for user {user_id}"
-        )
+        logger.info(f"DocxodusServiceParser - Parsing doc {doc_id} for user {user_id}")
 
         document = Document.objects.get(pk=doc_id)
 
@@ -229,8 +228,6 @@ class DocxodusServiceParser(BaseParser):
     def _normalize_annotation(ann: dict[str, Any]) -> dict[str, Any]:
         """Normalize a single annotation dict from camelCase to snake_case."""
         ann_mappings = {
-            "annotationLabel": "annotationLabel",  # already correct
-            "rawText": "rawText",  # already correct
             "annotationJson": "annotation_json",
             "parentId": "parent_id",
             "annotationType": "annotation_type",
@@ -248,7 +245,6 @@ class DocxodusServiceParser(BaseParser):
     def _normalize_relationship(rel: dict[str, Any]) -> dict[str, Any]:
         """Normalize a single relationship dict from camelCase to snake_case."""
         rel_mappings = {
-            "relationshipLabel": "relationshipLabel",  # already correct
             "sourceAnnotationIds": "source_annotation_ids",
             "targetAnnotationIds": "target_annotation_ids",
         }

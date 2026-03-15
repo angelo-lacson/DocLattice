@@ -34,7 +34,8 @@ def make_minimal_docx() -> bytes:
             "_rels/.rels",
             '<?xml version="1.0" encoding="UTF-8"?>'
             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+            '<Relationship Id="rId1" '
+            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '  # noqa: E501
             'Target="word/document.xml"/>'
             "</Relationships>",
         )
@@ -65,7 +66,11 @@ class MockResponse:
         if self.status_code >= 400:
             from requests.exceptions import HTTPError
 
-            resp = type("Response", (), {"status_code": self.status_code, "text": self.text})()
+            resp = type(
+                "Response",
+                (),
+                {"status_code": self.status_code, "text": self.text},
+            )()
             raise HTTPError(response=resp)
 
 
@@ -109,9 +114,7 @@ class TestDocxodusServiceParser(TestCase):
             "relationships": [],
         }
 
-    @patch(
-        "opencontractserver.pipeline.parsers.docxodus_parser.requests.post"
-    )
+    @patch("opencontractserver.pipeline.parsers.docxodus_parser.requests.post")
     def test_parse_document_success(self, mock_post):
         """Test successful DOCX parsing via the microservice."""
         mock_post.return_value = MockResponse(200, self.sample_response)
@@ -120,9 +123,7 @@ class TestDocxodusServiceParser(TestCase):
         parser.service_url = "http://docxodus-parser:8080/parse"
         parser.request_timeout = 30
 
-        result = parser._parse_document_impl(
-            user_id=self.user.id, doc_id=self.doc.id
-        )
+        result = parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
 
         self.assertIsNotNone(result)
         self.assertEqual(result["content"], "Hello World")
@@ -136,13 +137,13 @@ class TestDocxodusServiceParser(TestCase):
         # Verify request was made with base64-encoded DOCX
         mock_post.assert_called_once()
         call_kwargs = mock_post.call_args
-        payload = call_kwargs[1]["json"] if "json" in call_kwargs[1] else call_kwargs[0][1]
+        payload = (
+            call_kwargs[1]["json"] if "json" in call_kwargs[1] else call_kwargs[0][1]
+        )
         self.assertIn("docx_base64", payload)
         self.assertIn("filename", payload)
 
-    @patch(
-        "opencontractserver.pipeline.parsers.docxodus_parser.requests.post"
-    )
+    @patch("opencontractserver.pipeline.parsers.docxodus_parser.requests.post")
     def test_parse_document_timeout(self, mock_post):
         """Test that timeout raises transient DocumentParsingError."""
         mock_post.side_effect = Timeout("Connection timed out")
@@ -152,15 +153,11 @@ class TestDocxodusServiceParser(TestCase):
         parser.request_timeout = 5
 
         with self.assertRaises(DocumentParsingError) as ctx:
-            parser._parse_document_impl(
-                user_id=self.user.id, doc_id=self.doc.id
-            )
+            parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
 
         self.assertTrue(ctx.exception.is_transient)
 
-    @patch(
-        "opencontractserver.pipeline.parsers.docxodus_parser.requests.post"
-    )
+    @patch("opencontractserver.pipeline.parsers.docxodus_parser.requests.post")
     def test_parse_document_connection_error(self, mock_post):
         """Test that connection error raises transient DocumentParsingError."""
         mock_post.side_effect = ConnectionError("Connection refused")
@@ -169,9 +166,7 @@ class TestDocxodusServiceParser(TestCase):
         parser.service_url = "http://docxodus-parser:8080/parse"
 
         with self.assertRaises(DocumentParsingError) as ctx:
-            parser._parse_document_impl(
-                user_id=self.user.id, doc_id=self.doc.id
-            )
+            parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
 
         self.assertTrue(ctx.exception.is_transient)
 
@@ -325,12 +320,8 @@ class TestDocxThumbnailGenerator(TestCase):
             DocxThumbnailGenerator,
         )
 
-        result = DocxThumbnailGenerator._extract_embedded_thumbnail(
-            b"not a valid docx"
-        )
+        result = DocxThumbnailGenerator._extract_embedded_thumbnail(b"not a valid docx")
         self.assertIsNone(result)
 
-        result = DocxThumbnailGenerator._extract_text_preview(
-            b"not a valid docx"
-        )
+        result = DocxThumbnailGenerator._extract_text_preview(b"not a valid docx")
         self.assertIsNone(result)

@@ -6546,11 +6546,6 @@ react-countup@^6.5.3:
   dependencies:
     countup.js "^2.8.0"
 
-react-docxodus-viewer@^0.4.1:
-  version "0.4.1"
-  resolved "https://registry.yarnpkg.com/react-docxodus-viewer/-/react-docxodus-viewer-0.4.1.tgz#9f799225e1a4dfde2503c79337586dcfe36f5446"
-  integrity sha512-5Z1H6QsE9u2+gELlKg5cvgx4Tn19+TjvODmKNh7V2AE5AVve3RtGqU4oGP2GSZt33HJTrSKfxEsqcu1nPqMgYg==
-
 react-dom@18:
   version "18.3.1"
   resolved "https://registry.yarnpkg.com/react-dom/-/react-dom-18.3.1.tgz#c2265d79511b57d479b3dd3fdfa51536494c5cb4"
