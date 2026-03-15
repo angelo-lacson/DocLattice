@@ -8,6 +8,11 @@ from asgiref.sync import sync_to_async
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
+from doclatticeserver.constants.context_guardrails import (
+    CHARS_PER_TOKEN_ESTIMATE,
+    DEFAULT_CONTEXT_WINDOW,
+    EPHEMERAL_CONTEXT_EXHAUSTION_RATIO,
+)
 from doclatticeserver.conversations.models import ChatMessage, Conversation
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
@@ -613,12 +618,16 @@ class TestEphemeralConversationManager(TestCase):
         self.assertFalse(manager.context_exhausted)
 
     async def test_context_exhausted_when_buffer_large(self):
-        """Filling >90 % of gpt-4o's 128k window should set context_exhausted."""
+        """Filling past the exhaustion threshold should set context_exhausted."""
         manager = self._make_ephemeral_manager()
-        # gpt-4o has 128_000 token window; at 3.5 chars/token, 90% threshold =
-        # 128_000 * 0.9 = 115_200 tokens ≈ 403_200 chars.  Use 410_000 to be
-        # safely above the threshold.
-        large_content = "a" * 410_000
+        # gpt-4o window = DEFAULT_CONTEXT_WINDOW; threshold chars =
+        # window * ratio * chars_per_token.  Add 2% margin to be safely above.
+        threshold_chars = int(
+            DEFAULT_CONTEXT_WINDOW
+            * EPHEMERAL_CONTEXT_EXHAUSTION_RATIO
+            * CHARS_PER_TOKEN_ESTIMATE
+        )
+        large_content = "a" * int(threshold_chars * 1.02)
         await manager.store_user_message(large_content)
         self.assertTrue(manager.context_exhausted)
 
@@ -675,3 +684,55 @@ class TestEphemeralConversationManager(TestCase):
         await manager.complete_message(msg_id, "real content")
         self.assertEqual(len(manager._ephemeral_messages), 1)
         self.assertEqual(manager._ephemeral_messages[0].content, "real content")
+
+    async def test_complete_message_idempotent_same_id(self):
+        """complete_message(real_id) called twice updates in place, no duplicate."""
+        manager = self._make_ephemeral_manager()
+        msg_id = await manager.create_placeholder_message("LLM")
+
+        await manager.complete_message(msg_id, "first content")
+        self.assertEqual(len(manager._ephemeral_messages), 1)
+
+        # Second call with the same ID — should update, not append.
+        await manager.complete_message(msg_id, "updated content")
+        self.assertEqual(len(manager._ephemeral_messages), 1)
+        self.assertEqual(manager._ephemeral_messages[0].content, "updated content")
+
+    async def test_ephemeral_update_missing_id_logs_warning(self):
+        """_ephemeral_update returns False for unknown IDs, callers log warning."""
+        manager = self._make_ephemeral_manager()
+        result = manager._ephemeral_update(9999, "nope")
+        self.assertFalse(result)
+
+    async def test_update_message_content_missing_id_logs_warning(self):
+        """update_message_content logs when the message ID is not in the buffer."""
+        manager = self._make_ephemeral_manager()
+        with self.assertLogs(
+            "doclatticeserver.llms.agents.core_agents", level="WARNING"
+        ) as cm:
+            await manager.update_message_content(9999, "missing")
+        self.assertTrue(any("9999 not found" in msg for msg in cm.output))
+
+    async def test_update_message_missing_id_logs_warning(self):
+        """update_message logs when the message ID is not in the buffer."""
+        manager = self._make_ephemeral_manager()
+        with self.assertLogs(
+            "doclatticeserver.llms.agents.core_agents", level="WARNING"
+        ) as cm:
+            await manager.update_message(9999, "missing")
+        self.assertTrue(any("9999 not found" in msg for msg in cm.output))
+
+    def test_storage_backend_ephemeral(self):
+        """AgentConfig.storage_backend is 'ephemeral' for anonymous managers."""
+        config = AgentConfig(model_name="gpt-4o")
+        config.storage_backend = "ephemeral"
+        config.store_user_messages = True
+        config.store_llm_messages = True
+        manager = CoreConversationManager(None, None, config)
+        self.assertEqual(manager.config.storage_backend, "ephemeral")
+        self.assertTrue(manager.config.store_user_messages)
+
+    def test_storage_backend_default_is_db(self):
+        """AgentConfig.storage_backend defaults to 'db'."""
+        config = AgentConfig(model_name="gpt-4o")
+        self.assertEqual(config.storage_backend, "db")
