@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import styled from "styled-components";
+import { Button } from "@os-legal/ui";
 import { color } from "../../../theme/colors";
 import { MOBILE_VIEW_BREAKPOINT } from "../../../assets/configurations/constants";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
@@ -633,22 +634,22 @@ export const ContextExhaustedBanner = styled.div`
   font-size: 0.8125rem;
   color: ${OS_LEGAL_COLORS.warningText};
   flex-shrink: 0;
+`;
 
-  button {
-    padding: 0.375rem 0.75rem;
-    border: 1px solid ${OS_LEGAL_COLORS.warningBorder};
-    border-radius: 6px;
-    background: white;
-    color: ${OS_LEGAL_COLORS.warningText};
-    font-size: 0.8125rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    white-space: nowrap;
+export const ContextExhaustedButton = styled(Button)`
+  padding: 0.375rem 0.75rem;
+  border: 1px solid ${OS_LEGAL_COLORS.warningBorder};
+  border-radius: 6px;
+  background: white;
+  color: ${OS_LEGAL_COLORS.warningText};
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
 
-    &:hover {
-      background: ${OS_LEGAL_COLORS.warningSurface};
-      border-color: ${OS_LEGAL_COLORS.warningText};
-    }
+  &:hover {
+    background: ${OS_LEGAL_COLORS.warningSurface};
+    border-color: ${OS_LEGAL_COLORS.warningText};
   }
 `;

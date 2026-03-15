@@ -70,6 +70,7 @@ import type {
 import {
   ChatContainer,
   ContextExhaustedBanner,
+  ContextExhaustedButton,
   ConversationIndicator,
   ChatNavigationHeader,
   BackButton,
@@ -1288,7 +1289,9 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               {contextExhausted && (
                 <ContextExhaustedBanner>
                   <span>This conversation has reached its context limit.</span>
-                  <Button onClick={startNewChat}>Start New Chat</Button>
+                  <ContextExhaustedButton onClick={startNewChat}>
+                    Start New Chat
+                  </ContextExhaustedButton>
                 </ContextExhaustedBanner>
               )}
               {/* Input */}

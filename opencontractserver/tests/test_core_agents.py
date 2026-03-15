@@ -8,6 +8,11 @@ from asgiref.sync import sync_to_async
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
+from opencontractserver.constants.context_guardrails import (
+    CHARS_PER_TOKEN_ESTIMATE,
+    DEFAULT_CONTEXT_WINDOW,
+    EPHEMERAL_CONTEXT_EXHAUSTION_RATIO,
+)
 from opencontractserver.conversations.models import ChatMessage, Conversation
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
@@ -613,12 +618,16 @@ class TestEphemeralConversationManager(TestCase):
         self.assertFalse(manager.context_exhausted)
 
     async def test_context_exhausted_when_buffer_large(self):
-        """Filling >90 % of gpt-4o's 128k window should set context_exhausted."""
+        """Filling past the exhaustion threshold should set context_exhausted."""
         manager = self._make_ephemeral_manager()
-        # gpt-4o has 128_000 token window; at 3.5 chars/token, 90% threshold =
-        # 128_000 * 0.9 = 115_200 tokens ≈ 403_200 chars.  Use 410_000 to be
-        # safely above the threshold.
-        large_content = "a" * 410_000
+        # gpt-4o window = DEFAULT_CONTEXT_WINDOW; threshold chars =
+        # window * ratio * chars_per_token.  Add 2% margin to be safely above.
+        threshold_chars = int(
+            DEFAULT_CONTEXT_WINDOW
+            * EPHEMERAL_CONTEXT_EXHAUSTION_RATIO
+            * CHARS_PER_TOKEN_ESTIMATE
+        )
+        large_content = "a" * int(threshold_chars * 1.02)
         await manager.store_user_message(large_content)
         self.assertTrue(manager.context_exhausted)
 
