@@ -159,6 +159,30 @@ class TestTelemetryRecording(TestCase):
         self.assertIn("client_ip_hash", props)
 
     @patch("opencontractserver.mcp.telemetry.record_event")
+    def test_record_mcp_tool_call_with_resource_slugs(self, mock_record):
+        mock_record.return_value = True
+        with isolated_telemetry_context():
+            result = record_mcp_tool_call(
+                "list_documents",
+                success=True,
+                corpus_slug="my-corpus",
+                document_slug="my-doc",
+            )
+        self.assertTrue(result)
+        props = mock_record.call_args[0][1]
+        self.assertEqual(props["corpus_slug"], "my-corpus")
+        self.assertEqual(props["document_slug"], "my-doc")
+
+    @patch("opencontractserver.mcp.telemetry.record_event")
+    def test_record_mcp_tool_call_omits_none_slugs(self, mock_record):
+        mock_record.return_value = True
+        with isolated_telemetry_context():
+            record_mcp_tool_call("list_public_corpuses", success=True)
+        props = mock_record.call_args[0][1]
+        self.assertNotIn("corpus_slug", props)
+        self.assertNotIn("document_slug", props)
+
+    @patch("opencontractserver.mcp.telemetry.record_event")
     def test_record_mcp_tool_call_failure(self, mock_record):
         mock_record.return_value = True
         with isolated_telemetry_context():
@@ -178,6 +202,31 @@ class TestTelemetryRecording(TestCase):
         self.assertTrue(result)
         props = mock_record.call_args[0][1]
         self.assertEqual(props["resource_type"], "corpus")
+
+    @patch("opencontractserver.mcp.telemetry.record_event")
+    def test_record_mcp_resource_read_with_slugs(self, mock_record):
+        mock_record.return_value = True
+        with isolated_telemetry_context():
+            result = record_mcp_resource_read(
+                "document",
+                success=True,
+                corpus_slug="my-corpus",
+                document_slug="my-doc",
+            )
+        self.assertTrue(result)
+        props = mock_record.call_args[0][1]
+        self.assertEqual(props["resource_type"], "document")
+        self.assertEqual(props["corpus_slug"], "my-corpus")
+        self.assertEqual(props["document_slug"], "my-doc")
+
+    @patch("opencontractserver.mcp.telemetry.record_event")
+    def test_record_mcp_resource_read_omits_none_slugs(self, mock_record):
+        mock_record.return_value = True
+        with isolated_telemetry_context():
+            record_mcp_resource_read("corpus", success=True)
+        props = mock_record.call_args[0][1]
+        self.assertNotIn("corpus_slug", props)
+        self.assertNotIn("document_slug", props)
 
     @patch("opencontractserver.mcp.telemetry.record_event")
     def test_record_mcp_request(self, mock_record):

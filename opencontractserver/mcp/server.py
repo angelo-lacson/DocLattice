@@ -158,13 +158,18 @@ async def read_resource_handler(uri: str) -> str:
     uri_str = str(uri)
 
     resource_type = "unknown"
+    _corpus_slug: str | None = None
+    _document_slug: str | None = None
     try:
         # Try corpus URI
         corpus_slug = URIParser.parse_corpus(uri_str)
         if corpus_slug:
             resource_type = "corpus"
+            _corpus_slug = corpus_slug
             result = await sync_to_async(get_corpus_resource)(corpus_slug)
-            await arecord_mcp_resource_read(resource_type, success=True)
+            await arecord_mcp_resource_read(
+                resource_type, success=True, corpus_slug=_corpus_slug
+            )
             return result
 
         # Try document URI
@@ -172,10 +177,17 @@ async def read_resource_handler(uri: str) -> str:
         if doc_parts:
             resource_type = "document"
             corpus_slug, document_slug = doc_parts
+            _corpus_slug = corpus_slug
+            _document_slug = document_slug
             result = await sync_to_async(get_document_resource)(
                 corpus_slug, document_slug
             )
-            await arecord_mcp_resource_read(resource_type, success=True)
+            await arecord_mcp_resource_read(
+                resource_type,
+                success=True,
+                corpus_slug=_corpus_slug,
+                document_slug=_document_slug,
+            )
             return result
 
         # Try annotation URI
@@ -183,10 +195,17 @@ async def read_resource_handler(uri: str) -> str:
         if ann_parts:
             resource_type = "annotation"
             corpus_slug, document_slug, annotation_id = ann_parts
+            _corpus_slug = corpus_slug
+            _document_slug = document_slug
             result = await sync_to_async(get_annotation_resource)(
                 corpus_slug, document_slug, annotation_id
             )
-            await arecord_mcp_resource_read(resource_type, success=True)
+            await arecord_mcp_resource_read(
+                resource_type,
+                success=True,
+                corpus_slug=_corpus_slug,
+                document_slug=_document_slug,
+            )
             return result
 
         # Try thread URI
@@ -194,14 +213,21 @@ async def read_resource_handler(uri: str) -> str:
         if thread_parts:
             resource_type = "thread"
             corpus_slug, thread_id = thread_parts
+            _corpus_slug = corpus_slug
             result = await sync_to_async(get_thread_resource)(corpus_slug, thread_id)
-            await arecord_mcp_resource_read(resource_type, success=True)
+            await arecord_mcp_resource_read(
+                resource_type, success=True, corpus_slug=_corpus_slug
+            )
             return result
 
         raise ValueError(f"Invalid or unrecognized resource URI: {uri_str}")
     except Exception as e:
         await arecord_mcp_resource_read(
-            resource_type, success=False, error_type=type(e).__name__
+            resource_type,
+            success=False,
+            error_type=type(e).__name__,
+            corpus_slug=_corpus_slug,
+            document_slug=_document_slug,
         )
         raise
 
@@ -219,18 +245,39 @@ async def call_tool_handler(name: str, arguments: dict) -> list[TextContent]:
     """
     await _check_per_tool_rate_limit(name)
 
+    # Extract resource slugs from arguments for telemetry (public identifiers only)
+    _corpus_slug = arguments.get("corpus_slug")
+    _document_slug = arguments.get("document_slug")
+
     handler = TOOL_HANDLERS.get(name)
     if not handler:
-        await arecord_mcp_tool_call(name, success=False, error_type="UnknownTool")
+        await arecord_mcp_tool_call(
+            name,
+            success=False,
+            error_type="UnknownTool",
+            corpus_slug=_corpus_slug,
+            document_slug=_document_slug,
+        )
         raise ValueError(f"Unknown tool: {name}")
 
     try:
         # Run synchronous Django ORM handlers in thread pool
         result = await sync_to_async(handler)(**arguments)
-        await arecord_mcp_tool_call(name, success=True)
+        await arecord_mcp_tool_call(
+            name,
+            success=True,
+            corpus_slug=_corpus_slug,
+            document_slug=_document_slug,
+        )
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
     except Exception as e:
-        await arecord_mcp_tool_call(name, success=False, error_type=type(e).__name__)
+        await arecord_mcp_tool_call(
+            name,
+            success=False,
+            error_type=type(e).__name__,
+            corpus_slug=_corpus_slug,
+            document_slug=_document_slug,
+        )
         raise
 
 
@@ -721,12 +768,19 @@ def create_scoped_mcp_server(corpus_slug: str) -> Server:
         """
         await _check_per_tool_rate_limit(name)
 
+        # Extract document_slug from arguments for telemetry
+        _document_slug = arguments.get("document_slug")
+
         # Re-validate corpus is still accessible on every tool call
         # This prevents race condition where corpus becomes private after manager cached
         is_valid = await sync_to_async(_validate_corpus_sync)()
         if not is_valid:
             await arecord_mcp_tool_call(
-                name, success=False, error_type="CorpusNotAccessible"
+                name,
+                success=False,
+                error_type="CorpusNotAccessible",
+                corpus_slug=corpus_slug,
+                document_slug=_document_slug,
             )
             raise PermissionError(
                 f"Corpus '{corpus_slug}' is no longer publicly accessible"
@@ -734,17 +788,32 @@ def create_scoped_mcp_server(corpus_slug: str) -> Server:
 
         handler = scoped_handlers.get(name)
         if not handler:
-            await arecord_mcp_tool_call(name, success=False, error_type="UnknownTool")
+            await arecord_mcp_tool_call(
+                name,
+                success=False,
+                error_type="UnknownTool",
+                corpus_slug=corpus_slug,
+                document_slug=_document_slug,
+            )
             raise ValueError(f"Unknown tool: {name}")
 
         try:
             # Run synchronous Django ORM handlers in thread pool
             result = await sync_to_async(handler)(**arguments)
-            await arecord_mcp_tool_call(name, success=True)
+            await arecord_mcp_tool_call(
+                name,
+                success=True,
+                corpus_slug=corpus_slug,
+                document_slug=_document_slug,
+            )
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
         except Exception as e:
             await arecord_mcp_tool_call(
-                name, success=False, error_type=type(e).__name__
+                name,
+                success=False,
+                error_type=type(e).__name__,
+                corpus_slug=corpus_slug,
+                document_slug=_document_slug,
             )
             raise
 
