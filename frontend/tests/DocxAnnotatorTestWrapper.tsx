@@ -124,7 +124,7 @@ export const DocxAnnotatorTestWrapper: React.FC<{
           visibleLabels={sampleLabels}
           availableLabels={sampleLabels}
           selectedLabelTypeId={readOnly ? null : "label-1"}
-          read_only={readOnly}
+          readOnly={readOnly}
           allowInput={!readOnly}
           createAnnotation={() => {}}
           updateAnnotation={() => {}}

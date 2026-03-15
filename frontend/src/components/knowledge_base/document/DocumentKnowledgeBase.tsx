@@ -883,6 +883,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                 ...pageTextMaps,
               });
               setDocText(doc_text);
+              setDocxBytes(null);
               setViewState(ViewState.LOADED); // Set loaded state only after everything is done
             });
             routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
@@ -918,10 +919,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           .then((txt) => {
             // Batch text file completion state updates
             routingLogger.debug(
-              "[Text Load] 🔄 Batching text completion state updates"
+              "[Text Load] Batching text completion state updates"
             );
             unstable_batchedUpdates(() => {
               setDocText(txt);
+              setDocxBytes(null);
               setViewState(ViewState.LOADED);
             });
             routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
@@ -1127,6 +1129,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                   ...pageTextMaps,
                 });
                 setDocText(doc_text);
+                setDocxBytes(null);
                 setViewState(ViewState.LOADED);
               });
             })
@@ -1155,10 +1158,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             .then((txt) => {
               // Batch text file completion state updates (document-only)
               routingLogger.debug(
-                "[Text Load] 🔄 Batching text completion state updates (document-only)"
+                "[Text Load] Batching text completion state updates (document-only)"
               );
               unstable_batchedUpdates(() => {
                 setDocText(txt);
+                setDocxBytes(null);
                 setViewState(ViewState.LOADED);
               });
               routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
@@ -1180,10 +1184,16 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           routingLogger.debug("Type: DOCX (document-only)");
           routingLogger.debug("Document ID:", data.document.id);
           setViewState(ViewState.LOADING);
+          const docId = data.document.id;
+          const textHash = data.document.pdfFileHash;
 
           const docxPromise = getDocxBytes(data.document.pdfFile);
           const textPromise = data.document.txtExtractFile
-            ? getDocumentRawText(data.document.txtExtractFile)
+            ? getDocumentRawText(
+                data.document.txtExtractFile,
+                docId,
+                textHash ?? undefined
+              )
             : Promise.resolve("");
 
           Promise.all([docxPromise, textPromise])
@@ -1634,7 +1644,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     );
   } else if (isDocxFileType(metadata.fileType)) {
     viewerContent = (
-      <PDFContainer id="pdf-container" ref={containerRefCallback}>
+      <PDFContainer id="docx-container" ref={containerRefCallback}>
         {viewState === ViewState.LOADED ? (
           <DocxAnnotatorWrapper readOnly={!canEdit} allowInput={canEdit} />
         ) : viewState === ViewState.LOADING ? (

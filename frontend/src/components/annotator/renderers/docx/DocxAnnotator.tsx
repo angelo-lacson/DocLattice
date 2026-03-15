@@ -34,6 +34,7 @@ import {
   ShortcutHint,
 } from "../../components/SelectionActionMenu";
 import { clampMenuPosition } from "../../../../utils/layout";
+import DOMPurify from "dompurify";
 import { Tag, X } from "lucide-react";
 import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
@@ -70,7 +71,7 @@ interface DocxAnnotatorProps {
   /** Currently selected label type ID for new annotations */
   selectedLabelTypeId: string | null;
   /** Whether the annotator is read-only */
-  read_only: boolean;
+  readOnly: boolean;
   /** Whether user input is allowed */
   allowInput: boolean;
   /** Callback to create a new annotation from text selection */
@@ -81,9 +82,9 @@ interface DocxAnnotatorProps {
   }) => ServerSpanAnnotation;
   /** CRUD callbacks */
   createAnnotation: (annotation: ServerSpanAnnotation) => void;
-  updateAnnotation: (annotation: ServerSpanAnnotation) => void;
-  approveAnnotation: (annotationId: string) => void;
-  rejectAnnotation: (annotationId: string) => void;
+  updateAnnotation?: (annotation: ServerSpanAnnotation) => void;
+  approveAnnotation?: (annotationId: string) => void;
+  rejectAnnotation?: (annotationId: string) => void;
   deleteAnnotation: (annotationId: string) => void;
   /** Selection state */
   selectedAnnotations: string[];
@@ -147,11 +148,10 @@ function buildExternalAnnotationSet(
   > = {};
   for (const ann of filteredAnnotations) {
     const label = ann.annotationLabel;
-    const labelText = label?.text ?? "";
-    if (label && labelText && !textLabels[labelText]) {
-      textLabels[labelText] = {
+    if (label && label.id && !textLabels[label.id]) {
+      textLabels[label.id] = {
         id: label.id,
-        text: labelText,
+        text: label.text ?? "",
         color: label.color ?? "#FFD700",
         icon: "",
         labelType: "text",
@@ -186,7 +186,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
   visibleLabels,
   availableLabels,
   selectedLabelTypeId,
-  read_only,
+  readOnly,
   allowInput,
   getSpan,
   createAnnotation,
@@ -261,7 +261,14 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     )
       .then((resultHtml) => {
         if (!cancelled) {
-          setHtml(resultHtml);
+          // Sanitize WASM-produced HTML to prevent XSS from crafted DOCX files.
+          // RETURN_DOM_FRAGMENT=false ensures we get a string back.
+          // ADD_ATTR preserves data-annotation-id used for annotation click handling.
+          setHtml(
+            DOMPurify.sanitize(resultHtml, {
+              ADD_ATTR: ["data-annotation-id"],
+            })
+          );
           setConverting(false);
         }
       })
@@ -288,7 +295,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
   // Handle text selection for new annotation creation
   const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
-      if (read_only || !allowInput || !selectedLabelTypeId) return;
+      if (readOnly || !allowInput || !selectedLabelTypeId) return;
 
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed || !selection.toString().trim())
@@ -313,7 +320,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
         end: match.end,
       });
     },
-    [read_only, allowInput, selectedLabelTypeId, docText]
+    [readOnly, allowInput, selectedLabelTypeId, docText]
   );
 
   // Handle annotation creation from menu
