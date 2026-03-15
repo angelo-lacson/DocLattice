@@ -675,3 +675,55 @@ class TestEphemeralConversationManager(TestCase):
         await manager.complete_message(msg_id, "real content")
         self.assertEqual(len(manager._ephemeral_messages), 1)
         self.assertEqual(manager._ephemeral_messages[0].content, "real content")
+
+    async def test_complete_message_idempotent_same_id(self):
+        """complete_message(real_id) called twice updates in place, no duplicate."""
+        manager = self._make_ephemeral_manager()
+        msg_id = await manager.create_placeholder_message("LLM")
+
+        await manager.complete_message(msg_id, "first content")
+        self.assertEqual(len(manager._ephemeral_messages), 1)
+
+        # Second call with the same ID — should update, not append.
+        await manager.complete_message(msg_id, "updated content")
+        self.assertEqual(len(manager._ephemeral_messages), 1)
+        self.assertEqual(manager._ephemeral_messages[0].content, "updated content")
+
+    async def test_ephemeral_update_missing_id_logs_warning(self):
+        """_ephemeral_update returns False for unknown IDs, callers log warning."""
+        manager = self._make_ephemeral_manager()
+        result = manager._ephemeral_update(9999, "nope")
+        self.assertFalse(result)
+
+    async def test_update_message_content_missing_id_logs_warning(self):
+        """update_message_content logs when the message ID is not in the buffer."""
+        manager = self._make_ephemeral_manager()
+        with self.assertLogs(
+            "opencontractserver.llms.agents.core_agents", level="WARNING"
+        ) as cm:
+            await manager.update_message_content(9999, "missing")
+        self.assertTrue(any("9999 not found" in msg for msg in cm.output))
+
+    async def test_update_message_missing_id_logs_warning(self):
+        """update_message logs when the message ID is not in the buffer."""
+        manager = self._make_ephemeral_manager()
+        with self.assertLogs(
+            "opencontractserver.llms.agents.core_agents", level="WARNING"
+        ) as cm:
+            await manager.update_message(9999, "missing")
+        self.assertTrue(any("9999 not found" in msg for msg in cm.output))
+
+    def test_storage_backend_ephemeral(self):
+        """AgentConfig.storage_backend is 'ephemeral' for anonymous managers."""
+        config = AgentConfig(model_name="gpt-4o")
+        config.storage_backend = "ephemeral"
+        config.store_user_messages = True
+        config.store_llm_messages = True
+        manager = CoreConversationManager(None, None, config)
+        self.assertEqual(manager.config.storage_backend, "ephemeral")
+        self.assertTrue(manager.config.store_user_messages)
+
+    def test_storage_backend_default_is_db(self):
+        """AgentConfig.storage_backend defaults to 'db'."""
+        config = AgentConfig(model_name="gpt-4o")
+        self.assertEqual(config.storage_backend, "db")

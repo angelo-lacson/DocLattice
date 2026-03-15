@@ -289,6 +289,11 @@ class AgentConfig:
     store_user_messages: bool = True
     store_llm_messages: bool = True
 
+    # Where messages are persisted.  "db" = normal DB-backed conversation,
+    # "ephemeral" = in-memory buffer (anonymous sessions), "none" = no
+    # storage at all (caller explicitly disabled both store_* flags).
+    storage_backend: Literal["db", "ephemeral", "none"] = "db"
+
     # Tool configuration
     tools: list[Any] = field(default_factory=list)
 
@@ -1149,6 +1154,7 @@ class CoreConversationManager:
             logger.debug(
                 f"Creating ephemeral (non-stored) conversation for anonymous user on document {document.id}"
             )
+            config.storage_backend = "ephemeral"
             config.store_user_messages = True
             config.store_llm_messages = True
             return cls(None, None, config)
@@ -1160,6 +1166,7 @@ class CoreConversationManager:
                 "Creating non-stored conversation (caller disabled storage) "
                 f"for user {user_id} on document {document.id}"
             )
+            config.storage_backend = "none"
             return cls(None, user_id, config)
 
         # For authenticated users, handle conversation persistence normally
@@ -1216,6 +1223,7 @@ class CoreConversationManager:
             logger.debug(
                 f"Creating ephemeral (non-stored) conversation for anonymous user on corpus {corpus.id}"
             )
+            config.storage_backend = "ephemeral"
             config.store_user_messages = True
             config.store_llm_messages = True
             return cls(None, None, config)
@@ -1227,6 +1235,7 @@ class CoreConversationManager:
                 "Creating non-stored conversation (caller disabled storage) "
                 f"for user {user_id} on corpus {corpus.id}"
             )
+            config.storage_backend = "none"
             return cls(None, user_id, config)
 
         # For authenticated users, handle conversation persistence normally
@@ -1396,7 +1405,11 @@ class CoreConversationManager:
         if not self.conversation:
             if not message_id:
                 return
-            self._ephemeral_update(message_id, content)
+            if not self._ephemeral_update(message_id, content):
+                logger.warning(
+                    "Ephemeral update_message_content: message_id=%s not found in buffer",
+                    message_id,
+                )
             return
 
         message = await ChatMessage.objects.aget(id=message_id)
@@ -1418,6 +1431,12 @@ class CoreConversationManager:
             # Ephemeral branch — guard against None/0 from _stream_core to
             # prevent the double-write problem described in Task 5.
             if not message_id:
+                return
+            # Idempotency: if the message already exists (e.g. complete_message
+            # called twice with the same real_id), update in place rather than
+            # appending a duplicate.
+            if any(m.id == message_id for m in self._ephemeral_messages):
+                self._ephemeral_update(message_id, content, sources, metadata)
                 return
             self._ephemeral_messages.append(
                 SimpleNamespace(
@@ -1557,7 +1576,11 @@ class CoreConversationManager:
         if not self.conversation:
             if not message_id:
                 return
-            self._ephemeral_update(message_id, content, sources, metadata)
+            if not self._ephemeral_update(message_id, content, sources, metadata):
+                logger.warning(
+                    "Ephemeral update_message: message_id=%s not found in buffer",
+                    message_id,
+                )
             return
 
         message = await ChatMessage.objects.aget(id=message_id)
