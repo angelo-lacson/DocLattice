@@ -154,6 +154,10 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
   // Track whether the anonymous session context has been exhausted
   const [contextExhausted, setContextExhausted] = useState(false);
 
+  // Bumped on startNewChat to force WebSocket reconnection even when
+  // isNewChat and selectedConversationId haven't changed (anonymous sessions).
+  const [wsReconnectKey, setWsReconnectKey] = useState(0);
+
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | undefined
   >();
@@ -500,7 +504,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         socketRef.current = null;
       }
     };
-  }, [auth_token, corpusId, selectedConversationId, isNewChat]);
+  }, [auth_token, corpusId, selectedConversationId, isNewChat, wsReconnectKey]);
 
   // Track if this is the initial mount - skip forceNewChat effect on mount
   // since isNewChat is already initialized from forceNewChat prop
@@ -565,11 +569,16 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
    */
   const startNewChat = useCallback((): void => {
     setContextExhausted(false);
+    setContextStatus(null);
+    setCompactionNotice(null);
     setIsNewChat(true);
     setSelectedConversationId(undefined);
     setShowLoad(false);
     setChat([]);
     setServerMessages([]);
+    // Force WebSocket reconnection even when deps haven't changed
+    // (e.g. anonymous user where isNewChat is already true).
+    setWsReconnectKey((k) => k + 1);
   }, [setShowLoad]);
 
   /**
