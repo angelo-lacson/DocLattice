@@ -34,13 +34,23 @@ def sync_multiply(a: int, b: int) -> int:
     return a * b
 
 
+async def async_multiply(a: int, b: int) -> int:
+    """Multiply two integers and return the product (async)."""
+    return a * b
+
+
 async def async_add(a: int, b: int) -> int:
     """Add two integers and return the sum (async)."""
     return a + b
 
 
-def subtract(x: int, y: int) -> int:
+async def async_subtract(x: int, y: int) -> int:
     """Subtract y from x."""
+    return x - y
+
+
+def subtract(x: int, y: int) -> int:
+    """Subtract y from x (sync, for TypeError tests only)."""
     return x - y
 
 
@@ -55,11 +65,11 @@ class TestPydanticAITools(TestCase):
 
     def test_pydantic_ai_tool_wrapper_basic_properties(self):
         """Test basic wrapper properties and metadata."""
-        core_tool = CoreTool.from_function(sync_multiply)
+        core_tool = CoreTool.from_function(async_multiply)
         wrapper = PydanticAIToolWrapper(core_tool)
 
         # Basic metadata checks
-        self.assertEqual(wrapper.name, "sync_multiply")
+        self.assertEqual(wrapper.name, "async_multiply")
         self.assertIn("multiply", wrapper.description.lower())
 
         # The callable_function should accept `ctx` as first parameter
@@ -73,10 +83,17 @@ class TestPydanticAITools(TestCase):
         expected_keys = {"function", "name", "description"}
         self.assertEqual(set(tool_dict.keys()), expected_keys)
 
+    def test_sync_function_rejected(self):
+        """Test that sync functions are rejected with TypeError."""
+        core_tool = CoreTool.from_function(sync_multiply)
+        with self.assertRaises(TypeError) as ctx:
+            PydanticAIToolWrapper(core_tool)
+        self.assertIn("must be an async function", str(ctx.exception))
+
     def test_pydantic_ai_tool_factory_collections(self):
         """Test factory helpers for building tool collections."""
         tools = [
-            CoreTool.from_function(sync_multiply),
+            CoreTool.from_function(async_multiply),
             CoreTool.from_function(async_add),
         ]
 
@@ -88,16 +105,16 @@ class TestPydanticAITools(TestCase):
 
         # create_tool_registry maps names → callable
         registry = PydanticAIToolFactory.create_tool_registry(tools)
-        expected_names = {"sync_multiply", "async_add"}
+        expected_names = {"async_multiply", "async_add"}
         self.assertEqual(set(registry.keys()), expected_names)
         for name, fn in registry.items():
             self.assertTrue(callable(fn))
 
-    def test_decorator_function_properties(self):
-        """Test decorator creates proper function signatures."""
+    def test_decorator_async_function_properties(self):
+        """Test decorator creates proper function signatures with async functions."""
 
         @pydantic_ai_tool(description="Square a number")
-        def square(x: int) -> int:  # type: ignore[valid-type]
+        async def square(x: int) -> int:
             """Return x squared."""
             return x * x
 
@@ -109,9 +126,18 @@ class TestPydanticAITools(TestCase):
         first_param = next(iter(sig.parameters.keys()))
         self.assertEqual(first_param, "ctx")
 
+    def test_decorator_sync_function_rejected(self):
+        """Test that decorator rejects sync functions with TypeError."""
+        with self.assertRaises(TypeError):
+
+            @pydantic_ai_tool(description="Square a number")
+            def square(x: int) -> int:
+                """Return x squared."""
+                return x * x
+
     def test_typed_tool_creation(self):
-        """Test creation of typed tools from annotated functions."""
-        typed_tool = create_typed_pydantic_ai_tool(subtract)
+        """Test creation of typed tools from annotated async functions."""
+        typed_tool = create_typed_pydantic_ai_tool(async_subtract)
 
         # Should be callable
         self.assertTrue(callable(typed_tool))
@@ -121,10 +147,15 @@ class TestPydanticAITools(TestCase):
         first_param = next(iter(sig.parameters.keys()))
         self.assertEqual(first_param, "ctx")
 
-    def test_custom_tool_creation(self):
-        """Test custom tool creation with metadata."""
+    def test_typed_tool_sync_rejected(self):
+        """Test that create_typed_pydantic_ai_tool rejects sync functions."""
+        with self.assertRaises(TypeError):
+            create_typed_pydantic_ai_tool(subtract)
 
-        def divide(x: int, y: int) -> Optional[float]:  # noqa: D401 – simple example
+    def test_custom_tool_creation(self):
+        """Test custom tool creation with async function and metadata."""
+
+        async def divide(x: int, y: int) -> Optional[float]:
             """Divide x by y, returning None on ZeroDivisionError."""
             try:
                 return x / y
@@ -153,17 +184,6 @@ class TestPydanticAITools(TestCase):
 class TestPydanticAIToolsAsync(TestCase):
     """Async test cases for PydanticAI tools execution."""
 
-    async def test_sync_function_wrapper_execution(self):
-        """Test that sync functions are properly wrapped and executed."""
-        core_tool = CoreTool.from_function(sync_multiply)
-        wrapper = PydanticAIToolWrapper(core_tool)
-        callable_tool = wrapper.callable_function
-
-        # Use deps=None to skip permission checks during unit tests
-        ctx = MagicMock(deps=None)
-        result = await callable_tool(ctx, 3, 4)
-        self.assertEqual(result, 12)
-
     async def test_async_function_wrapper_execution(self):
         """Test that async functions retain async behaviour when wrapped."""
         core_tool = CoreTool.from_function(async_add)
@@ -175,7 +195,7 @@ class TestPydanticAIToolsAsync(TestCase):
 
     async def test_factory_from_function_execution(self):
         """Test from_function returns executable callable tool."""
-        callable_tool = PydanticAIToolFactory.from_function(sync_multiply)
+        callable_tool = PydanticAIToolFactory.from_function(async_multiply)
         ctx = MagicMock(deps=None)
         result = await callable_tool(ctx, 7, 8)
         self.assertEqual(result, 56)
@@ -184,17 +204,17 @@ class TestPydanticAIToolsAsync(TestCase):
         """Test decorator creates executable async tool."""
 
         @pydantic_ai_tool(description="Square a number")
-        def square(x: int) -> int:  # type: ignore[valid-type]
+        async def square(x: int) -> int:
             """Return x squared."""
             return x * x
 
         ctx = MagicMock(deps=None)
-        result = await square(ctx, 9)  # type: ignore[arg-type]
+        result = await square(ctx, 9)
         self.assertEqual(result, 81)
 
     async def test_typed_tool_execution(self):
         """Test typed tool executes correctly."""
-        typed_tool = create_typed_pydantic_ai_tool(subtract)
+        typed_tool = create_typed_pydantic_ai_tool(async_subtract)
         ctx = MagicMock(deps=None)
         result = await typed_tool(ctx, 10, 4)
         self.assertEqual(result, 6)
@@ -202,7 +222,7 @@ class TestPydanticAIToolsAsync(TestCase):
     async def test_custom_tool_execution_with_error_handling(self):
         """Test custom tool with error handling executes correctly."""
 
-        def divide(x: int, y: int) -> Optional[float]:  # noqa: D401 – simple example
+        async def divide(x: int, y: int) -> Optional[float]:
             """Divide x by y, returning None on ZeroDivisionError."""
             try:
                 return x / y
@@ -334,7 +354,7 @@ class TestCheckUserPermissions(TestCase):
 # ---------------------------------------------------------------------------
 
 
-def tool_with_doc_id(document_id: int, text: str) -> dict:
+async def async_tool_with_doc_id(document_id: int, text: str) -> dict:
     """A tool that requires document_id and text."""
     return {"document_id": document_id, "text": text, "processed": True}
 
@@ -360,7 +380,7 @@ class TestInjectParams(TestCase):
         see 'text' as a required parameter.
         """
         wrapped = PydanticAIToolFactory.from_function(
-            tool_with_doc_id,
+            async_tool_with_doc_id,
             name="process_document",
             inject_params={"document_id": 123},
         )
@@ -401,10 +421,10 @@ class TestInjectParams(TestCase):
 class TestInjectParamsExecution(TestCase):
     """Async tests for inject_params execution behavior."""
 
-    async def test_sync_tool_injects_params_at_execution(self):
-        """Test that injected params are provided to sync function at execution."""
+    async def test_tool_injects_params_at_execution(self):
+        """Test that injected params are provided to async function at execution."""
         wrapped = PydanticAIToolFactory.from_function(
-            tool_with_doc_id,
+            async_tool_with_doc_id,
             name="process_document",
             inject_params={"document_id": 42},
         )
@@ -437,7 +457,7 @@ class TestInjectParamsExecution(TestCase):
 
     async def test_wrapper_constructor_accepts_inject_params(self):
         """Test that PydanticAIToolWrapper constructor accepts inject_params."""
-        core_tool = CoreTool.from_function(tool_with_doc_id)
+        core_tool = CoreTool.from_function(async_tool_with_doc_id)
         wrapper = PydanticAIToolWrapper(core_tool, inject_params={"document_id": 999})
 
         # Verify inject_params is stored
@@ -450,7 +470,7 @@ class TestInjectParamsExecution(TestCase):
 
     async def test_create_tool_accepts_inject_params(self):
         """Test that PydanticAIToolFactory.create_tool accepts inject_params."""
-        core_tool = CoreTool.from_function(tool_with_doc_id)
+        core_tool = CoreTool.from_function(async_tool_with_doc_id)
         wrapped = PydanticAIToolFactory.create_tool(
             core_tool, inject_params={"document_id": 777}
         )
@@ -464,7 +484,7 @@ class TestInjectParamsExecution(TestCase):
     async def test_no_inject_params_preserves_original_signature(self):
         """Test that without inject_params, all original params are preserved."""
         wrapped = PydanticAIToolFactory.from_function(
-            tool_with_doc_id,
+            async_tool_with_doc_id,
             name="process_document",
             # No inject_params
         )
@@ -483,7 +503,7 @@ class TestInjectParamsExecution(TestCase):
 # ---------------------------------------------------------------------------
 
 
-def tool_with_resource_ids(document_id: int, corpus_id: int, text: str) -> dict:
+async def tool_with_resource_ids(document_id: int, corpus_id: int, text: str) -> dict:
     """Tool that uses document_id and corpus_id."""
     return {"document_id": document_id, "corpus_id": corpus_id, "text": text}
 
