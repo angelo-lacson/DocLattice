@@ -37,6 +37,9 @@ class Migration(migrations.Migration):
                 EXCEPTION
                     WHEN undefined_object THEN NULL;
                     WHEN invalid_parameter_value THEN NULL;
+                    WHEN OTHERS THEN
+                        RAISE WARNING 'Unexpected error resetting HNSW GUCs: % %',
+                            SQLERRM, SQLSTATE;
                 END $$;
             """,
             reverse_sql=migrations.RunSQL.noop,
