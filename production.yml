@@ -100,7 +100,7 @@ services:
     container_name: docling-parser
 
   docxodus-parser:
-    image: jscrudato/docxodus-service
+    image: ghcr.io/open-source-legal/docxodus-service:main
     container_name: docxodus-parser
 
   celeryworker:
