@@ -46,6 +46,7 @@ from .telemetry import (
     arecord_mcp_resource_read,
     arecord_mcp_tool_call,
     clear_request_context,
+    get_user_agent_from_scope,
     set_request_context,
 )
 from .tools import (
@@ -1211,7 +1212,12 @@ def create_mcp_asgi_app():
 
             # Set telemetry context for this request
             client_ip = get_client_ip_from_scope(scope)
-            set_request_context(client_ip=client_ip, transport="streamable_http_scoped")
+            user_agent = get_user_agent_from_scope(scope)
+            set_request_context(
+                client_ip=client_ip,
+                transport="streamable_http_scoped",
+                user_agent=user_agent,
+            )
 
             # Validate the corpus exists and is public
             if not await validate_corpus_slug(corpus_slug):
@@ -1284,7 +1290,12 @@ def create_mcp_asgi_app():
         if path == "/mcp/" or path == "/mcp":
             # Set telemetry context for this request
             client_ip = get_client_ip_from_scope(scope)
-            set_request_context(client_ip=client_ip, transport="streamable_http")
+            user_agent = get_user_agent_from_scope(scope)
+            set_request_context(
+                client_ip=client_ip,
+                transport="streamable_http",
+                user_agent=user_agent,
+            )
 
             # Ensure session manager is running
             await lifespan_manager.ensure_started()
@@ -1331,7 +1342,12 @@ def create_mcp_asgi_app():
         elif path == "/sse" or path.startswith("/sse/"):
             # Set telemetry context for this request
             client_ip = get_client_ip_from_scope(scope)
-            set_request_context(client_ip=client_ip, transport="sse")
+            user_agent = get_user_agent_from_scope(scope)
+            set_request_context(
+                client_ip=client_ip,
+                transport="sse",
+                user_agent=user_agent,
+            )
 
             try:
                 await sse_starlette_app(scope, receive, send)
