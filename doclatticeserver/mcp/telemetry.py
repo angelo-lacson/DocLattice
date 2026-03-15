@@ -114,6 +114,8 @@ def record_mcp_tool_call(
     tool_name: str,
     success: bool = True,
     error_type: str | None = None,
+    corpus_slug: str | None = None,
+    document_slug: str | None = None,
 ) -> bool:
     """
     Record a telemetry event for an MCP tool call.
@@ -122,6 +124,8 @@ def record_mcp_tool_call(
         tool_name: Name of the tool that was called
         success: Whether the tool call succeeded
         error_type: Type of error if the call failed (e.g., 'ValueError', 'PermissionError')
+        corpus_slug: Slug of the corpus being accessed (no user-identifying info)
+        document_slug: Slug of the document being accessed (no user-identifying info)
 
     Returns:
         True if event was successfully queued, False otherwise
@@ -142,6 +146,12 @@ def record_mcp_tool_call(
     if not success and error_type:
         properties["error_type"] = error_type
 
+    # Include resource identifiers (public slugs only, no user info)
+    if corpus_slug:
+        properties["corpus_slug"] = corpus_slug
+    if document_slug:
+        properties["document_slug"] = document_slug
+
     return record_event("mcp_tool_call", properties)
 
 
@@ -149,6 +159,8 @@ def record_mcp_resource_read(
     resource_type: str,
     success: bool = True,
     error_type: str | None = None,
+    corpus_slug: str | None = None,
+    document_slug: str | None = None,
 ) -> bool:
     """
     Record a telemetry event for an MCP resource read.
@@ -157,6 +169,8 @@ def record_mcp_resource_read(
         resource_type: Type of resource that was read (e.g., 'corpus', 'document')
         success: Whether the resource read succeeded
         error_type: Type of error if the read failed
+        corpus_slug: Slug of the corpus being accessed (no user-identifying info)
+        document_slug: Slug of the document being accessed (no user-identifying info)
 
     Returns:
         True if event was successfully queued, False otherwise
@@ -176,6 +190,12 @@ def record_mcp_resource_read(
     # Include error type if read failed
     if not success and error_type:
         properties["error_type"] = error_type
+
+    # Include resource identifiers (public slugs only, no user info)
+    if corpus_slug:
+        properties["corpus_slug"] = corpus_slug
+    if document_slug:
+        properties["document_slug"] = document_slug
 
     return record_event("mcp_resource_read", properties)
 
@@ -226,6 +246,8 @@ async def arecord_mcp_tool_call(
     tool_name: str,
     success: bool = True,
     error_type: str | None = None,
+    corpus_slug: str | None = None,
+    document_slug: str | None = None,
 ) -> bool:
     """
     Async version of ``record_mcp_tool_call``.
@@ -247,6 +269,11 @@ async def arecord_mcp_tool_call(
     if not success and error_type:
         properties["error_type"] = error_type
 
+    if corpus_slug:
+        properties["corpus_slug"] = corpus_slug
+    if document_slug:
+        properties["document_slug"] = document_slug
+
     return await arecord_event("mcp_tool_call", properties)
 
 
@@ -254,6 +281,8 @@ async def arecord_mcp_resource_read(
     resource_type: str,
     success: bool = True,
     error_type: str | None = None,
+    corpus_slug: str | None = None,
+    document_slug: str | None = None,
 ) -> bool:
     """
     Async version of ``record_mcp_resource_read``.
@@ -274,6 +303,11 @@ async def arecord_mcp_resource_read(
 
     if not success and error_type:
         properties["error_type"] = error_type
+
+    if corpus_slug:
+        properties["corpus_slug"] = corpus_slug
+    if document_slug:
+        properties["document_slug"] = document_slug
 
     return await arecord_event("mcp_resource_read", properties)
 
