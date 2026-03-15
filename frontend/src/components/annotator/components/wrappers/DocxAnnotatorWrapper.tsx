@@ -170,7 +170,7 @@ export const DocxAnnotatorWrapper: React.FC<DocxAnnotatorWrapperProps> = ({
       (match): match is TextSearchSpanResult => "start_index" in match
     ) ?? [];
 
-  if (!docxBytes) {
+  if (!docxBytes || docxBytes.length === 0) {
     return (
       <div
         data-testid="docx-annotator-wrapper-loading"

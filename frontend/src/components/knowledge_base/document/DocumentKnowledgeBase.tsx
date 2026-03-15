@@ -945,8 +945,13 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         routingLogger.debug("Type: DOCX");
         routingLogger.debug("Document ID:", data.document.id);
         routingLogger.debug("Hash:", data.document.pdfFileHash || "no hash");
+        // pdfFile holds the DOCX URL — the backend reuses this field for all
+        // uploaded document files regardless of format (PDF, DOCX, TXT, etc.).
         routingLogger.debug("DOCX URL:", data.document.pdfFile);
         setViewState(ViewState.LOADING);
+        // Clear previous DOCX bytes immediately to prevent stale rendering
+        // when switching between two DOCX documents.
+        setDocxBytes(null);
         const docId = data.document.id;
         const textHash = data.document.pdfFileHash;
 
@@ -1184,9 +1189,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           routingLogger.debug("Type: DOCX (document-only)");
           routingLogger.debug("Document ID:", data.document.id);
           setViewState(ViewState.LOADING);
+          // Clear previous DOCX bytes immediately to prevent stale rendering
+          // when switching between two DOCX documents.
+          setDocxBytes(null);
           const docId = data.document.id;
           const textHash = data.document.pdfFileHash;
 
+          // pdfFile holds the DOCX URL — the backend reuses this field for all
+          // uploaded document files regardless of format.
           const docxPromise = getDocxBytes(data.document.pdfFile);
           const textPromise = data.document.txtExtractFile
             ? getDocumentRawText(

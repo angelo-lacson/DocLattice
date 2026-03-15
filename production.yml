@@ -27,6 +27,7 @@ services:
       - postgres
       - redis
       - vector-embedder
+      - docling-parser
       - docxodus-parser
     env_file:
       - ./.envs/.production/.django

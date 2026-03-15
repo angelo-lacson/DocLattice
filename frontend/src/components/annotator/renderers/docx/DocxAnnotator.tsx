@@ -5,6 +5,11 @@
  * Uses convertDocxToHtmlWithExternalAnnotations() to render the document
  * with annotations overlaid on the native DOCX HTML output. Text selection
  * creates new annotations using character offsets (same format as TXT).
+ *
+ * Text selection disambiguation: uses DOM selection positions (anchorNode/
+ * focusNode) and a TreeWalker to compute exact character offsets in the
+ * document text, resolving ambiguity when the same text appears multiple
+ * times (e.g. "Party", "Agreement", legal boilerplate).
  */
 
 import React, {
@@ -262,8 +267,10 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       .then((resultHtml) => {
         if (!cancelled) {
           // Sanitize WASM-produced HTML to prevent XSS from crafted DOCX files.
-          // RETURN_DOM_FRAGMENT=false ensures we get a string back.
-          // ADD_ATTR preserves data-annotation-id used for annotation click handling.
+          // DOMPurify allows all data-* attributes by default, so the WASM
+          // renderer's data-annotation-id (and any future data-* attributes)
+          // pass through without explicit whitelisting. ADD_ATTR is kept as
+          // documentation of the attribute this component depends on.
           setHtml(
             DOMPurify.sanitize(resultHtml, {
               ADD_ATTR: ["data-annotation-id"],
@@ -292,7 +299,81 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     showStructuralAnnotations,
   ]);
 
-  // Handle text selection for new annotation creation
+  /**
+   * Compute an approximate character offset from a DOM selection point.
+   *
+   * Walks text nodes in document order within the container, skipping text
+   * inside annotation label elements (injected by the WASM renderer and not
+   * part of the original document text). The result may differ slightly from
+   * the true docText offset (e.g. inter-paragraph newlines in docText aren't
+   * present as DOM text nodes), but is close enough to disambiguate which
+   * occurrence of repeated text the user selected via closest-match.
+   */
+  const getGlobalOffsetFromDomPosition = useCallback(
+    (
+      container: HTMLElement,
+      node: Node | null,
+      localOffset: number
+    ): number | null => {
+      if (!node) return null;
+
+      // If the node is an element, resolve to the child at the given offset
+      let targetNode: Node = node;
+      let targetOffset: number = localOffset;
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        if (localOffset < el.childNodes.length) {
+          targetNode = el.childNodes[localOffset];
+          targetOffset = 0;
+        } else if (el.childNodes.length > 0) {
+          // Past the end — point to end of last child
+          targetNode = el.childNodes[el.childNodes.length - 1];
+          targetOffset = targetNode.textContent?.length ?? 0;
+        } else {
+          return null;
+        }
+      }
+
+      const walker = document.createTreeWalker(
+        container,
+        NodeFilter.SHOW_TEXT,
+        {
+          acceptNode: (n: Node) => {
+            // Skip text nodes inside annotation label elements — these are
+            // injected by the WASM renderer and are not part of docText.
+            let parent = n.parentElement;
+            while (parent && parent !== container) {
+              if (parent.classList.contains("oc-annot-label")) {
+                return NodeFilter.FILTER_REJECT;
+              }
+              parent = parent.parentElement;
+            }
+            return NodeFilter.FILTER_ACCEPT;
+          },
+        }
+      );
+
+      let globalOffset = 0;
+      let current: Node | null;
+      while ((current = walker.nextNode())) {
+        if (current === targetNode) {
+          return globalOffset + targetOffset;
+        }
+        // If targetNode is inside current (e.g. targetNode is a child element
+        // and current is a text node within it), this won't match directly.
+        // But for text selections, targetNode is always a text node.
+        globalOffset += current.textContent?.length ?? 0;
+      }
+
+      return null;
+    },
+    []
+  );
+
+  // Handle text selection for new annotation creation.
+  // When the same text appears multiple times (common in contracts: "Party",
+  // "Agreement", boilerplate), the DOM selection position is used to pick the
+  // closest occurrence rather than always choosing the first.
   const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
       if (readOnly || !allowInput || !selectedLabelTypeId) return;
@@ -303,14 +384,37 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
 
       const selectedText = selection.toString().trim();
 
-      // Find matching offsets in the document text.
-      // TODO: When the same text appears multiple times, this picks the first
-      // occurrence. A more robust approach would use DOM selection offsets
-      // (selection.getRangeAt(0)) to disambiguate, similar to TxtAnnotator.
       const occurrences = findTextOccurrences(docText, selectedText);
       if (occurrences.length === 0) return;
 
-      const match = occurrences[0];
+      let match = occurrences[0];
+
+      if (occurrences.length > 1) {
+        // Multiple occurrences — use the DOM selection position to disambiguate.
+        // The TreeWalker computes an approximate character offset from the DOM,
+        // which may differ slightly from docText offsets (e.g. inter-paragraph
+        // newlines in docText aren't in the DOM). We pick the occurrence whose
+        // start is closest to the DOM-computed offset.
+        const contentEl = containerRef.current?.querySelector(
+          ".docx-content"
+        ) as HTMLElement | null;
+        if (contentEl) {
+          const anchorOffset = getGlobalOffsetFromDomPosition(
+            contentEl,
+            selection.anchorNode,
+            selection.anchorOffset
+          );
+
+          if (anchorOffset !== null) {
+            match = occurrences.reduce((closest, occ) =>
+              Math.abs(occ.start - anchorOffset) <
+              Math.abs(closest.start - anchorOffset)
+                ? occ
+                : closest
+            );
+          }
+        }
+      }
 
       const menuPos = clampMenuPosition(e.clientX, e.clientY);
       setMenuPosition(menuPos);
@@ -320,7 +424,13 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
         end: match.end,
       });
     },
-    [readOnly, allowInput, selectedLabelTypeId, docText]
+    [
+      readOnly,
+      allowInput,
+      selectedLabelTypeId,
+      docText,
+      getGlobalOffsetFromDomPosition,
+    ]
   );
 
   // Handle annotation creation from menu

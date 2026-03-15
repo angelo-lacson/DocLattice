@@ -1,62 +1,159 @@
 import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
-import { DocxAnnotatorTestWrapper } from "./DocxAnnotatorTestWrapper";
+import {
+  DocxAnnotatorTestWrapper,
+  DocxAnnotatorEditableWrapper,
+} from "./DocxAnnotatorTestWrapper";
 import { docScreenshot } from "./utils/docScreenshot";
 import { setupDocxodusWasm } from "./utils/docxodusWasm";
+import { setupDocxFixture } from "./utils/docxFixture";
 
-test.describe("DocxAnnotator", () => {
-  // WASM initialization + DOCX conversion needs generous timeouts
-  test.setTimeout(60_000);
+// WASM initialization + DOCX conversion needs generous timeouts
+test.setTimeout(60_000);
 
-  test("renders DOCX content via WASM", async ({ mount, page }) => {
-    await setupDocxodusWasm(page);
+test("DocxAnnotator renders DOCX content via WASM", async ({ mount, page }) => {
+  await setupDocxodusWasm(page);
+  await setupDocxFixture(page);
 
-    const component = await mount(<DocxAnnotatorTestWrapper />);
+  const component = await mount(<DocxAnnotatorTestWrapper />);
 
-    // Wait for the DOCX annotator to appear (WASM initialized + document converted)
-    const annotator = page.getByTestId("docx-annotator");
-    await annotator.waitFor({ state: "visible", timeout: 45_000 });
+  const annotator = page.getByTestId("docx-annotator");
+  await annotator.waitFor({ state: "visible", timeout: 45_000 });
 
-    // Verify rendered content is present
-    const content = annotator.locator(".docx-content");
-    await expect(content).toBeVisible();
+  const content = annotator.locator(".docx-content");
+  await expect(content).toBeVisible();
 
-    await docScreenshot(page, "annotator--docx-annotator--rendered");
+  await docScreenshot(page, "annotator--docx-annotator--rendered");
 
-    await component.unmount();
-  });
+  await component.unmount();
+});
 
-  test("renders with annotations projected", async ({ mount, page }) => {
-    await setupDocxodusWasm(page);
+test("DocxAnnotator renders with annotations projected", async ({
+  mount,
+  page,
+}) => {
+  await setupDocxodusWasm(page);
+  await setupDocxFixture(page);
 
-    const component = await mount(
-      <DocxAnnotatorTestWrapper withAnnotations={true} />
+  const component = await mount(
+    <DocxAnnotatorTestWrapper withAnnotations={true} />
+  );
+
+  const annotator = page.getByTestId("docx-annotator");
+  await annotator.waitFor({ state: "visible", timeout: 45_000 });
+
+  const content = annotator.locator(".docx-content");
+  await expect(content).toBeVisible();
+
+  await docScreenshot(page, "annotator--docx-annotator--with-annotations");
+
+  await component.unmount();
+});
+
+test("DocxAnnotator renders in read-only mode", async ({ mount, page }) => {
+  await setupDocxodusWasm(page);
+  await setupDocxFixture(page);
+
+  const component = await mount(<DocxAnnotatorTestWrapper readOnly={true} />);
+
+  const annotator = page.getByTestId("docx-annotator");
+  await annotator.waitFor({ state: "visible", timeout: 45_000 });
+
+  const content = annotator.locator(".docx-content");
+  await expect(content).toBeVisible();
+
+  await docScreenshot(page, "annotator--docx-annotator--read-only");
+
+  await component.unmount();
+});
+
+test("DocxAnnotator disambiguates repeated text by selecting correct occurrence", async ({
+  mount,
+  page,
+}) => {
+  await setupDocxodusWasm(page);
+  await setupDocxFixture(page);
+
+  const component = await mount(<DocxAnnotatorEditableWrapper />);
+
+  const annotator = page.getByTestId("docx-annotator");
+  await annotator.waitFor({ state: "visible", timeout: 45_000 });
+
+  const content = annotator.locator(".docx-content");
+  await expect(content).toBeVisible();
+
+  // sampleDocText has "This" at two positions:
+  //   First:  index 13 ("Hello World. This is...")
+  //   Second: index 57 ("This paragraph contains...")
+  // These are hardcoded from the test fixture's known text.
+  const FIRST_THIS_OFFSET = 13;
+  const SECOND_THIS_OFFSET = 57;
+
+  // Find the second occurrence of "This" in the rendered DOM and get its
+  // bounding rect so we can drag-select it with the mouse.
+  const coords = await page.evaluate(() => {
+    const el = document.querySelector(".docx-content");
+    if (!el) throw new Error("No .docx-content element");
+
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node: Node | null;
+    let occurrenceCount = 0;
+
+    while ((node = walker.nextNode())) {
+      const text = node.textContent || "";
+      let searchStart = 0;
+      while (true) {
+        const idx = text.indexOf("This", searchStart);
+        if (idx === -1) break;
+        occurrenceCount++;
+        if (occurrenceCount === 2) {
+          const range = document.createRange();
+          range.setStart(node, idx);
+          range.setEnd(node, idx + 4);
+          const rect = range.getBoundingClientRect();
+          return {
+            x: rect.x,
+            y: rect.y,
+            right: rect.right,
+            height: rect.height,
+          };
+        }
+        searchStart = idx + 1;
+      }
+    }
+    throw new Error(
+      `Only found ${occurrenceCount} occurrences of "This" in DOM`
     );
-
-    const annotator = page.getByTestId("docx-annotator");
-    await annotator.waitFor({ state: "visible", timeout: 45_000 });
-
-    const content = annotator.locator(".docx-content");
-    await expect(content).toBeVisible();
-
-    await docScreenshot(page, "annotator--docx-annotator--with-annotations");
-
-    await component.unmount();
   });
 
-  test("renders in read-only mode", async ({ mount, page }) => {
-    await setupDocxodusWasm(page);
+  // Drag-select the second "This" using mouse events
+  const midY = coords.y + coords.height / 2;
+  await page.mouse.move(coords.x, midY);
+  await page.mouse.down();
+  await page.mouse.move(coords.right, midY);
+  await page.mouse.up();
 
-    const component = await mount(<DocxAnnotatorTestWrapper readOnly={true} />);
+  // The annotation creation menu should appear
+  const annotateButton = page.getByText("Annotate Selection");
+  await annotateButton.waitFor({ state: "visible", timeout: 5_000 });
 
-    const annotator = page.getByTestId("docx-annotator");
-    await annotator.waitFor({ state: "visible", timeout: 45_000 });
+  // Click "Annotate Selection" to create the annotation
+  await annotateButton.click();
 
-    const content = annotator.locator(".docx-content");
-    await expect(content).toBeVisible();
+  // The wrapper exposes the created annotation data in a hidden element
+  const lastAnnotation = page.getByTestId("last-annotation");
+  await lastAnnotation.waitFor({ state: "visible", timeout: 5_000 });
 
-    await docScreenshot(page, "annotator--docx-annotator--read-only");
+  const start = parseInt(
+    (await lastAnnotation.getAttribute("data-start"))!,
+    10
+  );
+  const end = parseInt((await lastAnnotation.getAttribute("data-end"))!, 10);
 
-    await component.unmount();
-  });
+  // The annotation should be at the SECOND occurrence (index 57),
+  // NOT the first (index 13). This proves DOM-based disambiguation works.
+  expect(start).toBe(SECOND_THIS_OFFSET);
+  expect(end).toBe(SECOND_THIS_OFFSET + 4);
+
+  await component.unmount();
 });
