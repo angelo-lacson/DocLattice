@@ -11,7 +11,11 @@ These settings are now applied via postgres command-line args (-c flags) in
 the docker-compose files, which are processed after shared_preload_libraries
 loads the vector library (guaranteeing GUC registration).
 
-This migration cleans up the stale database-level defaults.
+This migration cleans up the stale pg_db_role_setting entries from existing
+databases. On fresh databases that never ran migration 0063, ALTER DATABASE
+RESET on an unset parameter is a no-op (no exception raised). The exception
+handler covers the case where pgvector is not loaded and the GUC names are
+not registered.
 """
 
 from django.db import migrations
@@ -37,9 +41,6 @@ class Migration(migrations.Migration):
                 EXCEPTION
                     WHEN undefined_object THEN NULL;
                     WHEN invalid_parameter_value THEN NULL;
-                    WHEN OTHERS THEN
-                        RAISE WARNING 'Unexpected error resetting HNSW GUCs: % %',
-                            SQLERRM, SQLSTATE;
                 END $$;
             """,
             reverse_sql=migrations.RunSQL.noop,

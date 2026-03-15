@@ -10,18 +10,29 @@ SHARED_CONF="/etc/postgresql-custom/shared.conf"
 EXTRA_ARGS=()
 
 if [ -f "$SHARED_CONF" ]; then
-    while IFS='=' read -r key value; do
+    while IFS= read -r line || [[ -n "$line" ]]; do
         # Trim leading/trailing whitespace
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+
+        # Skip blank lines, comments, and malformed lines (no = sign)
+        [[ -z "$line" || "$line" == \#* || "$line" != *=* ]] && continue
+
+        key="${line%%=*}"
+        value="${line#*=}"
+
+        # Trim whitespace around key and value
         key="${key#"${key%%[![:space:]]*}"}"
         key="${key%"${key##*[![:space:]]}"}"
         value="${value#"${value%%[![:space:]]*}"}"
         value="${value%"${value##*[![:space:]]}"}"
 
-        # Skip blank lines and comments
-        [[ -z "$key" || "$key" == \#* ]] && continue
+        [[ -z "$key" ]] && continue
 
         EXTRA_ARGS+=("-c" "$key=$value")
     done < "$SHARED_CONF"
 fi
 
-exec /usr/local/bin/docker-entrypoint.sh "$@" "${EXTRA_ARGS[@]}"
+# Shared defaults first, per-environment args second (postgres uses last-wins
+# for -c flags, so per-environment settings correctly override shared defaults).
+exec /usr/local/bin/docker-entrypoint.sh "${EXTRA_ARGS[@]}" "$@"
