@@ -46,6 +46,7 @@ from .telemetry import (
     arecord_mcp_resource_read,
     arecord_mcp_tool_call,
     clear_request_context,
+    get_user_agent_from_scope,
     set_request_context,
 )
 from .tools import (
@@ -85,6 +86,7 @@ async def _check_per_tool_rate_limit(name: str) -> None:
             scope, tool_name=name, skip_global=True
         )
         if is_limited:
+            # slugs not available at this stage (extracted from arguments later)
             await arecord_mcp_tool_call(
                 name, success=False, error_type="RateLimitExceeded"
             )
@@ -245,7 +247,9 @@ async def call_tool_handler(name: str, arguments: dict) -> list[TextContent]:
     """
     await _check_per_tool_rate_limit(name)
 
-    # Extract resource slugs from arguments for telemetry (public identifiers only)
+    # Extract resource slugs from arguments for telemetry (public identifiers only).
+    # "corpus_slug" / "document_slug" are the enforced convention across all tools.
+    # Extracted for telemetry; validated downstream before DB use.
     _corpus_slug = arguments.get("corpus_slug")
     _document_slug = arguments.get("document_slug")
 
@@ -1211,7 +1215,12 @@ def create_mcp_asgi_app():
 
             # Set telemetry context for this request
             client_ip = get_client_ip_from_scope(scope)
-            set_request_context(client_ip=client_ip, transport="streamable_http_scoped")
+            user_agent = get_user_agent_from_scope(scope)
+            set_request_context(
+                client_ip=client_ip,
+                transport="streamable_http_scoped",
+                user_agent=user_agent,
+            )
 
             # Validate the corpus exists and is public
             if not await validate_corpus_slug(corpus_slug):
@@ -1284,7 +1293,12 @@ def create_mcp_asgi_app():
         if path == "/mcp/" or path == "/mcp":
             # Set telemetry context for this request
             client_ip = get_client_ip_from_scope(scope)
-            set_request_context(client_ip=client_ip, transport="streamable_http")
+            user_agent = get_user_agent_from_scope(scope)
+            set_request_context(
+                client_ip=client_ip,
+                transport="streamable_http",
+                user_agent=user_agent,
+            )
 
             # Ensure session manager is running
             await lifespan_manager.ensure_started()
@@ -1331,7 +1345,12 @@ def create_mcp_asgi_app():
         elif path == "/sse" or path.startswith("/sse/"):
             # Set telemetry context for this request
             client_ip = get_client_ip_from_scope(scope)
-            set_request_context(client_ip=client_ip, transport="sse")
+            user_agent = get_user_agent_from_scope(scope)
+            set_request_context(
+                client_ip=client_ip,
+                transport="sse",
+                user_agent=user_agent,
+            )
 
             try:
                 await sse_starlette_app(scope, receive, send)
