@@ -46,6 +46,7 @@ import {
 } from "./mocks/DocumentKnowledgeBase.mocks";
 
 import { GET_DOCUMENT_SUMMARY_VERSIONS } from "../src/components/knowledge_base/document/floating_summary_preview/graphql/documentSummaryQueries";
+import { GET_CORPUS_VERSIONS } from "../src/graphql/queries";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // │                               Test Data                                   │
@@ -194,7 +195,7 @@ Final paragraph with more content to ensure we have plenty of text to work with 
     })
   );
   // DOCX file route
-  await page.route(`**/${MOCK_DOCX_URL}`, async (route) => {
+  await page.route(`**${MOCK_DOCX_URL}`, async (route) => {
     if (!fs.existsSync(TEST_DOCX_PATH)) {
       return route.fulfill({ status: 404, body: "Test DOCX not found" });
     }
@@ -3456,22 +3457,43 @@ const mockSummaryVersions = [
     __typename: "DocumentSummaryRevision",
   },
 ];
-const createSummaryMocks = (documentId: string, corpusId: string) => [
-  {
-    request: {
-      query: GET_DOCUMENT_SUMMARY_VERSIONS,
-      variables: { documentId, corpusId },
-    },
-    result: {
-      data: {
-        document: {
-          id: documentId,
-          summaryContent: mockSummaryVersions[0].snapshot,
-          currentSummaryVersion: 1,
-          summaryRevisions: mockSummaryVersions,
-          __typename: "DocumentType",
-        },
+const createVersionMock = (documentId: string, corpusId: string) => ({
+  request: {
+    query: GET_CORPUS_VERSIONS,
+    variables: { documentId, corpusId },
+  },
+  result: {
+    data: {
+      document: {
+        id: documentId,
+        corpusVersions: [],
+        __typename: "DocumentType",
       },
     },
   },
+});
+
+const createSummaryVersionMock = (documentId: string, corpusId: string) => ({
+  request: {
+    query: GET_DOCUMENT_SUMMARY_VERSIONS,
+    variables: { documentId, corpusId },
+  },
+  result: {
+    data: {
+      document: {
+        id: documentId,
+        summaryContent: mockSummaryVersions[0].snapshot,
+        currentSummaryVersion: 1,
+        summaryRevisions: mockSummaryVersions,
+        __typename: "DocumentType",
+      },
+    },
+  },
+});
+
+const createSummaryMocks = (documentId: string, corpusId: string) => [
+  createSummaryVersionMock(documentId, corpusId),
+  createSummaryVersionMock(documentId, corpusId),
+  createVersionMock(documentId, corpusId),
+  createVersionMock(documentId, corpusId),
 ];
