@@ -20,19 +20,24 @@ import { docScreenshot } from "./utils/docScreenshot";
 
 // Import the new Wrapper component
 import { DocumentKnowledgeBaseTestWrapper } from "./DocumentKnowledgeBaseTestWrapper";
+import { setupDocxodusWasm } from "./utils/docxodusWasm";
 import {
   chatTrayMocks,
   CORPUS_ID,
+  DOCX_DOC_ID,
   graphqlMocks,
+  MOCK_DOCX_URL,
   MOCK_PDF_URL,
   MOCK_PDF_URL_FOR_STRUCTURAL_TEST,
   mockAnnotationNonStructural1,
   mockAnnotationStructural1,
+  mockDocxDocument,
   mockPdfDocument,
   mockPdfDocumentForStructuralTest,
   mockTxtDocument,
   PDF_DOC_ID,
   PDF_DOC_ID_FOR_STRUCTURAL_TEST,
+  TEST_DOCX_PATH,
   TEST_PAWLS_PATH,
   TEST_PDF_PATH,
   TXT_DOC_ID,
@@ -176,6 +181,31 @@ Final paragraph with more content to ensure we have plenty of text to work with 
       headers: {
         "Content-Length": String(buffer.length),
         "Accept-Ranges": "bytes",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+      },
+    });
+  });
+  // DOCX document text extract route
+  await page.route(`**/${mockDocxDocument.txtExtractFile}`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "text/plain",
+      body: `Hello World. This is a sample DOCX document for testing. This paragraph contains an Important Clause that should be annotated. The Definition section explains key terms used throughout.`,
+    })
+  );
+  // DOCX file route
+  await page.route(`**/${MOCK_DOCX_URL}`, async (route) => {
+    if (!fs.existsSync(TEST_DOCX_PATH)) {
+      return route.fulfill({ status: 404, body: "Test DOCX not found" });
+    }
+    const buffer = fs.readFileSync(TEST_DOCX_PATH);
+    await route.fulfill({
+      status: 200,
+      contentType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      body: buffer,
+      headers: {
+        "Content-Length": String(buffer.length),
         "Cache-Control": "no-cache, no-store, must-revalidate",
       },
     });
@@ -1008,6 +1038,45 @@ test("TXT document allows creating annotations via text selection", async ({
   await expect(newAnnotation).toBeVisible({ timeout: 15000 });
 
   console.log("[TEST SUCCESS] New annotation created in TXT document");
+});
+
+test("DOCX document renders DOCX annotator via WASM", async ({
+  mount,
+  page,
+}) => {
+  // WASM route interception must be set up before component mount
+  await setupDocxodusWasm(page);
+
+  await mount(
+    <DocumentKnowledgeBaseTestWrapper
+      mocks={[...graphqlMocks, ...createSummaryMocks(DOCX_DOC_ID, CORPUS_ID)]}
+      documentId={DOCX_DOC_ID}
+      corpusId={CORPUS_ID}
+    />
+  );
+
+  // Wait for document title to load
+  await expect(
+    page.getByRole("heading", { name: mockDocxDocument.title ?? "" })
+  ).toBeVisible({ timeout: LONG_TIMEOUT });
+
+  // DOCX annotator should be visible (WASM-rendered)
+  const docxAnnotator = page.getByTestId("docx-annotator");
+  await expect(docxAnnotator).toBeVisible({ timeout: 45_000 });
+
+  // Verify the DOCX content is rendered
+  const docxContent = docxAnnotator.locator(".docx-content");
+  await expect(docxContent).toBeVisible({ timeout: LONG_TIMEOUT });
+
+  // PDF annotator should NOT be present
+  const pdfAnnotator = page.getByTestId("pdf-annotator");
+  await expect(pdfAnnotator).toHaveCount(0);
+
+  // TXT annotator should NOT be present
+  const txtAnnotator = page.getByTestId("txt-annotator");
+  await expect(txtAnnotator).toHaveCount(0);
+
+  await docScreenshot(page, "knowledge-base--docx-document--rendered");
 });
 
 test("selects a label and creates an annotation via unified feed", async ({

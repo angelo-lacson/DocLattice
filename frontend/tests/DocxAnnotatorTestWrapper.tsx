@@ -25,12 +25,13 @@ const sampleLabels: AnnotationLabelType[] = [
   },
 ];
 
+// Must match Docxodus's text extraction exactly (newlines between paragraphs)
 const sampleDocText =
-  "Hello World. This is a sample DOCX document for testing. " +
-  "This paragraph contains an Important Clause that should be annotated. " +
-  "The Definition section explains key terms used throughout.";
+  "Hello World. This is a sample DOCX document for testing.\n" +
+  "This paragraph contains an Important Clause that should be annotated.\n" +
+  "The Definition section explains key terms used throughout.\n";
 
-const sampleAnnotation = new ServerSpanAnnotation(
+const sampleAnnotation1 = new ServerSpanAnnotation(
   0,
   sampleLabels[0],
   "Hello World",
@@ -47,6 +48,24 @@ const sampleAnnotation = new ServerSpanAnnotation(
   "ann-1"
 );
 
+// "Important Clause" at offset 84-100 in the Docxodus-extracted text
+const sampleAnnotation2 = new ServerSpanAnnotation(
+  0,
+  sampleLabels[1],
+  "Important Clause",
+  false,
+  { start: 84, end: 100 },
+  [
+    PermissionTypes.CAN_READ,
+    PermissionTypes.CAN_UPDATE,
+    PermissionTypes.CAN_REMOVE,
+  ],
+  false,
+  false,
+  false,
+  "ann-2"
+);
+
 export const DocxAnnotatorTestWrapper: React.FC<{
   readOnly?: boolean;
   withAnnotations?: boolean;
@@ -55,7 +74,9 @@ export const DocxAnnotatorTestWrapper: React.FC<{
   const [docxBytes, setDocxBytes] = useState<Uint8Array>(new Uint8Array(0));
   const [loading, setLoading] = useState(true);
 
-  const annotations = withAnnotations ? [sampleAnnotation] : [];
+  const annotations = withAnnotations
+    ? [sampleAnnotation1, sampleAnnotation2]
+    : [];
 
   // Load test DOCX file via Vite asset URL
   React.useEffect(() => {
