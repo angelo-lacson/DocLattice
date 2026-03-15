@@ -86,6 +86,7 @@ async def _check_per_tool_rate_limit(name: str) -> None:
             scope, tool_name=name, skip_global=True
         )
         if is_limited:
+            # slugs not available at this stage (extracted from arguments later)
             await arecord_mcp_tool_call(
                 name, success=False, error_type="RateLimitExceeded"
             )
@@ -246,7 +247,9 @@ async def call_tool_handler(name: str, arguments: dict) -> list[TextContent]:
     """
     await _check_per_tool_rate_limit(name)
 
-    # Extract resource slugs from arguments for telemetry (public identifiers only)
+    # Extract resource slugs from arguments for telemetry (public identifiers only).
+    # "corpus_slug" / "document_slug" are the enforced convention across all tools.
+    # Extracted for telemetry; validated downstream before DB use.
     _corpus_slug = arguments.get("corpus_slug")
     _document_slug = arguments.get("document_slug")
 

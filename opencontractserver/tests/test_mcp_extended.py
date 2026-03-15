@@ -38,6 +38,7 @@ from opencontractserver.mcp.permissions import validate_slug as perm_validate_sl
 from opencontractserver.mcp.server import TTLLRUCache, URIParser
 from opencontractserver.mcp.telemetry import (
     IP_HASH_LENGTH,
+    _get_request_context,
     _hash_ip,
     clear_request_context,
     get_claimed_client_ip_from_scope,
@@ -61,7 +62,6 @@ class TestTelemetryContext(TestCase):
 
     def test_set_and_clear_context(self):
         set_request_context(client_ip="1.2.3.4", transport="streamable_http")
-        from opencontractserver.mcp.telemetry import _get_request_context
 
         ctx = _get_request_context()
         self.assertEqual(ctx["transport"], "streamable_http")
@@ -73,7 +73,6 @@ class TestTelemetryContext(TestCase):
 
     def test_set_context_without_ip(self):
         set_request_context(transport="stdio")
-        from opencontractserver.mcp.telemetry import _get_request_context
 
         ctx = _get_request_context()
         self.assertIsNone(ctx["client_ip_hash"])
@@ -83,14 +82,12 @@ class TestTelemetryContext(TestCase):
         set_request_context(
             client_ip="1.2.3.4", transport="http", user_agent="Claude-Code/1.0"
         )
-        from opencontractserver.mcp.telemetry import _get_request_context
 
         ctx = _get_request_context()
         self.assertEqual(ctx["user_agent"], "Claude-Code/1.0")
 
     def test_set_context_without_user_agent(self):
         set_request_context(client_ip="1.2.3.4", transport="http")
-        from opencontractserver.mcp.telemetry import _get_request_context
 
         ctx = _get_request_context()
         self.assertIsNone(ctx["user_agent"])
@@ -98,8 +95,6 @@ class TestTelemetryContext(TestCase):
     def test_isolated_telemetry_context(self):
         set_request_context(client_ip="10.0.0.1", transport="test")
         with isolated_telemetry_context():
-            from opencontractserver.mcp.telemetry import _get_request_context
-
             # Context should be cleared on entry
             ctx = _get_request_context()
             self.assertEqual(ctx, {})
@@ -107,7 +102,6 @@ class TestTelemetryContext(TestCase):
             # Set something inside
             set_request_context(client_ip="10.0.0.2", transport="inner")
         # After exit, context should be cleared
-        from opencontractserver.mcp.telemetry import _get_request_context
 
         ctx = _get_request_context()
         self.assertEqual(ctx, {})
@@ -119,7 +113,6 @@ class TestTelemetryContext(TestCase):
                 raise RuntimeError("test error")
         except RuntimeError:
             pass
-        from opencontractserver.mcp.telemetry import _get_request_context
 
         ctx = _get_request_context()
         self.assertEqual(ctx, {})

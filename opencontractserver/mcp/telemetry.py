@@ -155,9 +155,9 @@ def record_mcp_tool_call(
 
     if not success and error_type:
         properties["error_type"] = error_type
-    if corpus_slug:
+    if corpus_slug is not None:
         properties["corpus_slug"] = corpus_slug
-    if document_slug:
+    if document_slug is not None:
         properties["document_slug"] = document_slug
 
     return record_event("mcp_tool_call", properties)
@@ -189,9 +189,9 @@ def record_mcp_resource_read(
 
     if not success and error_type:
         properties["error_type"] = error_type
-    if corpus_slug:
+    if corpus_slug is not None:
         properties["corpus_slug"] = corpus_slug
-    if document_slug:
+    if document_slug is not None:
         properties["document_slug"] = document_slug
 
     return record_event("mcp_resource_read", properties)
@@ -249,9 +249,9 @@ async def arecord_mcp_tool_call(
 
     if not success and error_type:
         properties["error_type"] = error_type
-    if corpus_slug:
+    if corpus_slug is not None:
         properties["corpus_slug"] = corpus_slug
-    if document_slug:
+    if document_slug is not None:
         properties["document_slug"] = document_slug
 
     return await arecord_event("mcp_tool_call", properties)
@@ -276,9 +276,9 @@ async def arecord_mcp_resource_read(
 
     if not success and error_type:
         properties["error_type"] = error_type
-    if corpus_slug:
+    if corpus_slug is not None:
         properties["corpus_slug"] = corpus_slug
-    if document_slug:
+    if document_slug is not None:
         properties["document_slug"] = document_slug
 
     return await arecord_event("mcp_resource_read", properties)
