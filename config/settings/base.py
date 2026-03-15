@@ -941,6 +941,13 @@ THUMBNAIL_TASKS = {
     # Add other MIME types and their thumbnail tasks as needed
 }
 
+# Annotation JSON validation
+# When True, Annotation.clean() validates the structure of annotation JSON
+# on every save. Enabled by default — the validation is a lightweight
+# dict-key check with negligible cost, and provides an important safety net
+# during the v1/v2 format co-existence period.
+VALIDATE_ANNOTATION_JSON = env.bool("VALIDATE_ANNOTATION_JSON", default=True)
+
 # Mapping of MIME types to annotation label types
 ANNOTATION_LABELS = {
     "application/pdf": "TOKEN_LABEL",

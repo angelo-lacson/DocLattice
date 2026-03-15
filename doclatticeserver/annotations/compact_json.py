@@ -140,15 +140,18 @@ def is_compact_format(json_data: Any) -> bool:
 
 
 def is_span_format(json_data: Any) -> bool:
-    """Return ``True`` if *json_data* is a span annotation (``{start, end}``)."""
-    if (
-        not isinstance(json_data, dict)
-        or "start" not in json_data
-        or "end" not in json_data
-    ):
-        return False
-    # Only allow known span keys to avoid false positives on page-keyed dicts
-    return set(json_data.keys()) <= {"start", "end", "text"}
+    """Return ``True`` if *json_data* is a span annotation (``{start, end}``).
+
+    Detection is based on the presence of ``start`` and ``end`` keys with
+    integer values — not an exact key-set check — so span annotations that
+    carry additional metadata (e.g. ``confidence``, ``source``) are still
+    recognised correctly.
+    """
+    return (
+        isinstance(json_data, dict)
+        and isinstance(json_data.get("start"), int)
+        and isinstance(json_data.get("end"), int)
+    )
 
 
 # ── Compact (v1 → v2) ──────────────────────────────────────────
@@ -189,6 +192,7 @@ def compact_annotation_json(
         compact_page: dict[str, Any] = {}
 
         # Compact bounds: {top, left, right, bottom} → [top, left, right, bottom]
+        # Index mapping: b = [top, left, right, bottom]
         bounds = page_data.get("bounds")
         if isinstance(bounds, dict):
             compact_page["b"] = [
@@ -260,7 +264,7 @@ def expand_annotation_json(
 
         page_entry: dict[str, Any] = {}
 
-        # Expand bounds: [top, left, right, bottom] → {top, left, right, bottom}
+        # Expand bounds: b = [top, left, right, bottom] → {top, left, right, bottom}
         b = page_data.get("b")
         if isinstance(b, (list, tuple)) and len(b) >= 4:
             page_entry["bounds"] = {

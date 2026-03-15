@@ -152,18 +152,22 @@ export function isCompactFormat(
   );
 }
 
-/** Check if annotation JSON is a span annotation ({start, end}). */
+/**
+ * Check if annotation JSON is a span annotation ({start, end}).
+ *
+ * Detection is based on the presence of `start` and `end` keys with
+ * numeric values — not an exact key-set check — so span annotations
+ * that carry additional metadata (e.g. `confidence`, `source`) are
+ * still recognised correctly.
+ */
 export function isSpanFormat(
   json: Record<string, unknown> | SpanAnnotationJson
 ): json is SpanAnnotationJson {
-  if (json == null || !("start" in json) || !("end" in json)) return false;
-  // Only allow known span keys to avoid false positives on page-keyed dicts
-  const keys = new Set(Object.keys(json));
-  const allowedKeys = new Set(["start", "end", "text"]);
-  for (const key of keys) {
-    if (!allowedKeys.has(key)) return false;
-  }
-  return true;
+  if (json == null) return false;
+  return (
+    typeof (json as Record<string, unknown>).start === "number" &&
+    typeof (json as Record<string, unknown>).end === "number"
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -182,6 +186,7 @@ export function compactAnnotationJson(
   for (const [pageKey, pageData] of Object.entries(v1Json)) {
     const data = pageData as SinglePageAnnotationJson;
 
+    // b = [top, left, right, bottom]
     const b: [number, number, number, number] = [
       data.bounds?.top ?? 0,
       data.bounds?.left ?? 0,
@@ -235,7 +240,7 @@ export function expandAnnotationJson(
     const pageIdx = parseInt(pageKey, 10);
     const actualPageIdx = isNaN(pageIdx) ? 0 : pageIdx;
 
-    // Expand bounds
+    // Expand bounds: b = [top, left, right, bottom]
     const b = pageData.b;
     const bounds: BoundingBox = {
       top: b?.[0] ?? 0,
