@@ -150,13 +150,21 @@ export async function getCachedPDFUrl(
   }
 }
 
+/** In-memory cache for DOCX bytes, keyed by URL to avoid refetching on Apollo refetch. */
+const docxBytesCache = new Map<string, Uint8Array>();
+
 /**
  * Get DOCX document bytes (as Uint8Array) for WASM rendering.
- * Fetches from server, returns raw bytes.
+ * Caches by URL to avoid re-downloading on Apollo query refetches.
  */
 export async function getDocxBytes(url: string): Promise<Uint8Array> {
+  const cached = docxBytesCache.get(url);
+  if (cached) return cached;
+
   const response = await axios.get(url, { responseType: "arraybuffer" });
-  return new Uint8Array(response.data);
+  const bytes = new Uint8Array(response.data);
+  docxBytesCache.set(url, bytes);
+  return bytes;
 }
 
 /**

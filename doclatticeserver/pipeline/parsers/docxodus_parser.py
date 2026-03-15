@@ -104,6 +104,8 @@ class DocxodusServiceParser(BaseParser):
 
         document = Document.objects.get(pk=doc_id)
 
+        # pdf_file is the generic storage field for all uploaded documents
+        # (PDF, DOCX, TXT, etc.) — the name is historical, not format-specific.
         if not document.pdf_file.name:
             logger.error(f"No DOCX file found for document {doc_id}")
             return None
