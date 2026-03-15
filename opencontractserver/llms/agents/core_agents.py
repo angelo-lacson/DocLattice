@@ -412,7 +412,7 @@ class CoreAgent(Protocol):
         """Get conversation metadata including ID, title, and user info."""
         ...
 
-    async def get_conversation_messages(self) -> list:
+    async def get_conversation_messages(self) -> list[Any]:
         """Get all messages in the current conversation."""
         ...
 
@@ -568,7 +568,7 @@ class CoreAgentBase(ABC):
             "description": conv.description,
         }
 
-    async def get_conversation_messages(self) -> list:
+    async def get_conversation_messages(self) -> list[Any]:
         """Get all messages in the current conversation."""
         return await self.conversation_manager.get_conversation_messages()
 
@@ -1254,7 +1254,7 @@ class CoreConversationManager:
 
         return manager
 
-    async def get_conversation_messages(self) -> list:
+    async def get_conversation_messages(self) -> list[Any]:
         """Get messages in the conversation, honouring compaction cutoff.
 
         If the conversation has a ``compacted_before_message_id`` set, only

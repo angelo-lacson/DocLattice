@@ -178,8 +178,8 @@ class TestLongConversationAPI(TransactionTestCase):
             self.assertEqual(conversation.creator_id, self.user.id)
             self.assertIn(self.document.title, conversation.title)
 
-    async def test_anonymous_conversation_no_message_storage(self):
-        """Test that anonymous conversations don't store messages."""
+    async def test_anonymous_conversation_uses_ephemeral_buffer(self):
+        """Test that anonymous conversations use ephemeral in-memory buffer."""
         initial_message_count = await ChatMessage.objects.acount()
 
         # Mock only the LLM interaction

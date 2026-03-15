@@ -622,6 +622,17 @@ class TestEphemeralConversationManager(TestCase):
         await manager.store_user_message(large_content)
         self.assertTrue(manager.context_exhausted)
 
+    async def test_context_exhaustion_unknown_model_uses_fallback(self):
+        """Unknown model names should use DEFAULT_CONTEXT_WINDOW, not block immediately."""
+        config = AgentConfig(model_name="totally-unknown-model-xyz")
+        manager = CoreConversationManager(None, None, config)
+        # With an empty buffer the estimate is 0, which should not exceed
+        # the fallback context window (DEFAULT_CONTEXT_WINDOW = 128_000).
+        self.assertFalse(manager.context_exhausted)
+        # A small message should also not trigger exhaustion
+        await manager.store_user_message("Hello, world!")
+        self.assertFalse(manager.context_exhausted)
+
     def test_context_not_exhausted_for_db_conversations(self):
         """DB-backed sessions always return False (compaction handles them)."""
         from opencontractserver.conversations.models import Conversation

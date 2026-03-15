@@ -109,3 +109,11 @@ CHARS_PER_TOKEN_ESTIMATE: float = 3.5
 # signals the client that no further turns are accepted.  Set conservatively
 # below 1.0 to leave headroom for the system prompt and tool outputs.
 EPHEMERAL_CONTEXT_EXHAUSTION_RATIO: float = 0.9
+
+# ---------------------------------------------------------------------------
+# WebSocket error types
+# ---------------------------------------------------------------------------
+# Error type identifier sent to the client when an ephemeral session has
+# exhausted its context window.  Used in both the backend consumer and the
+# frontend message handler to avoid duplicating magic strings.
+WS_ERROR_CONTEXT_EXHAUSTED: str = "CONTEXT_EXHAUSTED"

@@ -26,7 +26,10 @@ import { useLazyQuery, useQuery, useReactiveVar } from "@apollo/client";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, ArrowLeft, Send, Home } from "lucide-react";
 import { Button, Spinner } from "@os-legal/ui";
-import { CONVERSATION_TYPE } from "../../assets/configurations/constants";
+import {
+  CONVERSATION_TYPE,
+  WS_ERROR_CONTEXT_EXHAUSTED,
+} from "../../assets/configurations/constants";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 import {
@@ -338,6 +341,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
     newSocket.onopen = () => {
       setWsReady(true);
       setWsError(null);
+      setContextExhausted(false);
       console.log(
         "WebSocket connected for corpus conversation:",
         selectedConversationId
@@ -443,7 +447,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
             }
             break;
           case "ASYNC_ERROR":
-            if (data?.error_type === "CONTEXT_EXHAUSTED") {
+            if (data?.error_type === WS_ERROR_CONTEXT_EXHAUSTED) {
               setContextExhausted(true);
               setIsProcessing(false);
               break;
@@ -545,6 +549,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
     setShowLoad(false);
     setChat([]);
     setServerMessages([]);
+    setContextExhausted(false);
 
     fetchChatMessages({
       variables: {

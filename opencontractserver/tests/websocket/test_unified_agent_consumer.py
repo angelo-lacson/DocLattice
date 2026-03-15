@@ -709,7 +709,11 @@ class UnifiedAgentConsumerContextExhaustionTestCase(WebsocketFixtureBaseTestCase
         self.assertEqual(len(sent_messages), 1)
         msg = sent_messages[0]
         self.assertEqual(msg["msg_type"], "ASYNC_ERROR")
-        self.assertEqual(msg["data"].get("error_type"), "CONTEXT_EXHAUSTED")
+        from opencontractserver.constants.context_guardrails import (
+            WS_ERROR_CONTEXT_EXHAUSTED,
+        )
+
+        self.assertEqual(msg["data"].get("error_type"), WS_ERROR_CONTEXT_EXHAUSTED)
 
         # Streaming must NOT have been attempted.
         self.assertFalse(stream_called)

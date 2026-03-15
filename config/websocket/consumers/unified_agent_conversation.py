@@ -40,6 +40,7 @@ from config.ratelimit.decorators import check_ws_rate_limit
 from config.websocket.middleware import WS_CLOSE_RATE_LIMITED, WS_CLOSE_UNAUTHENTICATED
 from config.websocket.utils.auth_helpers import check_auth_and_close_if_failed
 from opencontractserver.agents.models import AgentConfiguration
+from opencontractserver.constants.context_guardrails import WS_ERROR_CONTEXT_EXHAUSTED
 from opencontractserver.conversations.models import MessageType
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
@@ -422,7 +423,7 @@ class UnifiedAgentConsumer(AsyncWebsocketConsumer):
                     content="This conversation has reached its context limit. "
                     "Please start a new chat to continue.",
                     data={
-                        "error_type": "CONTEXT_EXHAUSTED",
+                        "error_type": WS_ERROR_CONTEXT_EXHAUSTED,
                     },
                 )
                 return
