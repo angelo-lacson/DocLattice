@@ -1,7 +1,5 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, gql } from "@apollo/client";
-// TODO: migrate to @os-legal/ui once Table component is available
-import { Table } from "semantic-ui-react";
 import styled from "styled-components";
 import { toast } from "react-toastify";
 import { Plus, Edit, Trash2, Cpu } from "lucide-react";
@@ -14,6 +12,7 @@ import {
   ModalBody,
   ModalFooter,
   Spinner,
+  Table,
 } from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { BadgeConfigurator, BadgeConfig } from "../agents/BadgeConfigurator";
@@ -700,16 +699,16 @@ export const CorpusAgentManagement: React.FC<CorpusAgentManagementProps> = ({
           </Button>
         </EmptyState>
       ) : (
-        <Table basic="very" celled compact>
-          <Table.Header>
+        <Table variant="minimal" size="sm">
+          <Table.Head>
             <Table.Row>
-              <Table.HeaderCell>Name</Table.HeaderCell>
-              <Table.HeaderCell>Description</Table.HeaderCell>
-              <Table.HeaderCell>Tools</Table.HeaderCell>
-              <Table.HeaderCell>Status</Table.HeaderCell>
-              <Table.HeaderCell>Actions</Table.HeaderCell>
+              <Table.HeadCell>Name</Table.HeadCell>
+              <Table.HeadCell>Description</Table.HeadCell>
+              <Table.HeadCell>Tools</Table.HeadCell>
+              <Table.HeadCell>Status</Table.HeadCell>
+              <Table.HeadCell>Actions</Table.HeadCell>
             </Table.Row>
-          </Table.Header>
+          </Table.Head>
           <Table.Body>
             {agents.map((agent) => (
               <Table.Row key={agent.id}>

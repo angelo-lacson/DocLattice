@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Tab, Menu } from "semantic-ui-react";
 import _ from "lodash";
 import { toast } from "react-toastify";
 import {
@@ -40,6 +39,7 @@ import { SearchBox, FilterTabs } from "@os-legal/ui";
 import type { FilterTabItem } from "@os-legal/ui";
 
 import { ConfirmModal } from "../components/widgets/modals/ConfirmModal";
+import { CreateExtractModal } from "../components/widgets/modals/CreateExtractModal";
 import {
   CreateAndSearchBar,
   DropdownActionProps,
@@ -73,6 +73,7 @@ import {
   selectedExtractIds,
   selectedThreadId,
   corpusPowerUserMode,
+  showCreateExtractModal,
 } from "../graphql/cache";
 import {
   updateTabParam,
@@ -537,7 +538,8 @@ const CorpusQueryView = ({
             onMessageSelect={() => {}}
             onSourceNavigate={onSourceNavigate}
             forceNewChat={true}
-            onClose={resetToSearch}
+            // forceNewChat=true means we came from the search bar — just reset back to it
+            onNavigateHome={resetToSearch}
           />
         </motion.div>
       );
@@ -629,6 +631,13 @@ const CorpusQueryView = ({
             setShowLoad={() => {}}
             onMessageSelect={() => {}}
             onSourceNavigate={onSourceNavigate}
+            // showLoad=true means we're in conversation-list mode — reset search
+            // AND explicitly switch to ASK state so the search bar is visible
+            // (without this the view could stay in VIEW mode after navigating home)
+            onNavigateHome={() => {
+              resetToSearch();
+              showQueryViewState("ASK");
+            }}
           />
         </div>
       </motion.div>
@@ -1614,6 +1623,7 @@ export const Corpuses = () => {
   const currentUser = useReactiveVar(userObj);
   const annotation_search_term = useReactiveVar(annotationContentSearchTerm);
   const show_query_view_state = useReactiveVar(showQueryViewState);
+  const show_create_extract_modal = useReactiveVar(showCreateExtractModal);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -2591,7 +2601,7 @@ export const Corpuses = () => {
                 onSourceNavigate={handleSourceNavigate}
                 setShowLoad={() => {}}
                 onViewModeChange={setChatInConversation}
-                onClose={() => setActiveTab(0)}
+                onNavigateHome={() => setActiveTab(0)}
               />
             </div>
           </div>
@@ -3030,6 +3040,12 @@ export const Corpuses = () => {
           ) : (
             <></>
           )}
+
+          <CreateExtractModal
+            open={show_create_extract_modal}
+            onClose={() => showCreateExtractModal(false)}
+            corpusId={opened_corpus?.id}
+          />
         </>
       }
       SearchBar={

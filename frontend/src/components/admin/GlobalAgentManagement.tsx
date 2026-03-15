@@ -1,7 +1,5 @@
 import React, { useState } from "react";
 import { useQuery, useMutation } from "@apollo/client";
-// TODO: migrate to @os-legal/ui once Table component is available
-import { Table } from "semantic-ui-react";
 import styled from "styled-components";
 import { gql } from "@apollo/client";
 import { toast } from "react-toastify";
@@ -14,6 +12,7 @@ import {
   ModalHeader,
   ModalBody,
   ModalFooter,
+  Table,
 } from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { StyledTextArea } from "../widgets/modals/styled";
@@ -484,17 +483,17 @@ export const GlobalAgentManagement: React.FC = () => {
             corpuses.
           </InfoMessage>
         ) : (
-          <Table basic="very" celled>
-            <Table.Header>
+          <Table variant="minimal">
+            <Table.Head>
               <Table.Row>
-                <Table.HeaderCell>Name</Table.HeaderCell>
-                <Table.HeaderCell>Slug</Table.HeaderCell>
-                <Table.HeaderCell>Description</Table.HeaderCell>
-                <Table.HeaderCell>Tools</Table.HeaderCell>
-                <Table.HeaderCell>Status</Table.HeaderCell>
-                <Table.HeaderCell>Actions</Table.HeaderCell>
+                <Table.HeadCell>Name</Table.HeadCell>
+                <Table.HeadCell>Slug</Table.HeadCell>
+                <Table.HeadCell>Description</Table.HeadCell>
+                <Table.HeadCell>Tools</Table.HeadCell>
+                <Table.HeadCell>Status</Table.HeadCell>
+                <Table.HeadCell>Actions</Table.HeadCell>
               </Table.Row>
-            </Table.Header>
+            </Table.Head>
             <Table.Body>
               {agents.map((agent) => (
                 <Table.Row key={agent.id}>
