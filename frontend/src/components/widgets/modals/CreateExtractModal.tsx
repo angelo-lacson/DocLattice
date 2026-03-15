@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import styled from "styled-components";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
@@ -11,6 +12,8 @@ import {
   REQUEST_GET_EXTRACT,
   RequestGetExtractInput,
   RequestGetExtractOutput,
+  GET_EXTRACTS,
+  GetExtractsOutput,
 } from "../../../graphql/queries";
 import { CorpusDropdown } from "../selectors/CorpusDropdown";
 import { UnifiedFieldsetSelector } from "../selectors/UnifiedFieldsetSelector";
@@ -22,6 +25,8 @@ import {
 } from "../../../graphql/mutations";
 import { toast } from "react-toastify";
 
+// Uses createPortal to render at document.body, bypassing ancestor
+// overflow:hidden containers that would clip position:fixed content.
 // TODO: Migrate to @os-legal/ui Modal when available — currently uses custom
 // ModalOverlay/ModalContainer for framer-motion animation support
 const ModalOverlay = styled.div`
@@ -427,7 +432,51 @@ export const CreateExtractModal: React.FC<ExtractModalProps> = ({
   const [createExtract, { loading: createExtractLoading }] = useMutation<
     RequestCreateExtractOutputType,
     RequestCreateExtractInputType
-  >(REQUEST_CREATE_EXTRACT);
+  >(REQUEST_CREATE_EXTRACT, {
+    update(cache, { data: mutationData }) {
+      if (!mutationData?.createExtract.ok || !mutationData.createExtract.obj)
+        return;
+
+      const newExtract = mutationData.createExtract.obj;
+      const effectiveCorpusId = corpusId ?? selected_corpus?.id;
+
+      // Build the list of cache queries to update (corpus-specific + global)
+      const queriesToUpdate: Record<string, any>[] = [{ searchText: "" }, {}];
+      if (effectiveCorpusId) {
+        queriesToUpdate.push({
+          corpusId: effectiveCorpusId,
+          corpusAction_Isnull: true,
+        });
+        queriesToUpdate.push({ corpusId: effectiveCorpusId });
+      }
+
+      for (const variables of queriesToUpdate) {
+        try {
+          const existing = cache.readQuery<GetExtractsOutput>({
+            query: GET_EXTRACTS,
+            variables,
+          });
+          if (existing) {
+            cache.writeQuery({
+              query: GET_EXTRACTS,
+              variables,
+              data: {
+                extracts: {
+                  ...existing.extracts,
+                  edges: [
+                    { __typename: "ExtractTypeEdge", node: newExtract },
+                    ...existing.extracts.edges,
+                  ],
+                },
+              },
+            });
+          }
+        } catch {
+          // Cache miss for this variable combo — skip
+        }
+      }
+    },
+  });
 
   useEffect(() => {
     if (data?.extract) {
@@ -451,9 +500,10 @@ export const CreateExtractModal: React.FC<ExtractModalProps> = ({
     if (!extractId && name.trim()) {
       try {
         setIsSubmitting(true);
+        const effectiveCorpusId = corpusId ?? selected_corpus?.id;
         const { data } = await createExtract({
           variables: {
-            ...(selected_corpus?.id ? { corpusId: selected_corpus?.id } : {}),
+            ...(effectiveCorpusId ? { corpusId: effectiveCorpusId } : {}),
             ...(localSelectedFieldset?.id
               ? { fieldsetId: localSelectedFieldset?.id }
               : {}),
@@ -491,7 +541,7 @@ export const CreateExtractModal: React.FC<ExtractModalProps> = ({
 
   const isLoading = isSubmitting || createExtractLoading;
 
-  return (
+  return createPortal(
     <ModalOverlay onClick={handleClose}>
       <ModalContainer
         initial={{ opacity: 0, scale: 0.95 }}
@@ -622,6 +672,7 @@ export const CreateExtractModal: React.FC<ExtractModalProps> = ({
           content="Creating your extract..."
         />
       </ModalContainer>
-    </ModalOverlay>
+    </ModalOverlay>,
+    document.body
   );
 };

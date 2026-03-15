@@ -94,7 +94,11 @@ interface CorpusChatProps {
   onMessageSelect: (messageId: string) => void;
   initialQuery?: string;
   forceNewChat?: boolean;
-  onClose?: () => void;
+  /**
+   * Navigate back to the corpus home / search view.
+   * Also wired to the conversation list's "Back" button on mobile.
+   */
+  onNavigateHome?: () => void;
   /**
    * Callback fired when the component transitions between list view and conversation view.
    * Parent components can use this to adjust their navigation headers.
@@ -130,7 +134,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
   onMessageSelect,
   initialQuery,
   forceNewChat = false,
-  onClose,
+  onNavigateHome,
   onViewModeChange,
   onSourceNavigate,
 }) => {
@@ -986,8 +990,8 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
                 e.preventDefault();
                 e.stopPropagation();
                 console.log("Home button clicked");
-                if (onClose) {
-                  onClose();
+                if (onNavigateHome) {
+                  onNavigateHome();
                 }
               }}
               title="Return to Dashboard"
@@ -1366,6 +1370,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
               onCreatedAtGteChange={setCreatedAtGte}
               createdAtLte={createdAtLte}
               onCreatedAtLteChange={setCreatedAtLte}
+              onBack={onNavigateHome}
             />
           )}
         </AnimatePresence>

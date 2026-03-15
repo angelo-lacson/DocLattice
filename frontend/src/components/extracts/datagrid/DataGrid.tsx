@@ -9,8 +9,6 @@ import React, {
 } from "react";
 import { useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
-// TODO: migrate to @os-legal/ui once Table, Popup, Modal, and Button components are available
-import { Button, Popup, Modal, Table } from "semantic-ui-react";
 import {
   Trash2,
   FileText,
@@ -19,7 +17,8 @@ import {
   ChevronDown,
   Edit,
 } from "lucide-react";
-import { Spinner } from "@os-legal/ui";
+import { Button, IconButton, Spinner, Table, Tooltip } from "@os-legal/ui";
+import { ConfirmModal } from "../../widgets/modals/ConfirmModal";
 import {
   REQUEST_APPROVE_DATACELL,
   REQUEST_EDIT_DATACELL,
@@ -57,7 +56,6 @@ import { TruncatedText } from "../../widgets/data-display/TruncatedText";
 import { CreateColumnModal } from "../../widgets/modals/CreateColumnModal";
 import { SelectDocumentsModal } from "../../widgets/modals/SelectDocumentsModal";
 import { REQUEST_GET_EXTRACT } from "../../../graphql/queries";
-import { WarningMessage } from "../../widgets/feedback";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 interface DragState {
@@ -185,22 +183,6 @@ const styles = {
     fontSize: "0.9375rem",
     backgroundColor: "#fafbfc",
   },
-  frozenColumn: {
-    position: "sticky" as const,
-    left: 0,
-    backgroundColor: "#ffffff",
-    zIndex: 5,
-    boxShadow: "3px 0 6px rgba(0,0,0,0.05)",
-    borderRight: `1px solid ${OS_LEGAL_COLORS.border}`,
-  },
-  frozenHeaderColumn: {
-    position: "sticky" as const,
-    left: 0,
-    backgroundColor: `${OS_LEGAL_COLORS.surfaceHover} !important`,
-    zIndex: 11,
-    boxShadow: "3px 0 6px rgba(0,0,0,0.05)",
-    borderRight: `1px solid ${OS_LEGAL_COLORS.border}`,
-  },
   statusCell: {
     display: "flex",
     alignItems: "center",
@@ -285,11 +267,8 @@ export interface ExtractDataGridHandle {
   exportToCsv: () => void;
 }
 
-// Add new interface for the delete modal state
-interface DeleteColumnModalState {
-  isOpen: boolean;
-  columnToDelete: ColumnType | null;
-}
+// Column pending deletion (null = modal closed)
+type PendingDeleteColumn = ColumnType | null;
 
 export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
   (
@@ -578,27 +557,18 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
       return schemas;
     }, [columns]);
 
-    // Delete modal state
-    const [deleteModalState, setDeleteModalState] =
-      useState<DeleteColumnModalState>({
-        isOpen: false,
-        columnToDelete: null,
-      });
+    // Column pending deletion (null = modal closed)
+    const [pendingDeleteColumn, setPendingDeleteColumn] =
+      useState<PendingDeleteColumn>(null);
 
     const handleDeleteColumn = (column: ColumnType) => {
-      setDeleteModalState({
-        isOpen: true,
-        columnToDelete: column,
-      });
+      setPendingDeleteColumn(column);
     };
 
-    const confirmDeleteColumn = async () => {
-      if (!deleteModalState.columnToDelete) return;
-      onRemoveColumnId(deleteModalState.columnToDelete.id);
-      setDeleteModalState({
-        isOpen: false,
-        columnToDelete: null,
-      });
+    const confirmDeleteColumn = () => {
+      if (!pendingDeleteColumn) return;
+      onRemoveColumnId(pendingDeleteColumn.id);
+      setPendingDeleteColumn(null);
     };
 
     const [updateColumnMutation] = useMutation<
@@ -858,15 +828,13 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
               }}
             >
               <Button
-                negative
-                size="small"
+                variant="danger"
+                size="sm"
                 onClick={handleRowsDelete}
-                icon
-                labelPosition="left"
+                leftIcon={<Trash2 size={14} />}
                 loading={isDeleting}
                 disabled={isDeleting}
               >
-                <Trash2 size={14} />
                 Delete Selected ({selectedRows.size})
               </Button>
             </div>
@@ -889,14 +857,14 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                 </p>
               </div>
             ) : (
-              <Table celled compact>
-                <Table.Header style={styles.stickyHeader}>
+              <Table variant="bordered" size="sm" stickyHeader>
+                <Table.Head>
                   <Table.Row>
                     {!extract.started && (
-                      <Table.HeaderCell
+                      <Table.HeadCell
+                        sticky="left"
                         style={{
                           ...styles.headerCell,
-                          ...styles.frozenHeaderColumn,
                           width: "50px",
                         }}
                       >
@@ -916,12 +884,12 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                           onChange={handleSelectAll}
                           disabled={loading}
                         />
-                      </Table.HeaderCell>
+                      </Table.HeadCell>
                     )}
-                    <Table.HeaderCell
+                    <Table.HeadCell
+                      sticky="left"
                       style={{
                         ...styles.headerCell,
-                        ...styles.frozenHeaderColumn,
                         minWidth: "250px",
                       }}
                       onClick={() => handleSort("documentTitle")}
@@ -939,9 +907,9 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                             style={{ marginLeft: "8px", opacity: 0.6 }}
                           />
                         ))}
-                    </Table.HeaderCell>
+                    </Table.HeadCell>
                     {columns.map((column) => (
-                      <Table.HeaderCell
+                      <Table.HeadCell
                         key={column.id}
                         style={{ ...styles.headerCell, minWidth: "180px" }}
                         onClick={() => handleSort(column.id)}
@@ -972,68 +940,59 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                           </span>
                           {!extract.started && (
                             <span style={styles.headerControls}>
-                              <Popup
-                                content="Edit column"
-                                trigger={
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleEditColumn(column);
-                                    }}
-                                    style={{
-                                      ...styles.actionButton,
-                                      padding: "4px 8px",
-                                    }}
-                                    disabled={loading}
-                                  >
-                                    <Edit size={12} />
-                                  </button>
-                                }
-                              />
-                              <Popup
-                                content="Delete column"
-                                trigger={
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeleteColumn(column);
-                                    }}
-                                    style={{
-                                      ...styles.actionButton,
-                                      padding: "4px 8px",
-                                      color: OS_LEGAL_COLORS.dangerBorderHover,
-                                    }}
-                                    disabled={loading}
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
-                                }
-                              />
+                              <Tooltip content="Edit column">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditColumn(column);
+                                  }}
+                                  style={{
+                                    ...styles.actionButton,
+                                    padding: "4px 8px",
+                                  }}
+                                  disabled={loading}
+                                >
+                                  <Edit size={12} />
+                                </button>
+                              </Tooltip>
+                              <Tooltip content="Delete column">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteColumn(column);
+                                  }}
+                                  style={{
+                                    ...styles.actionButton,
+                                    padding: "4px 8px",
+                                    color: OS_LEGAL_COLORS.dangerBorderHover,
+                                  }}
+                                  disabled={loading}
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </Tooltip>
                             </span>
                           )}
                         </div>
-                      </Table.HeaderCell>
+                      </Table.HeadCell>
                     ))}
                     {!extract.started && (
-                      <Table.HeaderCell
+                      <Table.HeadCell
                         style={{ ...styles.headerCell, width: "80px" }}
                       >
-                        <Popup
-                          content="Add new column"
-                          trigger={
-                            <button
-                              onClick={handleAddColumn}
-                              style={styles.addColumnButton}
-                              disabled={loading}
-                            >
-                              <Plus size={14} />
-                            </button>
-                          }
-                        />
-                      </Table.HeaderCell>
+                        <Tooltip content="Add new column">
+                          <button
+                            onClick={handleAddColumn}
+                            style={styles.addColumnButton}
+                            disabled={loading}
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </Tooltip>
+                      </Table.HeadCell>
                     )}
                   </Table.Row>
-                </Table.Header>
+                </Table.Head>
 
                 <Table.Body>
                   {sortedRows.map((row) => {
@@ -1048,12 +1007,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                         }}
                       >
                         {!extract.started && (
-                          <Table.Cell
-                            style={{
-                              ...styles.tableCell,
-                              ...styles.frozenColumn,
-                            }}
-                          >
+                          <Table.Cell sticky="left" style={styles.tableCell}>
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -1062,12 +1016,7 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
                             />
                           </Table.Cell>
                         )}
-                        <Table.Cell
-                          style={{
-                            ...styles.tableCell,
-                            ...styles.frozenColumn,
-                          }}
-                        >
+                        <Table.Cell sticky="left" style={styles.tableCell}>
                           <TruncatedText
                             text={row.documentTitle || ""}
                             limit={100}
@@ -1131,20 +1080,28 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
           </div>
 
           {!extract.started && (
-            <Button
-              icon
-              circular
-              onClick={() => setOpenSelectDocumentsModal(true)}
-              style={{
-                position: "absolute",
-                bottom: "16px",
-                left: "16px",
-                zIndex: 1000,
-              }}
-              disabled={loading}
-            >
-              <Plus size={16} />
-            </Button>
+            <Tooltip content="Add documents">
+              <IconButton
+                aria-label="Add documents"
+                onClick={() => setOpenSelectDocumentsModal(true)}
+                style={{
+                  position: "absolute",
+                  bottom: "16px",
+                  left: "16px",
+                  zIndex: 1000,
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  background: OS_LEGAL_COLORS.primaryBlue,
+                  color: "#ffffff",
+                  boxShadow: "0 4px 12px rgba(59, 130, 246, 0.35)",
+                  border: "none",
+                }}
+                disabled={loading}
+              >
+                <Plus size={18} />
+              </IconButton>
+            </Tooltip>
           )}
 
           {isDragActive && (
@@ -1167,66 +1124,21 @@ export const ExtractDataGrid = forwardRef<ExtractDataGridHandle, DataGridProps>(
           onSubmit={handleColumnSubmit}
         />
 
-        <Modal
-          size="tiny"
-          open={deleteModalState.isOpen}
-          onClose={() =>
-            setDeleteModalState({ isOpen: false, columnToDelete: null })
+        <ConfirmModal
+          visible={pendingDeleteColumn !== null}
+          message={
+            `Are you sure you want to delete the column "${pendingDeleteColumn?.name}"?` +
+            (extract.fieldset?.inUse
+              ? " This fieldset is used in multiple places. Deleting this column will create a new copy of the fieldset for this extract only."
+              : "")
           }
-          style={{ borderRadius: "12px", padding: "1.5rem" }}
-        >
-          <Modal.Header
-            style={{
-              borderBottom: `1px solid ${OS_LEGAL_COLORS.surfaceLight}`,
-              paddingBottom: "1rem",
-            }}
-          >
-            Confirm Delete
-          </Modal.Header>
-          <Modal.Content>
-            <p style={{ color: OS_LEGAL_COLORS.textTertiary }}>
-              Are you sure you want to delete the column "
-              {deleteModalState.columnToDelete?.name}"?
-            </p>
-            {extract.fieldset?.inUse && (
-              <WarningMessage title="Note:" style={{ marginTop: "0.5rem" }}>
-                This fieldset is used in multiple places. Deleting this column
-                will create a new copy of the fieldset for this extract only.
-              </WarningMessage>
-            )}
-          </Modal.Content>
-          <Modal.Actions
-            style={{
-              borderTop: `1px solid ${OS_LEGAL_COLORS.surfaceLight}`,
-              paddingTop: "1rem",
-            }}
-          >
-            <Button
-              basic
-              onClick={() =>
-                setDeleteModalState({ isOpen: false, columnToDelete: null })
-              }
-              style={{
-                borderRadius: "6px",
-                boxShadow: "none",
-                border: `1px solid ${OS_LEGAL_COLORS.border}`,
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              negative
-              onClick={confirmDeleteColumn}
-              style={{
-                borderRadius: "6px",
-                backgroundColor: OS_LEGAL_COLORS.dangerBorderHover,
-                marginLeft: "0.75rem",
-              }}
-            >
-              Delete
-            </Button>
-          </Modal.Actions>
-        </Modal>
+          yesAction={confirmDeleteColumn}
+          noAction={() => {}}
+          toggleModal={() => setPendingDeleteColumn(null)}
+          confirmVariant="danger"
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+        />
       </>
     );
   }

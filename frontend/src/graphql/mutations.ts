@@ -1795,6 +1795,31 @@ export const REQUEST_CREATE_EXTRACT = gql`
       obj {
         id
         name
+        corpus {
+          id
+          title
+        }
+        fieldset {
+          id
+          name
+          inUse
+          fullColumnList {
+            id
+          }
+        }
+        fullDocumentList {
+          id
+        }
+        creator {
+          id
+          username
+          slug
+        }
+        created
+        started
+        finished
+        error
+        myPermissions
       }
     }
   }

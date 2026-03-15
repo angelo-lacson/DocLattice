@@ -300,8 +300,8 @@ test.describe("Extracts View - Context Menu", () => {
     const extractCard = page.locator("text=Running Extract").first();
     await extractCard.click({ button: "right" });
 
-    // Context menu should appear
-    const contextMenu = page.locator(".ui.menu.vertical");
+    // Context menu should appear - uses role="menu" from ContextMenu component
+    const contextMenu = page.locator('[role="menu"]');
     await expect(contextMenu).toBeVisible({
       timeout: 3000,
     });
@@ -326,6 +326,35 @@ test.describe("Extracts View - New Extract Button", () => {
 
     // New Extract button should be visible
     await expect(page.locator("text=New Extract")).toBeVisible();
+
+    await component.unmount();
+  });
+
+  test("should open CreateExtractModal when New Extract button is clicked", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <ExtractsTestWrapper extracts={allExtracts} />
+    );
+
+    // Wait for extracts to load
+    await expect(page.locator("text=Running Extract")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Click "New Extract" button
+    await page.locator("text=New Extract").click();
+
+    // Modal should appear with "Create New Extract" title
+    await expect(page.locator("text=Create New Extract")).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Modal form fields should be visible
+    await expect(
+      page.locator('input[placeholder*="Enter a descriptive name"]')
+    ).toBeVisible();
 
     await component.unmount();
   });
@@ -392,7 +421,7 @@ test.describe("Extracts View - Permission-based UI", () => {
     });
 
     // Count menu items - should only have View Details, not Delete
-    const menuItems = page.locator(".ui.menu.vertical .item");
+    const menuItems = page.locator('[role="menuitem"]');
     await expect(menuItems).toHaveCount(1);
 
     await component.unmount();
@@ -417,8 +446,8 @@ test.describe("Extracts View - Keyboard Accessibility", () => {
     // Wait for menu to appear
     await page.waitForTimeout(300);
 
-    // Context menu should appear
-    const contextMenu = page.locator(".ui.menu.vertical");
+    // Context menu should appear - uses role="menu" from ContextMenu component
+    const contextMenu = page.locator('[role="menu"]');
     await expect(contextMenu).toBeVisible({ timeout: 3000 });
 
     // Press Escape to close

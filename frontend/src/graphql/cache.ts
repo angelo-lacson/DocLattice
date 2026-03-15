@@ -280,7 +280,11 @@ export const cache = new InMemoryCache({
         labelsets: relayStylePagination(),
         annotationLabels: relayStylePagination(),
         relationshipLabels: relayStylePagination(),
-        extracts: relayStylePagination(),
+        extracts: relayStylePagination([
+          "corpus",
+          "corpusAction_Isnull",
+          "name_Contains",
+        ]),
         columns: relayStylePagination(),
         // Document relationships - cache by corpus/document context
         documentRelationships: relayStylePagination(["corpusId", "documentId"]),
