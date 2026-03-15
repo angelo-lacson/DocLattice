@@ -309,9 +309,20 @@ export function useCreateAnnotation() {
     const hasTokens =
       annotation instanceof ServerTokenAnnotation &&
       annotation.json &&
-      Object.values(annotation.json).some(
-        (pageData) => pageData?.tokensJsons && pageData.tokensJsons.length > 0
-      );
+      (() => {
+        const expanded = expandAnnotationJson(
+          annotation.json,
+          annotation.rawText || ""
+        );
+        if (!expanded || typeof expanded !== "object") return false;
+        // Span annotations have tokens implicitly
+        if ("start" in expanded && "end" in expanded) return true;
+        return Object.values(
+          expanded as Record<string, { tokensJsons?: unknown[] }>
+        ).some(
+          (pageData) => pageData?.tokensJsons && pageData.tokensJsons.length > 0
+        );
+      })();
     const hasText = annotation.rawText && annotation.rawText.trim().length > 0;
 
     console.log("[handleCreateAnnotation] Validating annotation:", {

@@ -850,7 +850,6 @@ export const GET_ANNOTATIONS = gql`
       edges {
         node {
           id
-
           json
           page
           created
@@ -1102,7 +1101,6 @@ export const SEMANTIC_SEARCH_ANNOTATIONS = gql`
     ) {
       annotation {
         id
-
         json
         page
         created

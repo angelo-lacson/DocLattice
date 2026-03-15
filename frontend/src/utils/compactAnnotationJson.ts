@@ -24,11 +24,8 @@ import {
 } from "../components/types";
 
 // ═══════════════════════════════════════════════════════════════
-// Safety limits
+// Safety limits (from project constants)
 // ═══════════════════════════════════════════════════════════════
-
-const MAX_RANGE_SPAN = COMPACT_JSON_MAX_RANGE_SPAN;
-const MAX_TOTAL_TOKENS = COMPACT_JSON_MAX_TOTAL_TOKENS;
 
 // ═══════════════════════════════════════════════════════════════
 // Compact v2 types
@@ -100,9 +97,10 @@ export function decodeTokenRanges(rangeStr: string): number[] {
       const start = parseInt(startStr, 10);
       const end = parseInt(endStr, 10);
       if (isNaN(start) || isNaN(end)) continue;
-      if (end - start > MAX_RANGE_SPAN || end - start < 0) continue;
+      if (end - start > COMPACT_JSON_MAX_RANGE_SPAN || end - start < 0)
+        continue;
       total += end - start + 1;
-      if (total > MAX_TOTAL_TOKENS) break;
+      if (total > COMPACT_JSON_MAX_TOTAL_TOKENS) break;
       for (let i = start; i <= end; i++) {
         tokens.push(i);
       }
@@ -111,7 +109,7 @@ export function decodeTokenRanges(rangeStr: string): number[] {
       if (!isNaN(num)) {
         tokens.push(num);
         total += 1;
-        if (total > MAX_TOTAL_TOKENS) break;
+        if (total > COMPACT_JSON_MAX_TOTAL_TOKENS) break;
       }
     }
   }
@@ -137,12 +135,14 @@ export function isCompactFormat(
 export function isSpanFormat(
   json: Record<string, unknown> | SpanAnnotationJson
 ): json is SpanAnnotationJson {
-  return (
-    json != null &&
-    "start" in json &&
-    "end" in json &&
-    Object.keys(json).length <= 3
-  );
+  if (json == null || !("start" in json) || !("end" in json)) return false;
+  // Only allow known span keys to avoid false positives on page-keyed dicts
+  const keys = new Set(Object.keys(json));
+  const allowedKeys = new Set(["start", "end", "text"]);
+  for (const key of keys) {
+    if (!allowedKeys.has(key)) return false;
+  }
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -37,6 +37,7 @@ Both formats are accepted everywhere; v1 is returned from
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from opencontractserver.constants.annotations import (
@@ -45,6 +46,8 @@ from opencontractserver.constants.annotations import (
 from opencontractserver.constants.annotations import (
     COMPACT_JSON_MAX_TOTAL_TOKENS as MAX_TOTAL_TOKENS,
 )
+
+logger = logging.getLogger(__name__)
 
 # ── Range encoding ──────────────────────────────────────────────
 
@@ -86,6 +89,7 @@ def decode_token_ranges(range_str: str) -> list[int]:
         return []
     tokens: list[int] = []
     total = 0
+    truncated = False
     for part in range_str.split(","):
         if "-" in part:
             pieces = part.split("-", 1)
@@ -98,6 +102,7 @@ def decode_token_ranges(range_str: str) -> list[int]:
                 continue
             total += span + 1
             if total > MAX_TOTAL_TOKENS:
+                truncated = True
                 break
             tokens.extend(range(start, end + 1))
         else:
@@ -105,9 +110,17 @@ def decode_token_ranges(range_str: str) -> list[int]:
                 tokens.append(int(part))
                 total += 1
                 if total > MAX_TOTAL_TOKENS:
+                    truncated = True
                     break
             except ValueError:
                 continue
+    if truncated:
+        logger.warning(
+            "decode_token_ranges truncated at %d tokens (limit %d): %s...",
+            len(tokens),
+            MAX_TOTAL_TOKENS,
+            range_str[:80],
+        )
     return tokens
 
 
@@ -121,30 +134,34 @@ def is_compact_format(json_data: Any) -> bool:
 
 def is_span_format(json_data: Any) -> bool:
     """Return ``True`` if *json_data* is a span annotation (``{start, end}``)."""
-    return (
-        isinstance(json_data, dict)
-        and "start" in json_data
-        and "end" in json_data
-        and len(json_data) <= 3  # start, end, optional text
-    )
+    if (
+        not isinstance(json_data, dict)
+        or "start" not in json_data
+        or "end" not in json_data
+    ):
+        return False
+    # Only allow known span keys to avoid false positives on page-keyed dicts
+    return set(json_data.keys()) <= {"start", "end", "text"}
 
 
 # ── Compact (v1 → v2) ──────────────────────────────────────────
 
 
 def compact_annotation_json(
-    v1_json: dict[str, Any],
-) -> dict[str, Any]:
+    v1_json: dict[str, Any] | None,
+) -> dict[str, Any] | None:
     """Convert a v1 multipage annotation JSON to v2 compact format.
 
     Span annotations (``{start, end}``) are returned unchanged.
     Already-compact v2 data is returned unchanged.
 
     Args:
-        v1_json: The annotation JSON in v1 format (page-keyed dict).
+        v1_json: The annotation JSON in v1 format (page-keyed dict),
+            or ``None``/falsy (returned as-is).
 
     Returns:
-        The annotation JSON in v2 compact format.
+        The annotation JSON in v2 compact format, or ``None`` if input
+        was ``None``.
     """
     if not v1_json or not isinstance(v1_json, dict):
         return v1_json

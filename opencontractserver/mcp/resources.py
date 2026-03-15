@@ -151,13 +151,17 @@ def get_annotation_resource(
             "label_type": annotation.annotation_label.label_type,
         }
 
+    from opencontractserver.annotations.compact_json import expand_annotation_json
+
     return json.dumps(
         {
             "id": str(annotation.id),
             "page": annotation.page,
             "raw_text": annotation.raw_text or "",
             "annotation_label": label_data,
-            "json": annotation.json,
+            "json": expand_annotation_json(
+                annotation.json, raw_text=annotation.raw_text or ""
+            ),
             "structural": annotation.structural,
             "created": annotation.created.isoformat() if annotation.created else None,
         }

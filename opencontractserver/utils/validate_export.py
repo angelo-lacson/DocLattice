@@ -351,13 +351,17 @@ def _check_annotation(
     # Use `or {}` instead of a default so that explicit null (common in
     # exports) is normalised to an empty dict rather than silently skipping.
     # Expand v2 compact format to v1 for uniform validation.
-    from opencontractserver.annotations.compact_json import expand_annotation_json
+    from opencontractserver.annotations.compact_json import (
+        expand_annotation_json,
+        is_span_format,
+    )
 
     ann_json = expand_annotation_json(
         annot.get("annotation_json") or {},
         raw_text=annot.get("rawText", ""),
     )
-    if isinstance(ann_json, dict):
+    # Span annotations ({start, end}) don't have page-keyed structure
+    if isinstance(ann_json, dict) and not is_span_format(ann_json):
         for page_key, page_data in ann_json.items():
             if not isinstance(page_data, dict):
                 continue
