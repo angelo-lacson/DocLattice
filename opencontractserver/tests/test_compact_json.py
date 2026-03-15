@@ -2,9 +2,11 @@
 Tests for annotations/compact_json.py encode/decode, format detection,
 and v1↔v2 conversion helpers.
 
-These are pure unit tests that exercise the compact annotation JSON functions
-directly without database access.
+Includes pure unit tests for the codec functions and integration tests
+for the Annotation model's ``save()`` auto-compact behaviour.
 """
+
+from unittest.mock import patch
 
 from django.test import TestCase
 
@@ -20,6 +22,7 @@ from opencontractserver.constants.annotations import (
     COMPACT_JSON_MAX_RANGE_SPAN,
     COMPACT_JSON_MAX_TOTAL_TOKENS,
 )
+from opencontractserver.tests.factories import AnnotationFactory
 
 # ── helpers ──────────────────────────────────────────────────────
 
@@ -444,3 +447,69 @@ class TestFullConversionRoundtrip(TestCase):
         self.assertEqual(re_compacted["v"], 2)
         self.assertEqual(re_compacted["p"]["0"]["b"], v2["p"]["0"]["b"])
         self.assertEqual(re_compacted["p"]["0"]["t"], v2["p"]["0"]["t"])
+
+
+# ── save() auto-compact integration tests ────────────────────────
+
+
+class TestAnnotationSaveAutoCompact(TestCase):
+    """Integration tests for the Annotation.save() auto-compact path."""
+
+    def test_save_compacts_v1_json_to_v2(self):
+        """Saving a TOKEN_LABEL annotation with v1 JSON auto-compacts to v2."""
+        v1_json = {
+            "0": {
+                "bounds": {"top": 10, "left": 20, "right": 30, "bottom": 40},
+                "tokensJsons": [
+                    {"pageIndex": 0, "tokenIndex": 1},
+                    {"pageIndex": 0, "tokenIndex": 2},
+                    {"pageIndex": 0, "tokenIndex": 3},
+                ],
+                "rawText": "hello world",
+            }
+        }
+        annot = AnnotationFactory(json=v1_json)
+
+        # After save the stored JSON must be v2 compact format.
+        annot.refresh_from_db()
+        self.assertTrue(is_compact_format(annot.json))
+        self.assertEqual(annot.json["v"], 2)
+        self.assertEqual(annot.json["p"]["0"]["t"], "1-3")
+        self.assertEqual(annot.json["p"]["0"]["b"], [10, 20, 30, 40])
+
+    def test_save_does_not_recompact_v2(self):
+        """Saving an already-v2 annotation does not mutate the JSON."""
+        v2_json = {"v": 2, "p": {"0": {"b": [1, 2, 3, 4], "t": "5-10"}}}
+        annot = AnnotationFactory(json=v2_json)
+
+        annot.refresh_from_db()
+        self.assertEqual(annot.json, v2_json)
+
+    def test_save_does_not_compact_span(self):
+        """Span annotations are left unchanged by the auto-compact path."""
+        span_json = {"start": 0, "end": 100}
+        annot = AnnotationFactory(json=span_json)
+
+        annot.refresh_from_db()
+        self.assertEqual(annot.json, span_json)
+
+    @patch(
+        "opencontractserver.annotations.models.compact_annotation_json",
+        side_effect=ValueError("boom"),
+    )
+    def test_save_exception_guard_logs_and_stores_as_is(self, mock_compact):
+        """If compact_annotation_json raises, save() succeeds with original JSON."""
+        v1_json = {
+            "0": {
+                "bounds": {"top": 0, "left": 0, "right": 0, "bottom": 0},
+                "tokensJsons": [{"pageIndex": 0, "tokenIndex": 1}],
+                "rawText": "",
+            }
+        }
+        # Should not raise — exception is caught and logged.
+        annot = AnnotationFactory(json=v1_json)
+
+        annot.refresh_from_db()
+        # v1 JSON stored as-is since compaction failed.
+        self.assertFalse(is_compact_format(annot.json))
+        self.assertIn("0", annot.json)

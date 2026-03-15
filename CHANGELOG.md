@@ -5,7 +5,18 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-11
+## [Unreleased] - 2026-03-14
+
+### Added
+
+- **Compact annotation JSON v2 format for ~75% storage reduction** (PR #1100): New compact v2 format for annotation JSON payloads that range-encodes consecutive token indices, compacts bounds to arrays, and drops redundant `pageIndex` and `rawText` from per-page data. Changes include:
+  - Core encode/decode in `opencontractserver/annotations/compact_json.py` (Python) and `frontend/src/utils/compactAnnotationJson.ts` (TypeScript)
+  - Safety limits: `COMPACT_JSON_MAX_RANGE_SPAN` (10,000) and `COMPACT_JSON_MAX_TOTAL_TOKENS` (50,000) in `opencontractserver/constants/annotations.py`
+  - `Annotation.save()` auto-compacts v1 → v2 on write (lazy migration) with exception guard for malformed legacy data
+  - Migration `0066` removes redundant `tokens_jsons` and `bounding_box` columns (includes `RunPython` backfill step to preserve any legacy data before column removal — **irreversible migration**)
+  - 60+ Python and 48+ TypeScript unit tests for the codec
+  - All GraphQL queries/mutations updated to use `json` field instead of `tokensJsons` and `boundingBox`
+  - Both v1 and v2 formats accepted everywhere; `expand_annotation_json()` normalizes to v1 for internal processing
 
 ### Added
 

@@ -1140,7 +1140,13 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
             and self.json
         ):
             if not is_compact_format(self.json) and not is_span_format(self.json):
-                self.json = compact_annotation_json(self.json)
+                try:
+                    self.json = compact_annotation_json(self.json)
+                except Exception:
+                    logger.exception(
+                        "Failed to compact annotation JSON for pk=%s; storing as-is",
+                        self.pk,
+                    )
 
         # Maintain timestamp consistency
         if not self.pk:
