@@ -51,8 +51,7 @@ def backfill_json_from_legacy_fields(apps, schema_editor):
             pages[page_key]["tokensJsons"].append(tok)
 
         if pages:
-            annot.json = pages
-            annot.save(update_fields=["json"])
+            Annotation.objects.filter(pk=annot.pk).update(json=pages)
             updated += 1
 
     if updated:

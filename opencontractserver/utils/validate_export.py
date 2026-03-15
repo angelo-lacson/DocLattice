@@ -19,6 +19,11 @@ import sys
 import zipfile
 from dataclasses import dataclass, field
 
+from opencontractserver.annotations.compact_json import (
+    expand_annotation_json,
+    is_span_format,
+)
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -351,11 +356,6 @@ def _check_annotation(
     # Use `or {}` instead of a default so that explicit null (common in
     # exports) is normalised to an empty dict rather than silently skipping.
     # Expand v2 compact format to v1 for uniform validation.
-    from opencontractserver.annotations.compact_json import (
-        expand_annotation_json,
-        is_span_format,
-    )
-
     ann_json = expand_annotation_json(
         annot.get("annotation_json") or {},
         raw_text=annot.get("rawText", ""),

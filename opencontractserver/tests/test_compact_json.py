@@ -8,7 +8,7 @@ for the Annotation model's ``save()`` auto-compact behaviour.
 
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from opencontractserver.annotations.compact_json import (
     compact_annotation_json,
@@ -513,3 +513,56 @@ class TestAnnotationSaveAutoCompact(TestCase):
         # v1 JSON stored as-is since compaction failed.
         self.assertFalse(is_compact_format(annot.json))
         self.assertIn("0", annot.json)
+
+
+# ── clean() validation integration tests ─────────────────────────
+
+
+@override_settings(VALIDATE_ANNOTATION_JSON=True)
+class TestAnnotationCleanValidation(TestCase):
+    """Integration tests for the Annotation.clean() JSON validation."""
+
+    def test_clean_accepts_valid_v2_compact_json(self):
+        """clean() passes for a well-formed v2 compact annotation."""
+        v2_json = {"v": 2, "p": {"0": {"b": [1, 2, 3, 4], "t": "5-10"}}}
+        annot = AnnotationFactory(json=v2_json)
+        # clean() should not raise
+        annot.clean()
+
+    def test_clean_accepts_valid_v1_legacy_json(self):
+        """clean() passes for a well-formed v1 legacy annotation."""
+        v1_json = {
+            "0": {
+                "bounds": {"top": 1, "left": 2, "right": 3, "bottom": 4},
+                "tokensJsons": [{"pageIndex": 0, "tokenIndex": 0}],
+                "rawText": "hello",
+            }
+        }
+        # save() auto-compacts, so build the annotation then set JSON directly
+        annot = AnnotationFactory()
+        annot.json = v1_json
+        annot.clean()
+
+    def test_clean_rejects_v2_with_non_dict_page_entry(self):
+        """clean() raises when a v2 page entry is not a dict."""
+        bad_json = {"v": 2, "p": {"0": "not_a_dict"}}
+        annot = AnnotationFactory()
+        annot.json = bad_json
+        with self.assertRaises(ValueError, msg="v2 page entries must be dicts"):
+            annot.clean()
+
+    def test_clean_rejects_v2_missing_b_or_t(self):
+        """clean() raises when a v2 page entry is missing 'b' or 't'."""
+        bad_json = {"v": 2, "p": {"0": {"b": [0, 0, 0, 0]}}}
+        annot = AnnotationFactory()
+        annot.json = bad_json
+        with self.assertRaises(ValueError, msg="must contain 'b' (bounds) and 't'"):
+            annot.clean()
+
+    def test_clean_rejects_v1_missing_required_keys(self):
+        """clean() raises when a v1 page entry is missing required keys."""
+        bad_json = {"0": {"bounds": {"top": 0, "left": 0, "right": 0, "bottom": 0}}}
+        annot = AnnotationFactory()
+        annot.json = bad_json
+        with self.assertRaises(ValueError, msg="must contain 'bounds', 'tokensJsons'"):
+            annot.clean()

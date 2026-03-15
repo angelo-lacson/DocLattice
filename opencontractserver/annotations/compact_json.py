@@ -63,7 +63,9 @@ def encode_token_ranges(indices: list[int]) -> str:
     """
     if not indices:
         return ""
-    sorted_idx = sorted(set(indices))
+    sorted_idx = sorted(i for i in set(indices) if i >= 0)
+    if not sorted_idx:
+        return ""
     ranges: list[str] = []
     start = end = sorted_idx[0]
     for i in range(1, len(sorted_idx)):
@@ -130,7 +132,11 @@ def decode_token_ranges(range_str: str) -> list[int]:
 
 def is_compact_format(json_data: Any) -> bool:
     """Return ``True`` if *json_data* uses the v2 compact layout."""
-    return isinstance(json_data, dict) and json_data.get("v") == 2
+    return (
+        isinstance(json_data, dict)
+        and json_data.get("v") == 2
+        and isinstance(json_data.get("p"), dict)
+    )
 
 
 def is_span_format(json_data: Any) -> bool:
@@ -191,6 +197,8 @@ def compact_annotation_json(
                 bounds.get("right", 0),
                 bounds.get("bottom", 0),
             ]
+        else:
+            compact_page["b"] = [0, 0, 0, 0]
 
         # Compact token refs: [{pageIndex, tokenIndex}, ...] → range string
         tokens_jsons = page_data.get("tokensJsons")

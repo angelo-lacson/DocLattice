@@ -57,7 +57,10 @@ export interface CompactAnnotationJson {
  */
 export function encodeTokenRanges(tokens: number[]): string {
   if (tokens.length === 0) return "";
-  const sorted = [...new Set(tokens)].sort((a, b) => a - b);
+  const sorted = [...new Set(tokens)]
+    .filter((t) => t >= 0)
+    .sort((a, b) => a - b);
+  if (sorted.length === 0) return "";
   const ranges: string[] = [];
   let rangeStart = sorted[0];
   let rangeEnd = sorted[0];
@@ -87,6 +90,7 @@ export function decodeTokenRanges(rangeStr: string): number[] {
   if (!rangeStr) return [];
   const tokens: number[] = [];
   let total = 0;
+  let truncated = false;
   const parts = rangeStr.split(",");
 
   for (const part of parts) {
@@ -100,7 +104,10 @@ export function decodeTokenRanges(rangeStr: string): number[] {
       if (end - start > COMPACT_JSON_MAX_RANGE_SPAN || end - start < 0)
         continue;
       total += end - start + 1;
-      if (total > COMPACT_JSON_MAX_TOTAL_TOKENS) break;
+      if (total > COMPACT_JSON_MAX_TOTAL_TOKENS) {
+        truncated = true;
+        break;
+      }
       for (let i = start; i <= end; i++) {
         tokens.push(i);
       }
@@ -108,10 +115,23 @@ export function decodeTokenRanges(rangeStr: string): number[] {
       const num = parseInt(part, 10);
       if (!isNaN(num)) {
         total += 1;
-        if (total > COMPACT_JSON_MAX_TOTAL_TOKENS) break;
+        if (total > COMPACT_JSON_MAX_TOTAL_TOKENS) {
+          truncated = true;
+          break;
+        }
         tokens.push(num);
       }
     }
+  }
+  if (truncated) {
+    console.warn(
+      `decodeTokenRanges truncated at ${
+        tokens.length
+      } tokens (limit ${COMPACT_JSON_MAX_TOTAL_TOKENS}): ${rangeStr.slice(
+        0,
+        80
+      )}...`
+    );
   }
   return tokens;
 }
@@ -226,7 +246,11 @@ export function expandAnnotationJson(
 
     // Expand token refs
     const indices =
-      typeof pageData.t === "string" ? decodeTokenRanges(pageData.t) : [];
+      typeof pageData.t === "string"
+        ? decodeTokenRanges(pageData.t)
+        : Array.isArray(pageData.t)
+        ? (pageData.t as number[])
+        : [];
     const tokensJsons: TokenId[] = indices.map((tokenIndex) => ({
       pageIndex: actualPageIdx,
       tokenIndex,
