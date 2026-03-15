@@ -102,7 +102,7 @@ class DocxThumbnailGenerator(BaseThumbnailGenerator):
                 for path, ext in thumbnail_paths:
                     if ext and path in zf.namelist():
                         return zf.read(path), ext
-        except (zipfile.BadZipFile, Exception) as e:
+        except Exception as e:
             logger.debug(f"Could not extract embedded thumbnail: {e}")
 
         return None
@@ -133,7 +133,9 @@ class DocxThumbnailGenerator(BaseThumbnailGenerator):
                     tree = ET.parse(doc_xml)
 
                 # Extract text from w:t elements
-                ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+                ns = {
+                    "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                }
                 texts = []
                 total_len = 0
 
