@@ -52,6 +52,8 @@ services:
     command: >
       postgres
       -c shared_preload_libraries=vector
+      -c hnsw.iterative_scan=relaxed_order
+      -c hnsw.ef_search=64
       -c shared_buffers=1GB
       -c maintenance_work_mem=512MB
       -c effective_cache_size=4GB
