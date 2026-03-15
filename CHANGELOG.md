@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-03-14
 
+### Breaking Changes
+
+- **Removed `tokensJsons` and `boundingBox` from GraphQL API**: The `tokensJsons` and `boundingBox` fields have been removed from GraphQL annotation queries and mutations (PR #1100). External API consumers and integrations must update to use the `json` field instead. The `json` field contains either v1 (legacy page-keyed format) or v2 (compact format) annotation data. Use `expand_annotation_json()` (Python) or `expandAnnotationJson()` (TypeScript) to normalize to v1 for processing.
+
 ### Added
 
 - **Compact annotation JSON v2 format for ~75% storage reduction** (PR #1100): New compact v2 format for annotation JSON payloads that range-encodes consecutive token indices, compacts bounds to arrays, and drops redundant `pageIndex` and `rawText` from per-page data. Changes include:

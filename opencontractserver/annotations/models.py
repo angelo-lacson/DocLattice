@@ -1055,11 +1055,8 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
         elif self.annotation_type == SPAN_LABEL:
             if not (
                 isinstance(self.json, dict)
-                and set(self.json.keys()) <= {"start", "end", "text"}
-                and "start" in self.json
-                and "end" in self.json
-                and isinstance(self.json["start"], int)
-                and isinstance(self.json["end"], int)
+                and isinstance(self.json.get("start"), int)
+                and isinstance(self.json.get("end"), int)
                 and isinstance(self.json.get("text", ""), str)
             ):
                 raise ValueError(

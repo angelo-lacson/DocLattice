@@ -210,16 +210,31 @@ class TestIsSpanFormat(TestCase):
     def test_valid_span_with_text(self):
         self.assertTrue(is_span_format({"start": 0, "end": 10, "text": "hi"}))
 
+    def test_span_with_extra_metadata_keys(self):
+        # Span annotations with extra metadata (e.g. from future parsers)
+        # should still be detected as spans.
+        self.assertTrue(is_span_format({"start": 0, "end": 10, "confidence": 0.95}))
+        self.assertTrue(
+            is_span_format({"start": 0, "end": 10, "text": "hi", "source": "parser_v2"})
+        )
+
     def test_missing_start(self):
         self.assertFalse(is_span_format({"end": 10}))
 
     def test_missing_end(self):
         self.assertFalse(is_span_format({"start": 0}))
 
+    def test_non_int_start_end_not_span(self):
+        # Values must be ints to distinguish from page-keyed dicts.
+        self.assertFalse(is_span_format({"start": "foo", "end": "bar"}))
+        self.assertFalse(is_span_format({"start": {}, "end": {}}))
+
     def test_page_keyed_dict_not_span(self):
-        # A v1 page-keyed dict that happens to have "start" and "end" but also
-        # other keys should NOT be detected as a span.
-        self.assertFalse(is_span_format({"start": 0, "end": 10, "bounds": {}}))
+        # A v1 page-keyed dict has numeric string keys with dict values —
+        # should NOT be detected as a span.
+        self.assertFalse(
+            is_span_format({"0": {"bounds": {}, "tokensJsons": [], "rawText": ""}})
+        )
 
     def test_non_dict(self):
         self.assertFalse(is_span_format("not a dict"))
@@ -485,8 +500,14 @@ class TestAnnotationSaveAutoCompact(TestCase):
         annot.refresh_from_db()
         self.assertEqual(annot.json, v2_json)
 
+    @override_settings(VALIDATE_ANNOTATION_JSON=False)
     def test_save_does_not_compact_span(self):
-        """Span annotations are left unchanged by the auto-compact path."""
+        """Span annotations are left unchanged by the auto-compact path.
+
+        Validation is disabled because this deliberately assigns span JSON
+        to a TOKEN_LABEL annotation to exercise the span-detection guard
+        in the auto-compact path.
+        """
         span_json = {"start": 0, "end": 100}
         annot = AnnotationFactory(json=span_json)
 
@@ -566,3 +587,35 @@ class TestAnnotationCleanValidation(TestCase):
         annot.json = bad_json
         with self.assertRaises(ValueError, msg="must contain 'bounds', 'tokensJsons'"):
             annot.clean()
+
+
+# ── bulk_update bypass documentation test ─────────────────────────
+
+
+class TestBulkUpdateBypassesAutoCompact(TestCase):
+    """Document that QuerySet.update() bypasses save() auto-compaction.
+
+    This is an inherent Django limitation: ``QuerySet.update()`` and
+    ``bulk_update()`` write directly to the database without calling
+    ``save()``.  v1 JSON written via these paths stays v1.
+    """
+
+    def test_queryset_update_does_not_compact_v1(self):
+        """Annotation.objects.filter().update(json=v1) stores v1 as-is."""
+        from opencontractserver.annotations.models import Annotation
+
+        annot = AnnotationFactory()
+        v1_json = {
+            "0": {
+                "bounds": {"top": 1, "left": 2, "right": 3, "bottom": 4},
+                "tokensJsons": [{"pageIndex": 0, "tokenIndex": 1}],
+                "rawText": "test",
+            }
+        }
+        Annotation.objects.filter(pk=annot.pk).update(json=v1_json)
+
+        annot.refresh_from_db()
+        # The JSON should remain v1 because update() bypasses save().
+        self.assertFalse(is_compact_format(annot.json))
+        self.assertIn("0", annot.json)
+        self.assertIn("bounds", annot.json["0"])
