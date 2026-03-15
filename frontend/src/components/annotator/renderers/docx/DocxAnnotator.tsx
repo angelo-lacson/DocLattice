@@ -120,15 +120,16 @@ function buildExternalAnnotationSet(
     return true;
   });
 
-  // Build labelled_text in docxodus format using TextSpan {start, end}
+  // Build labelled_text in docxodus format using TextSpan {start, end, text}
   const labelledText = filteredAnnotations.map((ann) => ({
     id: ann.id,
     annotationLabel: ann.annotationLabel?.text ?? "Unknown",
     rawText: ann.rawText,
     page: 0,
     annotationJson: ann.json
-      ? { start: ann.json.start, end: ann.json.end }
+      ? { start: ann.json.start, end: ann.json.end, text: ann.rawText }
       : undefined,
+    annotationType: ann.structural ? "structural" : "text",
     structural: ann.structural,
   }));
 

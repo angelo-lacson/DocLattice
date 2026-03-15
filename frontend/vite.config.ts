@@ -47,6 +47,7 @@ export default defineConfig({
     "**/*.svg",
     "**/*.gif",
     "**/*.webp",
+    "**/*.wasm",
   ],
   // Better handling of assets in all environments
   resolve: {

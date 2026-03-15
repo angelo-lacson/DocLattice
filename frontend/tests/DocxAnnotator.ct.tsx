@@ -2,63 +2,60 @@ import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
 import { DocxAnnotatorTestWrapper } from "./DocxAnnotatorTestWrapper";
 import { docScreenshot } from "./utils/docScreenshot";
+import { setupDocxodusWasm } from "./utils/docxodusWasm";
 
-// WASM loading requires more time than typical component tests
 test.describe("DocxAnnotator", () => {
-  test.setTimeout(30_000);
+  // WASM initialization + DOCX conversion needs generous timeouts
+  test.setTimeout(60_000);
 
-  test("renders component container", async ({ mount, page }) => {
+  test("renders DOCX content via WASM", async ({ mount, page }) => {
+    await setupDocxodusWasm(page);
+
     const component = await mount(<DocxAnnotatorTestWrapper />);
 
-    // The component should render - it will show either the WASM init state
-    // or the docx-annotator container depending on whether WASM loads.
-    // In test environment, WASM may not be available, so we check for
-    // either the loading message or the annotator container.
-    const hasAnnotator = await page
-      .getByTestId("docx-annotator")
-      .isVisible()
-      .catch(() => false);
-    const hasLoadingText = await page
-      .getByText(/Initializing|Converting|DOCX|Failed/)
-      .first()
-      .isVisible()
-      .catch(() => false);
+    // Wait for the DOCX annotator to appear (WASM initialized + document converted)
+    const annotator = page.getByTestId("docx-annotator");
+    await annotator.waitFor({ state: "visible", timeout: 45_000 });
 
-    expect(hasAnnotator || hasLoadingText).toBeTruthy();
+    // Verify rendered content is present
+    const content = annotator.locator(".docx-content");
+    await expect(content).toBeVisible();
 
-    await docScreenshot(page, "annotator--docx-annotator--initial");
+    await docScreenshot(page, "annotator--docx-annotator--rendered");
+
+    await component.unmount();
+  });
+
+  test("renders with annotations projected", async ({ mount, page }) => {
+    await setupDocxodusWasm(page);
+
+    const component = await mount(
+      <DocxAnnotatorTestWrapper withAnnotations={true} />
+    );
+
+    const annotator = page.getByTestId("docx-annotator");
+    await annotator.waitFor({ state: "visible", timeout: 45_000 });
+
+    const content = annotator.locator(".docx-content");
+    await expect(content).toBeVisible();
+
+    await docScreenshot(page, "annotator--docx-annotator--with-annotations");
 
     await component.unmount();
   });
 
   test("renders in read-only mode", async ({ mount, page }) => {
+    await setupDocxodusWasm(page);
+
     const component = await mount(<DocxAnnotatorTestWrapper readOnly={true} />);
 
-    // Wait for WASM to attempt initialization
-    await page.waitForTimeout(3000);
+    const annotator = page.getByTestId("docx-annotator");
+    await annotator.waitFor({ state: "visible", timeout: 45_000 });
 
-    // Component should render without crashing
-    const bodyText = await page.textContent("body");
-    expect(bodyText).toBeTruthy();
+    const content = annotator.locator(".docx-content");
+    await expect(content).toBeVisible();
 
     await docScreenshot(page, "annotator--docx-annotator--read-only");
-
-    await component.unmount();
-  });
-
-  test("handles graceful error state", async ({ mount, page }) => {
-    const component = await mount(<DocxAnnotatorTestWrapper />);
-
-    // Wait for WASM initialization attempt (may succeed or fail depending on env)
-    await page.waitForTimeout(5000);
-
-    // The component should either show content or an error message,
-    // but should NOT crash
-    const bodyText = await page.textContent("body");
-    expect(bodyText).toBeTruthy();
-    expect(bodyText!.length).toBeGreaterThan(0);
-
-    await docScreenshot(page, "annotator--docx-annotator--error-state");
 
     await component.unmount();
   });
