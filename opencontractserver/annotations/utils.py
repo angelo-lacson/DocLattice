@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Optional
 if TYPE_CHECKING:
     from opencontractserver.documents.models import Document
 
+from opencontractserver.annotations.compact_json import expand_annotation_json
 from opencontractserver.types.enums import ContentModality
 
 logger = logging.getLogger(__name__)
@@ -155,8 +156,6 @@ def update_annotation_modalities(
     # Get tokens from annotation's json field (handles both v1 and v2 formats)
     annotation_json = annotation.json or {}
     all_tokens = []
-
-    from opencontractserver.annotations.compact_json import expand_annotation_json
 
     expanded = expand_annotation_json(
         annotation_json, raw_text=getattr(annotation, "raw_text", "") or ""

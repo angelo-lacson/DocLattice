@@ -21,7 +21,6 @@ from opencontractserver.constants.annotations import (
     COMPACT_JSON_MAX_TOTAL_TOKENS,
 )
 
-
 # ── helpers ──────────────────────────────────────────────────────
 
 
@@ -29,9 +28,7 @@ def _v1_page(bounds, token_indices, raw_text="hello"):
     """Build a single v1 page entry."""
     return {
         "bounds": bounds,
-        "tokensJsons": [
-            {"pageIndex": 0, "tokenIndex": i} for i in token_indices
-        ],
+        "tokensJsons": [{"pageIndex": 0, "tokenIndex": i} for i in token_indices],
         "rawText": raw_text,
     }
 
@@ -57,13 +54,10 @@ class TestEncodeTokenRanges(TestCase):
             "1-3,5,7-9",
         )
 
-    def test_duplicates_extend_ranges(self):
-        # Duplicates are not deduplicated; sorted duplicates appear adjacent
-        # and the algorithm treats each as a continuation of the current run.
+    def test_duplicates_are_deduplicated(self):
+        # Duplicates are removed before encoding.
         result = encode_token_ranges([3, 3, 3, 5, 5])
-        # After sorting: [3, 3, 3, 5, 5]. Each 3 equals end (3) so the
-        # range stays 3-3; each 5 similarly stays 5-5.  Output: "3,3,3,5,5"
-        self.assertEqual(result, "3,3,3,5,5")
+        self.assertEqual(result, "3,5")
 
     def test_unsorted_input_is_sorted(self):
         self.assertEqual(encode_token_ranges([5, 3, 1, 2, 4]), "1-5")
@@ -186,9 +180,7 @@ class TestIsCompactFormat(TestCase):
 
     def test_v1_data(self):
         self.assertFalse(
-            is_compact_format(
-                {"0": {"bounds": {}, "tokensJsons": [], "rawText": ""}}
-            )
+            is_compact_format({"0": {"bounds": {}, "tokensJsons": [], "rawText": ""}})
         )
 
     def test_wrong_version(self):
@@ -224,9 +216,7 @@ class TestIsSpanFormat(TestCase):
     def test_page_keyed_dict_not_span(self):
         # A v1 page-keyed dict that happens to have "start" and "end" but also
         # other keys should NOT be detected as a span.
-        self.assertFalse(
-            is_span_format({"start": 0, "end": 10, "bounds": {}})
-        )
+        self.assertFalse(is_span_format({"start": 0, "end": 10, "bounds": {}}))
 
     def test_non_dict(self):
         self.assertFalse(is_span_format("not a dict"))
@@ -287,12 +277,8 @@ class TestCompactAnnotationJson(TestCase):
 
     def test_v1_multipage_conversion(self):
         v1 = {
-            "0": _v1_page(
-                {"top": 1, "left": 2, "right": 3, "bottom": 4}, [10, 11]
-            ),
-            "1": _v1_page(
-                {"top": 5, "left": 6, "right": 7, "bottom": 8}, [20]
-            ),
+            "0": _v1_page({"top": 1, "left": 2, "right": 3, "bottom": 4}, [10, 11]),
+            "1": _v1_page({"top": 5, "left": 6, "right": 7, "bottom": 8}, [20]),
         }
         result = compact_annotation_json(v1)
 

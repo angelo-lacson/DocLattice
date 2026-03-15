@@ -5,6 +5,7 @@ import logging
 
 from django.core.management.base import BaseCommand
 
+from opencontractserver.annotations.compact_json import expand_annotation_json
 from opencontractserver.annotations.models import Annotation
 
 logger = logging.getLogger(__name__)
@@ -109,8 +110,6 @@ class Command(BaseCommand):
             return ["TEXT"]
 
         # Extract token references from the json field (handles v1 and v2 formats)
-        from opencontractserver.annotations.compact_json import expand_annotation_json
-
         expanded_json = expand_annotation_json(
             annotation.json or {}, raw_text=annotation.raw_text or ""
         )

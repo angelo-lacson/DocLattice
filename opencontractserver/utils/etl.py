@@ -15,6 +15,7 @@ from typing_extensions import TypedDict
 from opencontractserver.annotations.compact_json import (
     compact_annotation_json,
     expand_annotation_json,
+    is_span_format,
 )
 from opencontractserver.annotations.models import (
     DOC_TYPE_LABEL,
@@ -343,6 +344,10 @@ def build_document_export(
                 annotation_json: dict[str, OpenContractsSinglePageAnnotationType] = (
                     expand_annotation_json(annot.json, raw_text=annot.raw_text or "")
                 )
+
+                # Span annotations ({start, end}) don't have page-keyed structure
+                if is_span_format(annotation_json):
+                    continue
 
                 for targ_page_num in annotation_json:
                     logger.info(

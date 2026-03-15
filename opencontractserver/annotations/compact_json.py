@@ -63,7 +63,7 @@ def encode_token_ranges(indices: list[int]) -> str:
     """
     if not indices:
         return ""
-    sorted_idx = sorted(indices)
+    sorted_idx = sorted(set(indices))
     ranges: list[str] = []
     start = end = sorted_idx[0]
     for i in range(1, len(sorted_idx)):
@@ -107,13 +107,14 @@ def decode_token_ranges(range_str: str) -> list[int]:
             tokens.extend(range(start, end + 1))
         else:
             try:
-                tokens.append(int(part))
-                total += 1
-                if total > MAX_TOTAL_TOKENS:
-                    truncated = True
-                    break
+                val = int(part)
             except ValueError:
                 continue
+            total += 1
+            if total > MAX_TOTAL_TOKENS:
+                truncated = True
+                break
+            tokens.append(val)
     if truncated:
         logger.warning(
             "decode_token_ranges truncated at %d tokens (limit %d): %s...",
@@ -265,7 +266,10 @@ def expand_annotation_json(
 
         # Expand token refs: range string → [{pageIndex, tokenIndex}, ...]
         t = page_data.get("t", "")
-        page_idx = int(page_key) if str(page_key).isdigit() else 0
+        try:
+            page_idx = int(page_key)
+        except (ValueError, TypeError):
+            page_idx = 0
         if isinstance(t, str):
             indices = decode_token_ranges(t)
         elif isinstance(t, list):

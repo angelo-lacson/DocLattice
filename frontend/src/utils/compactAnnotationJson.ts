@@ -57,7 +57,7 @@ export interface CompactAnnotationJson {
  */
 export function encodeTokenRanges(tokens: number[]): string {
   if (tokens.length === 0) return "";
-  const sorted = [...tokens].sort((a, b) => a - b);
+  const sorted = [...new Set(tokens)].sort((a, b) => a - b);
   const ranges: string[] = [];
   let rangeStart = sorted[0];
   let rangeEnd = sorted[0];
@@ -107,9 +107,9 @@ export function decodeTokenRanges(rangeStr: string): number[] {
     } else {
       const num = parseInt(part, 10);
       if (!isNaN(num)) {
-        tokens.push(num);
         total += 1;
         if (total > COMPACT_JSON_MAX_TOTAL_TOKENS) break;
+        tokens.push(num);
       }
     }
   }
@@ -127,7 +127,8 @@ export function isCompactFormat(
   return (
     json != null &&
     (json as Record<string, unknown>).v === 2 &&
-    typeof (json as Record<string, unknown>).p === "object"
+    typeof (json as Record<string, unknown>).p === "object" &&
+    (json as Record<string, unknown>).p !== null
   );
 }
 

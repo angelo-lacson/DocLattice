@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from opencontractserver.annotations.models import Annotation
     from opencontractserver.pipeline.base.embedder import BaseEmbedder
 
+from opencontractserver.annotations.compact_json import expand_annotation_json
 from opencontractserver.types.enums import ContentModality
 from opencontractserver.utils.pdf_token_extraction import (
     get_image_as_base64,
@@ -169,8 +170,6 @@ def get_annotation_image_tokens(
             return []
 
         # Get token references from annotation json (handles v1 and v2 formats)
-        from opencontractserver.annotations.compact_json import expand_annotation_json
-
         annotation_json = expand_annotation_json(
             annotation.json or {}, raw_text=annotation.raw_text or ""
         )
@@ -375,8 +374,6 @@ def extract_and_store_annotation_images(
 
     try:
         # Get token references from annotation json (handles v1 and v2 formats)
-        from opencontractserver.annotations.compact_json import expand_annotation_json
-
         annotation_json = expand_annotation_json(
             annotation.json or {}, raw_text=annotation.raw_text or ""
         )

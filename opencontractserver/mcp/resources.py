@@ -9,6 +9,8 @@ import json
 
 from django.contrib.auth.models import AnonymousUser
 
+from opencontractserver.annotations.compact_json import expand_annotation_json
+
 
 def get_corpus_resource(corpus_slug: str) -> str:
     """
@@ -150,8 +152,6 @@ def get_annotation_resource(
             "color": annotation.annotation_label.color or "#000000",
             "label_type": annotation.annotation_label.label_type,
         }
-
-    from opencontractserver.annotations.compact_json import expand_annotation_json
 
     return json.dumps(
         {
