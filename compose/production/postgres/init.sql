@@ -6,3 +6,4 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- parameter name" warnings when the GUC isn't registered during
 -- docker-entrypoint-initdb.d execution (the temporary postgres used for
 -- initialization doesn't receive user command-line args).
+-- Values: hnsw.iterative_scan=relaxed_order, hnsw.ef_search=64

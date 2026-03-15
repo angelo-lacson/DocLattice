@@ -34,10 +34,9 @@ class Migration(migrations.Migration):
                     EXECUTE 'ALTER DATABASE '
                         || current_database()
                         || ' RESET hnsw.ef_search';
-                EXCEPTION WHEN OTHERS THEN
-                    -- Ignore if the settings don't exist (fresh database
-                    -- that never ran migration 0063's ALTER DATABASE SET).
-                    NULL;
+                EXCEPTION
+                    WHEN undefined_object THEN NULL;
+                    WHEN invalid_parameter_value THEN NULL;
                 END $$;
             """,
             reverse_sql=migrations.RunSQL.noop,
