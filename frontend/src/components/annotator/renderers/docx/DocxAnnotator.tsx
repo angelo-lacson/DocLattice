@@ -1,15 +1,17 @@
 /**
  * DocxAnnotator Component
  *
- * Renders DOCX documents using Docxodus WASM with annotation projection.
- * Uses convertDocxToHtmlWithExternalAnnotations() to render the document
- * with annotations overlaid on the native DOCX HTML output. Text selection
- * creates new annotations using character offsets (same format as TXT).
+ * Renders DOCX documents using Docxodus WASM with incremental annotation
+ * overlay. Uses the convert-once / project-many pattern:
  *
- * Text selection disambiguation: uses DOM selection positions (anchorNode/
- * focusNode) and a TreeWalker to compute exact character offsets in the
- * document text, resolving ambiguity when the same text appears multiple
- * times (e.g. "Party", "Agreement", legal boilerplate).
+ *   1. convertDocxToHtml()  — expensive (~900ms), cached on docxBytes change
+ *   2. projectAnnotationsOntoHtml() — fast (~56ms), runs on annotation change
+ *   3. generateAnnotationVisibilityCss() — instant, CSS-only label toggling
+ *
+ * Text selection creates new annotations using character offsets (same format
+ * as TXT). Selection disambiguation uses DOM positions (anchorNode/focusNode)
+ * and a TreeWalker to compute exact character offsets, resolving ambiguity
+ * when the same text appears multiple times.
  */
 
 import React, {
@@ -21,13 +23,17 @@ import React, {
 } from "react";
 import {
   initialize as initDocxodus,
-  convertDocxToHtmlWithExternalAnnotations,
+  convertDocxToHtml,
+  projectAnnotationsOntoHtml,
+  generateAnnotationCss,
+  generateAnnotationVisibilityCss,
   findTextOccurrences,
   AnnotationLabelMode,
 } from "docxodus";
 import type {
   ExternalAnnotationSet,
   ExternalAnnotationProjectionSettings,
+  AnnotationLabel,
 } from "docxodus";
 import { AnnotationLabelType } from "../../../../types/graphql-api";
 import { ServerSpanAnnotation } from "../../types/annotations";
@@ -55,6 +61,17 @@ interface ChatSourceHighlight {
 }
 
 const EMPTY_CHAT_SOURCES: ChatSourceHighlight[] = [];
+
+/** CSS class prefix for annotation elements produced by the projector. */
+const CSS_CLASS_PREFIX = "oc-annot-";
+
+/** Stable projection settings shared by projection and CSS generation. */
+const PROJECTION_SETTINGS: ExternalAnnotationProjectionSettings = {
+  cssClassPrefix: CSS_CLASS_PREFIX,
+  labelMode: AnnotationLabelMode.Tooltip,
+  includeMetadata: true,
+  validateBeforeProjection: false,
+};
 
 interface DocxAnnotatorProps {
   /** Raw DOCX file bytes */
@@ -109,24 +126,22 @@ interface DocxAnnotatorProps {
 }
 
 /**
- * Convert server annotations to Docxodus ExternalAnnotationSet format.
+ * Build an ExternalAnnotationSet from server annotations.
+ *
+ * Label visibility filtering is NOT done here — all annotations matching the
+ * structural filter are included, and visibility is toggled via CSS rules
+ * produced by generateAnnotationVisibilityCss().
  */
 function buildExternalAnnotationSet(
   docText: string,
   annotations: ServerSpanAnnotation[],
-  visibleLabels: AnnotationLabelType[],
   showStructural: boolean
 ): ExternalAnnotationSet {
-  const visibleLabelIds = new Set(visibleLabels.map((l) => l.id));
-
   const filteredAnnotations = annotations.filter((ann) => {
-    if (ann.annotationLabel?.id && !visibleLabelIds.has(ann.annotationLabel.id))
-      return false;
     if (ann.structural && !showStructural) return false;
     return true;
   });
 
-  // Build labelled_text in docxodus format using TextSpan {start, end, text}
   const labelledText = filteredAnnotations.map((ann) => ({
     id: ann.id,
     annotationLabel: ann.annotationLabel?.text ?? "Unknown",
@@ -139,7 +154,6 @@ function buildExternalAnnotationSet(
     structural: ann.structural,
   }));
 
-  // Build text label definitions
   const textLabels: Record<
     string,
     {
@@ -181,6 +195,28 @@ function buildExternalAnnotationSet(
   };
 }
 
+/**
+ * Build the labels record for generateAnnotationCss() from all available
+ * corpus labels. This ensures CSS rules exist for every possible label
+ * before any annotation uses it.
+ */
+function buildLabelsRecord(
+  availableLabels: AnnotationLabelType[]
+): Record<string, AnnotationLabel> {
+  const record: Record<string, AnnotationLabel> = {};
+  for (const label of availableLabels) {
+    record[label.id] = {
+      id: label.id,
+      text: label.text ?? "",
+      color: label.color ?? "#FFD700",
+      description: label.description ?? "",
+      icon: label.icon ?? "",
+      labelType: "text",
+    };
+  }
+  return record;
+}
+
 const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
   docxBytes,
   docText,
@@ -204,7 +240,15 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
   maxHeight = "100%",
   maxWidth = "100%",
 }) => {
-  const [html, setHtml] = useState<string>("");
+  // Cached base HTML from one-time DOCX conversion (sanitized)
+  const [baseHtml, setBaseHtml] = useState<string>("");
+  // Annotated HTML with all annotations projected
+  const [annotatedHtml, setAnnotatedHtml] = useState<string>("");
+  // CSS from docxodus for annotation highlight styles
+  const [annotationCss, setAnnotationCss] = useState<string>("");
+  // CSS for toggling label visibility without re-projecting
+  const [visibilityCss, setVisibilityCss] = useState<string>("");
+
   const [wasmReady, setWasmReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
@@ -222,7 +266,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     end: number;
   } | null>(null);
 
-  // Initialize Docxodus WASM
+  // ── Effect 1: Initialize Docxodus WASM ──────────────────────────────
   useEffect(() => {
     let cancelled = false;
     initDocxodus()
@@ -237,43 +281,21 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     };
   }, []);
 
-  // Convert DOCX to HTML with annotations projected
+  // ── Effect 2: Convert DOCX → base HTML (expensive, cached) ─────────
+  // Only re-runs when docxBytes changes. The base HTML is sanitized once
+  // here; subsequent projection operates on this safe foundation.
   useEffect(() => {
     if (!wasmReady || !docxBytes || docxBytes.length === 0) return;
 
     let cancelled = false;
     setConverting(true);
 
-    const annotationSet = buildExternalAnnotationSet(
-      docText,
-      annotations,
-      visibleLabels,
-      showStructuralAnnotations
-    );
-
-    const projectionSettings: ExternalAnnotationProjectionSettings = {
-      cssClassPrefix: "oc-annot-",
-      labelMode: AnnotationLabelMode.Tooltip,
-      includeMetadata: true,
-      validateBeforeProjection: false,
-    };
-
-    convertDocxToHtmlWithExternalAnnotations(
-      docxBytes,
-      annotationSet,
-      undefined,
-      projectionSettings
-    )
-      .then((resultHtml) => {
+    convertDocxToHtml(docxBytes)
+      .then((html) => {
         if (!cancelled) {
-          // Sanitize WASM-produced HTML to prevent XSS from crafted DOCX files.
-          // DOMPurify allows all data-* attributes by default, so the WASM
-          // renderer's data-annotation-id (and any future data-* attributes)
-          // pass through without explicit whitelisting. ADD_ATTR is kept as
-          // documentation of the attribute this component depends on.
-          setHtml(
-            DOMPurify.sanitize(resultHtml, {
-              ADD_ATTR: ["data-annotation-id"],
+          setBaseHtml(
+            DOMPurify.sanitize(html, {
+              ADD_ATTR: ["data-annotation-id", "data-label-id", "data-label"],
             })
           );
           setConverting(false);
@@ -290,14 +312,106 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [
-    wasmReady,
-    docxBytes,
-    docText,
-    annotations,
-    visibleLabels,
-    showStructuralAnnotations,
-  ]);
+  }, [wasmReady, docxBytes]);
+
+  // ── Effect 3: Project annotations onto base HTML (~56ms) ────────────
+  // Re-runs when annotations change or structural toggle flips.
+  // Label visibility is handled separately via CSS (Effect 5).
+  useEffect(() => {
+    if (!baseHtml || !wasmReady) return;
+    let cancelled = false;
+
+    const annotationSet = buildExternalAnnotationSet(
+      docText,
+      annotations,
+      showStructuralAnnotations
+    );
+
+    if (annotationSet.labelledText.length === 0) {
+      setAnnotatedHtml(baseHtml);
+      return;
+    }
+
+    projectAnnotationsOntoHtml(baseHtml, annotationSet, PROJECTION_SETTINGS)
+      .then((html) => {
+        if (!cancelled) {
+          setAnnotatedHtml(
+            DOMPurify.sanitize(html, {
+              ADD_ATTR: ["data-annotation-id", "data-label-id", "data-label"],
+            })
+          );
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("Annotation projection error:", err);
+          setAnnotatedHtml(baseHtml);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [baseHtml, docText, annotations, showStructuralAnnotations, wasmReady]);
+
+  // ── Effect 4: Generate annotation CSS from label definitions ────────
+  useEffect(() => {
+    if (!wasmReady) return;
+    let cancelled = false;
+
+    const labels = buildLabelsRecord(availableLabels);
+    if (Object.keys(labels).length === 0) {
+      setAnnotationCss("");
+      return;
+    }
+
+    generateAnnotationCss(labels, PROJECTION_SETTINGS)
+      .then((css) => {
+        if (!cancelled) setAnnotationCss(css);
+      })
+      .catch((err) => {
+        if (!cancelled) console.error("Annotation CSS generation error:", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [wasmReady, availableLabels]);
+
+  // ── Effect 5: Generate visibility CSS (instant, CSS-only) ───────────
+  // When label filters change, toggle annotation visibility via CSS rules
+  // instead of re-projecting the entire HTML.
+  useEffect(() => {
+    if (!wasmReady) return;
+    let cancelled = false;
+
+    const visibleLabelIds = new Set(visibleLabels.map((l) => l.id));
+    const allLabelIds = new Set(
+      annotations
+        .map((a) => a.annotationLabel?.id)
+        .filter((id): id is string => Boolean(id))
+    );
+    const hiddenLabelIds = [...allLabelIds].filter(
+      (id) => !visibleLabelIds.has(id)
+    );
+
+    if (hiddenLabelIds.length === 0) {
+      setVisibilityCss("");
+      return;
+    }
+
+    generateAnnotationVisibilityCss(hiddenLabelIds, CSS_CLASS_PREFIX)
+      .then((css) => {
+        if (!cancelled) setVisibilityCss(css);
+      })
+      .catch((err) => {
+        if (!cancelled) console.error("Visibility CSS generation error:", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [wasmReady, visibleLabels, annotations]);
 
   /**
    * Compute an approximate character offset from a DOM selection point.
@@ -343,7 +457,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
             // injected by the WASM renderer and are not part of docText.
             let parent = n.parentElement;
             while (parent && parent !== container) {
-              if (parent.classList.contains("oc-annot-label")) {
+              if (parent.classList.contains(`${CSS_CLASS_PREFIX}label`)) {
                 return NodeFilter.FILTER_REJECT;
               }
               parent = parent.parentElement;
@@ -359,9 +473,6 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
         if (current === targetNode) {
           return globalOffset + targetOffset;
         }
-        // If targetNode is inside current (e.g. targetNode is a child element
-        // and current is a text node within it), this won't match directly.
-        // But for text selections, targetNode is always a text node.
         globalOffset += current.textContent?.length ?? 0;
       }
 
@@ -371,9 +482,6 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
   );
 
   // Handle text selection for new annotation creation.
-  // When the same text appears multiple times (common in contracts: "Party",
-  // "Agreement", boilerplate), the DOM selection position is used to pick the
-  // closest occurrence rather than always choosing the first.
   const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
       if (readOnly || !allowInput || !selectedLabelTypeId) return;
@@ -390,11 +498,6 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       let match = occurrences[0];
 
       if (occurrences.length > 1) {
-        // Multiple occurrences — use the DOM selection position to disambiguate.
-        // The TreeWalker computes an approximate character offset from the DOM,
-        // which may differ slightly from docText offsets (e.g. inter-paragraph
-        // newlines in docText aren't in the DOM). We pick the occurrence whose
-        // start is closest to the DOM-computed offset.
         const contentEl = containerRef.current?.querySelector(
           ".docx-content"
         ) as HTMLElement | null;
@@ -454,7 +557,6 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     (e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
 
-      // Check if the clicked element is an annotation span
       const annotationEl = target.closest(
         "[data-annotation-id]"
       ) as HTMLElement | null;
@@ -462,7 +564,6 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
         const annotationId = annotationEl.getAttribute("data-annotation-id");
         if (annotationId) {
           if (e.ctrlKey || e.metaKey) {
-            // Toggle in multi-select
             setSelectedAnnotations(
               selectedAnnotations.includes(annotationId)
                 ? selectedAnnotations.filter((id) => id !== annotationId)
@@ -475,7 +576,6 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
         }
       }
 
-      // Click on empty space clears selection
       if (!menuPosition) {
         setSelectedAnnotations([]);
       }
@@ -495,7 +595,8 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Inject custom CSS for annotation highlighting
+  // App-specific CSS for selection highlights and hover effects.
+  // Layered after annotationCss and visibilityCss so these override.
   const customCss = useMemo(() => {
     const selectedStyles = selectedAnnotations
       .map(
@@ -510,7 +611,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       .join("\n");
 
     return `
-      .oc-annot-label {
+      .${CSS_CLASS_PREFIX}label {
         font-size: 0.7em;
         padding: 1px 4px;
         border-radius: 3px;
@@ -544,7 +645,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     );
   }
 
-  if (!wasmReady || converting) {
+  if (!wasmReady || converting || !annotatedHtml) {
     return (
       <div
         style={{
@@ -558,7 +659,9 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       >
         {!wasmReady
           ? "Initializing DOCX renderer..."
-          : "Converting document..."}
+          : converting
+          ? "Converting document..."
+          : "Projecting annotations..."}
       </div>
     );
   }
@@ -577,10 +680,12 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       onMouseUp={handleMouseUp}
       onClick={handleClick}
     >
+      <style>{annotationCss}</style>
+      <style>{visibilityCss}</style>
       <style>{customCss}</style>
       <div
         className="docx-content"
-        dangerouslySetInnerHTML={{ __html: html }}
+        dangerouslySetInnerHTML={{ __html: annotatedHtml }}
         style={{
           padding: "1.5rem",
           lineHeight: 1.6,
