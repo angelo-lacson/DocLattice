@@ -261,8 +261,7 @@ export const SUPPORTED_MIME_TYPES = [
   { value: "application/pdf", label: "PDF", shortLabel: "PDF" },
   { value: "text/plain", label: "Plain Text", shortLabel: "TXT" },
   {
-    value:
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    value: DOCX_MIME_TYPE,
     label: "Word Document",
     shortLabel: "DOCX",
   },

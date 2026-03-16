@@ -85,7 +85,8 @@ test("DocxAnnotator disambiguates repeated text by selecting correct occurrence"
   // sampleDocText has "This" at two positions:
   //   First:  index 13 ("Hello World. This is...")
   //   Second: index 57 ("This paragraph contains...")
-  // These are hardcoded from the test fixture's known text.
+  // Offsets are pinned to docxodus@5.5.0 and the sampleDocText fixture
+  // defined in DocxAnnotatorTestWrapper.tsx. Update if either changes.
   const FIRST_THIS_OFFSET = 13;
   const SECOND_THIS_OFFSET = 57;
 

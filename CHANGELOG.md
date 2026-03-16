@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Frontend: DocumentKnowledgeBase integration**: DOCX loading flow (fetches raw bytes + extracted text) and renderer dispatch added to both query handlers.
   - **Frontend utilities**: `isDocxFileType()` in `frontend/src/utils/files.ts`, `DOCX_MIME_TYPE` constant, `docxBytesAtom` / `useDocxBytes()` hook in DocumentAtom, `getDocxBytes()` in cachedRest.
   - **Docker Compose**: `docxodus-parser` service added to `local.yml`, `production.yml`, and `test.yml` with dependency wiring.
-  - **Dependencies**: `docxodus@5.4.2` and `dompurify@3.3.3` added to frontend.
+  - **Dependencies**: `docxodus@5.5.0` and `dompurify@3.3.3` added to frontend.
   - **Backend tests**: `test_doc_parser_docxodus.py` with parser unit tests (success, timeout, connection error, normalization) and thumbnailer tests (text preview, embedded thumbnail, invalid DOCX handling).
   - **Frontend tests**: `DocxAnnotator.ct.tsx` component test with `docScreenshot` captures.
 

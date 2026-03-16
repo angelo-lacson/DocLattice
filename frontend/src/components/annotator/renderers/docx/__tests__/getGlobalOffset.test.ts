@@ -1,77 +1,8 @@
 import { describe, it, expect } from "vitest";
-
-/**
- * Standalone implementation of the DOM offset resolution algorithm used by
- * DocxAnnotator's handleMouseUp. Extracted here for testability since the
- * production code defines it as a useCallback inside the component.
- *
- * The algorithm walks text nodes in document order, skipping annotation label
- * elements, to compute an approximate character offset from the start of the
- * container. This offset is used to pick the closest occurrence of repeated
- * text via findTextOccurrences.
- */
-function getGlobalOffsetFromDomPosition(
-  container: HTMLElement,
-  node: Node | null,
-  localOffset: number
-): number | null {
-  if (!node) return null;
-
-  let targetNode: Node = node;
-  let targetOffset: number = localOffset;
-  if (node.nodeType === Node.ELEMENT_NODE) {
-    const el = node as HTMLElement;
-    if (localOffset < el.childNodes.length) {
-      targetNode = el.childNodes[localOffset];
-      targetOffset = 0;
-    } else if (el.childNodes.length > 0) {
-      targetNode = el.childNodes[el.childNodes.length - 1];
-      targetOffset = targetNode.textContent?.length ?? 0;
-    } else {
-      return null;
-    }
-  }
-
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n: Node) => {
-      let parent = (n as ChildNode).parentElement;
-      while (parent && parent !== container) {
-        if (parent.classList.contains("oc-annot-label")) {
-          return NodeFilter.FILTER_REJECT;
-        }
-        parent = parent.parentElement;
-      }
-      return NodeFilter.FILTER_ACCEPT;
-    },
-  });
-
-  let globalOffset = 0;
-  let current: Node | null;
-  while ((current = walker.nextNode())) {
-    if (current === targetNode) {
-      return globalOffset + targetOffset;
-    }
-    globalOffset += current.textContent?.length ?? 0;
-  }
-
-  return null;
-}
-
-/**
- * Simulate the closest-match disambiguation logic from handleMouseUp:
- * given multiple occurrences and an approximate DOM offset, pick the closest.
- */
-function pickClosestOccurrence(
-  occurrences: Array<{ start: number; end: number }>,
-  approximateOffset: number
-): { start: number; end: number } {
-  return occurrences.reduce((closest, occ) =>
-    Math.abs(occ.start - approximateOffset) <
-    Math.abs(closest.start - approximateOffset)
-      ? occ
-      : closest
-  );
-}
+import {
+  getGlobalOffsetFromDomPosition,
+  pickClosestOccurrence,
+} from "../docxOffsetUtils";
 
 describe("getGlobalOffsetFromDomPosition", () => {
   it("computes offset for a simple flat text container", () => {

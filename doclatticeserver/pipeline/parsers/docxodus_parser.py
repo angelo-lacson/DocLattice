@@ -204,6 +204,22 @@ class DocxodusServiceParser(BaseParser):
             "structuralSetHash": "structural_set_hash",
         }
 
+        # Validate required fields before normalizing
+        has_content = "content" in response_data
+        has_labelled = (
+            "labelledText" in response_data or "labelled_text" in response_data
+        )
+        if not has_content or not has_labelled:
+            missing = []
+            if not has_content:
+                missing.append("content")
+            if not has_labelled:
+                missing.append("labelledText")
+            raise DocumentParsingError(
+                f"Docxodus response missing required fields: {', '.join(missing)}",
+                is_transient=False,
+            )
+
         normalized: dict[str, Any] = {}
 
         for key, value in response_data.items():
