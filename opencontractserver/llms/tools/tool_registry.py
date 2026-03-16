@@ -5,12 +5,13 @@ This module provides:
   1. ``ToolDefinition`` / ``AVAILABLE_TOOLS`` — static metadata (names,
      descriptions, flags) exposed via the GraphQL API.
   2. ``ToolFunctionRegistry`` — singleton that maps tool names to their
-     Python function implementations (sync + async).  This is the **single
+     async Python function implementations.  This is the **single
      source of truth** for resolving tool names to callable functions.
 """
 
 from __future__ import annotations
 
+import inspect
 import logging
 import threading
 from dataclasses import dataclass, field
@@ -637,12 +638,20 @@ class ToolRegistryEntry:
     async_func: Callable
     aliases: tuple[str, ...] = field(default_factory=tuple)
 
+    def __post_init__(self) -> None:
+        if not inspect.iscoroutinefunction(self.async_func):
+            raise TypeError(
+                f"Tool {self.definition.name!r}: async_func must be an async "
+                f"function, got {self.async_func!r}. All registered tools must "
+                f"be async."
+            )
+
 
 class ToolFunctionRegistry:
-    """Singleton registry: tool name -> function refs + metadata.
+    """Singleton registry: tool name -> async function refs + metadata.
 
     Single source of truth for resolving tool names to implementations.
-    Always prefers async_func when available.
+    All registered tools must be async.
     """
 
     _instance: ToolFunctionRegistry | None = None

@@ -606,27 +606,27 @@ class TestValidateResourceIdParams(TestCase):
 # ---------------------------------------------------------------------------
 
 
-def tool_needing_document_id(document_id: int, query: str) -> dict:
+async def tool_needing_document_id(document_id: int, query: str) -> dict:
     """Tool that needs document_id."""
     return {"document_id": document_id, "query": query}
 
 
-def tool_needing_corpus_id(corpus_id: int, limit: int = 10) -> dict:
+async def tool_needing_corpus_id(corpus_id: int, limit: int = 10) -> dict:
     """Tool that needs corpus_id."""
     return {"corpus_id": corpus_id, "limit": limit}
 
 
-def tool_needing_author_id(author_id: int, content: str) -> dict:
+async def tool_needing_author_id(author_id: int, content: str) -> dict:
     """Tool that needs author_id."""
     return {"author_id": author_id, "content": content}
 
 
-def tool_needing_creator_id(creator_id: int, note: str) -> dict:
+async def tool_needing_creator_id(creator_id: int, note: str) -> dict:
     """Tool that needs creator_id."""
     return {"creator_id": creator_id, "note": note}
 
 
-def tool_needing_multiple_ids(
+async def tool_needing_multiple_ids(
     document_id: int, corpus_id: int, author_id: int, text: str
 ) -> dict:
     """Tool that needs multiple context IDs."""
@@ -638,7 +638,7 @@ def tool_needing_multiple_ids(
     }
 
 
-def tool_needing_no_ids(query: str, limit: int = 5) -> dict:
+async def tool_needing_no_ids(query: str, limit: int = 5) -> dict:
     """Tool that doesn't need any context IDs."""
     return {"query": query, "limit": limit}
 
@@ -845,18 +845,12 @@ class TestToolFaultTolerance(TestCase):
     exceptions (PermissionError, ToolConfirmationRequired) still propagate.
     """
 
-    async def test_sync_tool_error_returns_string(self):
-        """Test that sync tool ValueError is caught and returned as string."""
+    def test_sync_tool_rejected_with_type_error(self):
+        """Test that sync tool is rejected at wrapper creation time."""
         core_tool = CoreTool.from_function(sync_tool_that_raises)
-        wrapped = PydanticAIToolWrapper(core_tool).callable_function
-
-        ctx = MagicMock(deps=None)
-        result = await wrapped(ctx, 42)
-
-        self.assertIsInstance(result, str)
-        self.assertIn("[Tool error]", result)
-        self.assertIn("sync_tool_that_raises", result)
-        self.assertIn("Invalid value: 42", result)
+        with self.assertRaises(TypeError) as ctx:
+            PydanticAIToolWrapper(core_tool)
+        self.assertIn("async", str(ctx.exception))
 
     async def test_async_tool_error_returns_string(self):
         """Test that async tool ValueError is caught and returned as string."""
@@ -871,14 +865,12 @@ class TestToolFaultTolerance(TestCase):
         self.assertIn("async_tool_that_raises", result)
         self.assertIn("Invalid value: 99", result)
 
-    async def test_sync_tool_permission_error_propagates(self):
-        """Test that sync tool PermissionError still raises (security boundary)."""
+    def test_sync_tool_permission_error_rejected(self):
+        """Test that sync tool is rejected even if it raises PermissionError."""
         core_tool = CoreTool.from_function(sync_tool_that_raises_permission_error)
-        wrapped = PydanticAIToolWrapper(core_tool).callable_function
-
-        ctx = MagicMock(deps=None)
-        with self.assertRaises(PermissionError):
-            await wrapped(ctx, 1)
+        with self.assertRaises(TypeError) as ctx:
+            PydanticAIToolWrapper(core_tool)
+        self.assertIn("async", str(ctx.exception))
 
     async def test_async_tool_permission_error_propagates(self):
         """Test that async tool PermissionError still raises (security boundary)."""
@@ -889,17 +881,12 @@ class TestToolFaultTolerance(TestCase):
         with self.assertRaises(PermissionError):
             await wrapped(ctx, 1)
 
-    async def test_sync_runtime_error_returns_string(self):
-        """Test that sync RuntimeError is caught and returned as string."""
+    def test_sync_runtime_error_rejected(self):
+        """Test that sync tool is rejected even if it would raise RuntimeError."""
         core_tool = CoreTool.from_function(sync_tool_that_raises_runtime_error)
-        wrapped = PydanticAIToolWrapper(core_tool).callable_function
-
-        ctx = MagicMock(deps=None)
-        result = await wrapped(ctx, "boom")
-
-        self.assertIsInstance(result, str)
-        self.assertIn("[Tool error]", result)
-        self.assertIn("boom", result)
+        with self.assertRaises(TypeError) as ctx:
+            PydanticAIToolWrapper(core_tool)
+        self.assertIn("async", str(ctx.exception))
 
     async def test_async_runtime_error_returns_string(self):
         """Test that async RuntimeError is caught and returned as string."""
@@ -913,15 +900,12 @@ class TestToolFaultTolerance(TestCase):
         self.assertIn("[Tool error]", result)
         self.assertIn("kaboom", result)
 
-    async def test_successful_sync_tool_returns_normally(self):
-        """Test that successful sync tools are unaffected by fault tolerance."""
+    def test_successful_sync_tool_rejected(self):
+        """Test that even a working sync tool is rejected at wrapper creation time."""
         core_tool = CoreTool.from_function(sync_multiply)
-        wrapped = PydanticAIToolWrapper(core_tool).callable_function
-
-        ctx = MagicMock(deps=None)
-        result = await wrapped(ctx, 6, 7)
-
-        self.assertEqual(result, 42)
+        with self.assertRaises(TypeError) as ctx:
+            PydanticAIToolWrapper(core_tool)
+        self.assertIn("async", str(ctx.exception))
 
     async def test_successful_async_tool_returns_normally(self):
         """Test that successful async tools are unaffected by fault tolerance."""

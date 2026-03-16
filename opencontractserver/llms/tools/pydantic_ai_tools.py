@@ -249,6 +249,15 @@ class PydanticAIToolWrapper:
                 Maps parameter name -> value to inject.
                 Example: {"document_id": 123, "corpus_id": 456}
         """
+        # Fail fast: reject sync functions before mutating any state.
+        if not inspect.iscoroutinefunction(core_tool.function):
+            raise TypeError(
+                f"Tool {core_tool.name!r} must be an async function. "
+                f"PydanticAIToolWrapper does NOT wrap sync functions in a "
+                f"thread pool — sync ORM calls will raise "
+                f"SynchronousOnlyOperation. Convert this tool to async."
+            )
+
         self.core_tool = core_tool
         self.inject_params = inject_params or {}
         self._metadata = PydanticAIToolMetadata(
@@ -348,13 +357,12 @@ class PydanticAIToolWrapper:
 
         # ------------------------------------------------------------------
 
-        if not inspect.iscoroutinefunction(original_func):
-            raise TypeError(
-                f"Tool {func_name!r} must be an async function. "
-                f"PydanticAIToolWrapper does NOT wrap sync functions in a "
-                f"thread pool — sync ORM calls will raise "
-                f"SynchronousOnlyOperation. Convert this tool to async."
-            )
+        # Note: async check already performed in __init__ before any state
+        # is mutated. This assertion is a safety net only.
+        assert inspect.iscoroutinefunction(original_func), (
+            f"Tool {func_name!r} is not async — this should have been "
+            f"caught in __init__."
+        )
 
         async def async_wrapper(
             ctx: RunContext[PydanticAIDependencies], *args, **kwargs

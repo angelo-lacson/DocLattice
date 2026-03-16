@@ -362,8 +362,14 @@ async def aget_notes_for_document_corpus(
 
     Returns:
         A list of dictionaries, each containing Note data
+
+    Raises:
+        ValueError: If document doesn't exist
     """
     from opencontractserver.annotations.models import Note
+
+    if not await Document.objects.filter(pk=document_id).aexists():
+        raise ValueError(f"Document with id={document_id} does not exist.")
 
     queryset = Note.objects.filter(document_id=document_id)
 
