@@ -235,36 +235,30 @@ class XORConstraintTests(TestCase):
         self.assertIsNotNone(annotation.structural_set)
 
     def test_annotation_with_both_document_and_structural_set_fails(self):
-        """Database constraint prevents setting both document AND structural_set."""
-        with self.assertRaises(IntegrityError) as context:
-            with transaction.atomic():
-                Annotation.objects.create(
-                    document=self.doc,
-                    structural_set=self.struct_set,
-                    corpus=self.corpus,
-                    annotation_label=self.label,
-                    page=1,
-                    raw_text="Invalid annotation",
-                    creator=self.user,
-                )
-
-        self.assertIn("annotation_has_single_parent", str(context.exception).lower())
+        """Model validation prevents setting both document AND structural_set."""
+        with self.assertRaises(ValidationError):
+            Annotation.objects.create(
+                document=self.doc,
+                structural_set=self.struct_set,
+                corpus=self.corpus,
+                annotation_label=self.label,
+                page=1,
+                raw_text="Invalid annotation",
+                creator=self.user,
+            )
 
     def test_annotation_with_neither_document_nor_structural_set_fails(self):
-        """Database constraint requires exactly one parent."""
-        with self.assertRaises(IntegrityError) as context:
-            with transaction.atomic():
-                Annotation.objects.create(
-                    document=None,
-                    structural_set=None,
-                    corpus=self.corpus,
-                    annotation_label=self.label,
-                    page=1,
-                    raw_text="Orphaned annotation",
-                    creator=self.user,
-                )
-
-        self.assertIn("annotation_has_single_parent", str(context.exception).lower())
+        """Model validation requires exactly one parent."""
+        with self.assertRaises(ValidationError):
+            Annotation.objects.create(
+                document=None,
+                structural_set=None,
+                corpus=self.corpus,
+                annotation_label=self.label,
+                page=1,
+                raw_text="Orphaned annotation",
+                creator=self.user,
+            )
 
     def test_relationship_xor_constraint_mirrors_annotation_constraint(self):
         """Same XOR logic applies to Relationship model."""

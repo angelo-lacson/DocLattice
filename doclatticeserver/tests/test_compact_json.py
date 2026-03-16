@@ -580,13 +580,15 @@ class TestAnnotationCleanValidation(TestCase):
         with self.assertRaises(ValueError, msg="must contain 'b' (bounds) and 't'"):
             annot.clean()
 
-    def test_clean_rejects_v1_missing_required_keys(self):
-        """clean() raises when a v1 page entry is missing required keys."""
-        bad_json = {"0": {"bounds": {"top": 0, "left": 0, "right": 0, "bottom": 0}}}
+    def test_clean_accepts_v1_with_partial_keys(self):
+        """clean() accepts v1 page entries with partial keys (shallow check).
+
+        Auto-compaction in save() handles normalization of incomplete v1 data.
+        """
+        partial_json = {"0": {"bounds": {"top": 0, "left": 0, "right": 0, "bottom": 0}}}
         annot = AnnotationFactory()
-        annot.json = bad_json
-        with self.assertRaises(ValueError, msg="must contain 'bounds', 'tokensJsons'"):
-            annot.clean()
+        annot.json = partial_json
+        annot.clean()  # should not raise
 
 
 # ── bulk_update bypass documentation test ─────────────────────────
