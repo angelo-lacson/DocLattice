@@ -5,7 +5,7 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-11
+## [Unreleased] - 2026-03-15
 
 ### Added
 
@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dropdown test selectors outdated after @os-legal/ui upgrade**: Updated CSS selectors in `DocumentMetadataGrid.ct.tsx` from `.oc-select-trigger`/`.oc-select-search` to `.oc-dropdown__trigger`/`.oc-dropdown__search-input` to match the v0.1.13 Dropdown component's class names. Changed Enter-key selection to direct `.oc-dropdown__option` click. (`frontend/tests/DocumentMetadataGrid.ct.tsx`)
 
 ### Changed
+
+- **Enforced async-only tool registry for LLM agent tools**: Audited and converted the entire tool registry to reject sync functions. Previously `ToolRegistryEntry` carried both `sync_func` and `async_func` fields, `FUNCTION_MAP` registered both versions, and `PydanticAIToolWrapper` had a sync wrapper path that called sync functions without a thread pool (risking `SynchronousOnlyOperation`). Changes include:
+  - Removed `sync_func` field from `ToolRegistryEntry` — only `async_func` remains (`opencontractserver/llms/tools/tool_registry.py`)
+  - Simplified `FUNCTION_MAP` from 3-tuples `(sync, async, aliases)` to 2-tuples `(async, aliases)`, removing all sync imports from `_populate()`
+  - Replaced sync wrapper path in `PydanticAIToolWrapper` with a `TypeError` guard that rejects sync functions at construction time (`opencontractserver/llms/tools/pydantic_ai_tools.py`)
+  - Created async versions of `get_note_content_token_length` and `get_partial_note_content` (`aget_note_content_token_length`, `aget_partial_note_content`) which previously only had sync versions that used `Note.objects.get()` (`opencontractserver/llms/tools/core_tools.py`)
+  - Updated `create_document_tools()` to use only async functions (`opencontractserver/llms/tools/tool_factory.py`)
+  - Updated `__init__.py` exports to async-only (`opencontractserver/llms/tools/__init__.py`)
+  - Updated affected tests to use async functions and added new tests for sync rejection
 
 - **SUI Tab migration to @os-legal/ui FilterTabs** (Closes #1022 — tab portion): Removed unused `Tab` and `Menu` imports from `semantic-ui-react` in `frontend/src/views/Corpuses.tsx`. Replaced custom styled `Tab`/`TabContainer` components and custom `SearchInput` in `frontend/src/views/GlobalDiscussions.tsx` with `FilterTabs` and `SearchBox` from `@os-legal/ui`, consistent with the rest of the codebase.
 
