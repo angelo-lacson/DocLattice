@@ -149,8 +149,8 @@ def is_span_format(json_data: Any) -> bool:
     """
     return (
         isinstance(json_data, dict)
-        and isinstance(json_data.get("start"), int)
-        and isinstance(json_data.get("end"), int)
+        and type(json_data.get("start")) is int
+        and type(json_data.get("end")) is int
     )
 
 

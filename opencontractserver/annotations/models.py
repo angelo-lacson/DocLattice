@@ -1037,32 +1037,27 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
                         raise ValueError(
                             "v2 page entries must contain 'b' (bounds) and 't' (tokens)."
                         )
-            else:
-                # v1 legacy format: {"0": {"bounds": ..., "tokensJsons": ..., "rawText": ...}}
+            elif not is_span_format(self.json):
+                # v1 legacy or free-form — shallow check only.
+                # Auto-compaction in save() handles normalization.
                 for page, page_obj in list(self.json.items())[:1]:
                     if not isinstance(page, (int, str)):
                         raise ValueError("Page keys must be int-convertible.")
-                    if not (
-                        isinstance(page_obj, dict)
-                        and {"bounds", "tokensJsons", "rawText"}.issubset(
-                            page_obj.keys()
-                        )
-                    ):
-                        raise ValueError(
-                            "Each page entry must contain 'bounds', 'tokensJsons', and 'rawText'."
-                        )
 
         elif self.annotation_type == SPAN_LABEL:
-            if not (
-                isinstance(self.json, dict)
-                and isinstance(self.json.get("start"), int)
-                and isinstance(self.json.get("end"), int)
-                and isinstance(self.json.get("text", ""), str)
-            ):
-                raise ValueError(
-                    "SPAN_LABEL annotations must store SpanAnnotationJson with 'start' and 'end' ints"
-                    " and an optional 'text' string."
-                )
+            if not isinstance(self.json, dict):
+                raise ValueError("SPAN_LABEL annotations must store a dict.")
+            # Only enforce span schema when the JSON has span-like keys.
+            if "start" in self.json or "end" in self.json:
+                if not (
+                    isinstance(self.json.get("start"), int)
+                    and isinstance(self.json.get("end"), int)
+                    and isinstance(self.json.get("text", ""), str)
+                ):
+                    raise ValueError(
+                        "SPAN_LABEL annotations with 'start'/'end' keys must have"
+                        " integer values and an optional 'text' string."
+                    )
 
         # Other annotation types are free-form – no validation.
 
