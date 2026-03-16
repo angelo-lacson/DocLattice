@@ -173,6 +173,9 @@ export const CONVERSATION_TYPE = {
   THREAD: "THREAD",
 } as const;
 
+// WebSocket error type constants (matches backend WS_ERROR_* constants)
+export const WS_ERROR_CONTEXT_EXHAUSTED = "CONTEXT_EXHAUSTED";
+
 export type ConversationType =
   (typeof CONVERSATION_TYPE)[keyof typeof CONVERSATION_TYPE];
 
