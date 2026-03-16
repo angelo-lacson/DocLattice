@@ -19,7 +19,7 @@ from doclatticeserver.documents.models import Document
 from doclatticeserver.llms import agents
 from doclatticeserver.llms.agents.core_agents import AgentConfig
 from doclatticeserver.llms.agents.pydantic_ai_agents import PydanticAIDocumentAgent
-from doclatticeserver.llms.tools.core_tools import update_document_description
+from doclatticeserver.llms.tools.core_tools import aupdate_document_description
 from doclatticeserver.llms.tools.tool_factory import CoreTool
 
 User = get_user_model()
@@ -100,7 +100,7 @@ class TestDuplicateToolRegistration(TransactionTestCase):
 
         # Create a CoreTool that wraps the same function as the default
         duplicate_core_tool = CoreTool.from_function(
-            update_document_description,
+            aupdate_document_description,
             name="update_document_description",
             description="Duplicate tool for testing",
         )
@@ -238,7 +238,7 @@ class TestDuplicateToolRegistration(TransactionTestCase):
 
         # Create a duplicate tool that will be in config.tools
         duplicate_core_tool = CoreTool.from_function(
-            update_document_description,
+            aupdate_document_description,
             name="update_document_description",
             description="Duplicate tool for testing structured_response",
         )
