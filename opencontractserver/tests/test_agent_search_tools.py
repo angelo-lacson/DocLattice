@@ -466,6 +466,10 @@ class TestCoreTools(TestCase):
         self.assertEqual(len(filtered_notes), 1)
         self.assertEqual(filtered_notes[0]["id"], note_with_corpus.id)
 
+        # Non-existent document raises ValueError
+        with self.assertRaises(ValueError):
+            await aget_notes_for_document_corpus(999_999)
+
     async def test_aget_note_content_token_length(self):
         """Test async note content token length calculation."""
         user = await User.objects.acreate(username="toklenuser", password="pass")

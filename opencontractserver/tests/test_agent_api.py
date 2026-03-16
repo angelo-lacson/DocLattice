@@ -687,6 +687,25 @@ class TestToolFunctionRegistry(TestCase):
         self.assertFalse(core_read.requires_approval)
         self.assertFalse(core_read.requires_write_permission)
 
+    def test_sync_function_rejected_at_registration(self):
+        """ToolRegistryEntry rejects sync functions with TypeError."""
+        from opencontractserver.llms.tools.tool_registry import (
+            ToolCategory,
+            ToolDefinition,
+            ToolRegistryEntry,
+        )
+
+        def sync_func():
+            pass
+
+        defn = ToolDefinition(
+            name="test_sync",
+            description="should fail",
+            category=ToolCategory.DOCUMENT,
+        )
+        with self.assertRaises(TypeError):
+            ToolRegistryEntry(definition=defn, async_func=sync_func)
+
 
 class TestBuildToolsFromRegistry(TestCase):
     """Test the _build_tools_from_registry helper."""
