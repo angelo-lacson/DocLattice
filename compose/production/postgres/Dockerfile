@@ -10,7 +10,7 @@ COPY ./compose/postgres/shared.conf /etc/postgresql-custom/shared.conf
 COPY ./compose/postgres/docker-entrypoint-wrapper.sh /usr/local/bin/docker-entrypoint-wrapper.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint-wrapper.sh
 
-ENTRYPOINT ["docker-entrypoint-wrapper.sh"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint-wrapper.sh"]
 CMD ["postgres"]
 
 COPY ./compose/production/postgres/maintenance /usr/local/bin/maintenance

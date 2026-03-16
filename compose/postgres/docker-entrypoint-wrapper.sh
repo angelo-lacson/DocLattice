@@ -33,6 +33,10 @@ if [ -f "$SHARED_CONF" ]; then
     done < "$SHARED_CONF"
 fi
 
-# Shared defaults first, per-environment args second (postgres uses last-wins
-# for -c flags, so per-environment settings correctly override shared defaults).
-exec /usr/local/bin/docker-entrypoint.sh "${EXTRA_ARGS[@]}" "$@"
+# Pass the command (e.g. "postgres") first so docker-entrypoint.sh recognises
+# it as $1, then shared defaults, then per-environment args (postgres uses
+# last-wins for -c flags, so per-environment settings correctly override
+# shared defaults).
+CMD="$1"
+shift
+exec /usr/local/bin/docker-entrypoint.sh "$CMD" "${EXTRA_ARGS[@]}" "$@"
