@@ -20,8 +20,8 @@ import zipfile
 from dataclasses import dataclass, field
 
 from opencontractserver.annotations.compact_json import (
-    expand_annotation_json,
     is_span_format,
+    iter_page_annotations,
 )
 
 # ---------------------------------------------------------------------------
@@ -355,81 +355,44 @@ def _check_annotation(
     # Validate annotation_json token references and bounds.
     # Use `or {}` instead of a default so that explicit null (common in
     # exports) is normalised to an empty dict rather than silently skipping.
-    # Expand v2 compact format to v1 for uniform validation.
-    ann_json = expand_annotation_json(
-        annot.get("annotation_json") or {},
-        raw_text=annot.get("rawText", ""),
-    )
+    # The accessor layer handles both v1 and v2 formats transparently.
+    ann_json = annot.get("annotation_json") or {}
+
     # Span annotations ({start, end}) don't have page-keyed structure
     if isinstance(ann_json, dict) and not is_span_format(ann_json):
-        for page_key, page_data in ann_json.items():
-            if not isinstance(page_data, dict):
-                continue
-
-            # Validate page key is a valid integer
-            try:
-                page_key_int = int(page_key)
-            except (ValueError, TypeError):
+        for page in iter_page_annotations(ann_json, raw_text=annot.get("rawText", "")):
+            # Validate page index is within document range
+            if pawls and (page.page_index < 0 or page.page_index >= len(pawls)):
                 result.error(
-                    f"{ann_prefix}: annotation_json has non-integer "
-                    f"page key '{page_key}'"
-                )
-                continue
-
-            # Validate page key is within document range
-            if pawls and (page_key_int < 0 or page_key_int >= len(pawls)):
-                result.error(
-                    f"{ann_prefix}: annotation_json page key '{page_key}' "
-                    f"out of range (document has {len(pawls)} page(s))"
+                    f"{ann_prefix}: annotation_json page index "
+                    f"'{page.page_index}' out of range "
+                    f"(document has {len(pawls)} page(s))"
                 )
 
             # Validate bounds are non-negative
-            bounds = page_data.get("bounds", {})
-            if isinstance(bounds, dict):
-                for coord in ("top", "bottom", "left", "right"):
-                    val = bounds.get(coord)
-                    if val is not None and isinstance(val, (int, float)) and val < 0:
-                        result.error(
-                            f"{ann_prefix}: bounds.{coord} is negative ({val})"
-                        )
+            for coord in ("top", "bottom", "left", "right"):
+                val = page.bounds.get(coord)
+                if val is not None and isinstance(val, (int, float)) and val < 0:
+                    result.error(f"{ann_prefix}: bounds.{coord} is negative ({val})")
 
-            tokens_jsons = page_data.get("tokensJsons", [])
-            for tok_ref in tokens_jsons:
-                page_idx = tok_ref.get("pageIndex")
-                token_idx = tok_ref.get("tokenIndex")
-
-                if page_idx is None or token_idx is None:
+            if not pawls:
+                if page.token_indices:
                     result.error(
-                        f"{ann_prefix}: token ref missing pageIndex or tokenIndex"
+                        f"{ann_prefix}: page {page.page_index} references "
+                        f"tokens but PAWLs data is empty"
                     )
+                continue
+
+            for token_idx in page.token_indices:
+                if page.page_index < 0 or page.page_index >= len(pawls):
+                    # Already reported above; skip token-level checks
                     continue
 
-                # Check pageIndex matches the containing page key
-                if page_idx != page_key_int:
-                    result.error(
-                        f"{ann_prefix}: token ref pageIndex {page_idx} "
-                        f"does not match page key '{page_key}'"
-                    )
-
-                if not pawls:
-                    result.error(
-                        f"{ann_prefix}: pageIndex {page_idx} references "
-                        f"into empty PAWLs data"
-                    )
-                    continue
-
-                if page_idx < 0 or page_idx >= len(pawls):
-                    result.error(
-                        f"{ann_prefix}: pageIndex {page_idx} out of range "
-                        f"(0..{len(pawls) - 1})"
-                    )
-                    continue
-
-                page_tokens = pawls[page_idx].get("tokens", [])
+                page_tokens = pawls[page.page_index].get("tokens", [])
                 if token_idx < 0 or token_idx >= len(page_tokens):
                     result.error(
                         f"{ann_prefix}: tokenIndex {token_idx} out of range "
-                        f"for page {page_idx} "
+                        f"for page {page.page_index} "
                         f"(0..{max(0, len(page_tokens) - 1)})"
                     )
 

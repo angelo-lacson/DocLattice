@@ -2,13 +2,22 @@
  * Compact Annotation JSON v2 format.
  *
  * Provides encode/decode between the verbose v1 annotation JSON format and
- * the compact v2 format that reduces storage by ~75%.
+ * the compact v2 format that reduces storage by ~75%, plus a **format-agnostic
+ * accessor layer** so consumers never need to know which format they are reading.
  *
  * v1 (legacy):
  *   { "0": { bounds: {top,left,right,bottom}, tokensJsons: [{pageIndex,tokenIndex},...], rawText: "..." } }
  *
  * v2 (compact):
  *   { v: 2, p: { "0": { b: [top,left,right,bottom], t: "35-37,40" } } }
+ *
+ * Accessor layer (preferred for all new code):
+ *   for (const page of iterPageAnnotations(annotation.json, annotation.rawText)) {
+ *     page.pageIndex;      // number
+ *     page.bounds;          // BoundingBox
+ *     page.tokenIndices;    // number[]
+ *     page.rawText;         // string
+ *   }
  */
 
 import {
@@ -206,14 +215,20 @@ export function compactAnnotationJson(
 /**
  * Normalize annotation JSON to canonical v1 MultipageAnnotationJson.
  * Accepts both v1 and v2 formats. If already v1, returns as-is.
+ * Null/falsy inputs are returned as-is.
  */
 export function expandAnnotationJson(
-  json: MultipageAnnotationJson | CompactAnnotationJson | SpanAnnotationJson,
+  json:
+    | MultipageAnnotationJson
+    | CompactAnnotationJson
+    | SpanAnnotationJson
+    | null
+    | undefined,
   rawText: string = ""
-): MultipageAnnotationJson | SpanAnnotationJson {
-  // Type guard: not an object → return as-is
+): MultipageAnnotationJson | SpanAnnotationJson | null | undefined {
+  // Null/falsy passthrough
   if (!json || typeof json !== "object") {
-    return json as MultipageAnnotationJson;
+    return json as null | undefined;
   }
 
   const record = json as Record<string, unknown>;
@@ -265,4 +280,100 @@ export function expandAnnotationJson(
   }
 
   return v1;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Format-agnostic accessor layer
+// ═══════════════════════════════════════════════════════════════
+
+/** Format-agnostic view of one page's annotation data. */
+export interface PageAnnotationData {
+  /** Zero-based page number. */
+  pageIndex: number;
+  /** Bounding box as {top, left, right, bottom}. */
+  bounds: BoundingBox;
+  /** Token indices within the page (no pageIndex wrapper). */
+  tokenIndices: number[];
+  /** The annotation's text content. */
+  rawText: string;
+}
+
+const ZERO_BOUNDS: BoundingBox = { top: 0, left: 0, right: 0, bottom: 0 };
+
+/**
+ * Return per-page annotation data from any multipage format (v1 or v2).
+ *
+ * Span annotations and non-object inputs return an empty array — callers
+ * that also handle spans should check `isSpanFormat()` first.
+ */
+export function iterPageAnnotations(
+  json: unknown,
+  rawText: string = ""
+): PageAnnotationData[] {
+  if (!json || typeof json !== "object") return [];
+  const record = json as Record<string, unknown>;
+  if (isSpanFormat(record)) return [];
+
+  const pages: PageAnnotationData[] = [];
+
+  if (isCompactFormat(record)) {
+    const compact = json as CompactAnnotationJson;
+    for (const [pageKey, pageData] of Object.entries(compact.p)) {
+      const pageIdx = parseInt(pageKey, 10);
+      const actualPageIdx = isNaN(pageIdx) ? 0 : pageIdx;
+
+      const b = pageData.b;
+      const bounds: BoundingBox =
+        b?.length >= 4
+          ? { top: b[0], left: b[1], right: b[2], bottom: b[3] }
+          : { ...ZERO_BOUNDS };
+
+      const tokenIndices =
+        typeof pageData.t === "string"
+          ? decodeTokenRanges(pageData.t)
+          : Array.isArray(pageData.t)
+          ? (pageData.t as number[])
+          : [];
+
+      pages.push({ pageIndex: actualPageIdx, bounds, tokenIndices, rawText });
+    }
+  } else {
+    // v1 legacy format
+    for (const [pageKey, pageData] of Object.entries(record)) {
+      const data = pageData as SinglePageAnnotationJson | undefined;
+      if (!data || typeof data !== "object") continue;
+
+      const pageIdx = parseInt(pageKey, 10);
+      const actualPageIdx = isNaN(pageIdx) ? 0 : pageIdx;
+
+      const bounds: BoundingBox = data.bounds ?? { ...ZERO_BOUNDS };
+
+      const tokenIndices = (data.tokensJsons ?? []).map(
+        (tok: TokenId) => tok.tokenIndex
+      );
+
+      const pageRawText = data.rawText ?? rawText;
+
+      pages.push({
+        pageIndex: actualPageIdx,
+        bounds,
+        tokenIndices,
+        rawText: pageRawText,
+      });
+    }
+  }
+
+  return pages;
+}
+
+/**
+ * Return true if the annotation JSON contains any token references.
+ * Span annotations are considered to have tokens implicitly.
+ */
+export function hasAnyTokens(json: unknown, rawText: string = ""): boolean {
+  if (!json || typeof json !== "object") return false;
+  if (isSpanFormat(json as Record<string, unknown>)) return true;
+  return iterPageAnnotations(json, rawText).some(
+    (page) => page.tokenIndices.length > 0
+  );
 }

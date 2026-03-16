@@ -2,7 +2,10 @@
 Compact Annotation JSON v2 format.
 
 Provides encode/decode between the verbose v1 annotation JSON format and
-the compact v2 format. The v2 format reduces storage by:
+the compact v2 format, plus a **format-agnostic accessor layer** so that
+consumers never need to know which format they are reading.
+
+The v2 format reduces storage by:
 
 1. Removing redundant ``pageIndex`` from token references (implicit from page key).
 2. Range-encoding consecutive token indices (e.g. ``"35-37,40"`` vs three objects).
@@ -31,13 +34,26 @@ Format spec::
       }
     }
 
-Both formats are accepted everywhere; v1 is returned from
-:func:`expand_annotation_json` for internal processing.
+**Accessor layer** (preferred for all new code)::
+
+    from opencontractserver.annotations.compact_json import (
+        iter_page_annotations,
+        offset_annotation_json,
+        has_any_tokens,
+    )
+
+    for page in iter_page_annotations(annotation.json, raw_text=annotation.raw_text):
+        page.page_index   # int
+        page.bounds        # {"top": ..., "left": ..., "right": ..., "bottom": ...}
+        page.token_indices # [int, ...]
+        page.raw_text      # str
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import Any
 
 from opencontractserver.constants.annotations import (
@@ -299,3 +315,193 @@ def expand_annotation_json(
         v1[str(page_key)] = page_entry
 
     return v1
+
+
+# ── Format-agnostic accessor layer ──────────────────────────────
+
+_ZERO_BOUNDS: dict[str, int | float] = {
+    "top": 0,
+    "left": 0,
+    "right": 0,
+    "bottom": 0,
+}
+
+
+@dataclass(frozen=True)
+class PageAnnotationData:
+    """Format-agnostic view of one page's annotation data.
+
+    Produced by :func:`iter_page_annotations`.  All fields are normalised
+    regardless of whether the underlying JSON is v1 or v2.
+    """
+
+    page_index: int
+    """Zero-based page number."""
+
+    bounds: dict[str, int | float]
+    """Bounding box as ``{"top", "left", "right", "bottom"}``."""
+
+    token_indices: list[int]
+    """Token indices within the page (no ``pageIndex`` wrapper)."""
+
+    raw_text: str
+    """The annotation's text content."""
+
+
+def iter_page_annotations(
+    json_data: Any,
+    raw_text: str = "",
+) -> Iterator[PageAnnotationData]:
+    """Yield per-page annotation data from any multipage format (v1 or v2).
+
+    Span annotations (``{start, end}``) and non-dict inputs yield nothing —
+    callers that also handle spans should check :func:`is_span_format` first.
+
+    Args:
+        json_data: The annotation JSON in any format.
+        raw_text: Model-level ``Annotation.raw_text``.  Used as the
+            ``raw_text`` field on each yielded page.  For v1 data the
+            per-page ``rawText`` takes precedence when present.
+    """
+    if not isinstance(json_data, dict):
+        return
+
+    if is_span_format(json_data):
+        return
+
+    if is_compact_format(json_data):
+        pages = json_data.get("p", {})
+        if not isinstance(pages, dict):
+            return
+        for page_key, page_data in pages.items():
+            if not isinstance(page_data, dict):
+                continue
+            try:
+                page_idx = int(page_key)
+            except (ValueError, TypeError):
+                page_idx = 0
+
+            b = page_data.get("b")
+            if isinstance(b, (list, tuple)) and len(b) >= 4:
+                bounds = {
+                    "top": b[0],
+                    "left": b[1],
+                    "right": b[2],
+                    "bottom": b[3],
+                }
+            else:
+                bounds = dict(_ZERO_BOUNDS)
+
+            t = page_data.get("t", "")
+            if isinstance(t, str):
+                token_indices = decode_token_ranges(t)
+            elif isinstance(t, list):
+                token_indices = t
+            else:
+                token_indices = []
+
+            yield PageAnnotationData(
+                page_index=page_idx,
+                bounds=bounds,
+                token_indices=token_indices,
+                raw_text=raw_text,
+            )
+    else:
+        # v1 legacy format
+        for page_key, page_data in json_data.items():
+            if not isinstance(page_data, dict):
+                continue
+            try:
+                page_idx = int(page_key)
+            except (ValueError, TypeError):
+                page_idx = 0
+
+            bounds = page_data.get("bounds")
+            if not isinstance(bounds, dict):
+                bounds = dict(_ZERO_BOUNDS)
+
+            tokens_jsons = page_data.get("tokensJsons", [])
+            token_indices: list[int] = []
+            for tok in tokens_jsons:
+                if isinstance(tok, dict) and "tokenIndex" in tok:
+                    token_indices.append(tok["tokenIndex"])
+                elif isinstance(tok, int):
+                    token_indices.append(tok)
+
+            page_raw_text = page_data.get("rawText", raw_text)
+
+            yield PageAnnotationData(
+                page_index=page_idx,
+                bounds=bounds,
+                token_indices=token_indices,
+                raw_text=page_raw_text,
+            )
+
+
+def offset_annotation_json(
+    json_data: Any,
+    page_offset: int,
+) -> Any:
+    """Return a new annotation JSON with page keys offset by *page_offset*.
+
+    Preserves the original format (v1 stays v1, v2 stays v2).
+    Span annotations and non-dict inputs are returned unchanged.
+    """
+    if not isinstance(json_data, dict) or page_offset == 0:
+        return json_data
+
+    if is_span_format(json_data):
+        return json_data
+
+    if is_compact_format(json_data):
+        old_p = json_data.get("p", {})
+        new_p: dict[str, Any] = {}
+        for page_key, page_data in old_p.items():
+            try:
+                new_key = str(int(page_key) + page_offset)
+            except (ValueError, TypeError):
+                new_key = page_key
+            new_p[new_key] = page_data
+        return {"v": 2, "p": new_p}
+
+    # v1: renumber page keys AND update pageIndex in token refs
+    new_json: dict[str, Any] = {}
+    for page_key, page_data in json_data.items():
+        try:
+            new_key = str(int(page_key) + page_offset)
+        except (ValueError, TypeError):
+            new_key = page_key
+            new_json[new_key] = page_data
+            continue
+
+        if isinstance(page_data, dict):
+            new_page_data = dict(page_data)
+            tokens = new_page_data.get("tokensJsons", [])
+            new_page_data["tokensJsons"] = [
+                (
+                    {**tok, "pageIndex": tok["pageIndex"] + page_offset}
+                    if isinstance(tok, dict) and "pageIndex" in tok
+                    else tok
+                )
+                for tok in tokens
+            ]
+            new_json[new_key] = new_page_data
+        else:
+            new_json[new_key] = page_data
+
+    return new_json
+
+
+def has_any_tokens(json_data: Any, raw_text: str = "") -> bool:
+    """Return ``True`` if *json_data* contains any token references.
+
+    Span annotations are considered to have tokens (implicitly).
+    """
+    if not isinstance(json_data, dict):
+        return False
+    if is_span_format(json_data):
+        return True
+    for page in iter_page_annotations(json_data, raw_text=raw_text):
+        if page.token_indices:
+            return True
+    return False

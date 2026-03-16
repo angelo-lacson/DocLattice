@@ -14,8 +14,8 @@ from typing_extensions import TypedDict
 
 from opencontractserver.annotations.compact_json import (
     compact_annotation_json,
-    expand_annotation_json,
     is_span_format,
+    iter_page_annotations,
 )
 from opencontractserver.annotations.models import (
     DOC_TYPE_LABEL,
@@ -33,7 +33,6 @@ from opencontractserver.types.dicts import (
     BoundingBoxPythonType,
     LabelLookupPythonType,
     OpenContractDocExport,
-    OpenContractsSinglePageAnnotationType,
     PawlsPagePythonType,
 )
 from opencontractserver.types.enums import AnnotationFilterMode
@@ -341,33 +340,29 @@ def build_document_export(
                     annot_export["content_modalities"] = annot.content_modalities
                 labelled_text.append(annot_export)
 
-                annotation_json: dict[str, OpenContractsSinglePageAnnotationType] = (
-                    expand_annotation_json(annot.json, raw_text=annot.raw_text or "")
-                )
-
                 # Span annotations ({start, end}) don't have page-keyed structure
-                if is_span_format(annotation_json):
+                if is_span_format(annot.json):
                     continue
 
-                for targ_page_num in annotation_json:
-                    logger.info(
-                        f"Processing annotation {annot.id} on page {targ_page_num}"
-                    )
-                    highlight = annotation_json[targ_page_num]
-                    logger.info(f"Highlight: {highlight}")
+                for page in iter_page_annotations(
+                    annot.json, raw_text=annot.raw_text or ""
+                ):
+                    page_key = str(page.page_index)
+                    logger.info(f"Processing annotation {annot.id} on page {page_key}")
+                    logger.info(f"Highlight bounds: {page.bounds}")
 
-                    if targ_page_num in page_highlights:
-                        if annot.annotation_label.id in page_highlights[targ_page_num]:
-                            page_highlights[targ_page_num][
-                                annot.annotation_label.id
-                            ].append(highlight["bounds"])
+                    if page_key in page_highlights:
+                        if annot.annotation_label.id in page_highlights[page_key]:
+                            page_highlights[page_key][annot.annotation_label.id].append(
+                                page.bounds
+                            )
                         else:
-                            page_highlights[targ_page_num][
-                                annot.annotation_label.id
-                            ] = [highlight["bounds"]]
+                            page_highlights[page_key][annot.annotation_label.id] = [
+                                page.bounds
+                            ]
                     else:
-                        page_highlights[targ_page_num] = {
-                            annot.annotation_label.id: [highlight["bounds"]]
+                        page_highlights[page_key] = {
+                            annot.annotation_label.id: [page.bounds]
                         }
 
         doc_annotation_json["doc_labels"] = labels_for_doc

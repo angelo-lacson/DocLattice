@@ -15,8 +15,11 @@ from opencontractserver.annotations.compact_json import (
     decode_token_ranges,
     encode_token_ranges,
     expand_annotation_json,
+    has_any_tokens,
     is_compact_format,
     is_span_format,
+    iter_page_annotations,
+    offset_annotation_json,
 )
 from opencontractserver.constants.annotations import (
     COMPACT_JSON_MAX_RANGE_SPAN,
@@ -621,3 +624,257 @@ class TestBulkUpdateBypassesAutoCompact(TestCase):
         self.assertFalse(is_compact_format(annot.json))
         self.assertIn("0", annot.json)
         self.assertIn("bounds", annot.json["0"])
+
+
+# ── iter_page_annotations ────────────────────────────────────────
+
+
+class TestIterPageAnnotations(TestCase):
+    """Tests for iter_page_annotations (format-agnostic accessor)."""
+
+    def test_v1_single_page(self):
+        v1 = {
+            "0": {
+                "bounds": {"top": 10, "left": 20, "right": 30, "bottom": 40},
+                "tokensJsons": [
+                    {"pageIndex": 0, "tokenIndex": 1},
+                    {"pageIndex": 0, "tokenIndex": 2},
+                    {"pageIndex": 0, "tokenIndex": 5},
+                ],
+                "rawText": "hello",
+            }
+        }
+        pages = list(iter_page_annotations(v1, raw_text="fallback"))
+        self.assertEqual(len(pages), 1)
+        page = pages[0]
+        self.assertEqual(page.page_index, 0)
+        self.assertEqual(
+            page.bounds, {"top": 10, "left": 20, "right": 30, "bottom": 40}
+        )
+        self.assertEqual(page.token_indices, [1, 2, 5])
+        # v1 per-page rawText takes precedence over the parameter
+        self.assertEqual(page.raw_text, "hello")
+
+    def test_v1_multi_page(self):
+        v1 = {
+            "0": _v1_page(
+                {"top": 0, "left": 0, "right": 0, "bottom": 0}, [1, 2], "page0"
+            ),
+            "3": _v1_page(
+                {"top": 1, "left": 1, "right": 1, "bottom": 1}, [10, 11], "page3"
+            ),
+        }
+        pages = list(iter_page_annotations(v1))
+        self.assertEqual(len(pages), 2)
+        self.assertEqual(pages[0].page_index, 0)
+        self.assertEqual(pages[0].token_indices, [1, 2])
+        self.assertEqual(pages[0].raw_text, "page0")
+        self.assertEqual(pages[1].page_index, 3)
+        self.assertEqual(pages[1].token_indices, [10, 11])
+
+    def test_v2_single_page(self):
+        v2 = {"v": 2, "p": {"0": {"b": [10, 20, 30, 40], "t": "1-2,5"}}}
+        pages = list(iter_page_annotations(v2, raw_text="hello"))
+        self.assertEqual(len(pages), 1)
+        page = pages[0]
+        self.assertEqual(page.page_index, 0)
+        self.assertEqual(
+            page.bounds, {"top": 10, "left": 20, "right": 30, "bottom": 40}
+        )
+        self.assertEqual(page.token_indices, [1, 2, 5])
+        self.assertEqual(page.raw_text, "hello")
+
+    def test_v2_multi_page(self):
+        v2 = {
+            "v": 2,
+            "p": {
+                "0": {"b": [0, 0, 0, 0], "t": "1-3"},
+                "5": {"b": [1, 1, 1, 1], "t": "10,20"},
+            },
+        }
+        pages = list(iter_page_annotations(v2, raw_text="txt"))
+        self.assertEqual(len(pages), 2)
+        self.assertEqual(pages[0].page_index, 0)
+        self.assertEqual(pages[0].token_indices, [1, 2, 3])
+        self.assertEqual(pages[1].page_index, 5)
+        self.assertEqual(pages[1].token_indices, [10, 20])
+
+    def test_span_yields_nothing(self):
+        span = {"start": 0, "end": 100}
+        pages = list(iter_page_annotations(span))
+        self.assertEqual(pages, [])
+
+    def test_none_yields_nothing(self):
+        pages = list(iter_page_annotations(None))
+        self.assertEqual(pages, [])
+
+    def test_empty_dict_yields_nothing(self):
+        pages = list(iter_page_annotations({}))
+        self.assertEqual(pages, [])
+
+    def test_non_dict_input_yields_nothing(self):
+        pages = list(iter_page_annotations("string"))
+        self.assertEqual(pages, [])
+        pages = list(iter_page_annotations(42))
+        self.assertEqual(pages, [])
+
+    def test_v1_missing_bounds_gets_zeros(self):
+        v1 = {"0": {"tokensJsons": [{"pageIndex": 0, "tokenIndex": 1}]}}
+        pages = list(iter_page_annotations(v1))
+        self.assertEqual(len(pages), 1)
+        self.assertEqual(
+            pages[0].bounds, {"top": 0, "left": 0, "right": 0, "bottom": 0}
+        )
+
+    def test_v2_missing_bounds_gets_zeros(self):
+        v2 = {"v": 2, "p": {"0": {"t": "1-3"}}}
+        pages = list(iter_page_annotations(v2))
+        self.assertEqual(len(pages), 1)
+        self.assertEqual(
+            pages[0].bounds, {"top": 0, "left": 0, "right": 0, "bottom": 0}
+        )
+
+    def test_v1_raw_text_fallback(self):
+        """v1 page with no rawText uses the parameter as fallback."""
+        v1 = {
+            "0": {
+                "bounds": {"top": 0, "left": 0, "right": 0, "bottom": 0},
+                "tokensJsons": [],
+            }
+        }
+        pages = list(iter_page_annotations(v1, raw_text="fallback"))
+        self.assertEqual(pages[0].raw_text, "fallback")
+
+    def test_v1_v2_produce_same_results(self):
+        """The accessor yields identical data from v1 and v2 representations."""
+        v1 = {
+            "0": {
+                "bounds": {"top": 10, "left": 20, "right": 30, "bottom": 40},
+                "tokensJsons": [
+                    {"pageIndex": 0, "tokenIndex": 1},
+                    {"pageIndex": 0, "tokenIndex": 2},
+                    {"pageIndex": 0, "tokenIndex": 3},
+                ],
+                "rawText": "hello",
+            }
+        }
+        v2 = compact_annotation_json(v1)
+        pages_v1 = list(iter_page_annotations(v1))
+        pages_v2 = list(iter_page_annotations(v2, raw_text="hello"))
+
+        self.assertEqual(len(pages_v1), len(pages_v2))
+        for p1, p2 in zip(pages_v1, pages_v2):
+            self.assertEqual(p1.page_index, p2.page_index)
+            self.assertEqual(p1.bounds, p2.bounds)
+            self.assertEqual(p1.token_indices, p2.token_indices)
+            self.assertEqual(p1.raw_text, p2.raw_text)
+
+
+# ── offset_annotation_json ───────────────────────────────────────
+
+
+class TestOffsetAnnotationJson(TestCase):
+    """Tests for offset_annotation_json."""
+
+    def test_v1_offset(self):
+        v1 = {
+            "0": {
+                "bounds": {"top": 0, "left": 0, "right": 0, "bottom": 0},
+                "tokensJsons": [
+                    {"pageIndex": 0, "tokenIndex": 1},
+                    {"pageIndex": 0, "tokenIndex": 2},
+                ],
+                "rawText": "text",
+            }
+        }
+        result = offset_annotation_json(v1, 5)
+        self.assertIn("5", result)
+        self.assertNotIn("0", result)
+        # Token refs should also be offset
+        for tok in result["5"]["tokensJsons"]:
+            self.assertEqual(tok["pageIndex"], 5)
+
+    def test_v2_offset(self):
+        v2 = {"v": 2, "p": {"0": {"b": [1, 2, 3, 4], "t": "1-3"}}}
+        result = offset_annotation_json(v2, 10)
+        self.assertEqual(result["v"], 2)
+        self.assertIn("10", result["p"])
+        self.assertNotIn("0", result["p"])
+        # Token ranges are untouched (no pageIndex in v2)
+        self.assertEqual(result["p"]["10"]["t"], "1-3")
+
+    def test_zero_offset_returns_same(self):
+        v2 = {"v": 2, "p": {"0": {"b": [1, 2, 3, 4], "t": "1-3"}}}
+        result = offset_annotation_json(v2, 0)
+        self.assertIs(result, v2)
+
+    def test_span_returned_unchanged(self):
+        span = {"start": 0, "end": 100}
+        result = offset_annotation_json(span, 5)
+        self.assertEqual(result, span)
+
+    def test_non_dict_returned_unchanged(self):
+        self.assertIsNone(offset_annotation_json(None, 5))
+        self.assertEqual(offset_annotation_json("str", 5), "str")
+
+    def test_v1_multi_page_offset(self):
+        v1 = {
+            "0": _v1_page({"top": 0, "left": 0, "right": 0, "bottom": 0}, [1, 2]),
+            "1": _v1_page({"top": 0, "left": 0, "right": 0, "bottom": 0}, [3, 4]),
+        }
+        result = offset_annotation_json(v1, 3)
+        self.assertIn("3", result)
+        self.assertIn("4", result)
+        self.assertNotIn("0", result)
+        self.assertNotIn("1", result)
+
+    def test_preserves_format_v1(self):
+        """v1 input produces v1 output."""
+        v1 = {"0": _v1_page({"top": 0, "left": 0, "right": 0, "bottom": 0}, [1])}
+        result = offset_annotation_json(v1, 1)
+        self.assertFalse(is_compact_format(result))
+        self.assertIn("tokensJsons", result["1"])
+
+    def test_preserves_format_v2(self):
+        """v2 input produces v2 output."""
+        v2 = {"v": 2, "p": {"0": {"b": [0, 0, 0, 0], "t": "1"}}}
+        result = offset_annotation_json(v2, 1)
+        self.assertTrue(is_compact_format(result))
+
+
+# ── has_any_tokens ───────────────────────────────────────────────
+
+
+class TestHasAnyTokens(TestCase):
+    """Tests for has_any_tokens."""
+
+    def test_v1_with_tokens(self):
+        v1 = {"0": _v1_page({"top": 0, "left": 0, "right": 0, "bottom": 0}, [1, 2])}
+        self.assertTrue(has_any_tokens(v1))
+
+    def test_v2_with_tokens(self):
+        v2 = {"v": 2, "p": {"0": {"b": [0, 0, 0, 0], "t": "1-3"}}}
+        self.assertTrue(has_any_tokens(v2))
+
+    def test_v1_no_tokens(self):
+        v1 = {
+            "0": {
+                "bounds": {"top": 0, "left": 0, "right": 0, "bottom": 0},
+                "tokensJsons": [],
+                "rawText": "",
+            }
+        }
+        self.assertFalse(has_any_tokens(v1))
+
+    def test_v2_no_tokens(self):
+        v2 = {"v": 2, "p": {"0": {"b": [0, 0, 0, 0], "t": ""}}}
+        self.assertFalse(has_any_tokens(v2))
+
+    def test_span_has_tokens(self):
+        self.assertTrue(has_any_tokens({"start": 0, "end": 100}))
+
+    def test_none_no_tokens(self):
+        self.assertFalse(has_any_tokens(None))
+
+    def test_empty_dict_no_tokens(self):
+        self.assertFalse(has_any_tokens({}))

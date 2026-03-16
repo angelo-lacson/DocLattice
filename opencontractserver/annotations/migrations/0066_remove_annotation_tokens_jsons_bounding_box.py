@@ -7,7 +7,9 @@ in production (parsers, export, import, GraphQL, frontend).
 
 A ``RunPython`` step runs first to backfill ``json`` from the legacy
 fields for any rows where ``json`` is empty but the legacy fields
-contain data.  This guarantees no data loss when the columns are dropped.
+contain data.  Rows that already have a non-empty ``json`` value are
+intentionally skipped.  Backfilled rows are written in v1 format and
+will be lazily compacted to v2 on the next ``Annotation.save()`` call.
 
 NOTE: This migration is irreversible.
 """

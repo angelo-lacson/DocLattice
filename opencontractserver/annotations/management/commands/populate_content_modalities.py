@@ -5,7 +5,7 @@ import logging
 
 from django.core.management.base import BaseCommand
 
-from opencontractserver.annotations.compact_json import expand_annotation_json
+from opencontractserver.annotations.compact_json import iter_page_annotations
 from opencontractserver.annotations.models import Annotation
 
 logger = logging.getLogger(__name__)
@@ -110,15 +110,14 @@ class Command(BaseCommand):
             return ["TEXT"]
 
         # Extract token references from the json field (handles v1 and v2 formats)
-        expanded_json = expand_annotation_json(
-            annotation.json or {}, raw_text=annotation.raw_text or ""
-        )
-
         all_token_refs = []
-        if isinstance(expanded_json, dict) and "start" not in expanded_json:
-            for _page_key, page_data in expanded_json.items():
-                if isinstance(page_data, dict):
-                    all_token_refs.extend(page_data.get("tokensJsons", []))
+        for page in iter_page_annotations(
+            annotation.json or {}, raw_text=annotation.raw_text or ""
+        ):
+            all_token_refs.extend(
+                {"pageIndex": page.page_index, "tokenIndex": idx}
+                for idx in page.token_indices
+            )
 
         if not all_token_refs:
             # No tokens referenced, use label as hint
