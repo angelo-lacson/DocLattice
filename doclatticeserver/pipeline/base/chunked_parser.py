@@ -471,7 +471,6 @@ def _reassemble_chunk_results(
 
     * Offsets ``pawls_file_content[*].page.index`` by the chunk's page offset
     * Offsets annotation ``page`` fields and ``annotation_json`` page keys
-    * Offsets ``tokensJsons[*].pageIndex`` references
     * Prefixes annotation and relationship IDs to keep them unique across chunks
     * Concatenates text content
 

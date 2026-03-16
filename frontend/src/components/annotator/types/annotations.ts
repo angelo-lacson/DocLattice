@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { AnnotationLabelType } from "../../../types/graphql-api";
 import {
+  CompactAnnotationJson,
   expandAnnotationJson,
   isSpanFormat,
 } from "../../../utils/compactAnnotationJson";
@@ -146,7 +147,10 @@ export class ServerTokenAnnotation {
     public readonly annotationLabel: AnnotationLabelType,
     public readonly rawText: string,
     public readonly structural: boolean,
-    json: MultipageAnnotationJson | Record<string, unknown>,
+    json:
+      | MultipageAnnotationJson
+      | CompactAnnotationJson
+      | Record<string, unknown>,
     public readonly myPermissions: PermissionTypes[],
     public readonly approved: boolean,
     public readonly rejected: boolean,
@@ -158,10 +162,11 @@ export class ServerTokenAnnotation {
     // Normalize any format (v1 or v2) to v1 for the rendering layer.
     const record = json as Record<string, unknown>;
     if (json && typeof json === "object" && !isSpanFormat(record)) {
-      this.json = expandAnnotationJson(
-        json as any,
+      const expanded = expandAnnotationJson(
+        json as MultipageAnnotationJson | CompactAnnotationJson,
         rawText
-      ) as MultipageAnnotationJson;
+      );
+      this.json = (expanded ?? json) as MultipageAnnotationJson;
     } else {
       this.json = json as MultipageAnnotationJson;
     }
