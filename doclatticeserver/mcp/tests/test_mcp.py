@@ -1086,6 +1086,8 @@ class MCPResourcesAnnotationTest(TestCase):
         self.assertEqual(data["raw_text"], "Annotation text for resource")
         self.assertEqual(data["annotation_label"]["text"], "Resource Label")
         self.assertEqual(data["annotation_label"]["color"], "#AABBCC")
+        self.assertIn("json", data)
+        self.assertIsNotNone(data["json"])
 
 
 class MCPResourcesThreadTest(TestCase):
