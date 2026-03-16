@@ -7,6 +7,8 @@ import {
   isSpanFormat,
   compactAnnotationJson,
   expandAnnotationJson,
+  iterPageAnnotations,
+  hasAnyTokens,
   CompactAnnotationJson,
 } from "../utils/compactAnnotationJson";
 import { COMPACT_JSON_MAX_RANGE_SPAN } from "../assets/configurations/constants";
@@ -393,5 +395,161 @@ describe("compactAnnotationJson / expandAnnotationJson roundtrip", () => {
     expect(page.bounds).toEqual(v1[0].bounds);
     expect(page.tokensJsons).toEqual(v1[0].tokensJsons);
     expect(page.rawText).toBe(v1[0].rawText);
+  });
+});
+
+// ── iterPageAnnotations (format-agnostic accessor) ────────────
+
+describe("iterPageAnnotations", () => {
+  it("reads v1 single page", () => {
+    const v1: MultipageAnnotationJson = {
+      0: {
+        bounds: { top: 10, left: 20, right: 30, bottom: 40 },
+        tokensJsons: [
+          { pageIndex: 0, tokenIndex: 1 },
+          { pageIndex: 0, tokenIndex: 2 },
+          { pageIndex: 0, tokenIndex: 5 },
+        ],
+        rawText: "hello",
+      },
+    };
+    const pages = iterPageAnnotations(v1, "fallback");
+    expect(pages).toHaveLength(1);
+    expect(pages[0].pageIndex).toBe(0);
+    expect(pages[0].bounds).toEqual({
+      top: 10,
+      left: 20,
+      right: 30,
+      bottom: 40,
+    });
+    expect(pages[0].tokenIndices).toEqual([1, 2, 5]);
+    // v1 per-page rawText takes precedence
+    expect(pages[0].rawText).toBe("hello");
+  });
+
+  it("reads v2 single page", () => {
+    const v2: CompactAnnotationJson = {
+      v: 2,
+      p: { "0": { b: [10, 20, 30, 40], t: "1-2,5" } },
+    };
+    const pages = iterPageAnnotations(v2, "hello");
+    expect(pages).toHaveLength(1);
+    expect(pages[0].pageIndex).toBe(0);
+    expect(pages[0].bounds).toEqual({
+      top: 10,
+      left: 20,
+      right: 30,
+      bottom: 40,
+    });
+    expect(pages[0].tokenIndices).toEqual([1, 2, 5]);
+    expect(pages[0].rawText).toBe("hello");
+  });
+
+  it("v1 and v2 produce identical results", () => {
+    const v1: MultipageAnnotationJson = {
+      0: {
+        bounds: { top: 10, left: 20, right: 30, bottom: 40 },
+        tokensJsons: [
+          { pageIndex: 0, tokenIndex: 1 },
+          { pageIndex: 0, tokenIndex: 2 },
+          { pageIndex: 0, tokenIndex: 3 },
+        ],
+        rawText: "hello",
+      },
+    };
+    const v2 = compactAnnotationJson(v1);
+    const pagesV1 = iterPageAnnotations(v1);
+    const pagesV2 = iterPageAnnotations(v2, "hello");
+
+    expect(pagesV1).toHaveLength(pagesV2.length);
+    for (let i = 0; i < pagesV1.length; i++) {
+      expect(pagesV1[i].pageIndex).toBe(pagesV2[i].pageIndex);
+      expect(pagesV1[i].bounds).toEqual(pagesV2[i].bounds);
+      expect(pagesV1[i].tokenIndices).toEqual(pagesV2[i].tokenIndices);
+      expect(pagesV1[i].rawText).toBe(pagesV2[i].rawText);
+    }
+  });
+
+  it("span annotations return empty", () => {
+    expect(iterPageAnnotations({ start: 0, end: 100 })).toEqual([]);
+  });
+
+  it("null/undefined return empty", () => {
+    expect(iterPageAnnotations(null)).toEqual([]);
+    expect(iterPageAnnotations(undefined)).toEqual([]);
+  });
+
+  it("empty object returns empty", () => {
+    expect(iterPageAnnotations({})).toEqual([]);
+  });
+
+  it("multi-page v2", () => {
+    const v2: CompactAnnotationJson = {
+      v: 2,
+      p: {
+        "0": { b: [0, 0, 0, 0], t: "1-3" },
+        "5": { b: [1, 1, 1, 1], t: "10,20" },
+      },
+    };
+    const pages = iterPageAnnotations(v2, "text");
+    expect(pages).toHaveLength(2);
+    expect(pages[0].pageIndex).toBe(0);
+    expect(pages[0].tokenIndices).toEqual([1, 2, 3]);
+    expect(pages[1].pageIndex).toBe(5);
+    expect(pages[1].tokenIndices).toEqual([10, 20]);
+  });
+});
+
+// ── hasAnyTokens ──────────────────────────────────────────────
+
+describe("hasAnyTokens", () => {
+  it("returns true for v1 with tokens", () => {
+    const v1: MultipageAnnotationJson = {
+      0: {
+        bounds: { top: 0, left: 0, right: 0, bottom: 0 },
+        tokensJsons: [{ pageIndex: 0, tokenIndex: 1 }],
+        rawText: "",
+      },
+    };
+    expect(hasAnyTokens(v1)).toBe(true);
+  });
+
+  it("returns true for v2 with tokens", () => {
+    const v2: CompactAnnotationJson = {
+      v: 2,
+      p: { "0": { b: [0, 0, 0, 0], t: "1-3" } },
+    };
+    expect(hasAnyTokens(v2)).toBe(true);
+  });
+
+  it("returns false for v1 with empty tokens", () => {
+    const v1: MultipageAnnotationJson = {
+      0: {
+        bounds: { top: 0, left: 0, right: 0, bottom: 0 },
+        tokensJsons: [],
+        rawText: "",
+      },
+    };
+    expect(hasAnyTokens(v1)).toBe(false);
+  });
+
+  it("returns false for v2 with empty tokens", () => {
+    const v2: CompactAnnotationJson = {
+      v: 2,
+      p: { "0": { b: [0, 0, 0, 0], t: "" } },
+    };
+    expect(hasAnyTokens(v2)).toBe(false);
+  });
+
+  it("returns true for span annotations", () => {
+    expect(hasAnyTokens({ start: 0, end: 100 })).toBe(true);
+  });
+
+  it("returns false for null", () => {
+    expect(hasAnyTokens(null)).toBe(false);
+  });
+
+  it("returns false for empty object", () => {
+    expect(hasAnyTokens({})).toBe(false);
   });
 });

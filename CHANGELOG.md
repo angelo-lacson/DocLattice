@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
-- **Removed `tokensJsons` and `boundingBox` from GraphQL API**: The `tokensJsons` and `boundingBox` fields have been removed from GraphQL annotation queries and mutations (PR #1100). External API consumers and integrations must update to use the `json` field instead. The `json` field contains either v1 (legacy page-keyed format) or v2 (compact format) annotation data. Use `expand_annotation_json()` (Python) or `expandAnnotationJson()` (TypeScript) to normalize to v1 for processing.
+- **Removed `tokensJsons` and `boundingBox` from GraphQL API**: The `tokensJsons` and `boundingBox` fields have been removed from GraphQL annotation queries and mutations (PR #1100). External API consumers and integrations must update to use the `json` field instead. The `json` field contains either v1 (legacy page-keyed format) or v2 (compact format) annotation data. Use `iter_page_annotations()` (Python) or `iterPageAnnotations()` (TypeScript) for format-agnostic access.
 
 ### Added
 
@@ -20,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Migration `0066` removes redundant `tokens_jsons` and `bounding_box` columns (includes `RunPython` backfill step to preserve any legacy data before column removal — **irreversible migration**)
   - 60+ Python and 48+ TypeScript unit tests for the codec
   - All GraphQL queries/mutations updated to use `json` field instead of `tokensJsons` and `boundingBox`
-  - Both v1 and v2 formats accepted everywhere; `expand_annotation_json()` normalizes to v1 for internal processing
+  - Format-agnostic accessor layer: `iter_page_annotations()`, `offset_annotation_json()`, `has_any_tokens()` (Python) and `iterPageAnnotations()`, `hasAnyTokens()` (TypeScript) — all production code migrated off `expand_annotation_json()`
+  - `ServerTokenAnnotation` constructor now accepts both v1 and v2 formats, normalizing internally
 
 ### Added
 

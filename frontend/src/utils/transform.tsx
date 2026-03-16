@@ -17,7 +17,6 @@ import {
 } from "../types/graphql-api";
 import { PAWLS_COORDINATE_EPSILON } from "../assets/configurations/constants";
 import { isSpanAnnotation } from "./annotationGuards";
-import { expandAnnotationJson } from "./compactAnnotationJson";
 
 // https://gist.github.com/JamieMason/0566f8412af9fe6a1d470aa1e089a752
 export function groupBy<T extends Record<string, any>, K extends keyof T>(
@@ -150,18 +149,13 @@ export function convertToServerAnnotation(
   }
 
   // Fallback: treat as token annotation (MultipageAnnotationJson)
-  // Expand v2 compact format to v1 for rendering compatibility
-  const expandedJson = expandAnnotationJson(
-    annotation.json ?? {},
-    annotation.rawText ?? ""
-  ) as MultipageAnnotationJson;
-
+  // ServerTokenAnnotation handles v1/v2 format normalization internally.
   return new ServerTokenAnnotation(
     annotation.page,
     annotation.annotationLabel,
     annotation.rawText ?? "",
     annotation.structural ?? false,
-    expandedJson,
+    annotation.json ?? {},
     permissions,
     approved,
     rejected,
