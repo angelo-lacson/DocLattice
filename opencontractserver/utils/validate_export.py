@@ -20,6 +20,7 @@ import zipfile
 from dataclasses import dataclass, field
 
 from opencontractserver.annotations.compact_json import (
+    is_compact_format,
     is_span_format,
     iter_page_annotations,
 )
@@ -360,6 +361,45 @@ def _check_annotation(
 
     # Span annotations ({start, end}) don't have page-keyed structure
     if isinstance(ann_json, dict) and not is_span_format(ann_json):
+        # Raw-format checks before the accessor layer (catches structural
+        # issues the accessor silently normalises).
+        if not is_compact_format(ann_json):
+            # v1 format: validate page keys are integer strings
+            for page_key, page_data in ann_json.items():
+                if not isinstance(page_data, dict):
+                    continue
+                try:
+                    pk_int = int(page_key)
+                except (ValueError, TypeError):
+                    result.error(
+                        f"{ann_prefix}: non-integer page key '{page_key}' "
+                        f"in annotation_json"
+                    )
+                    continue
+
+                if pawls and (pk_int < 0 or pk_int >= len(pawls)):
+                    result.error(
+                        f"{ann_prefix}: annotation_json page key "
+                        f"'{page_key}' out of range "
+                        f"(document has {len(pawls)} page(s))"
+                    )
+
+                # Validate pageIndex consistency in tokensJsons
+                for tok in page_data.get("tokensJsons", []):
+                    if isinstance(tok, dict):
+                        pi = tok.get("pageIndex")
+                        if pi is not None and pi != pk_int:
+                            result.error(
+                                f"{ann_prefix}: tokensJsons pageIndex "
+                                f"{pi} does not match page key '{page_key}'"
+                            )
+                        if pi is not None and pawls and (pi < 0 or pi >= len(pawls)):
+                            result.error(
+                                f"{ann_prefix}: tokensJsons pageIndex "
+                                f"{pi} out of range "
+                                f"(document has {len(pawls)} page(s))"
+                            )
+
         for page in iter_page_annotations(ann_json, raw_text=annot.get("rawText", "")):
             # Validate page index is within document range
             if pawls and (page.page_index < 0 or page.page_index >= len(pawls)):
@@ -379,7 +419,7 @@ def _check_annotation(
                 if page.token_indices:
                     result.error(
                         f"{ann_prefix}: page {page.page_index} references "
-                        f"tokens but PAWLs data is empty"
+                        f"tokens but empty PAWLs data"
                     )
                 continue
 
