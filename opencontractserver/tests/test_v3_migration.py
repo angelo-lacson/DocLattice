@@ -19,7 +19,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
 
 from opencontractserver.annotations.models import (
     Annotation,
@@ -234,6 +234,7 @@ class XORConstraintTests(TestCase):
         self.assertIsNone(annotation.document)
         self.assertIsNotNone(annotation.structural_set)
 
+    @override_settings(VALIDATE_ANNOTATION_JSON=True)
     def test_annotation_with_both_document_and_structural_set_fails(self):
         """Model validation prevents setting both document AND structural_set."""
         with self.assertRaises(ValidationError):
@@ -247,6 +248,7 @@ class XORConstraintTests(TestCase):
                 creator=self.user,
             )
 
+    @override_settings(VALIDATE_ANNOTATION_JSON=True)
     def test_annotation_with_neither_document_nor_structural_set_fails(self):
         """Model validation requires exactly one parent."""
         with self.assertRaises(ValidationError):
@@ -294,6 +296,7 @@ class XORConstraintTests(TestCase):
         self.assertIsNotNone(rel.document)
         self.assertIsNone(rel.structural_set)
 
+    @override_settings(VALIDATE_ANNOTATION_JSON=True)
     def test_relationship_with_both_parents_fails(self):
         """Relationship with both document AND structural_set fails validation."""
         # Model-level validation catches this before database constraint
