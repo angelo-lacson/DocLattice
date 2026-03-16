@@ -357,12 +357,14 @@ class PydanticAIToolWrapper:
 
         # ------------------------------------------------------------------
 
-        # Note: async check already performed in __init__ before any state
-        # is mutated. This assertion is a safety net only.
-        assert inspect.iscoroutinefunction(original_func), (
-            f"Tool {func_name!r} is not async — this should have been "
-            f"caught in __init__."
-        )
+        # Defense-in-depth: async check already performed in __init__
+        # before any state is mutated.  Use an explicit guard rather than
+        # assert, which is stripped under python -O.
+        if not inspect.iscoroutinefunction(original_func):
+            raise RuntimeError(
+                f"Tool {func_name!r} is not async — this should have been "
+                f"caught in __init__."
+            )
 
         async def async_wrapper(
             ctx: RunContext[PydanticAIDependencies], *args, **kwargs
