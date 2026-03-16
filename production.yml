@@ -98,7 +98,7 @@ services:
     container_name: docling-parser
 
   docxodus-parser:
-    image: ghcr.io/open-source-legal/docxodus-service:main
+    image: ghcr.io/open-source-legal/docxodus-service:v1.0.0
     container_name: docxodus-parser
 
   celeryworker:

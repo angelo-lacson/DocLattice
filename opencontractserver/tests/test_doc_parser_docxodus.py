@@ -233,6 +233,19 @@ class TestDocxodusServiceParser(TestCase):
 
         self.assertFalse(ctx.exception.is_transient)
 
+    @patch("opencontractserver.pipeline.parsers.docxodus_parser.requests.post")
+    def test_parse_document_http_5xx_error(self, mock_post):
+        """Test that a 5xx HTTP error raises a transient DocumentParsingError."""
+        mock_post.return_value = MockResponse(502, {"error": "Bad Gateway"})
+
+        parser = DocxodusServiceParser()
+        parser.service_url = "http://docxodus-parser:8080/parse"
+
+        with self.assertRaises(DocumentParsingError) as ctx:
+            parser._parse_document_impl(user_id=self.user.id, doc_id=self.doc.id)
+
+        self.assertTrue(ctx.exception.is_transient)
+
     def test_no_file_returns_none(self):
         """Test that a document with no file returns None."""
         doc_no_file = Document.objects.create(

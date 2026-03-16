@@ -21,6 +21,7 @@ import React, {
   useRef,
   useMemo,
 } from "react";
+import { getGlobalOffsetFromDomPosition } from "./docxOffsetUtils";
 import {
   initialize as initDocxodus,
   convertDocxToHtml,
@@ -413,74 +414,6 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     };
   }, [wasmReady, visibleLabels, annotations]);
 
-  /**
-   * Compute an approximate character offset from a DOM selection point.
-   *
-   * Walks text nodes in document order within the container, skipping text
-   * inside annotation label elements (injected by the WASM renderer and not
-   * part of the original document text). The result may differ slightly from
-   * the true docText offset (e.g. inter-paragraph newlines in docText aren't
-   * present as DOM text nodes), but is close enough to disambiguate which
-   * occurrence of repeated text the user selected via closest-match.
-   */
-  const getGlobalOffsetFromDomPosition = useCallback(
-    (
-      container: HTMLElement,
-      node: Node | null,
-      localOffset: number
-    ): number | null => {
-      if (!node) return null;
-
-      // If the node is an element, resolve to the child at the given offset
-      let targetNode: Node = node;
-      let targetOffset: number = localOffset;
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const el = node as HTMLElement;
-        if (localOffset < el.childNodes.length) {
-          targetNode = el.childNodes[localOffset];
-          targetOffset = 0;
-        } else if (el.childNodes.length > 0) {
-          // Past the end — point to end of last child
-          targetNode = el.childNodes[el.childNodes.length - 1];
-          targetOffset = targetNode.textContent?.length ?? 0;
-        } else {
-          return null;
-        }
-      }
-
-      const walker = document.createTreeWalker(
-        container,
-        NodeFilter.SHOW_TEXT,
-        {
-          acceptNode: (n: Node) => {
-            // Skip text nodes inside annotation label elements — these are
-            // injected by the WASM renderer and are not part of docText.
-            let parent = n.parentElement;
-            while (parent && parent !== container) {
-              if (parent.classList.contains(`${CSS_CLASS_PREFIX}label`)) {
-                return NodeFilter.FILTER_REJECT;
-              }
-              parent = parent.parentElement;
-            }
-            return NodeFilter.FILTER_ACCEPT;
-          },
-        }
-      );
-
-      let globalOffset = 0;
-      let current: Node | null;
-      while ((current = walker.nextNode())) {
-        if (current === targetNode) {
-          return globalOffset + targetOffset;
-        }
-        globalOffset += current.textContent?.length ?? 0;
-      }
-
-      return null;
-    },
-    []
-  );
-
   // Handle text selection for new annotation creation.
   const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
@@ -505,7 +438,8 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
           const anchorOffset = getGlobalOffsetFromDomPosition(
             contentEl,
             selection.anchorNode,
-            selection.anchorOffset
+            selection.anchorOffset,
+            `${CSS_CLASS_PREFIX}label`
           );
 
           if (anchorOffset !== null) {
@@ -527,13 +461,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
         end: match.end,
       });
     },
-    [
-      readOnly,
-      allowInput,
-      selectedLabelTypeId,
-      docText,
-      getGlobalOffsetFromDomPosition,
-    ]
+    [readOnly, allowInput, selectedLabelTypeId, docText]
   );
 
   // Handle annotation creation from menu

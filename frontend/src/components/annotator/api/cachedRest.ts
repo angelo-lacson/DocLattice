@@ -150,7 +150,12 @@ export async function getCachedPDFUrl(
   }
 }
 
-/** In-memory cache for DOCX bytes, keyed by URL to avoid refetching on Apollo refetch. */
+/**
+ * In-memory cache for DOCX bytes, keyed by URL to avoid refetching on Apollo refetch.
+ * Note: entries are never evicted. This is acceptable because users typically view
+ * only a few DOCX documents per session, and each entry is garbage-collected when
+ * the page is refreshed.
+ */
 const docxBytesCache = new Map<string, Uint8Array>();
 
 /**
