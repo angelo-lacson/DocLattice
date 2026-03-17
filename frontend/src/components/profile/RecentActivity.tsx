@@ -13,7 +13,7 @@ import React from "react";
 import { useQuery } from "@apollo/client";
 import styled from "styled-components";
 import { MessageSquare, FileText, Tag, Clock } from "lucide-react";
-import { Dimmer, Loader, Message } from "semantic-ui-react";
+import { Spinner } from "@os-legal/ui";
 import { formatDistanceToNow } from "date-fns";
 import { gql } from "@apollo/client";
 import { color } from "../../theme/colors";
@@ -139,20 +139,33 @@ export const RecentActivity: React.FC<RecentActivityProps> = ({ userId }) => {
 
   if (loading) {
     return (
-      <div style={{ minHeight: "200px", position: "relative" }}>
-        <Dimmer active inverted>
-          <Loader>Loading activity...</Loader>
-        </Dimmer>
+      <div
+        style={{
+          minHeight: "200px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Spinner size="md" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <Message negative>
-        <Message.Header>Error loading activity</Message.Header>
-        <p>{error.message}</p>
-      </Message>
+      <div
+        style={{
+          padding: "1rem",
+          background: "#fef2f2",
+          border: "1px solid #fecaca",
+          borderRadius: "8px",
+          color: "#991b1b",
+        }}
+      >
+        <strong>Error loading activity</strong>
+        <p style={{ margin: "0.25rem 0 0" }}>{error.message}</p>
+      </div>
     );
   }
 

@@ -5,6 +5,12 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-03-17
+
+### Changed
+
+- **Complete removal of Semantic UI React dependency**: Migrated all 19 remaining files that imported from `semantic-ui-react` to use `@os-legal/ui` equivalents and native HTML elements. Component mappings: `Label` → `Chip`, `Modal/ModalHeader/ModalContent/ModalActions` → `Modal/ModalHeader/ModalBody/ModalFooter`, `Button` → `Button`, `Confirm` → custom confirm dialog via `Modal`, `Loader/Dimmer` → `Spinner`, `Dropdown` → `Dropdown`, `Icon` → lucide-react icons, `Segment/Card/Form` → styled HTML elements. Removed `semantic-ui-css` and `semantic-ui-react` from `package.json`, deleted the semantic-ui CSS import from `App.tsx` and `playwright/index.tsx`, and removed the orphaned `semantic.css` asset file. Also replaced the `SemanticICONS` type with `string` in `graphql/mutations.ts`.
+
 ## [Unreleased] - 2026-03-15
 
 ### Breaking Changes
