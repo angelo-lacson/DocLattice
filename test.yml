@@ -29,7 +29,7 @@ services:
     container_name: docling-parser
 
   docxodus-parser:
-    image: ghcr.io/open-source-legal/docxodus-service:v1.0.0
+    image: ghcr.io/open-source-legal/docxodus-service:main
     container_name: docxodus-parser
 
   django: &django

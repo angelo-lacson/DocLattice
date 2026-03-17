@@ -152,11 +152,11 @@ export async function getCachedPDFUrl(
 
 /**
  * In-memory cache for DOCX bytes, keyed by URL to avoid refetching on Apollo refetch.
- * Note: entries are never evicted. This is acceptable because users typically view
- * only a few DOCX documents per session, and each entry is garbage-collected when
- * the page is refreshed.
+ * Capped at 3 entries to bound memory usage; oldest entry (first Map key) is evicted
+ * when the limit is reached. Each entry is also garbage-collected on page refresh.
  */
 const docxBytesCache = new Map<string, Uint8Array>();
+const DOCX_CACHE_MAX_ENTRIES = 3;
 
 /**
  * Get DOCX document bytes (as Uint8Array) for WASM rendering.
@@ -168,6 +168,15 @@ export async function getDocxBytes(url: string): Promise<Uint8Array> {
 
   const response = await axios.get(url, { responseType: "arraybuffer" });
   const bytes = new Uint8Array(response.data);
+
+  // Evict oldest entry if cache is at capacity
+  if (docxBytesCache.size >= DOCX_CACHE_MAX_ENTRIES) {
+    const oldestKey = docxBytesCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      docxBytesCache.delete(oldestKey);
+    }
+  }
+
   docxBytesCache.set(url, bytes);
   return bytes;
 }

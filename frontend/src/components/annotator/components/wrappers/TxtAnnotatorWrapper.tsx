@@ -195,7 +195,7 @@ export const TxtAnnotatorWrapper: React.FC<TxtAnnotatorWrapperProps> = ({
             : undefined
         }
         getSpan={getSpan}
-        visibleLabels={spanLabelsToView ?? []}
+        visibleLabels={spanLabelsToView}
         availableLabels={spanLabels}
         selectedLabelTypeId={activeSpanLabel?.id ?? null}
         read_only={readOnly}

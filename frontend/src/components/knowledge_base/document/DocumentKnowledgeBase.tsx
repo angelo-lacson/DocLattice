@@ -706,6 +706,57 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     }
   };
 
+  /**
+   * Load DOCX document bytes and extracted text in parallel.
+   * Shared by both corpus-context and document-only onCompleted handlers
+   * to avoid duplicating the same fetch/state-update logic.
+   */
+  const loadDocxDocument = useCallback(
+    (doc: {
+      id: string;
+      pdfFile?: string;
+      pdfFileHash?: string | null;
+      txtExtractFile?: string | null;
+    }) => {
+      if (!doc.pdfFile) return;
+
+      setViewState(ViewState.LOADING);
+      setDocxBytes(null);
+
+      const docxPromise = getDocxBytes(doc.pdfFile);
+      const textPromise = doc.txtExtractFile
+        ? getDocumentRawText(
+            doc.txtExtractFile,
+            doc.id,
+            doc.pdfFileHash ?? undefined
+          )
+        : Promise.resolve("");
+
+      Promise.all([docxPromise, textPromise])
+        .then(([bytes, txt]) => {
+          routingLogger.debug(
+            "[DOCX Load] Batching DOCX completion state updates"
+          );
+          unstable_batchedUpdates(() => {
+            setDocxBytes(bytes);
+            setDocText(txt);
+            setViewState(ViewState.LOADED);
+          });
+          routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
+        })
+        .catch((err) => {
+          setViewState(ViewState.ERROR);
+          routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
+          toast.error(
+            `Error loading DOCX content: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          );
+        });
+    },
+    [setViewState, setDocxBytes, setDocText]
+  );
+
   // We'll store the measured containerWidth here
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
 
@@ -750,6 +801,13 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   /* clear on unmount so stale refs are never used */
   useEffect(() => () => setScrollContainerRef(null), [setScrollContainerRef]);
+
+  /* Reset DOCX bytes on unmount to avoid stale WASM data when navigating away */
+  useEffect(() => {
+    return () => {
+      setDocxBytes(null);
+    };
+  }, [setDocxBytes]);
 
   const handleKeyUpPress = useCallback(
     (event: { keyCode: any }) => {
@@ -945,48 +1003,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         routingLogger.debug("Type: DOCX");
         routingLogger.debug("Document ID:", data.document.id);
         routingLogger.debug("Hash:", data.document.pdfFileHash || "no hash");
-        // pdfFile holds the DOCX URL — the backend reuses this field for all
-        // uploaded document files regardless of format (PDF, DOCX, TXT, etc.).
         routingLogger.debug("DOCX URL:", data.document.pdfFile);
-        setViewState(ViewState.LOADING);
-        // Clear previous DOCX bytes immediately to prevent stale rendering
-        // when switching between two DOCX documents.
-        setDocxBytes(null);
-        const docId = data.document.id;
-        const textHash = data.document.pdfFileHash;
-
-        // Load both the raw DOCX bytes (for WASM rendering) and
-        // the extracted text (for annotation offsets and search)
-        const docxPromise = getDocxBytes(data.document.pdfFile);
-        const textPromise = data.document.txtExtractFile
-          ? getDocumentRawText(
-              data.document.txtExtractFile,
-              docId,
-              textHash ?? undefined
-            )
-          : Promise.resolve("");
-
-        Promise.all([docxPromise, textPromise])
-          .then(([bytes, txt]) => {
-            routingLogger.debug(
-              "[DOCX Load] Batching DOCX completion state updates"
-            );
-            unstable_batchedUpdates(() => {
-              setDocxBytes(bytes);
-              setDocText(txt);
-              setViewState(ViewState.LOADED);
-            });
-            routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
-          })
-          .catch((err) => {
-            setViewState(ViewState.ERROR);
-            routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
-            toast.error(
-              `Error loading DOCX content: ${
-                err instanceof Error ? err.message : String(err)
-              }`
-            );
-          });
+        loadDocxDocument(data.document);
       } else {
         console.warn(
           "onCompleted: Unsupported file type or missing file path.",
@@ -1188,45 +1206,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           routingLogger.debug("\n=== DOCUMENT LOAD START ===");
           routingLogger.debug("Type: DOCX (document-only)");
           routingLogger.debug("Document ID:", data.document.id);
-          setViewState(ViewState.LOADING);
-          // Clear previous DOCX bytes immediately to prevent stale rendering
-          // when switching between two DOCX documents.
-          setDocxBytes(null);
-          const docId = data.document.id;
-          const textHash = data.document.pdfFileHash;
-
-          // pdfFile holds the DOCX URL — the backend reuses this field for all
-          // uploaded document files regardless of format.
-          const docxPromise = getDocxBytes(data.document.pdfFile);
-          const textPromise = data.document.txtExtractFile
-            ? getDocumentRawText(
-                data.document.txtExtractFile,
-                docId,
-                textHash ?? undefined
-              )
-            : Promise.resolve("");
-
-          Promise.all([docxPromise, textPromise])
-            .then(([bytes, txt]) => {
-              routingLogger.debug(
-                "[DOCX Load] Batching DOCX completion state updates (document-only)"
-              );
-              unstable_batchedUpdates(() => {
-                setDocxBytes(bytes);
-                setDocText(txt);
-                setViewState(ViewState.LOADED);
-              });
-              routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
-            })
-            .catch((err) => {
-              setViewState(ViewState.ERROR);
-              routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
-              toast.error(
-                `Error loading DOCX content: ${
-                  err instanceof Error ? err.message : String(err)
-                }`
-              );
-            });
+          loadDocxDocument(data.document);
         } else {
           console.warn(
             "onCompleted: Unsupported file type or missing file path.",

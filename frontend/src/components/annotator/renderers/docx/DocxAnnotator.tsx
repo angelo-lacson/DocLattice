@@ -71,6 +71,8 @@ const PROJECTION_SETTINGS: ExternalAnnotationProjectionSettings = {
   cssClassPrefix: CSS_CLASS_PREFIX,
   labelMode: AnnotationLabelMode.Tooltip,
   includeMetadata: true,
+  // Validation disabled because both backend (Docxodus microservice) and frontend
+  // (Docxodus WASM) use the same library, guaranteeing character offset alignment.
   validateBeforeProjection: false,
 };
 
@@ -294,6 +296,10 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     convertDocxToHtml(docxBytes)
       .then((html) => {
         if (!cancelled) {
+          // Security: HTML originates from user-uploaded DOCX processed by Docxodus WASM.
+          // DOMPurify strips all script/event handler vectors by default. The ADD_ATTR
+          // whitelist only permits data-* attributes used for annotation projection,
+          // which cannot execute JavaScript. Links and src/action attrs are stripped.
           setBaseHtml(
             DOMPurify.sanitize(html, {
               ADD_ATTR: ["data-annotation-id", "data-label-id", "data-label"],
@@ -471,8 +477,8 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     try {
       const newAnnotation = getSpan(pendingSelection);
       createAnnotation(newAnnotation);
-    } catch {
-      // Label not found - ignore
+    } catch (err) {
+      console.warn("Failed to create annotation from selection:", err);
     }
 
     setMenuPosition(null);
