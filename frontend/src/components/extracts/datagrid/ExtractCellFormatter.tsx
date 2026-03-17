@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Button, Popup, Icon, Modal } from "semantic-ui-react";
+import {
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+} from "@os-legal/ui";
+import { Code, Check, Edit2, Eye, X as XIcon } from "lucide-react";
 import { CellStatus } from "../../../types/extract-grid";
 import styled from "styled-components";
 import { JSONSchema7 } from "json-schema";
@@ -302,7 +309,7 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
             alignItems: "center",
           }}
         >
-          <Icon name="code" />
+          <Code size={16} />
           <span style={{ marginLeft: "5px" }}>View/Edit JSON</span>
         </div>
       );
@@ -349,21 +356,28 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
       {cellStatus?.isLoading && <div className="cell-loader">Loading...</div>}
       {!cellStatus?.isLoading && isExtractComplete && (
         <>
-          <Popup
-            trigger={<StatusDot statusColor={statusColor()} />}
-            on="click"
-            position="top right"
-            open={isPopupOpen}
-            onOpen={() => setIsPopupOpen(true)}
-            onClose={() => setIsPopupOpen(false)}
-            mouseLeaveDelay={300}
-            content={
+          <StatusDot
+            statusColor={statusColor()}
+            onClick={() => setIsPopupOpen(!isPopupOpen)}
+          />
+          {isPopupOpen && (
+            <div
+              style={{
+                position: "absolute",
+                top: "-4px",
+                right: "24px",
+                zIndex: 100,
+                background: "white",
+                borderRadius: "8px",
+                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.12)",
+                border: `1px solid ${OS_LEGAL_COLORS.border}`,
+              }}
+              onMouseLeave={() => setTimeout(() => setIsPopupOpen(false), 300)}
+            >
               <ButtonContainer>
                 <div className="buttons">
-                  <Button
-                    icon="check"
-                    color="green"
-                    size="tiny"
+                  <button
+                    className="ui button green"
                     onClick={() => {
                       onApprove();
                       setIsPopupOpen(false);
@@ -372,11 +386,16 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                       cellStatus?.isApproved || readOnly || !isExtractComplete
                     }
                     title="Approve"
-                  />
-                  <Button
-                    icon="edit"
-                    color="grey"
-                    size="tiny"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    className="ui button"
                     onClick={() => {
                       if (
                         typeof displayedValue === "object" &&
@@ -390,11 +409,23 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                     }}
                     disabled={readOnly || !isExtractComplete}
                     title="Edit"
-                  />
-                  <Button
-                    icon="eye"
-                    color="blue"
-                    size="tiny"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                  <button
+                    className="ui button"
+                    style={{
+                      background: OS_LEGAL_COLORS.primaryBlue,
+                      color: "white",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
                     onClick={() => {
                       if (
                         cell?.fullSourceList &&
@@ -411,11 +442,11 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                       !cell?.fullSourceList || cell.fullSourceList.length === 0
                     }
                     title="View Sources"
-                  />
-                  <Button
-                    icon="close"
-                    color="red"
-                    size="tiny"
+                  >
+                    <Eye size={14} />
+                  </button>
+                  <button
+                    className="ui button red"
                     onClick={() => {
                       onReject();
                       setIsPopupOpen(false);
@@ -424,7 +455,14 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                       cellStatus?.isRejected || readOnly || !isExtractComplete
                     }
                     title="Reject"
-                  />
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <XIcon size={14} />
+                  </button>
                 </div>
                 {cellStatus?.isApproved && (
                   <div className="status-message">
@@ -440,16 +478,12 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                   <div className="status-message">Cell has been edited</div>
                 )}
               </ButtonContainer>
-            }
-          />
+            </div>
+          )}
           {isEditing && (
-            <Modal
-              open={isEditing}
-              onClose={() => setIsEditing(false)}
-              size="small"
-            >
-              <Modal.Header>Edit {column.name}</Modal.Header>
-              <Modal.Content>
+            <Modal open={isEditing} onClose={() => setIsEditing(false)}>
+              <ModalHeader>Edit {column.name}</ModalHeader>
+              <ModalBody>
                 <ExtractCellEditor
                   row={row}
                   column={column}
@@ -462,12 +496,12 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                   schema={schema}
                   extractIsList={extractIsList}
                 />
-              </Modal.Content>
+              </ModalBody>
             </Modal>
           )}
-          <Modal open={isModalOpen} onClose={closeModal} size="large">
-            <Modal.Header>Edit JSON Data</Modal.Header>
-            <Modal.Content>
+          <Modal open={isModalOpen} onClose={closeModal}>
+            <ModalHeader>Edit JSON Data</ModalHeader>
+            <ModalBody>
               <ReactJson
                 src={displayedValue}
                 onEdit={handleJsonEdit}
@@ -478,18 +512,16 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                 enableClipboard={false}
                 displayDataTypes={false}
               />
-            </Modal.Content>
-            <Modal.Actions>
-              <Button onClick={closeModal}>Close</Button>
-            </Modal.Actions>
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="secondary" onClick={closeModal}>
+                Close
+              </Button>
+            </ModalFooter>
           </Modal>
-          <Modal
-            open={isOriginalModalOpen}
-            onClose={closeOriginalModal}
-            size="large"
-          >
-            <Modal.Header>Original Value</Modal.Header>
-            <Modal.Content>
+          <Modal open={isOriginalModalOpen} onClose={closeOriginalModal}>
+            <ModalHeader>Original Value</ModalHeader>
+            <ModalBody>
               {typeof value === "object" && value !== null ? (
                 <ReactJson
                   src={value}
@@ -501,10 +533,12 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
               ) : (
                 <div style={{ padding: "20px" }}>{String(value)}</div>
               )}
-            </Modal.Content>
-            <Modal.Actions>
-              <Button onClick={closeOriginalModal}>Close</Button>
-            </Modal.Actions>
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="secondary" onClick={closeOriginalModal}>
+                Close
+              </Button>
+            </ModalFooter>
           </Modal>
         </>
       )}

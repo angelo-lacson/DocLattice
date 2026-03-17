@@ -1,10 +1,10 @@
 import {
-  ModalHeader,
-  ModalContent,
-  ModalActions,
-  Button,
   Modal,
-} from "semantic-ui-react";
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+} from "@os-legal/ui";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import _ from "lodash";
 import {
@@ -176,19 +176,9 @@ export const SelectDocumentsModal = ({
   }, []);
 
   return (
-    <Modal
-      size="fullscreen"
-      open={open}
-      closeIcon
-      onClose={() => toggleModal()}
-      // style={{
-      //   margin: "5vh auto",
-      //   display: "flex",
-      //   flexDirection: "column",
-      // }}
-    >
+    <Modal open={open} onClose={() => toggleModal()}>
       <ModalHeader>Select Document(s)</ModalHeader>
-      <ModalContent style={{ flex: 1, overflow: "hidden" }}>
+      <ModalBody style={{ flex: 1, overflow: "hidden", maxHeight: "70vh" }}>
         <CardLayout
           Modals={<></>}
           SearchBar={
@@ -232,8 +222,8 @@ export const SelectDocumentsModal = ({
         >
           <DocumentCards
             containerStyle={{
-              flex: 1, // Take remaining space
-              minHeight: 0, // Important for Firefox flex scroll
+              flex: 1,
+              minHeight: 0,
               position: "relative",
             }}
             style={{
@@ -248,15 +238,15 @@ export const SelectDocumentsModal = ({
             onDrop={onDrop}
           />
         </CardLayout>
-      </ModalContent>
-      <ModalActions>
-        <Button negative onClick={() => handleCancel()}>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="secondary" onClick={() => handleCancel()}>
           Cancel
         </Button>
-        <Button positive onClick={() => handleConfirm()}>
+        <Button variant="primary" onClick={() => handleConfirm()}>
           Add Documents
         </Button>
-      </ModalActions>
+      </ModalFooter>
     </Modal>
   );
 };
