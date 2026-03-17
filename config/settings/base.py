@@ -946,6 +946,10 @@ THUMBNAIL_TASKS = {
 # on every save. Enabled by default — the validation is a lightweight
 # dict-key check with negligible cost, and provides an important safety net
 # during the v1/v2 format co-existence period.
+# TODO: Remove after v1 sunset — once migration 0066 has run on all
+# environments and lazy compaction has converted remaining v1 rows, the
+# v1/v2 co-existence guard is no longer needed and this can default to
+# DEBUG-only validation.
 VALIDATE_ANNOTATION_JSON = env.bool("VALIDATE_ANNOTATION_JSON", default=True)
 
 # Mapping of MIME types to annotation label types
