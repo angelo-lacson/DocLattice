@@ -887,3 +887,176 @@ class TestHasAnyTokens(TestCase):
 
     def test_empty_dict_no_tokens(self):
         self.assertFalse(has_any_tokens({}))
+
+
+# ── Additional coverage for edge/error paths ─────────────────────
+
+
+class TestDecodeEdgePaths(TestCase):
+    """Cover decode_token_ranges error handling and truncation logging."""
+
+    @patch("opencontractserver.annotations.compact_json.logger")
+    def test_truncation_emits_warning_log(self, mock_logger):
+        """Verify that decode_token_ranges logs a warning when truncating."""
+        # Build a range string with many small ranges that collectively exceed
+        # MAX_TOTAL_TOKENS.  Each range must be <= MAX_RANGE_SPAN.
+        step = COMPACT_JSON_MAX_RANGE_SPAN
+        parts = []
+        total = 0
+        i = 0
+        while total < COMPACT_JSON_MAX_TOTAL_TOKENS + 100:
+            end = i + step - 1
+            parts.append(f"{i}-{end}")
+            total += step
+            i = end + 1
+        range_str = ",".join(parts)
+        decode_token_ranges(range_str)
+        mock_logger.warning.assert_called_once()
+        call_args = mock_logger.warning.call_args[0][0]
+        self.assertIn("truncated", call_args)
+
+    def test_single_value_truncation(self):
+        """Decode truncates when individual values exceed the limit."""
+        # Build a string of individual comma-separated values beyond the limit.
+        vals = ",".join(str(i) for i in range(COMPACT_JSON_MAX_TOTAL_TOKENS + 10))
+        result = decode_token_ranges(vals)
+        self.assertLessEqual(len(result), COMPACT_JSON_MAX_TOTAL_TOKENS)
+
+
+class TestIterPageAnnotationsEdgePaths(TestCase):
+    """Cover iter_page_annotations edge cases for both v1 and v2."""
+
+    def test_v2_non_numeric_page_key_defaults_to_zero(self):
+        """v2 page key that can't be parsed as int defaults to page_index=0."""
+        v2 = {"v": 2, "p": {"abc": {"b": [1, 2, 3, 4], "t": "5"}}}
+        pages = list(iter_page_annotations(v2, raw_text="test"))
+        self.assertEqual(len(pages), 1)
+        self.assertEqual(pages[0].page_index, 0)
+
+    def test_v1_non_numeric_page_key_defaults_to_zero(self):
+        """v1 page key that can't be parsed as int defaults to page_index=0."""
+        v1 = {
+            "abc": {
+                "bounds": {"top": 0, "left": 0, "right": 0, "bottom": 0},
+                "tokensJsons": [{"pageIndex": 0, "tokenIndex": 1}],
+                "rawText": "",
+            }
+        }
+        pages = list(iter_page_annotations(v1))
+        self.assertEqual(len(pages), 1)
+        self.assertEqual(pages[0].page_index, 0)
+
+    def test_v2_non_dict_page_data_skipped(self):
+        """Non-dict page data entries in v2 are silently skipped."""
+        v2 = {
+            "v": 2,
+            "p": {
+                "0": "not_a_dict",
+                "1": {"b": [0, 0, 0, 0], "t": "1"},
+            },
+        }
+        pages = list(iter_page_annotations(v2, raw_text=""))
+        self.assertEqual(len(pages), 1)
+        self.assertEqual(pages[0].page_index, 1)
+
+    def test_v1_non_dict_page_data_skipped(self):
+        """Non-dict page data entries in v1 are silently skipped."""
+        v1 = {
+            "0": "not_a_dict",
+            "1": _v1_page({"top": 0, "left": 0, "right": 0, "bottom": 0}, [1]),
+        }
+        pages = list(iter_page_annotations(v1))
+        self.assertEqual(len(pages), 1)
+        self.assertEqual(pages[0].page_index, 1)
+
+    def test_v2_token_list_fallback(self):
+        """v2 page with t as a list instead of string is handled."""
+        v2 = {"v": 2, "p": {"0": {"b": [0, 0, 0, 0], "t": [3, 4, 5]}}}
+        pages = list(iter_page_annotations(v2, raw_text=""))
+        self.assertEqual(pages[0].token_indices, [3, 4, 5])
+
+    def test_v2_non_string_non_list_token_defaults_empty(self):
+        """v2 page with t as unexpected type yields empty token_indices."""
+        v2 = {"v": 2, "p": {"0": {"b": [0, 0, 0, 0], "t": 42}}}
+        pages = list(iter_page_annotations(v2, raw_text=""))
+        self.assertEqual(pages[0].token_indices, [])
+
+    def test_v2_non_dict_p_yields_nothing(self):
+        """v2 with non-dict p value yields no pages."""
+        v2 = {"v": 2, "p": "not_a_dict"}
+        pages = list(iter_page_annotations(v2))
+        self.assertEqual(pages, [])
+
+    def test_v1_mixed_token_formats(self):
+        """v1 page with mixed dict and bare int token refs."""
+        v1 = {
+            "0": {
+                "bounds": {"top": 0, "left": 0, "right": 0, "bottom": 0},
+                "tokensJsons": [
+                    {"pageIndex": 0, "tokenIndex": 1},
+                    3,
+                    {"pageIndex": 0, "tokenIndex": 5},
+                ],
+                "rawText": "",
+            }
+        }
+        pages = list(iter_page_annotations(v1))
+        self.assertEqual(pages[0].token_indices, [1, 3, 5])
+
+    def test_v1_bounds_non_dict_gets_zeros(self):
+        """v1 page where bounds is a non-dict value gets zero bounds."""
+        v1 = {"0": {"bounds": "invalid", "tokensJsons": [], "rawText": ""}}
+        pages = list(iter_page_annotations(v1))
+        self.assertEqual(
+            pages[0].bounds, {"top": 0, "left": 0, "right": 0, "bottom": 0}
+        )
+
+
+class TestExpandEdgePaths(TestCase):
+    """Cover expand_annotation_json edge cases."""
+
+    def test_v2_non_numeric_page_key_defaults_to_zero(self):
+        """Expand v2 with non-numeric page key uses pageIndex=0 in tokens."""
+        v2 = {"v": 2, "p": {"abc": {"b": [1, 2, 3, 4], "t": "5"}}}
+        result = expand_annotation_json(v2, raw_text="test")
+        self.assertIn("abc", result)
+        self.assertEqual(result["abc"]["tokensJsons"][0]["pageIndex"], 0)
+
+    def test_v2_token_type_none_yields_empty(self):
+        """Expand v2 page where t is None yields empty tokensJsons."""
+        v2 = {"v": 2, "p": {"0": {"b": [0, 0, 0, 0], "t": None}}}
+        result = expand_annotation_json(v2)
+        self.assertEqual(result["0"]["tokensJsons"], [])
+
+
+class TestOffsetEdgePaths(TestCase):
+    """Cover offset_annotation_json edge cases."""
+
+    def test_v1_non_numeric_page_key_preserved(self):
+        """v1 page with non-numeric key is preserved as-is."""
+        v1 = {"abc": {"bounds": {"top": 0, "left": 0, "right": 0, "bottom": 0}}}
+        result = offset_annotation_json(v1, 5)
+        self.assertIn("abc", result)
+
+    def test_v2_non_numeric_page_key_preserved(self):
+        """v2 page with non-numeric key is preserved as-is."""
+        v2 = {"v": 2, "p": {"abc": {"b": [0, 0, 0, 0], "t": "1"}}}
+        result = offset_annotation_json(v2, 5)
+        self.assertIn("abc", result["p"])
+
+
+class TestCompactEdgePaths(TestCase):
+    """Cover compact_annotation_json edge cases."""
+
+    def test_bounds_non_dict_defaults_to_zeros(self):
+        """v1 page where bounds is not a dict gets [0,0,0,0]."""
+        v1 = {"0": {"bounds": "invalid", "tokensJsons": []}}
+        result = compact_annotation_json(v1)
+        self.assertEqual(result["p"]["0"]["b"], [0, 0, 0, 0])
+
+    def test_tokens_jsons_missing_yields_no_t_key(self):
+        """v1 page with no tokensJsons still produces a page entry."""
+        v1 = {"0": {"bounds": {"top": 1, "left": 2, "right": 3, "bottom": 4}}}
+        result = compact_annotation_json(v1)
+        self.assertIn("0", result["p"])
+        self.assertEqual(result["p"]["0"]["b"], [1, 2, 3, 4])
