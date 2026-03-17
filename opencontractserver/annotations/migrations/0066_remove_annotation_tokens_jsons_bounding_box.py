@@ -14,7 +14,7 @@ will be lazily compacted to v2 on the next ``Annotation.save()`` call.
 NOTE: This migration is irreversible.
 """
 
-from django.db import migrations
+from django.db import migrations, models
 
 
 def backfill_json_from_legacy_fields(apps, schema_editor):
@@ -22,10 +22,12 @@ def backfill_json_from_legacy_fields(apps, schema_editor):
     Annotation = apps.get_model("annotations", "Annotation")
 
     # Find annotations where json is empty/null but legacy fields have data.
+    # Use explicit Q objects: json__in=[{}, None] may not match DB-level NULL
+    # reliably across PostgreSQL versions, so we use json__isnull=True as well.
     qs = Annotation.objects.filter(
-        json__in=[{}, None],
+        models.Q(json__isnull=True) | models.Q(json={}),
     ).exclude(
-        tokens_jsons__in=[[], None],
+        models.Q(tokens_jsons__isnull=True) | models.Q(tokens_jsons=[]),
     )
 
     updated = 0
@@ -39,6 +41,13 @@ def backfill_json_from_legacy_fields(apps, schema_editor):
         # Rebuild a v1-style json payload from the legacy fields.
         # tokens_jsons is a flat list of {pageIndex, tokenIndex} dicts;
         # group them by page and attach the bounding_box to each page.
+        #
+        # NOTE: The legacy bounding_box field was a single annotation-level
+        # dict, not per-page.  For multi-page annotations the same box is
+        # assigned to every page entry.  This is acceptable because (a) the
+        # legacy bounding_box was never page-specific in the old schema, and
+        # (b) the authoritative bounds come from the json field (which we are
+        # backfilling here only for rows that had no json at all).
         pages: dict[str, dict] = {}
         for tok in tokens_jsons:
             if not isinstance(tok, dict):

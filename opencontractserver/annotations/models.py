@@ -725,6 +725,9 @@ class StructuralAnnotationSet(BaseOCModel):
             )
         )
 
+        # compact_annotation_json is called explicitly because bulk_create()
+        # bypasses save(), which is where auto-compaction normally runs.
+        # The function is idempotent — already-compact v2 data is returned as-is.
         new_annotations = [
             Annotation(
                 structural_set=new_set,
@@ -1030,7 +1033,7 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
             if is_compact_format(self.json):
                 # v2 compact format: {"v": 2, "p": {"0": {"b": [...], "t": "..."}}}
                 pages = self.json.get("p", {})
-                for page_key, page_obj in list(pages.items())[:1]:
+                for page_key, page_obj in pages.items():
                     if not isinstance(page_obj, dict):
                         raise ValueError("v2 page entries must be dicts.")
                     if "b" not in page_obj or "t" not in page_obj:
@@ -1038,9 +1041,9 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
                             "v2 page entries must contain 'b' (bounds) and 't' (tokens)."
                         )
             elif not is_span_format(self.json):
-                # v1 legacy or free-form — shallow check only.
+                # v1 legacy or free-form — shallow type/shape check.
                 # Auto-compaction in save() handles normalization.
-                for page, page_obj in list(self.json.items())[:1]:
+                for page, page_obj in self.json.items():
                     if not isinstance(page, (int, str)):
                         raise ValueError("Page keys must be int-convertible.")
 

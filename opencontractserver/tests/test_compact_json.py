@@ -74,6 +74,12 @@ class TestEncodeTokenRanges(TestCase):
     def test_pair_range(self):
         self.assertEqual(encode_token_ranges([7, 8]), "7-8")
 
+    def test_rejects_oversized_input(self):
+        """encode_token_ranges raises ValueError when input exceeds limit."""
+        oversized = list(range(COMPACT_JSON_MAX_TOTAL_TOKENS + 1))
+        with self.assertRaises(ValueError):
+            encode_token_ranges(oversized)
+
 
 # ── decode_token_ranges ─────────────────────────────────────────
 
@@ -124,10 +130,13 @@ class TestDecodeTokenRanges(TestCase):
         self.assertEqual(result, [])
 
     def test_truncation_at_max_total_tokens(self):
-        # Build a range string that would produce more than the limit.
-        range_str = encode_token_ranges(
-            list(range(COMPACT_JSON_MAX_TOTAL_TOKENS + 100))
-        )
+        # Build a range string manually (bypassing encode which now rejects
+        # oversized inputs) to verify decode truncates gracefully.
+        range_str = encode_token_ranges(list(range(COMPACT_JSON_MAX_TOTAL_TOKENS)))
+        # Append extra tokens beyond the limit to the already-encoded string.
+        extra_start = COMPACT_JSON_MAX_TOTAL_TOKENS
+        extra_end = COMPACT_JSON_MAX_TOTAL_TOKENS + 99
+        range_str += f",{extra_start}-{extra_end}"
         result = decode_token_ranges(range_str)
         self.assertLessEqual(len(result), COMPACT_JSON_MAX_TOTAL_TOKENS)
 

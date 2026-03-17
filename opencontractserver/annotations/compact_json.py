@@ -71,6 +71,10 @@ logger = logging.getLogger(__name__)
 def encode_token_ranges(indices: list[int]) -> str:
     """Encode a sorted list of token indices into a compact range string.
 
+    Raises :class:`ValueError` if the number of token indices exceeds
+    ``COMPACT_JSON_MAX_TOTAL_TOKENS`` — this prevents writing data that
+    would be silently truncated on decode.
+
     Examples::
 
         [1, 2, 3, 5, 7, 8, 9] → "1-3,5,7-9"
@@ -82,6 +86,11 @@ def encode_token_ranges(indices: list[int]) -> str:
     sorted_idx = sorted(i for i in set(indices) if i >= 0)
     if not sorted_idx:
         return ""
+    if len(sorted_idx) > MAX_TOTAL_TOKENS:
+        raise ValueError(
+            f"Token count {len(sorted_idx)} exceeds limit {MAX_TOTAL_TOKENS}. "
+            f"Refusing to encode to prevent silent data loss on decode."
+        )
     ranges: list[str] = []
     start = end = sorted_idx[0]
     for i in range(1, len(sorted_idx)):
