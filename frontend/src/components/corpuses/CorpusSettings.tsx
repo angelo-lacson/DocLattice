@@ -490,9 +490,8 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
               Cancel
             </Button>
             <Button
-              variant="primary"
+              variant="danger"
               onClick={() => actionToDelete && handleDelete(actionToDelete)}
-              style={{ background: OS_LEGAL_COLORS.danger }}
             >
               Delete
             </Button>

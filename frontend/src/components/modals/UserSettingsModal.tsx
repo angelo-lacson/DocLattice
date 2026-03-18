@@ -12,6 +12,7 @@ import styled from "styled-components";
 import { UserCircle, X, Check } from "lucide-react";
 
 import { backendUserObj, showUserSettingsModal } from "../../graphql/cache";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import {
   UPDATE_ME,
   UpdateMeInputs,
@@ -35,7 +36,7 @@ const ResponsiveFormGroup = styled.div`
 
 const ProfileVisibilityHint = styled.div`
   font-size: 12px;
-  color: #666;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin-top: 0.5rem;
 
   @media (max-width: 768px) {
@@ -51,7 +52,7 @@ const FormField = styled.div`
     font-weight: 600;
     font-size: 0.875rem;
     margin-bottom: 0.375rem;
-    color: #334155;
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 `;
 
@@ -115,7 +116,11 @@ const UserSettingsModal: React.FC = () => {
           <div>
             <div>User Settings</div>
             <div
-              style={{ fontSize: "0.85rem", fontWeight: 400, color: "#64748b" }}
+              style={{
+                fontSize: "0.85rem",
+                fontWeight: 400,
+                color: OS_LEGAL_COLORS.textSecondary,
+              }}
             >
               Update your profile and public slug
             </div>
@@ -203,7 +208,7 @@ const UserSettingsModal: React.FC = () => {
             <hr
               style={{
                 border: "none",
-                borderTop: "1px solid #e2e8f0",
+                borderTop: `1px solid ${OS_LEGAL_COLORS.border}`,
                 margin: "1.5rem 0",
               }}
             />

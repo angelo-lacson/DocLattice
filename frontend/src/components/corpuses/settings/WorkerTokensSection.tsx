@@ -667,11 +667,10 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
             Cancel
           </Button>
           <Button
-            variant="primary"
+            variant="danger"
             onClick={() =>
               tokenToRevoke !== null && handleRevoke(tokenToRevoke)
             }
-            style={{ background: OS_LEGAL_COLORS.danger }}
           >
             Revoke
           </Button>

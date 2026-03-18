@@ -92,6 +92,7 @@ export const EditLabelModal = ({
       <ModalFooter>
         <Button
           variant="secondary"
+          onMouseDown={onMouseDown}
           onClick={(e: SyntheticEvent) => {
             e.stopPropagation();
             onHide();
