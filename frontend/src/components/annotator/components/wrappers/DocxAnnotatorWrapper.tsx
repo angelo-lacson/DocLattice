@@ -5,7 +5,7 @@
  * of the parent DocumentViewer component. Mirrors TxtAnnotatorWrapper's pattern.
  */
 
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import { useSetAtom } from "jotai";
 import {
   useApproveAnnotation,
@@ -160,15 +160,22 @@ export const DocxAnnotatorWrapper: React.FC<DocxAnnotatorWrapperProps> = ({
     [spanLabels, activeSpanLabel]
   );
 
-  const filteredAnnotations = pdfAnnotations.annotations.filter(
-    (annot): annot is ServerSpanAnnotation =>
-      annot instanceof ServerSpanAnnotation
+  const filteredAnnotations = useMemo(
+    () =>
+      pdfAnnotations.annotations.filter(
+        (annot): annot is ServerSpanAnnotation =>
+          annot instanceof ServerSpanAnnotation
+      ),
+    [pdfAnnotations.annotations]
   );
 
-  const filteredSearchResults =
-    textSearchMatches?.filter(
-      (match): match is TextSearchSpanResult => "start_index" in match
-    ) ?? [];
+  const filteredSearchResults = useMemo(
+    () =>
+      textSearchMatches?.filter(
+        (match): match is TextSearchSpanResult => "start_index" in match
+      ) ?? [],
+    [textSearchMatches]
+  );
 
   if (!docxBytes || docxBytes.length === 0) {
     return (

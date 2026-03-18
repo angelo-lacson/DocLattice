@@ -715,7 +715,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
           textAlign: "center",
         }}
       >
-        <p>{error}</p>
+        <p>Unable to display this document. Please try reloading the page.</p>
       </div>
     );
   }

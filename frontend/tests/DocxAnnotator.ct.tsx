@@ -3,6 +3,7 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import {
   DocxAnnotatorTestWrapper,
   DocxAnnotatorEditableWrapper,
+  sampleDocText,
 } from "./DocxAnnotatorTestWrapper";
 import { docScreenshot } from "./utils/docScreenshot";
 import { setupDocxodusWasm } from "./utils/docxodusWasm";
@@ -89,6 +90,16 @@ test("DocxAnnotator disambiguates repeated text by selecting correct occurrence"
   // defined in DocxAnnotatorTestWrapper.tsx. Update if either changes.
   const FIRST_THIS_OFFSET = 13;
   const SECOND_THIS_OFFSET = 57;
+
+  // Sanity check: verify sampleDocText actually has "This" at the pinned
+  // offsets. If a docxodus version bump changes text extraction, this gives
+  // a clear failure message rather than a cryptic offset mismatch later.
+  expect(
+    sampleDocText.substring(FIRST_THIS_OFFSET, FIRST_THIS_OFFSET + 4)
+  ).toBe("This");
+  expect(
+    sampleDocText.substring(SECOND_THIS_OFFSET, SECOND_THIS_OFFSET + 4)
+  ).toBe("This");
 
   // Find the second occurrence of "This" in the rendered DOM and get its
   // bounding rect so we can drag-select it with the mouse.

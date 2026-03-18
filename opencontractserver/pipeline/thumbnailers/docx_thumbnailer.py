@@ -123,6 +123,9 @@ class DocxThumbnailGenerator(BaseThumbnailGenerator):
             Text preview string or None.
         """
         try:
+            # Imported locally because this is an optional fallback path — avoids
+            # loading the XML parser at module level for the common case where an
+            # embedded thumbnail image is found first.
             import xml.etree.ElementTree as ET
 
             with zipfile.ZipFile(BytesIO(docx_bytes), "r") as zf:
