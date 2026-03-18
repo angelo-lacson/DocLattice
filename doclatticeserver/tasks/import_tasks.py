@@ -24,6 +24,7 @@ from doclatticeserver.constants.document_processing import (
 )
 from doclatticeserver.corpuses.models import Corpus, TemporaryFileHandle
 from doclatticeserver.documents.models import Document
+from doclatticeserver.pipeline.registry import get_allowed_mime_types
 from doclatticeserver.types.dicts import DocLatticeAnnotatedDocumentImportType
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.compact_pawls import compact_pawls_pages
@@ -277,10 +278,6 @@ def process_documents_zip(
                             kind = kind.mime
 
                         # Skip files with unsupported types
-                        from doclatticeserver.pipeline.registry import (
-                            get_allowed_mime_types,
-                        )
-
                         if kind not in get_allowed_mime_types():
                             results["skipped_files"] += 1
                             continue
@@ -795,10 +792,6 @@ def import_zip_with_folder_structure(
                             continue
                     else:
                         mime_type = kind.mime
-
-                    from doclatticeserver.pipeline.registry import (
-                        get_allowed_mime_types,
-                    )
 
                     if mime_type not in get_allowed_mime_types():
                         results["files_skipped_type"] += 1
