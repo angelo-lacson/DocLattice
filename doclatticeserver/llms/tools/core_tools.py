@@ -377,7 +377,7 @@ async def aget_notes_for_document_corpus(
         queryset = queryset.filter(corpus_id=corpus_id)
 
     notes = []
-    async for note in queryset:
+    async for note in queryset.order_by("created"):
         notes.append(
             {
                 "id": note.id,
