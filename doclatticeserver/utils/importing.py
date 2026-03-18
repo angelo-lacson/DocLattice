@@ -23,6 +23,7 @@ from doclatticeserver.types.dicts import (
     DocLatticeRelationshipPythonType,
 )
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.compact_pawls import compact_pawls_pages
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 logger = logging.getLogger(__name__)
@@ -299,7 +300,7 @@ def create_document_from_export_data(
     pdf_file = File(pdf_file_handle, doc_filename)
 
     pawls_parse_file = ContentFile(
-        json.dumps(doc_data["pawls_file_content"]).encode("utf-8"),
+        json.dumps(compact_pawls_pages(doc_data["pawls_file_content"])).encode("utf-8"),
         name="pawls_tokens.json",
     )
 
