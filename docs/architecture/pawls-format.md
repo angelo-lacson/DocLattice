@@ -336,12 +336,15 @@ The frontend never writes PAWLs — it only fetches and renders. So it only need
 
 ### Write Paths (Where v2 Encoding Happens)
 
-All entry points that persist PAWLs files automatically compact to v2:
+Primary entry points that persist PAWLs files automatically compact to v2. If a page exceeds `MAX_TOKENS_PER_PAGE` (100,000), that page falls back to v1 format.
 
 | Write Path | File | What It Does |
 |------------|------|--------------|
 | Parser output | `opencontractserver/pipeline/base/parser.py` | Compacts after parsing completes |
 | Worker uploads | `opencontractserver/worker_uploads/tasks.py` | Compacts imported PAWLs data |
+| V2 import | `opencontractserver/utils/import_v2.py` | Compacts during v2 corpus import |
+| Legacy import | `opencontractserver/utils/importing.py` | Compacts during legacy corpus import |
+| Import tasks | `opencontractserver/tasks/import_tasks.py` | Compacts during async import jobs |
 
 ```python
 from opencontractserver.utils.compact_pawls import compact_pawls_pages
@@ -352,12 +355,13 @@ pawls_string = json.dumps(compact_data)
 
 ### Read Paths (Where v2 Expansion Happens)
 
-All consumers read through `expand_pawls_pages()`:
+Key consumers read through `expand_pawls_pages()`. Run `grep -r expand_pawls_pages` for the full list (~15 files).
 
 | Consumer | File |
 |----------|------|
 | LLM agent tools | `opencontractserver/llms/tools/core_tools.py` |
-| PDF redaction | `opencontractserver/pipeline/post_processors/pdf_redactor.py` |
+| Image tools | `opencontractserver/llms/tools/image_tools.py` |
+| PDF token extraction | `opencontractserver/utils/pdf_token_extraction.py` |
 | Frontend REST fetch | `frontend/src/components/annotator/api/rest.ts` |
 | Any code loading `pawls_parse_file` | Via `expand_pawls_pages(json.load(f))` |
 
