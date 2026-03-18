@@ -18,9 +18,11 @@ from opencontractserver.pipeline.registry import (
     get_all_parsers_cached,
     get_all_post_processors_cached,
     get_all_thumbnailers_cached,
+    get_allowed_mime_types,
     get_component_by_name_cached,
     get_components_by_mimetype_cached,
     get_registry,
+    get_supported_mime_types,
     reset_registry,
 )
 
@@ -382,3 +384,64 @@ class TestCreateDefinitionSettingsSchemaError(TestCase):
             # Should still return a definition with empty settings_schema
             self.assertEqual(defn.settings_schema, ())
             self.assertEqual(defn.name, "BrokenSettingsComponent")
+
+
+class TestSupportedMimeTypes(TestCase):
+    """Tests for get_supported_mime_types() and get_allowed_mime_types()."""
+
+    def test_get_supported_mime_types_returns_all_file_types(self):
+        """Every FileTypeEnum member should appear in the result."""
+        from opencontractserver.pipeline.base.file_types import FileTypeEnum
+
+        result = get_supported_mime_types()
+        file_types = {entry["file_type"] for entry in result}
+        for ft in FileTypeEnum:
+            self.assertIn(ft.value, file_types)
+
+    def test_get_supported_mime_types_structure(self):
+        """Each entry should have the expected keys and types."""
+        result = get_supported_mime_types()
+        for entry in result:
+            self.assertIn("mimetype", entry)
+            self.assertIn("file_type", entry)
+            self.assertIn("label", entry)
+            self.assertIn("fully_supported", entry)
+            self.assertIn("stage_coverage", entry)
+            self.assertIsInstance(entry["fully_supported"], bool)
+            self.assertIn("parser", entry["stage_coverage"])
+            self.assertIn("embedder", entry["stage_coverage"])
+            self.assertIn("thumbnailer", entry["stage_coverage"])
+
+    def test_get_supported_mime_types_pdf_has_parser(self):
+        """PDF should have at least one parser available."""
+        result = get_supported_mime_types()
+        pdf_entry = next(e for e in result if e["file_type"] == "pdf")
+        self.assertTrue(pdf_entry["stage_coverage"]["parser"])
+
+    def test_get_allowed_mime_types_returns_list(self):
+        """get_allowed_mime_types should return a list of MIME type strings."""
+        allowed = get_allowed_mime_types()
+        self.assertIsInstance(allowed, list)
+        for mime in allowed:
+            self.assertIsInstance(mime, str)
+            self.assertIn("/", mime)
+
+    def test_get_allowed_mime_types_includes_legacy_aliases(self):
+        """Legacy MIME aliases should be included if their canonical type is supported."""
+        allowed = get_allowed_mime_types()
+        # If text/plain is supported, application/txt should also be in the list
+        if "text/plain" in allowed:
+            self.assertIn("application/txt", allowed)
+
+    def test_fully_supported_requires_all_stages(self):
+        """A file type is fully_supported only if all stages have components."""
+        result = get_supported_mime_types()
+        for entry in result:
+            coverage = entry["stage_coverage"]
+            expected = all(coverage.values())
+            self.assertEqual(
+                entry["fully_supported"],
+                expected,
+                f"fully_supported mismatch for {entry['file_type']}: "
+                f"coverage={coverage}, fully_supported={entry['fully_supported']}",
+            )

@@ -33,12 +33,14 @@ import { formatSettingLabel } from "../../utils/formatters";
 import {
   GET_PIPELINE_SETTINGS,
   GET_PIPELINE_COMPONENTS,
+  GET_SUPPORTED_MIME_TYPES,
   UPDATE_PIPELINE_SETTINGS,
   RESET_PIPELINE_SETTINGS,
   UPDATE_COMPONENT_SECRETS,
   DELETE_COMPONENT_SECRETS,
   PipelineSettingsQueryResult,
   PipelineComponentsQueryResult,
+  SupportedMimeTypesQueryResult,
 } from "./system_settings/graphql";
 import { SettingsSchemaEntry } from "./system_settings/types";
 import { STAGE_CONFIG } from "./system_settings/config";
@@ -132,6 +134,11 @@ export const SystemSettings: React.FC = () => {
   } = useQuery<PipelineComponentsQueryResult>(GET_PIPELINE_COMPONENTS, {
     fetchPolicy: "cache-and-network",
   });
+
+  const { data: mimeTypesData, loading: mimeTypesLoading } =
+    useQuery<SupportedMimeTypesQueryResult>(GET_SUPPORTED_MIME_TYPES, {
+      fetchPolicy: "cache-and-network",
+    });
 
   // Mutations
   const [updateSettings, { loading: updating }] = useMutation(
@@ -539,8 +546,10 @@ export const SystemSettings: React.FC = () => {
     }
   }, []);
 
+  const supportedMimeTypes = mimeTypesData?.supportedMimeTypes ?? [];
+
   // Loading state
-  if (settingsLoading || componentsLoading) {
+  if (settingsLoading || componentsLoading || mimeTypesLoading) {
     return (
       <Container>
         <LoadingContainer>
@@ -663,6 +672,7 @@ export const SystemSettings: React.FC = () => {
             ) : (
               <FiletypeDefaults
                 components={componentsByStage}
+                supportedMimeTypes={supportedMimeTypes}
                 enabledComponents={
                   (settings?.enabledComponents?.filter(Boolean) as string[]) ??
                   []
@@ -704,6 +714,7 @@ export const SystemSettings: React.FC = () => {
           <SettingsRightColumn>
             <FiletypeDefaults
               components={componentsByStage}
+              supportedMimeTypes={supportedMimeTypes}
               enabledComponents={
                 (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
               }

@@ -236,13 +236,12 @@ class PipelineComponentRegistry:
         """Create a PipelineComponentDefinition from a component class."""
         module_name = component_class.__module__.split(".")[-1]
 
-        # Get supported file types, filtering to valid ones
+        # Get supported file types, filtering to valid FileTypeEnum members
         # Store as the enum value (e.g., "pdf") for consistency
         supported_file_types = []
         if hasattr(component_class, "supported_file_types"):
             for ft in component_class.supported_file_types:
-                if ft in [FileTypeEnum.PDF, FileTypeEnum.TXT, FileTypeEnum.DOCX]:
-                    # Store the enum value ("pdf", "txt", "docx")
+                if isinstance(ft, FileTypeEnum):
                     supported_file_types.append(ft.value)
 
         # Get supported modalities (for embedders)
@@ -479,17 +478,12 @@ def get_components_by_mimetype_cached(
 
     Returns dict with keys: parsers, embedders, thumbnailers, post_processors
     """
+    from opencontractserver.pipeline.base.file_types import MIME_TO_FILE_TYPE
+
     registry = get_registry()
 
     # Convert MIME type to FileTypeEnum value for lookup
-    # FileTypeEnum values are "pdf", "txt", "docx" - not MIME types
-    mime_to_enum_value = {
-        "application/pdf": "pdf",
-        "text/plain": "txt",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
-    }
-
-    file_type_value = mime_to_enum_value.get(mimetype, mimetype)
+    file_type_value = MIME_TO_FILE_TYPE.get(mimetype, mimetype)
 
     return {
         "parsers": registry.get_parsers_for_filetype(file_type_value),
@@ -512,6 +506,78 @@ def get_all_components_cached() -> dict[str, tuple[PipelineComponentDefinition, 
         "thumbnailers": registry.thumbnailers,
         "post_processors": registry.post_processors,
     }
+
+
+def get_supported_mime_types() -> list[dict[str, object]]:
+    """
+    Derive supported MIME types dynamically from registered pipeline components.
+
+    A file type is "fully supported" if at least one registered component exists
+    for each required pipeline stage: parser, embedder, and thumbnailer.
+
+    Returns a list of dicts, each containing:
+        - mimetype: canonical MIME type string
+        - file_type: short label (e.g. "pdf")
+        - label: human-readable label (e.g. "PDF")
+        - fully_supported: True if all required stages have at least one component
+        - stage_coverage: dict of stage -> bool indicating availability
+    """
+    from opencontractserver.pipeline.base.file_types import (
+        FILE_TYPE_LABELS,
+        FILE_TYPE_TO_MIME,
+        FileTypeEnum,
+    )
+
+    registry = get_registry()
+    result = []
+
+    for ft_enum in FileTypeEnum:
+        ft_value = ft_enum.value
+        mime = FILE_TYPE_TO_MIME.get(ft_value, "")
+
+        has_parser = len(registry.get_parsers_for_filetype(ft_value)) > 0
+        # Embedders currently work on all text types (not filtered by file type)
+        has_embedder = len(registry.embedders) > 0
+        has_thumbnailer = len(registry.get_thumbnailers_for_filetype(ft_value)) > 0
+
+        stage_coverage = {
+            "parser": has_parser,
+            "embedder": has_embedder,
+            "thumbnailer": has_thumbnailer,
+        }
+
+        result.append(
+            {
+                "mimetype": mime,
+                "file_type": ft_value,
+                "label": FILE_TYPE_LABELS.get(ft_value, ft_value.upper()),
+                "fully_supported": all(stage_coverage.values()),
+                "stage_coverage": stage_coverage,
+            }
+        )
+
+    return result
+
+
+def get_allowed_mime_types() -> list[str]:
+    """
+    Return the list of MIME types that are fully supported by the pipeline.
+
+    This replaces the static settings.ALLOWED_DOCUMENT_MIMETYPES with a
+    dynamically-derived list based on registered pipeline components.
+    Includes legacy MIME type aliases for backward compatibility.
+    """
+    from opencontractserver.pipeline.base.file_types import LEGACY_MIME_ALIASES
+
+    supported = get_supported_mime_types()
+    allowed = [entry["mimetype"] for entry in supported if entry["fully_supported"]]
+
+    # Add legacy aliases that map to supported types
+    for legacy, canonical in LEGACY_MIME_ALIASES.items():
+        if canonical in allowed and legacy not in allowed:
+            allowed.append(legacy)
+
+    return allowed
 
 
 def reset_registry() -> None:

@@ -1,11 +1,10 @@
 import React, { memo, useMemo, useCallback } from "react";
 import { Button } from "@os-legal/ui";
-import { FileText, Cpu, Settings } from "lucide-react";
-import { PipelineComponentType } from "../../../types/graphql-api";
+import { AlertTriangle, FileText, Cpu, Settings } from "lucide-react";
 import {
-  SUPPORTED_MIME_TYPES,
-  MIME_TO_SHORT_LABEL,
-} from "../../../assets/configurations/constants";
+  PipelineComponentType,
+  SupportedMimeTypeType,
+} from "../../../types/graphql-api";
 import { getComponentDisplayName } from "../PipelineIcons";
 import { StageType } from "./types";
 import { isComponentAvailable } from "./utils";
@@ -36,6 +35,7 @@ interface FiletypeDefaultsProps {
     embedders: (PipelineComponentType & { className: string })[];
     thumbnailers: (PipelineComponentType & { className: string })[];
   };
+  supportedMimeTypes: SupportedMimeTypeType[];
   enabledComponents: string[];
   preferredParsers: Record<string, string>;
   preferredEmbedders: Record<string, string>;
@@ -67,6 +67,7 @@ const STAGES: { key: StageType; label: string }[] = [
 export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
   ({
     components,
+    supportedMimeTypes,
     enabledComponents,
     preferredParsers,
     preferredEmbedders,
@@ -86,6 +87,15 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
       [preferredParsers, preferredEmbedders, preferredThumbnailers]
     );
 
+    // Build a lookup from MIME type to short label from dynamic data
+    const mimeToShortLabel = useMemo(
+      () =>
+        Object.fromEntries(
+          supportedMimeTypes.map((m) => [m.mimetype, m.fileType.toUpperCase()])
+        ),
+      [supportedMimeTypes]
+    );
+
     // Pre-compute available components per stage per MIME type
     const availableComponents = useMemo(() => {
       const result: Record<
@@ -97,17 +107,17 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
         thumbnailers: {},
       };
 
-      for (const mime of SUPPORTED_MIME_TYPES) {
-        const shortLabel = MIME_TO_SHORT_LABEL[mime.value] || mime.value;
+      for (const mime of supportedMimeTypes) {
+        const shortLabel = mimeToShortLabel[mime.mimetype] || mime.mimetype;
         for (const stage of STAGES) {
-          result[stage.key][mime.value] = components[stage.key].filter((comp) =>
-            isComponentAvailable(comp, shortLabel, enabledComponents)
+          result[stage.key][mime.mimetype] = components[stage.key].filter(
+            (comp) => isComponentAvailable(comp, shortLabel, enabledComponents)
           );
         }
       }
 
       return result;
-    }, [components, enabledComponents]);
+    }, [components, supportedMimeTypes, mimeToShortLabel, enabledComponents]);
 
     const handleChange = useCallback(
       (stage: StageType, mimeType: string, value: string) => {
@@ -135,18 +145,25 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
           </DefaultsHeaderRow>
 
           {/* One row per MIME type */}
-          {SUPPORTED_MIME_TYPES.map((mime) => {
+          {supportedMimeTypes.map((mime) => {
             return (
-              <FiletypeRow key={mime.value}>
+              <FiletypeRow key={mime.mimetype}>
                 <FiletypeLabel>
-                  <FileText />
-                  {mime.shortLabel}
+                  {mime.fullySupported ? (
+                    <FileText />
+                  ) : (
+                    <span title="Partially supported: missing pipeline components for some stages">
+                      <AlertTriangle style={{ color: "#D69E2E" }} />
+                    </span>
+                  )}
+                  {mime.label}
                 </FiletypeLabel>
 
                 {STAGES.map((stage) => {
                   const currentValue =
-                    preferredByStage[stage.key]?.[mime.value] || "";
-                  const available = availableComponents[stage.key][mime.value];
+                    preferredByStage[stage.key]?.[mime.mimetype] || "";
+                  const available =
+                    availableComponents[stage.key][mime.mimetype];
                   const hasNoOptions = available.length === 0;
                   const isUnassigned = !currentValue;
 
@@ -158,9 +175,9 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
                         $warning={isUnassigned && !hasNoOptions}
                         disabled={updating || hasNoOptions}
                         onChange={(e) =>
-                          handleChange(stage.key, mime.value, e.target.value)
+                          handleChange(stage.key, mime.mimetype, e.target.value)
                         }
-                        aria-label={`${stage.label} for ${mime.label}`}
+                        aria-label={`${stage.label} for ${mime.label} files`}
                       >
                         {hasNoOptions ? (
                           <option value="">None available</option>

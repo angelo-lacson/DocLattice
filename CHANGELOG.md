@@ -5,13 +5,23 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-15
+## [Unreleased] - 2026-03-18
 
 ### Breaking Changes
 
 - **Removed `tokensJsons` and `boundingBox` from GraphQL API**: The `tokensJsons` and `boundingBox` fields have been removed from GraphQL annotation queries and mutations (PR #1100). External API consumers and integrations must update to use the `json` field instead. The `json` field contains either v1 (legacy page-keyed format) or v2 (compact format) annotation data. Use `iter_page_annotations()` (Python) or `iterPageAnnotations()` (TypeScript) for format-agnostic access.
 
 ### Added
+
+- **Dynamic MIME type support from pipeline components** (Closes #1059): Supported file types are now derived dynamically from registered pipeline components instead of being hardcoded. Changes include:
+  - New `get_supported_mime_types()` and `get_allowed_mime_types()` functions in `opencontractserver/pipeline/registry.py` that compute supported file types by intersecting component coverage across parser, embedder, and thumbnailer stages
+  - New `supportedMimeTypes` GraphQL query (`config/graphql/pipeline_queries.py`) returning per-file-type support level with stage coverage details
+  - New `SupportedMimeTypeType` and `StageCoverageType` GraphQL types (`config/graphql/pipeline_types.py`)
+  - Centralized MIME ↔ file type mappings (`MIME_TO_FILE_TYPE`, `FILE_TYPE_TO_MIME`, `FILE_TYPE_LABELS`, `LEGACY_MIME_ALIASES`) in `opencontractserver/pipeline/base/file_types.py`, replacing scattered inline dicts
+  - Upload validation in `document_mutations.py`, `folder_service.py`, and `import_tasks.py` now uses the dynamic registry instead of `settings.ALLOWED_DOCUMENT_MIMETYPES`
+  - Frontend `FiletypeDefaults` component fetches supported MIME types via GraphQL query instead of using hardcoded `SUPPORTED_MIME_TYPES` constant
+  - Warning icon displayed for partially-supported file types (e.g., DOCX which lacks a thumbnailer)
+  - `FileTypeEnum` gains `.mimetype` and `.label` properties and supports legacy MIME aliases in `from_mimetype()`
 
 - **Compact annotation JSON v2 format for ~75% storage reduction** (PR #1100): New compact v2 format for annotation JSON payloads that range-encodes consecutive token indices, compacts bounds to arrays, and drops redundant `pageIndex` and `rawText` from per-page data. Changes include:
   - Core encode/decode in `opencontractserver/annotations/compact_json.py` (Python) and `frontend/src/utils/compactAnnotationJson.ts` (TypeScript)

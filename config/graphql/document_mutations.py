@@ -164,7 +164,9 @@ class UploadDocument(graphene.Mutation):
             else:
                 kind = kind.mime
 
-            if kind not in settings.ALLOWED_DOCUMENT_MIMETYPES:
+            from opencontractserver.pipeline.registry import get_allowed_mime_types
+
+            if kind not in get_allowed_mime_types():
                 return UploadDocument(
                     message=f"Unallowed filetype: {kind}", ok=False, document=None
                 )

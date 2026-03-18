@@ -1471,8 +1471,9 @@ class DocumentFolderService:
         else:
             mime_type = kind.mime
 
-        allowed = getattr(settings, "ALLOWED_DOCUMENT_MIMETYPES", [])
-        if mime_type not in allowed:
+        from opencontractserver.pipeline.registry import get_allowed_mime_types
+
+        if mime_type not in get_allowed_mime_types():
             return None, f"Unallowed filetype: {mime_type}"
 
         return mime_type, ""

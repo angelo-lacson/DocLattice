@@ -274,7 +274,11 @@ def process_documents_zip(
                             kind = kind.mime
 
                         # Skip files with unsupported types
-                        if kind not in settings.ALLOWED_DOCUMENT_MIMETYPES:
+                        from opencontractserver.pipeline.registry import (
+                            get_allowed_mime_types,
+                        )
+
+                        if kind not in get_allowed_mime_types():
                             results["skipped_files"] += 1
                             continue
 
@@ -789,7 +793,11 @@ def import_zip_with_folder_structure(
                     else:
                         mime_type = kind.mime
 
-                    if mime_type not in settings.ALLOWED_DOCUMENT_MIMETYPES:
+                    from opencontractserver.pipeline.registry import (
+                        get_allowed_mime_types,
+                    )
+
+                    if mime_type not in get_allowed_mime_types():
                         results["files_skipped_type"] += 1
                         continue
 
