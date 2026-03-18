@@ -154,10 +154,10 @@ test.describe("GlobalSettingsPanel Component", () => {
 
     // Check descriptions are present
     await expect(
-      page.locator("text=Create and manage badges that can be awarded"),
+      page.locator("text=Create and manage badges that can be awarded")
     ).toBeVisible();
     await expect(
-      page.locator("text=Configure global AI agents available"),
+      page.locator("text=Configure global AI agents available")
     ).toBeVisible();
 
     await component.unmount();
@@ -180,7 +180,7 @@ test.describe("GlobalAgentManagement Component", () => {
     };
 
     const component = await mount(
-      <GlobalAgentManagementWrapper mocks={[getGlobalAgentsMock]} />,
+      <GlobalAgentManagementWrapper mocks={[getGlobalAgentsMock]} />
     );
 
     // Wait for agents to load
@@ -217,7 +217,7 @@ test.describe("GlobalAgentManagement Component", () => {
     };
 
     const component = await mount(
-      <GlobalAgentManagementWrapper mocks={[emptyAgentsMock]} />,
+      <GlobalAgentManagementWrapper mocks={[emptyAgentsMock]} />
     );
 
     // Check for empty state message
@@ -225,7 +225,7 @@ test.describe("GlobalAgentManagement Component", () => {
       timeout: 5000,
     });
     await expect(
-      page.locator("text=Create your first global agent"),
+      page.locator("text=Create your first global agent")
     ).toBeVisible();
 
     await component.unmount();
@@ -246,7 +246,7 @@ test.describe("GlobalAgentManagement Component", () => {
     };
 
     const component = await mount(
-      <GlobalAgentManagementWrapper mocks={[emptyAgentsMock]} />,
+      <GlobalAgentManagementWrapper mocks={[emptyAgentsMock]} />
     );
 
     // Wait for content to load
@@ -264,7 +264,7 @@ test.describe("GlobalAgentManagement Component", () => {
     await expect(page.locator("label:has-text('Name')")).toBeVisible();
     await expect(page.locator("label:has-text('Description')")).toBeVisible();
     await expect(
-      page.locator("label:has-text('System Instructions')"),
+      page.locator("label:has-text('System Instructions')")
     ).toBeVisible();
 
     await docScreenshot(page, "admin--agent-config--create-modal");
@@ -288,7 +288,7 @@ test.describe("GlobalAgentManagement Component", () => {
     };
 
     const component = await mount(
-      <GlobalAgentManagementWrapper mocks={[getGlobalAgentsMock]} />,
+      <GlobalAgentManagementWrapper mocks={[getGlobalAgentsMock]} />
     );
 
     // Wait for agents to load
@@ -318,7 +318,7 @@ test.describe("GlobalAgentManagement Component", () => {
     };
 
     const component = await mount(
-      <GlobalAgentManagementWrapper mocks={[getGlobalAgentsMock]} />,
+      <GlobalAgentManagementWrapper mocks={[getGlobalAgentsMock]} />
     );
 
     // Wait for agents to load
@@ -356,7 +356,7 @@ test.describe("CorpusAgentManagement Component", () => {
         corpusId="Q29ycHVzVHlwZTox"
         canUpdate={true}
         mocks={[getCorpusAgentsMock]}
-      />,
+      />
     );
 
     // Wait for agents to load
@@ -395,7 +395,7 @@ test.describe("CorpusAgentManagement Component", () => {
         corpusId="Q29ycHVzVHlwZTox"
         canUpdate={true}
         mocks={[emptyAgentsMock]}
-      />,
+      />
     );
 
     // Check for empty state
@@ -403,7 +403,7 @@ test.describe("CorpusAgentManagement Component", () => {
       timeout: 5000,
     });
     await expect(
-      page.locator("text=Create an agent configuration to enable AI-powered"),
+      page.locator("text=Create an agent configuration to enable AI-powered")
     ).toBeVisible();
 
     await component.unmount();
@@ -418,14 +418,14 @@ test.describe("CorpusAgentManagement Component", () => {
         corpusId="Q29ycHVzVHlwZTox"
         canUpdate={false}
         mocks={[]}
-      />,
+      />
     );
 
     // Should show permission denied message
     await expect(
       page.locator(
-        "text=You do not have permission to manage agents for this corpus",
-      ),
+        "text=You do not have permission to manage agents for this corpus"
+      )
     ).toBeVisible({ timeout: 5000 });
 
     await component.unmount();
@@ -454,7 +454,7 @@ test.describe("CorpusAgentManagement Component", () => {
         corpusId="Q29ycHVzVHlwZTox"
         canUpdate={true}
         mocks={[emptyAgentsMock]}
-      />,
+      />
     );
 
     // Wait for content to load
@@ -469,7 +469,7 @@ test.describe("CorpusAgentManagement Component", () => {
     await expect(
       page
         .locator(".oc-modal-header__title")
-        .getByText("Create Agent Configuration", { exact: true }),
+        .getByText("Create Agent Configuration", { exact: true })
     ).toBeVisible();
 
     await component.unmount();
@@ -495,12 +495,12 @@ test.describe("CorpusAgentManagement Component", () => {
         corpusId="Q29ycHVzVHlwZTox"
         canUpdate={true}
         mocks={[emptyAgentsMock]}
-      />,
+      />
     );
 
     // Check helper text is displayed
     await expect(
-      page.locator("text=Create agent configurations for this corpus"),
+      page.locator("text=Create agent configurations for this corpus")
     ).toBeVisible({ timeout: 5000 });
 
     await component.unmount();
@@ -636,12 +636,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Should show loading state
     await expect(
-      page.locator("text=Loading pipeline settings..."),
+      page.locator("text=Loading pipeline settings...")
     ).toBeVisible();
 
     await component.unmount();
@@ -662,12 +662,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -702,12 +702,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -733,12 +733,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -754,7 +754,7 @@ test.describe("SystemSettings Component", () => {
 
     // Checkboxes should exist and be checked
     const checkboxes = lib.locator(
-      'input[type="checkbox"][aria-label*="Disable"]',
+      'input[type="checkbox"][aria-label*="Disable"]'
     );
     await expect(checkboxes).toHaveCount(4);
     for (let i = 0; i < 4; i++) {
@@ -780,12 +780,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -798,7 +798,7 @@ test.describe("SystemSettings Component", () => {
 
     await expect(page.locator("text=Secret Keys")).toBeVisible();
     await expect(
-      page.locator("button:has-text('Update Secrets')"),
+      page.locator("button:has-text('Update Secrets')")
     ).toBeVisible();
     await expect(page.locator("button:has-text('Delete All')")).toBeVisible();
 
@@ -817,12 +817,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -849,12 +849,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -880,12 +880,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -901,7 +901,7 @@ test.describe("SystemSettings Component", () => {
 
     // Modal should open
     await expect(
-      page.locator(".oc-modal-header__title:has-text('Configure Secrets')"),
+      page.locator(".oc-modal-header__title:has-text('Configure Secrets')")
     ).toBeVisible();
 
     // Security notice should be visible
@@ -931,12 +931,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -953,7 +953,7 @@ test.describe("SystemSettings Component", () => {
     // Confirmation modal should open
     await expect(page.locator("text=Delete Component Secrets")).toBeVisible();
     await expect(
-      page.locator("text=This action cannot be undone"),
+      page.locator("text=This action cannot be undone")
     ).toBeVisible();
 
     await component.unmount();
@@ -971,12 +971,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -986,10 +986,10 @@ test.describe("SystemSettings Component", () => {
 
     // Confirmation modal should open
     await expect(
-      page.locator(".oc-modal-header__title:has-text('Reset to Defaults')"),
+      page.locator(".oc-modal-header__title:has-text('Reset to Defaults')")
     ).toBeVisible();
     await expect(
-      page.locator("text=This will reset all pipeline settings"),
+      page.locator("text=This will reset all pipeline settings")
     ).toBeVisible();
 
     await component.unmount();
@@ -1015,12 +1015,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -1056,7 +1056,7 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[errorMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[errorMock, componentsMock]} />
     );
 
     // Wait for error state
@@ -1082,12 +1082,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -1113,12 +1113,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -1155,12 +1155,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -1196,12 +1196,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -1210,7 +1210,7 @@ test.describe("SystemSettings Component", () => {
 
     // Type in the search input
     const searchInput = lib.locator(
-      'input[placeholder="Search components..."]',
+      'input[placeholder="Search components..."]'
     );
     await searchInput.fill("Docling");
 
@@ -1240,12 +1240,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -1278,12 +1278,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -1321,12 +1321,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -1334,7 +1334,7 @@ test.describe("SystemSettings Component", () => {
     // Check that the PDF parser dropdown has the Docling Parser selected
     const pdfParserSelect = page.locator('select[aria-label="Parser for PDF"]');
     await expect(pdfParserSelect).toHaveValue(
-      "opencontractserver.pipeline.parsers.docling.DoclingParser",
+      "opencontractserver.pipeline.parsers.docling.DoclingParser"
     );
 
     await component.unmount();
@@ -1355,12 +1355,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -1385,12 +1385,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -1506,12 +1506,12 @@ test.describe("SystemSettings Component", () => {
     };
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />,
+      <SystemSettingsWrapper mocks={[settingsMock, componentsMock]} />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -1524,7 +1524,7 @@ test.describe("SystemSettings Component", () => {
 
     // TXT parser select should have: Unassigned + Text Parser + Universal Parser = 3
     const txtParserSelect = page.locator(
-      'select[aria-label="Parser for Plain Text"]',
+      'select[aria-label="Parser for Plain Text"]'
     );
     const txtParserOptions = txtParserSelect.locator("option");
     await expect(txtParserOptions).toHaveCount(3);
@@ -1594,12 +1594,12 @@ test.describe("SystemSettings Component", () => {
     const component = await mount(
       <SystemSettingsWrapper
         mocks={[settingsMock, componentsMock, resetMock, refetchMock]}
-      />,
+      />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -1612,7 +1612,7 @@ test.describe("SystemSettings Component", () => {
     // Confirmation modal should appear
     await expect(page.locator("text=Reset to Defaults").nth(1)).toBeVisible();
     await expect(
-      page.locator("text=This will reset all pipeline settings"),
+      page.locator("text=This will reset all pipeline settings")
     ).toBeVisible();
 
     // Click confirm reset button in modal
@@ -1700,12 +1700,12 @@ test.describe("SystemSettings Component", () => {
           refetchMock,
           componentsRefetchMock,
         ]}
-      />,
+      />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -1718,14 +1718,14 @@ test.describe("SystemSettings Component", () => {
 
     // Click Configure Secrets button
     const configureSecretsButton = page.locator(
-      "button:has-text('Configure Secrets')",
+      "button:has-text('Configure Secrets')"
     );
     await expect(configureSecretsButton).toBeVisible();
     await configureSecretsButton.click();
 
     // Modal should appear
     await expect(
-      page.locator(".oc-modal-header__title:has-text('Configure Secrets')"),
+      page.locator(".oc-modal-header__title:has-text('Configure Secrets')")
     ).toBeVisible();
 
     // Fill in the form
@@ -1741,7 +1741,7 @@ test.describe("SystemSettings Component", () => {
     await expect(page.locator("text=Secrets updated successfully")).toBeVisible(
       {
         timeout: 5000,
-      },
+      }
     );
 
     await component.unmount();
@@ -1813,12 +1813,12 @@ test.describe("SystemSettings Component", () => {
           refetchMock,
           componentsRefetchMock,
         ]}
-      />,
+      />
     );
 
     // Wait for page to load
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({
       timeout: 5000,
     });
@@ -1837,7 +1837,7 @@ test.describe("SystemSettings Component", () => {
     // Confirmation modal should appear
     await expect(page.locator("text=Delete Component Secrets")).toBeVisible();
     await expect(
-      page.locator("text=Are you sure you want to delete secrets"),
+      page.locator("text=Are you sure you want to delete secrets")
     ).toBeVisible();
 
     // Click confirm delete button
@@ -1849,7 +1849,7 @@ test.describe("SystemSettings Component", () => {
     await expect(page.locator("text=Secrets deleted successfully")).toBeVisible(
       {
         timeout: 5000,
-      },
+      }
     );
 
     await component.unmount();
@@ -1874,7 +1874,7 @@ test.describe("SystemSettings Two-Column Layout", () => {
 
   const waitForLoad = async (page: any) => {
     await expect(
-      page.locator("h1:has-text('Pipeline Configuration')"),
+      page.locator("h1:has-text('Pipeline Configuration')")
     ).toBeVisible({ timeout: 5000 });
   };
 
@@ -1885,7 +1885,7 @@ test.describe("SystemSettings Two-Column Layout", () => {
     await page.setViewportSize({ width: 1200, height: 800 });
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={standardMocks} />,
+      <SystemSettingsWrapper mocks={standardMocks} />
     );
     await waitForLoad(page);
 
@@ -1914,7 +1914,7 @@ test.describe("SystemSettings Two-Column Layout", () => {
     await page.setViewportSize({ width: 600, height: 800 });
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={standardMocks} />,
+      <SystemSettingsWrapper mocks={standardMocks} />
     );
     await waitForLoad(page);
 
@@ -1945,7 +1945,7 @@ test.describe("SystemSettings Two-Column Layout", () => {
     await page.setViewportSize({ width: 600, height: 800 });
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={standardMocks} />,
+      <SystemSettingsWrapper mocks={standardMocks} />
     );
     await waitForLoad(page);
 
@@ -1985,7 +1985,7 @@ test.describe("SystemSettings Two-Column Layout", () => {
     await page.setViewportSize({ width: 600, height: 800 });
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={standardMocks} />,
+      <SystemSettingsWrapper mocks={standardMocks} />
     );
     await waitForLoad(page);
 
@@ -2011,7 +2011,7 @@ test.describe("SystemSettings Two-Column Layout", () => {
     await page.setViewportSize({ width: 1200, height: 800 });
 
     const component = await mount(
-      <SystemSettingsWrapper mocks={standardMocks} />,
+      <SystemSettingsWrapper mocks={standardMocks} />
     );
     await waitForLoad(page);
 
