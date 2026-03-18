@@ -5,7 +5,13 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-15
+## [Unreleased] - 2026-03-18
+
+### Fixed
+
+- **Undefined ordering in async note retrieval** (Closes #1107): Added missing `.order_by("created")` to `aget_notes_for_document_corpus` in `opencontractserver/llms/tools/core_tools.py`, matching the sync counterpart `get_notes_for_document_corpus` which already had deterministic ordering.
+- **Tool name breaking change from async migration** (Closes #1107): `create_document_tools()` in `opencontractserver/llms/tools/tool_factory.py` derived tool names from `func.__name__`, causing names to silently change from e.g. `load_document_md_summary` to `aload_document_md_summary` when the registry switched to async functions. Added explicit `name=` parameters to all `CoreTool.from_function()` calls to preserve the original tool names.
+- **Test username typo**: Fixed "toklenuser" → "tokenuser" in `opencontractserver/tests/test_agent_search_tools.py`.
 
 ### Breaking Changes
 
