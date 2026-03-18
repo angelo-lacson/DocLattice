@@ -135,8 +135,8 @@ def _compact_token(token: dict[str, Any]) -> list:
 
 
 def compact_pawls_pages(
-    pages: list[dict[str, Any]] | None,
-) -> dict[str, Any] | None:
+    pages: list[dict[str, Any]] | Any | None,
+) -> dict[str, Any] | Any | None:
     """Convert v1 PAWLs pages to v2 compact format.
 
     Already-compact data is returned unchanged.  ``None`` is returned as-is.
@@ -188,7 +188,7 @@ def compact_pawls_pages(
 # ── Expand (v2 → v1) ────────────────────────────────────────────
 
 
-def _expand_token(arr: list, page_index: int) -> dict[str, Any] | None:
+def _expand_token(arr: list) -> dict[str, Any] | None:
     """Convert a compact token array back to a v1 token dict.
 
     Returns ``None`` if the array is malformed.
@@ -262,7 +262,7 @@ def expand_pawls_pages(
         compact_tokens = compact_page.get("t", [])
         tokens: list[dict[str, Any]] = []
         for tok_arr in compact_tokens:
-            tok = _expand_token(tok_arr, page_index)
+            tok = _expand_token(tok_arr)
             if tok is not None:
                 tokens.append(tok)
 

@@ -15,6 +15,12 @@ from opencontractserver.utils.compact_pawls import (
 # ── Sample data ────────────────────────────────────────────────
 
 
+_DEFAULT_TOKENS = [
+    {"x": 72.0, "y": 720.0, "width": 41.0, "height": 12.0, "text": "Hello"},
+    {"x": 120.5, "y": 720.0, "width": 35.2, "height": 12.0, "text": "world"},
+]
+
+
 def _make_v1_page(
     index: int = 0,
     width: float = 612.0,
@@ -23,16 +29,12 @@ def _make_v1_page(
 ) -> dict:
     return {
         "page": {"width": width, "height": height, "index": index},
-        "tokens": tokens
-        or [
-            {"x": 72.0, "y": 720.0, "width": 41.0, "height": 12.0, "text": "Hello"},
-            {"x": 120.5, "y": 720.0, "width": 35.2, "height": 12.0, "text": "world"},
-        ],
+        "tokens": _DEFAULT_TOKENS if tokens is None else tokens,
     }
 
 
-def _make_image_token() -> dict:
-    return {
+def _make_image_token(include_base64: bool = False) -> dict:
+    token = {
         "x": 50.0,
         "y": 100.0,
         "width": 200.0,
@@ -46,6 +48,9 @@ def _make_image_token() -> dict:
         "original_height": 600,
         "image_type": "embedded",
     }
+    if include_base64:
+        token["base64_data"] = "iVBORw0KGgoAAAANSUhEUg=="
+    return token
 
 
 # ── Tests ──────────────────────────────────────────────────────
@@ -117,7 +122,7 @@ class TestCompactPawlsPages(TestCase):
                     {
                         "x": 72.123456,
                         "y": 720.999,
-                        "width": 41.05,
+                        "width": 41.06,
                         "height": 12.04,
                         "text": "hi",
                     }
@@ -128,7 +133,7 @@ class TestCompactPawlsPages(TestCase):
         tok = result["p"][0]["t"][0]
         self.assertEqual(tok[0], 72.1)
         self.assertEqual(tok[1], 721.0)
-        self.assertEqual(tok[2], 41.1)  # 41.05 rounds to 41.1 at 1dp
+        self.assertEqual(tok[2], 41.1)  # 41.06 rounds to 41.1 at 1dp
         self.assertEqual(tok[3], 12.0)  # 12.04 rounds to 12.0
 
     def test_compact_image_token(self):
@@ -305,6 +310,20 @@ class TestRoundTrip(TestCase):
         self.assertEqual(tok["original_width"], img_token["original_width"])
         self.assertEqual(tok["original_height"], img_token["original_height"])
         self.assertEqual(tok["image_type"], img_token["image_type"])
+
+    def test_roundtrip_image_base64_data(self):
+        """Image tokens with base64_data survive the roundtrip."""
+        img_token = _make_image_token(include_base64=True)
+        original = [_make_v1_page(tokens=[img_token])]
+
+        compact = compact_pawls_pages(original)
+        # Verify b64 key is in compact form
+        self.assertIn("b64", compact["p"][0]["t"][0][5])
+
+        expanded = expand_pawls_pages(compact)
+        tok = expanded[0]["tokens"][0]
+        self.assertTrue(tok["is_image"])
+        self.assertEqual(tok["base64_data"], "iVBORw0KGgoAAAANSUhEUg==")
 
     def test_roundtrip_empty_pages(self):
         """Pages with no tokens survive the roundtrip."""

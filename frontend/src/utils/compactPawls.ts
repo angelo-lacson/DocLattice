@@ -87,6 +87,7 @@ function expandToken(arr: unknown[]): Token | null {
     const meta = arr[5] as CompactImageMeta;
     token.is_image = true;
     if (meta.p !== undefined) token.image_path = meta.p;
+    if (meta.b64 !== undefined) token.base64_data = meta.b64;
     if (meta.f !== undefined) token.format = meta.f;
     if (meta.ch !== undefined) token.content_hash = meta.ch;
     if (meta.ow !== undefined) token.original_width = meta.ow;
