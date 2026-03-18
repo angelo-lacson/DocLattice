@@ -16,7 +16,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Modal as OsModal, ModalBody as OsModalBody } from "@os-legal/ui";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import { useMutation } from "@apollo/client";
 import { X, Save, AlertCircle, Loader2 } from "lucide-react";
 import {
@@ -175,14 +175,6 @@ const ActionButton = styled.button<{ $variant?: "primary" | "secondary" }>`
   justify-content: center;
   gap: 0.375rem;
 
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
   padding: 0.625rem 1.25rem;
   border-radius: ${CORPUS_RADII.md};
   font-family: ${CORPUS_FONTS.sans};
@@ -238,6 +230,16 @@ const ActionButton = styled.button<{ $variant?: "primary" | "secondary" }>`
       border-color: ${CORPUS_COLORS.slate[300]};
     }
   `}
+`;
+
+const spin = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+`;
+
+const SpinningIcon = styled.span`
+  display: inline-flex;
+  animation: ${spin} 1s linear infinite;
 `;
 
 const ErrorMessage = styled.div`
@@ -459,7 +461,12 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
   const hasChanges = content !== initialContent;
 
   return (
-    <OsModal open={isOpen} onClose={handleClose}>
+    <OsModal
+      open={isOpen}
+      onClose={handleClose}
+      closeOnOverlay={!hasChanges}
+      closeOnEscape={!hasChanges}
+    >
       <OsModalBody style={{ padding: 0 }}>
         <StyledModalInner>
           <ModalHeader>
@@ -506,10 +513,9 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
               }
             >
               {loading ? (
-                <Loader2
-                  size={16}
-                  style={{ animation: "spin 1s linear infinite" }}
-                />
+                <SpinningIcon>
+                  <Loader2 size={16} />
+                </SpinningIcon>
               ) : (
                 <Save size={16} />
               )}

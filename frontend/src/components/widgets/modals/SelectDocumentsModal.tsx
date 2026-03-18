@@ -204,7 +204,7 @@ export const SelectDocumentsModal = ({
   }, []);
 
   return (
-    <Modal open={open} onClose={() => toggleModal()}>
+    <Modal open={open} onClose={() => toggleModal()} size="fullscreen">
       <ModalHeader>Select Document(s)</ModalHeader>
       <ModalBody
         style={{

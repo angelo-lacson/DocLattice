@@ -38,6 +38,7 @@ import {
 import {
   OS_LEGAL_COLORS,
   primaryBlueAlpha,
+  folderIconAlpha,
 } from "../../../assets/configurations/osLegalStyles";
 
 const StatusDot = styled.div<{ statusColor: string }>`
@@ -174,6 +175,7 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
   );
 
   const cellRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
   const [cellWidth, setCellWidth] = useState<number>(0);
 
   const navigate = useNavigate();
@@ -189,6 +191,27 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
     }
   }, [cellRef]);
 
+  // Close popup on outside click or Escape key
+  useEffect(() => {
+    if (!isPopupOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        setIsPopupOpen(false);
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsPopupOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isPopupOpen]);
+
   const statusColor = () => {
     if (cellStatus?.isApproved) return OS_LEGAL_COLORS.greenMedium; // Modern green
     if (cellStatus?.isRejected) return OS_LEGAL_COLORS.dangerBorderHover; // Modern red
@@ -200,7 +223,7 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
     if (cellStatus?.isLoading) return primaryBlueAlpha(0.05);
     if (cellStatus?.isApproved) return OS_LEGAL_COLORS.successLight;
     if (cellStatus?.isRejected) return OS_LEGAL_COLORS.dangerLight;
-    if (cellStatus?.isEdited) return "rgba(245, 158, 11, 0.05)"; // folderIcon alpha
+    if (cellStatus?.isEdited) return folderIconAlpha(0.05);
     return "transparent";
   };
 
@@ -292,6 +315,7 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
           />
           {isPopupOpen && (
             <div
+              ref={popupRef}
               style={{
                 position: "absolute",
                 top: "-4px",

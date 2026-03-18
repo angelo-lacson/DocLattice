@@ -604,7 +604,7 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
         </ModalFooter>
       </Modal>
 
-      {/* One-Time Key Display Modal */}
+      {/* One-Time Key Display Modal — block outside-click so users must explicitly close */}
       <Modal
         open={showKeyModal}
         onClose={() => {
@@ -612,6 +612,8 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
           setNewTokenKey("");
           setCopied(false);
         }}
+        closeOnOverlay={false}
+        closeOnEscape={false}
       >
         <ModalHeader>Access Token Created</ModalHeader>
         <ModalBody>
@@ -669,7 +671,7 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
             onClick={() =>
               tokenToRevoke !== null && handleRevoke(tokenToRevoke)
             }
-            style={{ background: "#ef4444" }}
+            style={{ background: OS_LEGAL_COLORS.danger }}
           >
             Revoke
           </Button>
