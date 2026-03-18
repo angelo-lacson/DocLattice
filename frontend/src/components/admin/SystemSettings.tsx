@@ -69,6 +69,7 @@ import {
   MobileSettingsTabContainer,
   MobileSettingsTabList,
   MobileSettingsTab,
+  MobileSettingsTabPanel,
 } from "./system_settings/styles";
 import { ComponentLibrary } from "./system_settings/ComponentLibrary";
 import { FiletypeDefaults } from "./system_settings/FiletypeDefaults";
@@ -82,7 +83,7 @@ export const SystemSettings: React.FC = () => {
 
   // Layout state - JS-based media query so only one layout mounts at a time
   const [isMobile, setIsMobile] = useState(
-    () => window.innerWidth <= CORPUS_BREAKPOINTS.tablet
+    () => window.innerWidth <= CORPUS_BREAKPOINTS.tablet,
   );
   const [activeTab, setActiveTab] = useState<"library" | "defaults">("library");
 
@@ -93,12 +94,46 @@ export const SystemSettings: React.FC = () => {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
+  // Keyboard navigation for mobile tabs (WAI-ARIA tabs pattern)
+  const handleTabKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const tabs: Array<"library" | "defaults"> = ["library", "defaults"];
+      const currentIndex = tabs.indexOf(activeTab);
+      let nextIndex: number | null = null;
+
+      switch (e.key) {
+        case "ArrowLeft":
+        case "ArrowUp":
+          nextIndex = currentIndex === 0 ? tabs.length - 1 : currentIndex - 1;
+          break;
+        case "ArrowRight":
+        case "ArrowDown":
+          nextIndex = currentIndex === tabs.length - 1 ? 0 : currentIndex + 1;
+          break;
+        case "Home":
+          nextIndex = 0;
+          break;
+        case "End":
+          nextIndex = tabs.length - 1;
+          break;
+        default:
+          return;
+      }
+
+      e.preventDefault();
+      const nextTab = tabs[nextIndex];
+      setActiveTab(nextTab);
+      document.getElementById(`settings-tab-${nextTab}`)?.focus();
+    },
+    [activeTab],
+  );
+
   // Modal states
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showSecretsModal, setShowSecretsModal] = useState(false);
   const [secretsComponentPath, setSecretsComponentPath] = useState("");
   const [secretsValues, setSecretsValues] = useState<Record<string, string>>(
-    {}
+    {},
   );
   const [showDefaultEmbedderModal, setShowDefaultEmbedderModal] =
     useState(false);
@@ -144,14 +179,14 @@ export const SystemSettings: React.FC = () => {
           refetchComponents();
         } else {
           toast.error(
-            data.updatePipelineSettings?.message || "Failed to update settings"
+            data.updatePipelineSettings?.message || "Failed to update settings",
           );
         }
       },
       onError: (err) => {
         toast.error(`Error updating settings: ${err.message}`);
       },
-    }
+    },
   );
 
   const [resetSettings, { loading: resetting }] = useMutation(
@@ -165,14 +200,14 @@ export const SystemSettings: React.FC = () => {
           refetchComponents();
         } else {
           toast.error(
-            data.resetPipelineSettings?.message || "Failed to reset settings"
+            data.resetPipelineSettings?.message || "Failed to reset settings",
           );
         }
       },
       onError: (err) => {
         toast.error(`Error resetting settings: ${err.message}`);
       },
-    }
+    },
   );
 
   const [updateSecrets, { loading: updatingSecrets }] = useMutation(
@@ -188,14 +223,14 @@ export const SystemSettings: React.FC = () => {
           refetchComponents();
         } else {
           toast.error(
-            data.updateComponentSecrets?.message || "Failed to update secrets"
+            data.updateComponentSecrets?.message || "Failed to update secrets",
           );
         }
       },
       onError: (err) => {
         toast.error(`Error updating secrets: ${err.message}`);
       },
-    }
+    },
   );
 
   const [deleteSecrets, { loading: deletingSecrets }] = useMutation(
@@ -208,14 +243,14 @@ export const SystemSettings: React.FC = () => {
           refetchComponents();
         } else {
           toast.error(
-            data.deleteComponentSecrets?.message || "Failed to delete secrets"
+            data.deleteComponentSecrets?.message || "Failed to delete secrets",
           );
         }
       },
       onError: (err) => {
         toast.error(`Error deleting secrets: ${err.message}`);
       },
-    }
+    },
   );
 
   const settings = settingsData?.pipelineSettings;
@@ -224,15 +259,15 @@ export const SystemSettings: React.FC = () => {
   const componentsByStage = useMemo(() => {
     const parsers = (components?.parsers || []).filter(
       (comp): comp is PipelineComponentType & { className: string } =>
-        Boolean(comp?.className)
+        Boolean(comp?.className),
     );
     const embedders = (components?.embedders || []).filter(
       (comp): comp is PipelineComponentType & { className: string } =>
-        Boolean(comp?.className)
+        Boolean(comp?.className),
     );
     const thumbnailers = (components?.thumbnailers || []).filter(
       (comp): comp is PipelineComponentType & { className: string } =>
-        Boolean(comp?.className)
+        Boolean(comp?.className),
     );
 
     return { parsers, embedders, thumbnailers };
@@ -257,28 +292,28 @@ export const SystemSettings: React.FC = () => {
     (className: string): SettingsSchemaEntry[] => {
       const component = componentByClassName.get(className);
       return (component?.settingsSchema || []).filter(
-        (entry): entry is SettingsSchemaEntry => Boolean(entry)
+        (entry): entry is SettingsSchemaEntry => Boolean(entry),
       );
     },
-    [componentByClassName]
+    [componentByClassName],
   );
 
   const getSecretSettingsForComponent = useCallback(
     (className: string): SettingsSchemaEntry[] => {
       return getComponentSettingsSchema(className).filter(
-        (entry) => entry.settingType === "secret"
+        (entry) => entry.settingType === "secret",
       );
     },
-    [getComponentSettingsSchema]
+    [getComponentSettingsSchema],
   );
 
   const getNonSecretSettingsForComponent = useCallback(
     (className: string): SettingsSchemaEntry[] => {
       return getComponentSettingsSchema(className).filter(
-        (entry) => entry.settingType !== "secret"
+        (entry) => entry.settingType !== "secret",
       );
     },
-    [getComponentSettingsSchema]
+    [getComponentSettingsSchema],
   );
 
   // Look up a component's display name by className from loaded components data
@@ -287,7 +322,7 @@ export const SystemSettings: React.FC = () => {
       const component = componentByClassName.get(className);
       return getComponentDisplayName(className, component?.title || undefined);
     },
-    [componentByClassName]
+    [componentByClassName],
   );
 
   // Toggle component enabled state
@@ -349,7 +384,7 @@ export const SystemSettings: React.FC = () => {
       componentsLoading,
       settingsLoading,
       updateSettings,
-    ]
+    ],
   );
 
   // Assign a component to a filetype default
@@ -357,7 +392,7 @@ export const SystemSettings: React.FC = () => {
     (
       stage: "parsers" | "embedders" | "thumbnailers",
       mimeType: string,
-      className: string
+      className: string,
     ) => {
       const settingsKey = STAGE_CONFIG[stage].settingsKey;
       const currentMapping =
@@ -374,7 +409,7 @@ export const SystemSettings: React.FC = () => {
         variables: { [settingsKey]: newMapping },
       });
     },
-    [settings, updateSettings]
+    [settings, updateSettings],
   );
 
   // Handle secrets modal
@@ -383,12 +418,12 @@ export const SystemSettings: React.FC = () => {
       setSecretsComponentPath(componentPath);
       const secretSettings = getSecretSettingsForComponent(componentPath);
       const template = Object.fromEntries(
-        secretSettings.map((entry) => [entry.name, ""])
+        secretSettings.map((entry) => [entry.name, ""]),
       );
       setSecretsValues(template);
       setShowSecretsModal(true);
     },
-    [getSecretSettingsForComponent]
+    [getSecretSettingsForComponent],
   );
 
   const handleSaveSecrets = useCallback(() => {
@@ -421,7 +456,7 @@ export const SystemSettings: React.FC = () => {
     const secretsBytes = new TextEncoder().encode(secretsJson).length;
     if (secretsBytes > PIPELINE_UI.MAX_SECRET_SIZE_BYTES) {
       toast.error(
-        `Secrets payload exceeds ${PIPELINE_UI.MAX_SECRET_SIZE_BYTES} bytes.`
+        `Secrets payload exceeds ${PIPELINE_UI.MAX_SECRET_SIZE_BYTES} bytes.`,
       );
       return;
     }
@@ -435,7 +470,7 @@ export const SystemSettings: React.FC = () => {
     });
     if (missingRequired.length > 0) {
       const missingLabels = missingRequired.map((entry) =>
-        formatSettingLabel(entry.name, entry.description)
+        formatSettingLabel(entry.name, entry.description),
       );
       toast.error(`Missing required secrets: ${missingLabels.join(", ")}`);
       return;
@@ -511,7 +546,7 @@ export const SystemSettings: React.FC = () => {
         },
       });
     },
-    [settings, getNonSecretSettingsForComponent, updateSettings]
+    [settings, getNonSecretSettingsForComponent, updateSettings],
   );
 
   // Handle default embedder
@@ -538,6 +573,64 @@ export const SystemSettings: React.FC = () => {
       return dateStr;
     }
   }, []);
+
+  // Shared props for ComponentLibrary and FiletypeDefaults (avoids duplication
+  // between desktop two-column and mobile tab layouts)
+  const componentLibraryProps = useMemo(
+    () => ({
+      components: componentsByStage,
+      updating,
+      componentsLoading,
+      settingsLoading,
+      onToggleEnabled: handleToggleEnabled,
+      onAddSecrets: handleAddSecrets,
+      onDeleteSecrets: handleDeleteSecretsClick,
+      onSaveConfig: handleSaveComponentSettings,
+      getConfigSettings: getNonSecretSettingsForComponent,
+      getSecretSettings: getSecretSettingsForComponent,
+    }),
+    [
+      componentsByStage,
+      updating,
+      componentsLoading,
+      settingsLoading,
+      handleToggleEnabled,
+      handleAddSecrets,
+      handleDeleteSecretsClick,
+      handleSaveComponentSettings,
+      getNonSecretSettingsForComponent,
+      getSecretSettingsForComponent,
+    ],
+  );
+
+  const filetypeDefaultsProps = useMemo(
+    () => ({
+      components: componentsByStage,
+      enabledComponents:
+        (settings?.enabledComponents?.filter(Boolean) as string[]) ?? [],
+      preferredParsers:
+        (settings?.preferredParsers as Record<string, string>) || {},
+      preferredEmbedders:
+        (settings?.preferredEmbedders as Record<string, string>) || {},
+      preferredThumbnailers:
+        (settings?.preferredThumbnailers as Record<string, string>) || {},
+      defaultEmbedder: settings?.defaultEmbedder || "",
+      updating,
+      onAssign: handleAssign,
+      onEditDefaultEmbedder: handleEditDefaultEmbedder,
+    }),
+    [
+      componentsByStage,
+      settings?.enabledComponents,
+      settings?.preferredParsers,
+      settings?.preferredEmbedders,
+      settings?.preferredThumbnailers,
+      settings?.defaultEmbedder,
+      updating,
+      handleAssign,
+      handleEditDefaultEmbedder,
+    ],
+  );
 
   // Loading state
   if (settingsLoading || componentsLoading) {
@@ -623,105 +716,48 @@ export const SystemSettings: React.FC = () => {
             <MobileSettingsTab
               id="settings-tab-library"
               role="tab"
+              tabIndex={activeTab === "library" ? 0 : -1}
               aria-selected={activeTab === "library"}
               aria-controls="settings-panel-library"
               $active={activeTab === "library"}
               onClick={() => setActiveTab("library")}
+              onKeyDown={handleTabKeyDown}
             >
               Component Library
             </MobileSettingsTab>
             <MobileSettingsTab
               id="settings-tab-defaults"
               role="tab"
+              tabIndex={activeTab === "defaults" ? 0 : -1}
               aria-selected={activeTab === "defaults"}
               aria-controls="settings-panel-defaults"
               $active={activeTab === "defaults"}
               onClick={() => setActiveTab("defaults")}
+              onKeyDown={handleTabKeyDown}
             >
               Filetype Defaults
             </MobileSettingsTab>
           </MobileSettingsTabList>
 
-          <div
+          <MobileSettingsTabPanel
             id={`settings-panel-${activeTab}`}
             role="tabpanel"
             aria-labelledby={`settings-tab-${activeTab}`}
           >
             {activeTab === "library" ? (
-              <ComponentLibrary
-                components={componentsByStage}
-                updating={updating}
-                componentsLoading={componentsLoading}
-                settingsLoading={settingsLoading}
-                onToggleEnabled={handleToggleEnabled}
-                onAddSecrets={handleAddSecrets}
-                onDeleteSecrets={handleDeleteSecretsClick}
-                onSaveConfig={handleSaveComponentSettings}
-                getConfigSettings={getNonSecretSettingsForComponent}
-                getSecretSettings={getSecretSettingsForComponent}
-              />
+              <ComponentLibrary {...componentLibraryProps} />
             ) : (
-              <FiletypeDefaults
-                components={componentsByStage}
-                enabledComponents={
-                  (settings?.enabledComponents?.filter(Boolean) as string[]) ??
-                  []
-                }
-                preferredParsers={
-                  (settings?.preferredParsers as Record<string, string>) || {}
-                }
-                preferredEmbedders={
-                  (settings?.preferredEmbedders as Record<string, string>) || {}
-                }
-                preferredThumbnailers={
-                  (settings?.preferredThumbnailers as Record<string, string>) ||
-                  {}
-                }
-                defaultEmbedder={settings?.defaultEmbedder || ""}
-                updating={updating}
-                onAssign={handleAssign}
-                onEditDefaultEmbedder={handleEditDefaultEmbedder}
-              />
+              <FiletypeDefaults {...filetypeDefaultsProps} />
             )}
-          </div>
+          </MobileSettingsTabPanel>
         </MobileSettingsTabContainer>
       ) : (
         <SettingsTwoColumnLayout>
           <SettingsLeftColumn>
-            <ComponentLibrary
-              components={componentsByStage}
-              updating={updating}
-              componentsLoading={componentsLoading}
-              settingsLoading={settingsLoading}
-              onToggleEnabled={handleToggleEnabled}
-              onAddSecrets={handleAddSecrets}
-              onDeleteSecrets={handleDeleteSecretsClick}
-              onSaveConfig={handleSaveComponentSettings}
-              getConfigSettings={getNonSecretSettingsForComponent}
-              getSecretSettings={getSecretSettingsForComponent}
-            />
+            <ComponentLibrary {...componentLibraryProps} />
           </SettingsLeftColumn>
           <SettingsRightColumn>
-            <FiletypeDefaults
-              components={componentsByStage}
-              enabledComponents={
-                (settings?.enabledComponents?.filter(Boolean) as string[]) ?? []
-              }
-              preferredParsers={
-                (settings?.preferredParsers as Record<string, string>) || {}
-              }
-              preferredEmbedders={
-                (settings?.preferredEmbedders as Record<string, string>) || {}
-              }
-              preferredThumbnailers={
-                (settings?.preferredThumbnailers as Record<string, string>) ||
-                {}
-              }
-              defaultEmbedder={settings?.defaultEmbedder || ""}
-              updating={updating}
-              onAssign={handleAssign}
-              onEditDefaultEmbedder={handleEditDefaultEmbedder}
-            />
+            <FiletypeDefaults {...filetypeDefaultsProps} />
           </SettingsRightColumn>
         </SettingsTwoColumnLayout>
       )}
@@ -783,7 +819,7 @@ export const SystemSettings: React.FC = () => {
       >
         <ModalHeader
           title={`Configure Secrets \u2014 ${getComponentDisplayNameByClassName(
-            secretsComponentPath
+            secretsComponentPath,
           )}`}
           onClose={() => setShowSecretsModal(false)}
         />
@@ -847,7 +883,7 @@ export const SystemSettings: React.FC = () => {
                     </FormHelperText>
                   )}
                 </SecretFieldRow>
-              )
+              ),
             )}
           </SecretFieldGroup>
         </ModalBody>
@@ -903,7 +939,7 @@ export const SystemSettings: React.FC = () => {
               {components.embedders
                 .filter(
                   (e): e is PipelineComponentType & { className: string } =>
-                    Boolean(e?.className)
+                    Boolean(e?.className),
                 )
                 .map((e) => (
                   <div
