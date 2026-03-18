@@ -234,10 +234,10 @@ const conversationsMock: MockedResponse = {
               title: "How do I interpret Section 4.2?",
               description: "Question about the interpretation",
               createdAt: new Date(
-                Date.now() - 2 * 60 * 60 * 1000
+                Date.now() - 2 * 60 * 60 * 1000,
               ).toISOString(),
               updatedAt: new Date(
-                Date.now() - 1 * 60 * 60 * 1000
+                Date.now() - 1 * 60 * 60 * 1000,
               ).toISOString(),
               created: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
               modified: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
@@ -276,14 +276,14 @@ const conversationsMock: MockedResponse = {
               title: "Suggestion: Add cross-reference annotations",
               description: "Idea for improvement",
               createdAt: new Date(
-                Date.now() - 24 * 60 * 60 * 1000
+                Date.now() - 24 * 60 * 60 * 1000,
               ).toISOString(),
               updatedAt: new Date(
-                Date.now() - 12 * 60 * 60 * 1000
+                Date.now() - 12 * 60 * 60 * 1000,
               ).toISOString(),
               created: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
               modified: new Date(
-                Date.now() - 12 * 60 * 60 * 1000
+                Date.now() - 12 * 60 * 60 * 1000,
               ).toISOString(),
               creator: {
                 id: "USER_3",
@@ -465,7 +465,7 @@ test("renders landing view with chat bar and quick actions", async ({
 
   // Chat input placeholder
   await expect(
-    chatBar.locator('textarea[placeholder*="Ask a question"]')
+    chatBar.locator('textarea[placeholder*="Ask a question"]'),
   ).toBeVisible();
 
   // Quick action chips
@@ -498,7 +498,7 @@ test("renders Browse documents link in landing view", async ({
 
   // Browse documents link should be visible
   const viewDetailsBtn = page.getByTestId(
-    "corpus-home-landing-view-details-btn"
+    "corpus-home-landing-view-details-btn",
   );
   await expect(viewDetailsBtn).toBeVisible();
   await expect(viewDetailsBtn).toContainText("Browse documents");
@@ -515,7 +515,7 @@ test("clicking View Details switches to details view", async ({
 
   // Click View Details button
   const viewDetailsBtn = page.getByTestId(
-    "corpus-home-landing-view-details-btn"
+    "corpus-home-landing-view-details-btn",
   );
   await viewDetailsBtn.click();
 
@@ -538,7 +538,7 @@ test("shows details view when view=details URL param is set", async ({
       mocks={mocks}
       corpus={dummyCorpus}
       initialView="details"
-    />
+    />,
   );
 
   // Details view should be visible
@@ -556,7 +556,7 @@ test("details view shows back button", async ({ mount, page }) => {
       mocks={mocks}
       corpus={dummyCorpus}
       initialView="details"
-    />
+    />,
   );
 
   // Back button should be visible
@@ -571,7 +571,7 @@ test("details view shows corpus title", async ({ mount, page }) => {
       mocks={mocks}
       corpus={dummyCorpus}
       initialView="details"
-    />
+    />,
   );
 
   // Title should be visible
@@ -589,7 +589,7 @@ test("clicking back button in details view returns to landing", async ({
       mocks={mocks}
       corpus={dummyCorpus}
       initialView="details"
-    />
+    />,
   );
 
   // Initially in details view
@@ -618,16 +618,16 @@ test("details view shows two-column layout on desktop", async ({
       mocks={mocks}
       corpus={dummyCorpus}
       initialView="details"
-    />
+    />,
   );
 
   // Both Documents and About sections should be visible (minimalist labels)
   // Use specific selector to avoid matching metadata and mobile tabs
   await expect(
-    page.locator("span").filter({ hasText: /^Documents$/ })
+    page.locator("span").filter({ hasText: /^Documents$/ }),
   ).toBeVisible();
   await expect(
-    page.locator("span").filter({ hasText: /^About$/ })
+    page.locator("span").filter({ hasText: /^About$/ }),
   ).toBeVisible();
 });
 
@@ -647,7 +647,7 @@ test("landing view has centered breadcrumbs", async ({ mount, page }) => {
 
   // Should have current corpus name
   await expect(breadcrumbs.locator(".current")).toContainText(
-    dummyCorpus.title
+    dummyCorpus.title,
   );
 });
 
@@ -671,18 +671,18 @@ test("landing view shows recent discussions feed with threads", async ({
 
   // Thread items should be visible
   await expect(
-    page.getByTestId("corpus-home-landing-discussions-thread-thread-1")
+    page.getByTestId("corpus-home-landing-discussions-thread-thread-1"),
   ).toBeVisible();
   await expect(
-    page.getByTestId("corpus-home-landing-discussions-thread-thread-2")
+    page.getByTestId("corpus-home-landing-discussions-thread-thread-2"),
   ).toBeVisible();
 
   // Thread titles should display
   await expect(
-    page.locator("text=How do I interpret Section 4.2?")
+    page.locator("text=How do I interpret Section 4.2?"),
   ).toBeVisible();
   await expect(
-    page.locator("text=Suggestion: Add cross-reference annotations")
+    page.locator("text=Suggestion: Add cross-reference annotations"),
   ).toBeVisible();
 
   // Screenshot of the full landing view with discussion feed
@@ -703,7 +703,7 @@ test("landing view shows empty state when no discussions exist", async ({
   ];
 
   await mount(
-    <CorpusHomeTestWrapper mocks={emptyMocks} corpus={dummyCorpus} />
+    <CorpusHomeTestWrapper mocks={emptyMocks} corpus={dummyCorpus} />,
   );
 
   // Wait for empty state to render
@@ -714,6 +714,92 @@ test("landing view shows empty state when no discussions exist", async ({
   await docScreenshot(page, "corpus--landing--no-discussions", {
     fullPage: true,
   });
+});
+
+/* --------------------------------------------------------------------------
+ * Tests for Focus / Power Mode Toggle
+ * -------------------------------------------------------------------------- */
+
+test("does not render mode toggle when onModeToggle is not provided", async ({
+  mount,
+  page,
+}) => {
+  // Default mountCorpusHome does not pass onModeToggle
+  await mountCorpusHome(mount);
+
+  // Landing view should render
+  await expect(page.getByTestId("corpus-home-landing")).toBeVisible();
+
+  // Power-user toggle should NOT be in the DOM
+  await expect(page.getByTestId("power-user-toggle")).toBeHidden();
+});
+
+test("renders Focus/Power pill toggle when onModeToggle is provided", async ({
+  mount,
+  page,
+}) => {
+  await mount(
+    <CorpusHomeTestWrapper
+      mocks={mocks}
+      corpus={dummyCorpus}
+      onModeToggle={() => {}}
+      isPowerUserMode={false}
+    />,
+  );
+
+  // Toggle should be visible
+  const toggle = page.getByTestId("power-user-toggle");
+  await expect(toggle).toBeVisible({ timeout: 10000 });
+
+  // "Focus" label should be active (non-power-user mode)
+  // "Power" label should be present but inactive
+  await expect(toggle.locator("text=Focus")).toBeVisible();
+  await expect(toggle.locator("text=Power")).toBeVisible();
+});
+
+test("pill toggle reflects isPowerUserMode=true state", async ({
+  mount,
+  page,
+}) => {
+  await mount(
+    <CorpusHomeTestWrapper
+      mocks={mocks}
+      corpus={dummyCorpus}
+      onModeToggle={() => {}}
+      isPowerUserMode={true}
+    />,
+  );
+
+  const toggle = page.getByTestId("power-user-toggle");
+  await expect(toggle).toBeVisible({ timeout: 10000 });
+
+  // In power-user mode the toggle title should reflect "Switch to focused view"
+  await expect(toggle).toHaveAttribute("title", "Switch to focused view");
+});
+
+test("clicking mode toggle fires onModeToggle callback", async ({
+  mount,
+  page,
+}) => {
+  let toggled = false;
+
+  await mount(
+    <CorpusHomeTestWrapper
+      mocks={mocks}
+      corpus={dummyCorpus}
+      onModeToggle={() => {
+        toggled = true;
+      }}
+      isPowerUserMode={false}
+    />,
+  );
+
+  const toggle = page.getByTestId("power-user-toggle");
+  await expect(toggle).toBeVisible({ timeout: 10000 });
+  await toggle.click();
+
+  // Verify the callback was invoked (toggled flag set by the handler)
+  expect(toggled).toBe(true);
 });
 
 /* --------------------------------------------------------------------------
@@ -757,7 +843,7 @@ test("discussions view shows when view=discussions URL param is set", async ({
       mocks={discussionViewMocks}
       corpus={dummyCorpus}
       initialView="discussions"
-    />
+    />,
   );
 
   // Discussions inline view should be visible

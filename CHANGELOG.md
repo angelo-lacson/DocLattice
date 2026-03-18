@@ -5,7 +5,15 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-15
+## [Unreleased] - 2026-03-18
+
+### Fixed
+
+- **Misleading CleanViewContainer comment** (`frontend/src/views/Corpuses.tsx`): Corrected the styled-component comment that claimed height constraints were "intentionally removed" when `height: 100%`, `min-height: 0`, and `overflow: hidden` were still present. The comment now accurately documents the height model and explains that only `max-height: 100dvh` was removed. Closes #1044 (items 1 & 2).
+
+### Added
+
+- **Test coverage for Focus/Power mode toggle** (`frontend/tests/CorpusHome.ct.tsx`, `frontend/tests/CorpusHomeTestWrapper.tsx`): Added four Playwright component tests exercising the `onModeToggle` and `isPowerUserMode` props: toggle hidden when callback absent, toggle visible in focus mode, toggle reflects power-user state, and click fires callback. Updated `CorpusHomeTestWrapper` to forward mode-toggle props. Closes #1044 (item 5).
 
 ### Breaking Changes
 
