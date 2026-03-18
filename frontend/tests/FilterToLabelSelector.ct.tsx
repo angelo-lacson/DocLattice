@@ -37,7 +37,7 @@ const mocks = [
   },
 ];
 
-test("FilterToLabelSelector renders correctly", async ({ mount }) => {
+test("FilterToLabelSelector renders correctly", async ({ mount, page }) => {
   // Mount the component with mocked Apollo provider
   const component = await mount(
     <MockedProvider mocks={mocks} addTypename={false}>
