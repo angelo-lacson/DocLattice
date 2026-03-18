@@ -9,6 +9,7 @@ import {
   getPawlsLayer as uncachedGetPawlsLayer,
   getDocumentRawText as uncachedGetDocumentRawText,
 } from "./rest";
+import { DOCX_CACHE_MAX_ENTRIES } from "../../../assets/configurations/constants";
 
 /**
  * Get PAWLS layer data with caching
@@ -156,7 +157,6 @@ export async function getCachedPDFUrl(
  * when the limit is reached. Each entry is also garbage-collected on page refresh.
  */
 const docxBytesCache = new Map<string, Uint8Array>();
-const DOCX_CACHE_MAX_ENTRIES = 3;
 
 /**
  * Get DOCX document bytes (as Uint8Array) for WASM rendering.

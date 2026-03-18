@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { MemoryRouter } from "react-router-dom";
 import DocxAnnotator from "../src/components/annotator/renderers/docx/DocxAnnotator";
 import { ServerSpanAnnotation } from "../src/components/annotator/types/annotations";
@@ -10,6 +10,30 @@ import { PermissionTypes } from "../src/components/types";
  * setupDocxFixture() — no Vite ?url import needed.
  */
 const TEST_DOCX_URL = "/test-fixtures/test.docx";
+
+/**
+ * Shared hook for loading test DOCX bytes from the fixture route interceptor.
+ * Used by both DocxAnnotatorTestWrapper and DocxAnnotatorEditableWrapper.
+ */
+function useTestDocxBytes(): { docxBytes: Uint8Array; loading: boolean } {
+  const [docxBytes, setDocxBytes] = useState<Uint8Array>(new Uint8Array(0));
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(TEST_DOCX_URL)
+      .then((res) => res.arrayBuffer())
+      .then((buf) => {
+        setDocxBytes(new Uint8Array(buf));
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load test DOCX:", err);
+        setLoading(false);
+      });
+  }, []);
+
+  return { docxBytes, loading };
+}
 
 const sampleLabels: AnnotationLabelType[] = [
   {
@@ -76,26 +100,11 @@ export const DocxAnnotatorTestWrapper: React.FC<{
   withAnnotations?: boolean;
 }> = ({ readOnly = true, withAnnotations = false }) => {
   const [selected, setSelected] = useState<string[]>([]);
-  const [docxBytes, setDocxBytes] = useState<Uint8Array>(new Uint8Array(0));
-  const [loading, setLoading] = useState(true);
+  const { docxBytes, loading } = useTestDocxBytes();
 
   const annotations = withAnnotations
     ? [sampleAnnotation1, sampleAnnotation2]
     : [];
-
-  // Load test DOCX file from the route interceptor
-  React.useEffect(() => {
-    fetch(TEST_DOCX_URL)
-      .then((res) => res.arrayBuffer())
-      .then((buf) => {
-        setDocxBytes(new Uint8Array(buf));
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to load test DOCX:", err);
-        setLoading(false);
-      });
-  }, []);
 
   if (loading) {
     return <div>Loading test DOCX...</div>;
@@ -152,26 +161,12 @@ export const DocxAnnotatorTestWrapper: React.FC<{
  */
 export const DocxAnnotatorEditableWrapper: React.FC = () => {
   const [selected, setSelected] = useState<string[]>([]);
-  const [docxBytes, setDocxBytes] = useState<Uint8Array>(new Uint8Array(0));
-  const [loading, setLoading] = useState(true);
+  const { docxBytes, loading } = useTestDocxBytes();
   const [lastAnnotation, setLastAnnotation] = useState<{
     start: number;
     end: number;
     text: string;
   } | null>(null);
-
-  React.useEffect(() => {
-    fetch(TEST_DOCX_URL)
-      .then((res) => res.arrayBuffer())
-      .then((buf) => {
-        setDocxBytes(new Uint8Array(buf));
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to load test DOCX:", err);
-        setLoading(false);
-      });
-  }, []);
 
   const handleCreate = React.useCallback((annotation: ServerSpanAnnotation) => {
     setLastAnnotation({
