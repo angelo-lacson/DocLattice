@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Compact PAWLs v2 format for ~67% storage reduction** (PR #1112): New v2 compact format for PAWLs files (per-page token bounding boxes) that reduces storage from ~500+ KB to ~180 KB for a typical 9-page PDF. Changes include:
+  - Core encode/decode in `opencontractserver/utils/compact_pawls.py` (Python) and `frontend/src/utils/compactPawls.ts` (TypeScript)
+  - Array-based tokens `[x, y, w, h, "text"]` instead of verbose dicts, shortened page keys, implicit page index, coordinate precision normalization
+  - Write paths (parser, import, worker upload) auto-compact on save; read paths transparently expand v2 → v1
+  - Safety limit: `COMPACT_PAWLS_MAX_TOKENS_PER_PAGE` (100,000) in `opencontractserver/constants/pawls.py` — graceful fallback to v1 when exceeded
+  - Comprehensive Python (5 test classes) and TypeScript (8 tests) unit tests including roundtrip and image token coverage
+
 - **Compact annotation JSON v2 format for ~75% storage reduction** (PR #1100): New compact v2 format for annotation JSON payloads that range-encodes consecutive token indices, compacts bounds to arrays, and drops redundant `pageIndex` and `rawText` from per-page data. Changes include:
   - Core encode/decode in `opencontractserver/annotations/compact_json.py` (Python) and `frontend/src/utils/compactAnnotationJson.ts` (TypeScript)
   - Safety limits: `COMPACT_JSON_MAX_RANGE_SPAN` (10,000) and `COMPACT_JSON_MAX_TOTAL_TOKENS` (50,000) in `opencontractserver/constants/annotations.py`

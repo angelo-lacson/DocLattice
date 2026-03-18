@@ -19,6 +19,7 @@ from opencontractserver.constants.truncation import (
 )
 from opencontractserver.corpuses.models import Corpus, CorpusDescriptionRevision
 from opencontractserver.documents.models import Document
+from opencontractserver.utils.compact_pawls import expand_pawls_pages
 from opencontractserver.utils.text import truncate
 
 logger = logging.getLogger(__name__)
@@ -1663,7 +1664,7 @@ def add_annotations_from_exact_strings(
         # Load PAWLS tokens once per document.
         doc.pawls_parse_file.open("r")
         try:
-            pawls_tokens = json.load(doc.pawls_parse_file)
+            pawls_tokens = expand_pawls_pages(json.load(doc.pawls_parse_file))
         finally:
             doc.pawls_parse_file.close()
 
@@ -1837,7 +1838,7 @@ def search_exact_text_as_sources(
         # Load PAWLS tokens once
         doc.pawls_parse_file.open("r")
         try:
-            pawls_tokens = json.load(doc.pawls_parse_file)
+            pawls_tokens = expand_pawls_pages(json.load(doc.pawls_parse_file))
         finally:
             doc.pawls_parse_file.close()
 
