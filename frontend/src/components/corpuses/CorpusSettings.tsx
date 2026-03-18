@@ -42,6 +42,7 @@ import { CorpusAgentManagement } from "./CorpusAgentManagement";
 import { ActionExecutionTrail } from "./ActionExecutionTrail";
 import { PermissionTypes } from "../types";
 import { getPermissions } from "../../utils/transform";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // Sub-components
 import {
@@ -491,7 +492,7 @@ export const CorpusSettings: React.FC<CorpusSettingsProps> = ({ corpus }) => {
             <Button
               variant="primary"
               onClick={() => actionToDelete && handleDelete(actionToDelete)}
-              style={{ background: "#ef4444" }}
+              style={{ background: OS_LEGAL_COLORS.danger }}
             >
               Delete
             </Button>

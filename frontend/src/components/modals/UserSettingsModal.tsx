@@ -104,7 +104,11 @@ const UserSettingsModal: React.FC = () => {
   const canSave = useMemo(() => dirty && !!user, [dirty, user]);
 
   return (
-    <Modal open={isOpen} onClose={() => showUserSettingsModal(false)}>
+    <Modal
+      open={isOpen}
+      onClose={() => showUserSettingsModal(false)}
+      data-testid="user-settings-modal"
+    >
       <ModalHeader>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <UserCircle size={24} />
