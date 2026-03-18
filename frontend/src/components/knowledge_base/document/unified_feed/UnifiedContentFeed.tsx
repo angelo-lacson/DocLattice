@@ -716,21 +716,20 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
             <div className="selection-actions">
               <Button
                 size="sm"
-                variant="secondary"
+                variant="ghost"
                 onClick={() => setShowRelationshipModal(true)}
                 disabled={relationshipActionLoading}
                 leftIcon={<LinkIcon size={14} />}
                 style={{
-                  color: "white",
-                  borderColor: "white",
-                  background: "transparent",
+                  color: OS_LEGAL_COLORS.surface,
+                  borderColor: OS_LEGAL_COLORS.surface,
                 }}
               >
                 Add to Relationship
               </Button>
               <Button
                 size="sm"
-                variant="secondary"
+                variant="ghost"
                 onClick={handleSelectAll}
                 disabled={
                   contentItems.filter((item) => item.type === "annotation")
@@ -738,22 +737,20 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
                 }
                 leftIcon={<CheckSquare size={14} />}
                 style={{
-                  color: "white",
-                  borderColor: "white",
-                  background: "transparent",
+                  color: OS_LEGAL_COLORS.surface,
+                  borderColor: OS_LEGAL_COLORS.surface,
                 }}
               >
                 Select All
               </Button>
               <Button
                 size="sm"
-                variant="secondary"
+                variant="ghost"
                 onClick={handleClearSelection}
                 leftIcon={<X size={14} />}
                 style={{
-                  color: "white",
-                  borderColor: "white",
-                  background: "transparent",
+                  color: OS_LEGAL_COLORS.surface,
+                  borderColor: OS_LEGAL_COLORS.surface,
                 }}
               >
                 Clear

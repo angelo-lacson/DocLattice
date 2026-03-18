@@ -17,6 +17,7 @@ import { Spinner } from "@os-legal/ui";
 import { formatDistanceToNow } from "date-fns";
 import { gql } from "@apollo/client";
 import { color } from "../../theme/colors";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 const ActivityList = styled.div`
   display: flex;
@@ -157,10 +158,10 @@ export const RecentActivity: React.FC<RecentActivityProps> = ({ userId }) => {
       <div
         style={{
           padding: "1rem",
-          background: "#fef2f2",
-          border: "1px solid #fecaca",
+          background: OS_LEGAL_COLORS.dangerSurface,
+          border: `1px solid ${OS_LEGAL_COLORS.dangerBorder}`,
           borderRadius: "8px",
-          color: "#991b1b",
+          color: OS_LEGAL_COLORS.dangerText,
         }}
       >
         <strong>Error loading activity</strong>
