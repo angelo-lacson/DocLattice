@@ -5,7 +5,16 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-15
+## [Unreleased] - 2026-03-18
+
+### Fixed
+
+- **Tighten MCP telemetry input validation and test coverage** (Closes #1106):
+  - Bound User-Agent storage to 512 characters (`MAX_USER_AGENT_LENGTH`) in both `set_request_context()` and `get_user_agent_from_scope()` to prevent attacker-controlled multi-megabyte values from reaching telemetry backends (`opencontractserver/mcp/telemetry.py`)
+  - Empty-string slugs no longer reach telemetry — changed `if slug is not None` to falsy checks (`if slug`) consistently across all sync and async recording functions
+  - Documented the duplicate-header-dropping assumption when converting ASGI header lists to dicts in `get_user_agent_from_scope()` and `get_claimed_client_ip_from_scope()`
+  - Added async telemetry tests for `arecord_mcp_tool_call`, `arecord_mcp_resource_read`, and `arecord_mcp_request` (`opencontractserver/tests/test_mcp_extended.py`)
+  - Added tests for User-Agent truncation and empty-string slug filtering
 
 ### Breaking Changes
 
