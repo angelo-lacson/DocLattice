@@ -730,8 +730,8 @@ test("does not render mode toggle when onModeToggle is not provided", async ({
   // Landing view should render
   await expect(page.getByTestId("corpus-home-landing")).toBeVisible();
 
-  // Power-user toggle should NOT be in the DOM
-  await expect(page.getByTestId("power-user-toggle")).toBeHidden();
+  // Power-user toggle should NOT be in the DOM (not just CSS-hidden)
+  await expect(page.getByTestId("power-user-toggle")).toHaveCount(0);
 });
 
 test("renders Focus/Power pill toggle when onModeToggle is provided", async ({
@@ -755,6 +755,12 @@ test("renders Focus/Power pill toggle when onModeToggle is provided", async ({
   // "Power" label should be present but inactive
   await expect(toggle.locator("text=Focus")).toBeVisible();
   await expect(toggle.locator("text=Power")).toBeVisible();
+
+  // Title should reflect focus-mode state
+  await expect(toggle).toHaveAttribute(
+    "title",
+    "Switch to full corpus management view"
+  );
 });
 
 test("pill toggle reflects isPowerUserMode=true state", async ({
@@ -798,8 +804,8 @@ test("clicking mode toggle fires onModeToggle callback", async ({
   await expect(toggle).toBeVisible({ timeout: 10000 });
   await toggle.click();
 
-  // Verify the callback was invoked (toggled flag set by the handler)
-  expect(toggled).toBe(true);
+  // Use poll to account for async proxy callback across Playwright CT boundary
+  await expect.poll(() => toggled, { timeout: 5000 }).toBe(true);
 });
 
 /* --------------------------------------------------------------------------

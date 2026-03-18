@@ -1749,25 +1749,25 @@ export const Corpuses = () => {
   const debouncedCorpusSearch = useRef(
     _.debounce((searchTerm) => {
       corpusSearchTerm(searchTerm);
-    }, 1000)
+    }, DEBOUNCE.SEARCH_MS)
   );
 
   const debouncedDocumentSearch = useRef(
     _.debounce((searchTerm) => {
       documentSearchTerm(searchTerm);
-    }, 1000)
+    }, DEBOUNCE.SEARCH_MS)
   );
 
   const debouncedAnnotationSearch = useRef(
     _.debounce((searchTerm) => {
       annotationContentSearchTerm(searchTerm);
-    }, 1000)
+    }, DEBOUNCE.SEARCH_MS)
   );
 
   const debouncedAnalysisSearch = useRef(
     _.debounce((searchTerm) => {
       analysisSearchTerm(searchTerm);
-    }, 1000)
+    }, DEBOUNCE.SEARCH_MS)
   );
 
   const handleCorpusSearchChange = (value: string) => {
