@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-03-15
 
+### Breaking Changes
+
+- **Removed `tokensJsons` and `boundingBox` from GraphQL API**: The `tokensJsons` and `boundingBox` fields have been removed from GraphQL annotation queries and mutations (PR #1100). External API consumers and integrations must update to use the `json` field instead. The `json` field contains either v1 (legacy page-keyed format) or v2 (compact format) annotation data. Use `iter_page_annotations()` (Python) or `iterPageAnnotations()` (TypeScript) for format-agnostic access.
+
+### Added
+
+- **Compact annotation JSON v2 format for ~75% storage reduction** (PR #1100): New compact v2 format for annotation JSON payloads that range-encodes consecutive token indices, compacts bounds to arrays, and drops redundant `pageIndex` and `rawText` from per-page data. Changes include:
+  - Core encode/decode in `opencontractserver/annotations/compact_json.py` (Python) and `frontend/src/utils/compactAnnotationJson.ts` (TypeScript)
+  - Safety limits: `COMPACT_JSON_MAX_RANGE_SPAN` (10,000) and `COMPACT_JSON_MAX_TOTAL_TOKENS` (50,000) in `opencontractserver/constants/annotations.py`
+  - `Annotation.save()` auto-compacts v1 → v2 on write (lazy migration) with exception guard for malformed legacy data
+  - Migration `0066` removes redundant `tokens_jsons` and `bounding_box` columns (includes `RunPython` backfill step to preserve any legacy data before column removal — **irreversible migration**)
+  - 60+ Python and 48+ TypeScript unit tests for the codec
+  - All GraphQL queries/mutations updated to use `json` field instead of `tokensJsons` and `boundingBox`
+  - Format-agnostic accessor layer: `iter_page_annotations()`, `offset_annotation_json()`, `has_any_tokens()` (Python) and `iterPageAnnotations()`, `hasAnyTokens()` (TypeScript) — all production code migrated off `expand_annotation_json()`
+  - `ServerTokenAnnotation` constructor now accepts both v1 and v2 formats, normalizing internally
+
 ### Added
 
 - **First-class DOCX document support via Docxodus pipeline**: Added a complete parallel ingestion pipeline and rendering tree for DOCX files, bringing Word document support alongside existing PDF and TXT pipelines. Changes include:
