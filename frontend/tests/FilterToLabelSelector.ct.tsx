@@ -4,6 +4,7 @@ import {
   expect,
   type MountResult,
 } from "@playwright/experimental-ct-react";
+import { docScreenshot } from "./utils/docScreenshot";
 import { FilterToLabelSelector } from "../src/components/widgets/model-filters/FilterToLabelSelector";
 import { LabelType } from "../src/types/graphql-api";
 import { MockedProvider } from "@apollo/client/testing";
@@ -55,4 +56,6 @@ test("FilterToLabelSelector renders correctly", async ({ mount }) => {
   ).toBeVisible({
     timeout: 5000,
   });
+
+  await docScreenshot(page, "filters--label-selector--default");
 });
