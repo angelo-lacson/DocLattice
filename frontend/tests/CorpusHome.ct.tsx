@@ -761,6 +761,8 @@ test("renders Focus/Power pill toggle when onModeToggle is provided", async ({
     "title",
     "Switch to full corpus management view"
   );
+
+  await docScreenshot(page, "corpus--mode-toggle--focus-mode");
 });
 
 test("pill toggle reflects isPowerUserMode=true state", async ({
