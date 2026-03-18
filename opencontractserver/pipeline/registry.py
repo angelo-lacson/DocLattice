@@ -513,7 +513,8 @@ def get_supported_mime_types() -> list[dict[str, object]]:
     Derive supported MIME types dynamically from registered pipeline components.
 
     A file type is "fully supported" if at least one registered component exists
-    for each required pipeline stage: parser, embedder, and thumbnailer.
+    for each required pipeline stage: parser and embedder. Thumbnailer coverage
+    is informational but not required for upload acceptance.
 
     Returns a list of dicts, each containing:
         - mimetype: canonical MIME type string
@@ -551,7 +552,7 @@ def get_supported_mime_types() -> list[dict[str, object]]:
                 "mimetype": mime,
                 "file_type": ft_value,
                 "label": FILE_TYPE_LABELS.get(ft_value, ft_value.upper()),
-                "fully_supported": all(stage_coverage.values()),
+                "fully_supported": has_parser and has_embedder,
                 "stage_coverage": stage_coverage,
             }
         )
