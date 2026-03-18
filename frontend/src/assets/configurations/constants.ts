@@ -250,7 +250,10 @@ export const PIPELINE_UI = {
  */
 export const LEGACY_TEXT_MIME_TYPE = "application/txt";
 
-// Supported MIME types for pipeline configuration
+/**
+ * @deprecated Use the `supportedMimeTypes` GraphQL query instead.
+ * Retained as a static fallback for components that haven't migrated yet.
+ */
 export const SUPPORTED_MIME_TYPES = [
   { value: "application/pdf", label: "PDF", shortLabel: "PDF" },
   { value: "text/plain", label: "Plain Text", shortLabel: "TXT" },

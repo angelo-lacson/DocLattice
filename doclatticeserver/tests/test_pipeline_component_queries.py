@@ -598,3 +598,66 @@ class TestPostProcessor(BasePostProcessor):
                     f"Component {component['name']} in {category} should be disabled "
                     f"since it's not in the enabled_components list",
                 )
+
+    def test_supported_mime_types_query(self):
+        """Test the supportedMimeTypes query returns dynamically-derived MIME types."""
+        query = """
+        query {
+            supportedMimeTypes {
+                mimetype
+                fileType
+                label
+                fullySupported
+                stageCoverage {
+                    parser
+                    embedder
+                    thumbnailer
+                }
+            }
+        }
+        """
+
+        result = self.client.execute(query)
+        self.assertIsNone(result.get("errors"))
+
+        mime_types = result["data"]["supportedMimeTypes"]
+        self.assertGreater(len(mime_types), 0)
+
+        # Build lookup by file type
+        by_file_type = {mt["fileType"]: mt for mt in mime_types}
+
+        # PDF should be fully supported (has test parser + test embedder + test thumbnailer)
+        self.assertIn("pdf", by_file_type)
+        pdf_entry = by_file_type["pdf"]
+        self.assertEqual(pdf_entry["mimetype"], "application/pdf")
+        self.assertEqual(pdf_entry["label"], "PDF")
+        self.assertTrue(pdf_entry["fullySupported"])
+        self.assertTrue(pdf_entry["stageCoverage"]["parser"])
+        self.assertTrue(pdf_entry["stageCoverage"]["embedder"])
+        self.assertTrue(pdf_entry["stageCoverage"]["thumbnailer"])
+
+        # TXT should have parser and embedder, check thumbnailer dynamically
+        self.assertIn("txt", by_file_type)
+        txt_entry = by_file_type["txt"]
+        self.assertEqual(txt_entry["mimetype"], "text/plain")
+        self.assertTrue(txt_entry["stageCoverage"]["parser"])
+        self.assertTrue(txt_entry["stageCoverage"]["embedder"])
+
+        # DOCX has no thumbnailer, so should not be fully supported
+        self.assertIn("docx", by_file_type)
+        docx_entry = by_file_type["docx"]
+        self.assertFalse(docx_entry["stageCoverage"]["thumbnailer"])
+        self.assertFalse(docx_entry["fullySupported"])
+
+    def test_supported_mime_types_requires_auth(self):
+        """Test that supportedMimeTypes requires authentication."""
+        query = """
+        query {
+            supportedMimeTypes {
+                mimetype
+            }
+        }
+        """
+        client = Client(schema, context_value=TestContext(AnonymousUser()))
+        result = client.execute(query)
+        self.assertIsNotNone(result.get("errors"))
