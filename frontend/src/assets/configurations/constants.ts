@@ -256,6 +256,12 @@ export const LEGACY_TEXT_MIME_TYPE = "application/txt";
 export const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+/**
+ * Maximum number of DOCX byte arrays to cache in memory.
+ * Oldest entry is evicted when the limit is reached.
+ */
+export const DOCX_CACHE_MAX_ENTRIES = 3;
+
 // Supported MIME types for pipeline configuration
 export const SUPPORTED_MIME_TYPES = [
   { value: "application/pdf", label: "PDF", shortLabel: "PDF" },

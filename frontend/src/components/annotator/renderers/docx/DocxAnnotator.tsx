@@ -21,7 +21,10 @@ import React, {
   useRef,
   useMemo,
 } from "react";
-import { getGlobalOffsetFromDomPosition } from "./docxOffsetUtils";
+import {
+  getGlobalOffsetFromDomPosition,
+  pickClosestOccurrence,
+} from "./docxOffsetUtils";
 import {
   initialize as initDocxodus,
   convertDocxToHtml,
@@ -65,6 +68,11 @@ const EMPTY_CHAT_SOURCES: ChatSourceHighlight[] = [];
 
 /** CSS class prefix for annotation elements produced by the projector. */
 const CSS_CLASS_PREFIX = "oc-annot-";
+
+/** Synthetic label IDs for search results and chat source highlights. */
+const SEARCH_RESULT_LABEL_ID = "__search_result__";
+const CHAT_SOURCE_LABEL_ID = "__chat_source__";
+const CHAT_SOURCE_SELECTED_LABEL_ID = "__chat_source_selected__";
 
 /** Stable projection settings shared by projection and CSS generation. */
 const PROJECTION_SETTINGS: ExternalAnnotationProjectionSettings = {
@@ -129,16 +137,23 @@ interface DocxAnnotatorProps {
 }
 
 /**
- * Build an ExternalAnnotationSet from server annotations.
+ * Build an ExternalAnnotationSet from server annotations, search results,
+ * and chat source highlights.
  *
  * Label visibility filtering is NOT done here — all annotations matching the
  * structural filter are included, and visibility is toggled via CSS rules
  * produced by generateAnnotationVisibilityCss().
+ *
+ * Search results and chat sources are projected as synthetic annotations with
+ * special label IDs, styled via CSS in customCss.
  */
 function buildExternalAnnotationSet(
   docText: string,
   annotations: ServerSpanAnnotation[],
-  showStructural: boolean
+  showStructural: boolean,
+  searchResults: TextSearchSpanResult[],
+  chatSources: ChatSourceHighlight[],
+  selectedChatSourceId?: string
 ): ExternalAnnotationSet {
   const filteredAnnotations = annotations.filter((ann) => {
     if (ann.structural && !showStructural) return false;
@@ -156,6 +171,38 @@ function buildExternalAnnotationSet(
     annotationType: ann.structural ? "structural" : "text",
     structural: ann.structural,
   }));
+
+  // Project search results as synthetic annotations (only when no chat sources)
+  if (chatSources.length === 0) {
+    for (let i = 0; i < searchResults.length; i++) {
+      const sr = searchResults[i];
+      const text = docText.slice(sr.start_index, sr.end_index);
+      labelledText.push({
+        id: `__sr_${i}`,
+        annotationLabel: "Search Result",
+        rawText: text,
+        page: 0,
+        annotationJson: { start: sr.start_index, end: sr.end_index, text },
+        annotationType: "text",
+        structural: false,
+      });
+    }
+  }
+
+  // Project chat sources as synthetic annotations
+  for (const cs of chatSources) {
+    const text = docText.slice(cs.start_index, cs.end_index);
+    const isSelected = cs.sourceId === selectedChatSourceId;
+    labelledText.push({
+      id: `__cs_${cs.sourceId}`,
+      annotationLabel: isSelected ? "Chat Source (Active)" : "Chat Source",
+      rawText: text,
+      page: 0,
+      annotationJson: { start: cs.start_index, end: cs.end_index, text },
+      annotationType: "text",
+      structural: false,
+    });
+  }
 
   const textLabels: Record<
     string,
@@ -179,6 +226,30 @@ function buildExternalAnnotationSet(
         labelType: "text",
       };
     }
+  }
+
+  // Add synthetic labels for search results and chat sources
+  if (chatSources.length === 0 && searchResults.length > 0) {
+    textLabels[SEARCH_RESULT_LABEL_ID] = {
+      id: SEARCH_RESULT_LABEL_ID,
+      text: "Search Result",
+      color: OS_LEGAL_COLORS.searchHighlight,
+      labelType: "text",
+    };
+  }
+  if (chatSources.length > 0) {
+    textLabels[CHAT_SOURCE_LABEL_ID] = {
+      id: CHAT_SOURCE_LABEL_ID,
+      text: "Chat Source",
+      color: OS_LEGAL_COLORS.chatSourceHighlight,
+      labelType: "text",
+    };
+    textLabels[CHAT_SOURCE_SELECTED_LABEL_ID] = {
+      id: CHAT_SOURCE_SELECTED_LABEL_ID,
+      text: "Chat Source (Active)",
+      color: OS_LEGAL_COLORS.chatSourceHighlightActive,
+      labelType: "text",
+    };
   }
 
   return {
@@ -300,11 +371,13 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
           // DOMPurify strips all script/event handler vectors by default. The ADD_ATTR
           // whitelist only permits data-* attributes used for annotation projection,
           // which cannot execute JavaScript. Links and src/action attrs are stripped.
-          setBaseHtml(
-            DOMPurify.sanitize(html, {
-              ADD_ATTR: ["data-annotation-id", "data-label-id", "data-label"],
-            })
-          );
+          const sanitized = DOMPurify.sanitize(html, {
+            ADD_ATTR: ["data-annotation-id", "data-label-id", "data-label"],
+          });
+          setBaseHtml(sanitized);
+          // Show the base HTML immediately to avoid a "Projecting annotations..."
+          // flash while the projection effect runs.
+          setAnnotatedHtml(sanitized);
           setConverting(false);
         }
       })
@@ -331,7 +404,10 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     const annotationSet = buildExternalAnnotationSet(
       docText,
       annotations,
-      showStructuralAnnotations
+      showStructuralAnnotations,
+      searchResults,
+      chatSources,
+      selectedChatSourceId
     );
 
     if (annotationSet.labelledText.length === 0) {
@@ -359,7 +435,16 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [baseHtml, docText, annotations, showStructuralAnnotations, wasmReady]);
+  }, [
+    baseHtml,
+    docText,
+    annotations,
+    showStructuralAnnotations,
+    searchResults,
+    chatSources,
+    selectedChatSourceId,
+    wasmReady,
+  ]);
 
   // ── Effect 4: Generate annotation CSS from label definitions ────────
   useEffect(() => {
@@ -420,6 +505,44 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     };
   }, [wasmReady, visibleLabels, annotations]);
 
+  // ── Effect 6: Register annotation refs for sidebar scroll-into-view ──
+  // After annotated HTML is rendered, query projected annotation elements
+  // and report them via onAnnotationRefChange so the sidebar can scroll to them.
+  const registeredRefsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!onAnnotationRefChange || !annotatedHtml || !containerRef.current)
+      return;
+
+    // Wait a tick for dangerouslySetInnerHTML to flush to the DOM
+    const timer = requestAnimationFrame(() => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const currentIds = new Set<string>();
+      const elements = container.querySelectorAll("[data-annotation-id]");
+      elements.forEach((el) => {
+        const id = el.getAttribute("data-annotation-id");
+        // Skip synthetic search result / chat source annotations
+        if (id && !id.startsWith("__sr_") && !id.startsWith("__cs_")) {
+          if (!currentIds.has(id)) {
+            currentIds.add(id);
+            onAnnotationRefChange(id, el as HTMLElement);
+          }
+        }
+      });
+
+      // Unregister previously registered annotations that are no longer in the DOM
+      for (const prevId of registeredRefsRef.current) {
+        if (!currentIds.has(prevId)) {
+          onAnnotationRefChange(prevId, null);
+        }
+      }
+      registeredRefsRef.current = currentIds;
+    });
+
+    return () => cancelAnimationFrame(timer);
+  }, [annotatedHtml, onAnnotationRefChange]);
+
   // Handle text selection for new annotation creation.
   const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
@@ -449,12 +572,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
           );
 
           if (anchorOffset !== null) {
-            match = occurrences.reduce((closest, occ) =>
-              Math.abs(occ.start - anchorOffset) <
-              Math.abs(closest.start - anchorOffset)
-                ? occ
-                : closest
-            );
+            match = pickClosestOccurrence(occurrences, anchorOffset);
           }
         }
       }
@@ -496,7 +614,12 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       ) as HTMLElement | null;
       if (annotationEl) {
         const annotationId = annotationEl.getAttribute("data-annotation-id");
-        if (annotationId) {
+        // Ignore clicks on synthetic search result / chat source annotations
+        if (
+          annotationId &&
+          !annotationId.startsWith("__sr_") &&
+          !annotationId.startsWith("__cs_")
+        ) {
           if (e.ctrlKey || e.metaKey) {
             setSelectedAnnotations(
               selectedAnnotations.includes(annotationId)
@@ -560,6 +683,24 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       [data-annotation-id]:hover {
         outline: 1px solid ${OS_LEGAL_COLORS.borderHover};
         outline-offset: 1px;
+      }
+      /* Search result highlighting */
+      [data-annotation-id^="__sr_"] {
+        background-color: ${OS_LEGAL_COLORS.searchHighlight} !important;
+        cursor: default;
+      }
+      /* Chat source highlighting */
+      [data-annotation-id^="__cs_"] {
+        background-color: ${OS_LEGAL_COLORS.chatSourceHighlight} !important;
+        cursor: default;
+      }
+      [data-annotation-id^="__cs_"][data-label="Chat Source (Active)"] {
+        background-color: ${OS_LEGAL_COLORS.chatSourceHighlightActive} !important;
+      }
+      /* Hide label tooltips on synthetic highlights */
+      [data-annotation-id^="__sr_"] .${CSS_CLASS_PREFIX}label,
+      [data-annotation-id^="__cs_"] .${CSS_CLASS_PREFIX}label {
+        display: none;
       }
       ${selectedStyles}
     `;
