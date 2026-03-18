@@ -16,9 +16,9 @@
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Modal as OsModal, ModalBody as OsModalBody } from "@os-legal/ui";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import { useMutation } from "@apollo/client";
-import { X, Save, AlertCircle } from "lucide-react";
+import { X, Save, AlertCircle, Loader2 } from "lucide-react";
 import {
   CORPUS_COLORS,
   CORPUS_FONTS,
@@ -174,6 +174,7 @@ const ActionButton = styled.button<{ $variant?: "primary" | "secondary" }>`
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
+
   padding: 0.625rem 1.25rem;
   border-radius: ${CORPUS_RADII.md};
   font-family: ${CORPUS_FONTS.sans};
@@ -231,6 +232,16 @@ const ActionButton = styled.button<{ $variant?: "primary" | "secondary" }>`
   `}
 `;
 
+const spin = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+`;
+
+const SpinningIcon = styled.span`
+  display: inline-flex;
+  animation: ${spin} 1s linear infinite;
+`;
+
 const ErrorMessage = styled.div`
   display: flex;
   align-items: center;
@@ -238,7 +249,7 @@ const ErrorMessage = styled.div`
   padding: 0.625rem 0.875rem;
   background: ${OS_LEGAL_COLORS.dangerSurfaceHover};
   color: ${OS_LEGAL_COLORS.danger};
-  border: 1px solid #fca5a5;
+  border: 1px solid ${OS_LEGAL_COLORS.dangerBorder};
   border-radius: ${CORPUS_RADII.md};
   font-family: ${CORPUS_FONTS.sans};
   font-size: 0.8125rem;
@@ -450,7 +461,12 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
   const hasChanges = content !== initialContent;
 
   return (
-    <OsModal open={isOpen} onClose={handleClose}>
+    <OsModal
+      open={isOpen}
+      onClose={handleClose}
+      closeOnOverlay={!hasChanges}
+      closeOnEscape={!hasChanges}
+    >
       <OsModalBody style={{ padding: 0 }}>
         <StyledModalInner>
           <ModalHeader>
@@ -496,8 +512,14 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
                 loading ? "Saving changes..." : "Save message changes"
               }
             >
-              <Save size={16} />
-              Save Changes
+              {loading ? (
+                <SpinningIcon>
+                  <Loader2 size={16} />
+                </SpinningIcon>
+              ) : (
+                <Save size={16} />
+              )}
+              {loading ? "Saving..." : "Save Changes"}
             </ActionButton>
           </ModalFooter>
 

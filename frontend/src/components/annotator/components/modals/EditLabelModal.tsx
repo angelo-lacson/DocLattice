@@ -101,6 +101,7 @@ export const EditLabelModal = ({
         </Button>
         <Button
           variant="primary"
+          onMouseDown={(e: React.MouseEvent) => e.stopPropagation()}
           onClick={(event: SyntheticEvent) => {
             event.preventDefault();
             event.stopPropagation();
