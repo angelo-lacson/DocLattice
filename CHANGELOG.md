@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Undefined ordering in async note retrieval** (Closes #1107): Added missing `.order_by("created")` to `aget_notes_for_document_corpus` in `opencontractserver/llms/tools/core_tools.py`, matching the sync counterpart `get_notes_for_document_corpus` which already had deterministic ordering.
+- **Tool name breaking change from async migration** (Closes #1107): `create_document_tools()` in `opencontractserver/llms/tools/tool_factory.py` derived tool names from `func.__name__`, causing names to silently change from e.g. `load_document_md_summary` to `aload_document_md_summary` when the registry switched to async functions. Added explicit `name=` parameters to all `CoreTool.from_function()` calls to preserve the original tool names.
+- **Test username typo**: Fixed "toklenuser" → "tokenuser" in `opencontractserver/tests/test_agent_search_tools.py`.
 - **Misleading CleanViewContainer comment** (`frontend/src/views/Corpuses.tsx`): Corrected the styled-component comment that claimed height constraints were "intentionally removed" when `height: 100%`, `min-height: 0`, and `overflow: hidden` were still present. The comment now accurately documents the height model and explains that only `max-height: 100dvh` was removed. Closes #1044 (items 1 & 2).
 
 ### Added
