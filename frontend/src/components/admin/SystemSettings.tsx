@@ -75,6 +75,13 @@ import { ComponentLibrary } from "./system_settings/ComponentLibrary";
 import { FiletypeDefaults } from "./system_settings/FiletypeDefaults";
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+const SETTINGS_TABS = ["library", "defaults"] as const;
+type SettingsTab = (typeof SETTINGS_TABS)[number];
+
+// ============================================================================
 // Component
 // ============================================================================
 
@@ -85,7 +92,7 @@ export const SystemSettings: React.FC = () => {
   const [isMobile, setIsMobile] = useState(
     () => window.innerWidth <= CORPUS_BREAKPOINTS.tablet
   );
-  const [activeTab, setActiveTab] = useState<"library" | "defaults">("library");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("library");
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${CORPUS_BREAKPOINTS.tablet}px)`);
@@ -94,34 +101,33 @@ export const SystemSettings: React.FC = () => {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // Keyboard navigation for mobile tabs (WAI-ARIA tabs pattern)
+  // Keyboard navigation for mobile tabs (WAI-ARIA horizontal tabs pattern)
   const handleTabKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      const tabs: Array<"library" | "defaults"> = ["library", "defaults"];
-      const currentIndex = tabs.indexOf(activeTab);
+      const currentIndex = SETTINGS_TABS.indexOf(activeTab);
       let nextIndex: number | null = null;
 
       switch (e.key) {
         case "ArrowLeft":
-        case "ArrowUp":
-          nextIndex = currentIndex === 0 ? tabs.length - 1 : currentIndex - 1;
+          nextIndex =
+            currentIndex === 0 ? SETTINGS_TABS.length - 1 : currentIndex - 1;
           break;
         case "ArrowRight":
-        case "ArrowDown":
-          nextIndex = currentIndex === tabs.length - 1 ? 0 : currentIndex + 1;
+          nextIndex =
+            currentIndex === SETTINGS_TABS.length - 1 ? 0 : currentIndex + 1;
           break;
         case "Home":
           nextIndex = 0;
           break;
         case "End":
-          nextIndex = tabs.length - 1;
+          nextIndex = SETTINGS_TABS.length - 1;
           break;
         default:
           return;
       }
 
       e.preventDefault();
-      const nextTab = tabs[nextIndex];
+      const nextTab = SETTINGS_TABS[nextIndex];
       setActiveTab(nextTab);
       document.getElementById(`settings-tab-${nextTab}`)?.focus();
     },
@@ -743,6 +749,7 @@ export const SystemSettings: React.FC = () => {
             id={`settings-panel-${activeTab}`}
             role="tabpanel"
             aria-labelledby={`settings-tab-${activeTab}`}
+            tabIndex={0}
           >
             {activeTab === "library" ? (
               <ComponentLibrary {...componentLibraryProps} />
