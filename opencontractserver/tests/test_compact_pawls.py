@@ -381,15 +381,16 @@ class TestEdgeCases(TestCase):
         self.assertEqual(len(result[0]["tokens"]), 1)
         self.assertEqual(result[0]["tokens"][0]["text"], "valid")
 
-    def test_max_tokens_per_page_limit(self):
-        """Compacting a page with too many tokens raises ValueError."""
+    def test_max_tokens_per_page_fallback(self):
+        """Compacting a page with too many tokens falls back to v1."""
         tokens = [
             {"x": 0, "y": 0, "width": 1, "height": 1, "text": f"t{i}"}
             for i in range(100_001)
         ]
         v1 = [_make_v1_page(tokens=tokens)]
-        with self.assertRaises(ValueError):
-            compact_pawls_pages(v1)
+        result = compact_pawls_pages(v1)
+        # Should return original v1 data, not compact
+        self.assertIs(result, v1)
 
     def test_non_list_input(self):
         """Non-list, non-dict input returns as-is from compact."""

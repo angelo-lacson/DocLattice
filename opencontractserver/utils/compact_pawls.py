@@ -129,7 +129,8 @@ def _compact_token(token: dict[str, Any]) -> list:
         for v1_key, v2_key in _IMAGE_KEY_MAP.items():
             if v1_key in token and token[v1_key] is not None:
                 img_meta[v2_key] = token[v1_key]
-        arr.append(img_meta)
+        if img_meta:
+            arr.append(img_meta)
 
     return arr
 
@@ -147,9 +148,8 @@ def compact_pawls_pages(
 
     Returns:
         V2 compact PAWLs dict, or ``None`` if input was ``None``.
-
-    Raises:
-        ValueError: If any page exceeds ``MAX_TOKENS_PER_PAGE``.
+        Falls back to returning the original v1 data if any page exceeds
+        ``MAX_TOKENS_PER_PAGE``.
     """
     if pages is None:
         return None
@@ -170,10 +170,12 @@ def compact_pawls_pages(
         tokens = page_data.get("tokens", [])
 
         if len(tokens) > MAX_TOKENS_PER_PAGE:
-            raise ValueError(
-                f"Page has {len(tokens)} tokens, exceeds limit {MAX_TOKENS_PER_PAGE}. "
-                f"Refusing to compact."
+            logger.warning(
+                "Page has %d tokens (limit %d) — storing v1 format instead",
+                len(tokens),
+                MAX_TOKENS_PER_PAGE,
             )
+            return pages
 
         compact_page: dict[str, Any] = {
             "w": _round(float(page_info.get("width", 0))),
