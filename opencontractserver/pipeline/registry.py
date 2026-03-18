@@ -508,6 +508,10 @@ def get_all_components_cached() -> dict[str, tuple[PipelineComponentDefinition, 
     }
 
 
+_supported_mime_types_cache: list[dict[str, object]] | None = None
+_allowed_mime_types_cache: list[str] | None = None
+
+
 def get_supported_mime_types() -> list[dict[str, object]]:
     """
     Derive supported MIME types dynamically from registered pipeline components.
@@ -523,6 +527,10 @@ def get_supported_mime_types() -> list[dict[str, object]]:
         - fully_supported: True if all required stages have at least one component
         - stage_coverage: dict of stage -> bool indicating availability
     """
+    global _supported_mime_types_cache
+    if _supported_mime_types_cache is not None:
+        return _supported_mime_types_cache
+
     from opencontractserver.pipeline.base.file_types import (
         FILE_TYPE_LABELS,
         FILE_TYPE_TO_MIME,
@@ -534,10 +542,15 @@ def get_supported_mime_types() -> list[dict[str, object]]:
 
     for ft_enum in FileTypeEnum:
         ft_value = ft_enum.value
-        mime = FILE_TYPE_TO_MIME.get(ft_value, "")
+        mime = FILE_TYPE_TO_MIME.get(ft_value)
+        if not mime:
+            logger.warning("No MIME mapping for FileTypeEnum member %r", ft_value)
+            continue
 
         has_parser = len(registry.get_parsers_for_filetype(ft_value)) > 0
-        # Embedders currently work on all text types (not filtered by file type)
+        # TODO: Embedders currently work on all text types (not filtered by
+        # file type). If a file-type-specific embedder is added, this check
+        # should be updated to query per-file-type coverage.
         has_embedder = len(registry.embedders) > 0
         has_thumbnailer = len(registry.get_thumbnailers_for_filetype(ft_value)) > 0
 
@@ -557,6 +570,7 @@ def get_supported_mime_types() -> list[dict[str, object]]:
             }
         )
 
+    _supported_mime_types_cache = result
     return result
 
 
@@ -568,6 +582,10 @@ def get_allowed_mime_types() -> list[str]:
     dynamically-derived list based on registered pipeline components.
     Includes legacy MIME type aliases for backward compatibility.
     """
+    global _allowed_mime_types_cache
+    if _allowed_mime_types_cache is not None:
+        return _allowed_mime_types_cache
+
     from opencontractserver.pipeline.base.file_types import LEGACY_MIME_ALIASES
 
     supported = get_supported_mime_types()
@@ -578,6 +596,7 @@ def get_allowed_mime_types() -> list[str]:
         if canonical in allowed and legacy not in allowed:
             allowed.append(legacy)
 
+    _allowed_mime_types_cache = allowed
     return allowed
 
 
@@ -587,6 +606,9 @@ def reset_registry() -> None:
 
     Useful for testing or if components are dynamically added.
     """
+    global _supported_mime_types_cache, _allowed_mime_types_cache
     PipelineComponentRegistry._instance = None
     PipelineComponentRegistry._initialized = False
     get_registry.cache_clear()
+    _supported_mime_types_cache = None
+    _allowed_mime_types_cache = None
