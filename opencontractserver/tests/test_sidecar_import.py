@@ -458,7 +458,7 @@ class TestSidecarImportTask(TestCase):
             ),
         ]
 
-        relationships = [
+        relationships_data = [
             {
                 "id": 1,
                 "relationshipLabel": "Contains",
@@ -471,7 +471,7 @@ class TestSidecarImportTask(TestCase):
         sidecar = _build_sidecar_json(
             title="Doc with Relationships",
             annotations=annotations,
-            relationships=relationships,
+            relationships=relationships_data,
         )
 
         labels = _build_labels_json(

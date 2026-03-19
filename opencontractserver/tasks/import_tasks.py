@@ -583,13 +583,10 @@ def _apply_sidecar_annotations(
             results["annotation_sidecars_processed"] += 1
             return
 
-        # Count doc-level annotations that will be created
-        doc_labels_created = sum(
-            1 for name in doc_data.get("doc_labels", []) if doc_label_lookup.get(name)
-        )
-
         # Import annotations onto the corpus document
-        annot_id_map = import_doc_annotations(
+        expected_text = len(doc_data.get("labelled_text", []))
+        expected_doc = len(doc_data.get("doc_labels", []))
+        annot_id_map, doc_labels_created = import_doc_annotations(
             doc_data=doc_data,
             corpus_doc=corpus_doc,
             corpus_obj=corpus_obj,
@@ -598,6 +595,18 @@ def _apply_sidecar_annotations(
             doc_label_lookup=doc_label_lookup,
         )
         results["annotations_imported"] += len(annot_id_map) + doc_labels_created
+
+        # Warn if any annotations were skipped (e.g. due to missing labels)
+        actual_total = len(annot_id_map) + doc_labels_created
+        expected_total = expected_text + expected_doc
+        if actual_total < expected_total:
+            skipped = expected_total - actual_total
+            msg = (
+                f"Sidecar {sidecar_path}: {skipped} annotation(s) skipped "
+                f"(likely due to missing labels in labels.json)"
+            )
+            logger.warning(f"import_zip_with_folder_structure() - {msg}")
+            results["errors"].append(msg)
 
         # Import intra-document relationships from the sidecar
         relationships_data = doc_data.get("relationships", [])
@@ -614,7 +623,8 @@ def _apply_sidecar_annotations(
         results["annotation_sidecars_processed"] += 1
         logger.info(
             f"import_zip_with_folder_structure() - Applied sidecar annotations "
-            f"to document {corpus_doc.id}: {len(annot_id_map)} annotations"
+            f"to document {corpus_doc.id}: {len(annot_id_map)} text, "
+            f"{doc_labels_created} doc-level"
         )
 
     except Exception as e:
@@ -709,6 +719,7 @@ def import_zip_with_folder_structure(
         "metadata_applied": 0,
         # Annotation sidecar statistics
         "labels_file_found": False,
+        "labels_loaded": False,
         "annotation_sidecars_found": 0,
         "annotation_sidecars_processed": 0,
         "annotation_sidecars_errored": 0,
@@ -902,6 +913,7 @@ def import_zip_with_folder_structure(
                     label_lookup, doc_label_lookup = prepare_import_labels(
                         labels_data, user_obj.id, labelset_obj
                     )
+                    results["labels_loaded"] = True
                     logger.info(
                         f"import_zip_with_folder_structure() - Loaded "
                         f"{len(label_lookup)} labels from {manifest.labels_file}"

@@ -267,7 +267,8 @@ def is_metadata_file(path: str) -> bool:
     return path in METADATA_FILE_NAMES
 
 
-# Allowed names for the labels definition file at zip root
+# Allowed names for the labels definition file at zip root.
+# Intentionally case-sensitive — only these exact names are recognised.
 LABELS_FILE_NAMES = [
     "labels.json",
     "LABELS.json",
