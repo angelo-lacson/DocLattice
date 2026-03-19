@@ -419,7 +419,26 @@ class TestSupportedMimeTypes(TestCase):
             self.assertIn("thumbnailer", entry["stage_coverage"])
 
     def test_get_supported_mime_types_pdf_has_parser(self):
-        """PDF should have at least one parser available."""
+        """PDF should have at least one parser available.
+
+        Registers a minimal mock parser so the test is self-contained rather
+        than relying on a specific parser being installed in the test env.
+        """
+        registry = get_registry()
+        mock_parser = PipelineComponentDefinition(
+            name="MockPdfParser",
+            class_name="tests.MockPdfParser",
+            component_type=ComponentType.PARSER,
+            title="Mock PDF Parser",
+            module_name="mock",
+            description="Mock parser for test",
+            author="test",
+            dependencies=(),
+            supported_file_types=("pdf",),
+        )
+        registry._parsers_by_filetype.setdefault("pdf", []).append(mock_parser)
+        get_supported_mime_types.cache_clear()
+
         result = get_supported_mime_types()
         by_file_type = {e["file_type"]: e for e in result}
         self.assertIn("pdf", by_file_type)

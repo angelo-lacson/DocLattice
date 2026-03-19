@@ -622,6 +622,7 @@ export const SystemSettings: React.FC = () => {
     () => ({
       components: componentsByStage,
       supportedMimeTypes,
+      mimeTypesLoading,
       enabledComponents:
         (settings?.enabledComponents?.filter(Boolean) as string[]) ?? [],
       preferredParsers:
@@ -638,6 +639,7 @@ export const SystemSettings: React.FC = () => {
     [
       componentsByStage,
       supportedMimeTypes,
+      mimeTypesLoading,
       settings?.enabledComponents,
       settings?.preferredParsers,
       settings?.preferredEmbedders,
@@ -650,7 +652,7 @@ export const SystemSettings: React.FC = () => {
   );
 
   // Loading state
-  if (settingsLoading || componentsLoading || mimeTypesLoading) {
+  if (settingsLoading || componentsLoading) {
     return (
       <Container>
         <LoadingContainer>

@@ -19,7 +19,7 @@ import pkgutil
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Any, Optional, TypedDict
 
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 from opencontractserver.pipeline.base.file_types import (
@@ -490,7 +490,12 @@ def get_components_by_mimetype_cached(
     file_type_value = MIME_TO_FILE_TYPE.get(mimetype)
     if file_type_value is None:
         logger.warning("Unknown MIME type %r — no FileTypeEnum mapping", mimetype)
-        file_type_value = mimetype
+        return {
+            "parsers": [],
+            "embedders": [],
+            "thumbnailers": [],
+            "post_processors": [],
+        }
 
     return {
         "parsers": registry.get_parsers_for_filetype(file_type_value),
@@ -515,8 +520,22 @@ def get_all_components_cached() -> dict[str, tuple[PipelineComponentDefinition, 
     }
 
 
+class StageCoverage(TypedDict):
+    parser: bool
+    embedder: bool
+    thumbnailer: bool
+
+
+class SupportedMimeTypeEntry(TypedDict):
+    mimetype: str
+    file_type: str
+    label: str
+    fully_supported: bool
+    stage_coverage: StageCoverage
+
+
 @lru_cache(maxsize=None)
-def get_supported_mime_types() -> tuple[dict[str, object], ...]:
+def get_supported_mime_types() -> tuple[SupportedMimeTypeEntry, ...]:
     """
     Derive supported MIME types dynamically from registered pipeline components.
 

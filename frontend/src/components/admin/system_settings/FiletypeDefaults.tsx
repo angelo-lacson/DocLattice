@@ -1,5 +1,5 @@
 import React, { memo, useMemo, useCallback } from "react";
-import { Button } from "@os-legal/ui";
+import { Button, Spinner } from "@os-legal/ui";
 import { AlertTriangle, FileText, Cpu, Settings } from "lucide-react";
 import {
   PipelineComponentType,
@@ -36,6 +36,7 @@ interface FiletypeDefaultsProps {
     thumbnailers: (PipelineComponentType & { className: string })[];
   };
   supportedMimeTypes: SupportedMimeTypeType[];
+  mimeTypesLoading?: boolean;
   enabledComponents: string[];
   preferredParsers: Record<string, string>;
   preferredEmbedders: Record<string, string>;
@@ -68,6 +69,7 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
   ({
     components,
     supportedMimeTypes,
+    mimeTypesLoading,
     enabledComponents,
     preferredParsers,
     preferredEmbedders,
@@ -136,6 +138,23 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
           </DefaultsHeaderRow>
 
           {/* One row per MIME type */}
+          {mimeTypesLoading && supportedMimeTypes.length === 0 ? (
+            <FiletypeRow>
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.5rem",
+                  padding: "1rem",
+                }}
+              >
+                <Spinner size="sm" />
+                <span>Loading file types...</span>
+              </div>
+            </FiletypeRow>
+          ) : null}
           {supportedMimeTypes.map((mime) => {
             return (
               <FiletypeRow key={mime.mimetype}>

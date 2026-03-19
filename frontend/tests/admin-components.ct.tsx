@@ -621,6 +621,9 @@ const mockPipelineComponentsWithConfiguredSecrets = {
   }),
 };
 
+// fullySupported requires parser + embedder only; thumbnailer is optional.
+// TXT and DOCX have thumbnailer: false but are still fullySupported: true
+// because the pipeline only requires parser + embedder for upload acceptance.
 const mockSupportedMimeTypes = [
   {
     mimetype: "application/pdf",
