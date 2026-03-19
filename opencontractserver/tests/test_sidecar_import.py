@@ -250,6 +250,28 @@ class TestSidecarDetectionInManifest(TestCase):
         # Should be detected as a sidecar for docs/labels.pdf
         self.assertIn("docs/labels.pdf", manifest.annotation_sidecars)
 
+    def test_multiple_labels_files_uses_first(self):
+        """When both labels.json and LABELS.json exist, only the first is used."""
+        from opencontractserver.utils.zip_security import validate_zip_for_import
+
+        pdf_bytes = SAMPLE_PDF_FILE_ONE_PATH.read_bytes()
+        sidecar = json.dumps(_build_sidecar_json()).encode("utf-8")
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("doc.pdf", pdf_bytes)
+            zf.writestr("doc.json", sidecar)
+            zf.writestr("labels.json", b'{"text_labels": {}, "doc_labels": {}}')
+            zf.writestr("LABELS.json", b'{"text_labels": {}, "doc_labels": {}}')
+        buffer.seek(0)
+
+        with zipfile.ZipFile(buffer, "r") as zf:
+            manifest = validate_zip_for_import(zf)
+
+        self.assertTrue(manifest.is_valid)
+        # First labels file should be used
+        self.assertIsNotNone(manifest.labels_file)
+
     def test_mixed_sidecar_and_plain_documents(self):
         """Zip with some docs having sidecars and others without."""
         from opencontractserver.utils.zip_security import validate_zip_for_import
@@ -701,8 +723,9 @@ class TestSidecarImportTask(TestCase):
         # Sidecar was found but labels file wasn't
         self.assertEqual(result["annotation_sidecars_found"], 1)
         self.assertFalse(result["labels_file_found"])
-        # Sidecar is processed but annotations are skipped (no labels)
-        self.assertEqual(result["annotation_sidecars_processed"], 1)
+        # Sidecar is errored (not processed) because annotations were skipped
+        self.assertEqual(result["annotation_sidecars_errored"], 1)
+        self.assertEqual(result["annotation_sidecars_processed"], 0)
         self.assertEqual(result["annotations_imported"], 0)
         self.assertEqual(result["files_processed"], 1)
         # Warning should be in errors
@@ -902,3 +925,192 @@ class TestSidecarImportTask(TestCase):
             self.corpus.label_set.annotation_labels.values_list("text", flat=True)
         )
         self.assertIn("Heading", label_texts)
+
+    def test_sidecar_with_missing_label_skips_annotation(self):
+        """
+        When a sidecar references a label not in labels.json, those annotations
+        are skipped and a warning is recorded — but valid annotations still import.
+        """
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        annotations = [
+            _make_annotation(1, "Valid Text", "Heading", 0, 0, 1),
+            _make_annotation(2, "Missing Label", "NonExistentLabel", 0, 2, 3),
+        ]
+        sidecar = _build_sidecar_json(annotations=annotations)
+
+        # labels.json only defines "Heading", not "NonExistentLabel"
+        labels = _build_labels_json(
+            text_labels={
+                "Heading": _make_label_data("Heading"),
+            },
+        )
+
+        files = {
+            "doc.pdf": self.pdf_bytes,
+            "doc.json": json.dumps(sidecar).encode("utf-8"),
+            "labels.json": json.dumps(labels).encode("utf-8"),
+        }
+
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-sidecar-missing-label",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["completed"], f"Errors: {result.get('errors')}")
+        self.assertEqual(result["annotation_sidecars_processed"], 1)
+        # Only the valid annotation should be imported
+        self.assertEqual(result["annotations_imported"], 1)
+        # Warning about skipped annotation(s) should appear
+        self.assertTrue(
+            any("skipped" in e for e in result["errors"]),
+            f"Expected warning about skipped annotations, got: {result['errors']}",
+        )
+
+    def test_malformed_sidecar_json_records_error(self):
+        """
+        When a sidecar file contains invalid JSON, the error is caught and
+        recorded — the document is still created via the pipeline.
+        """
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        labels = _build_labels_json(
+            text_labels={"Heading": _make_label_data("Heading")},
+        )
+
+        files = {
+            "doc.pdf": self.pdf_bytes,
+            "doc.json": b"THIS IS NOT VALID JSON {{{",
+            "labels.json": json.dumps(labels).encode("utf-8"),
+        }
+
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-malformed-sidecar",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["completed"], f"Errors: {result.get('errors')}")
+        # Document should still be created via pipeline
+        self.assertEqual(result["files_processed"], 1)
+        # Sidecar should be counted as errored
+        self.assertEqual(result["annotation_sidecars_errored"], 1)
+        self.assertEqual(result["annotation_sidecars_processed"], 0)
+        self.assertTrue(
+            any("Sidecar annotation error" in e for e in result["errors"]),
+            f"Expected sidecar error message, got: {result['errors']}",
+        )
+
+    def test_malformed_labels_json_records_error(self):
+        """
+        When labels.json contains invalid JSON, the error is caught and
+        recorded — documents are still imported via the pipeline.
+        """
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        sidecar = _build_sidecar_json(
+            annotations=[_make_annotation(1, "Text", "Heading", 0, 0, 1)],
+        )
+
+        files = {
+            "doc.pdf": self.pdf_bytes,
+            "doc.json": json.dumps(sidecar).encode("utf-8"),
+            "labels.json": b"NOT VALID JSON!!!",
+        }
+
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-malformed-labels",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["completed"], f"Errors: {result.get('errors')}")
+        self.assertTrue(result["labels_file_found"])
+        self.assertFalse(result["labels_loaded"])
+        # Document still processed via pipeline
+        self.assertEqual(result["files_processed"], 1)
+        # Labels file error should be recorded
+        self.assertTrue(
+            any("Labels file error" in e for e in result["errors"]),
+            f"Expected labels file error, got: {result['errors']}",
+        )
+
+    def test_sidecar_with_missing_relationship_label_skips_relationship(self):
+        """
+        When a sidecar references a relationship label not in labels.json,
+        that relationship is skipped gracefully — other annotations still import.
+        """
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        annotations = [
+            _make_annotation(1, "Source text", "Heading", 0, 0, 1),
+            _make_annotation(2, "Target text", "Heading", 0, 2, 3),
+        ]
+        relationships = [
+            {
+                "id": 1,
+                "relationshipLabel": "NonExistentRelLabel",
+                "source_ids": [1],
+                "target_ids": [2],
+                "structural": False,
+            },
+        ]
+        sidecar = _build_sidecar_json(
+            annotations=annotations, relationships=relationships
+        )
+
+        labels = _build_labels_json(
+            text_labels={"Heading": _make_label_data("Heading")},
+        )
+
+        files = {
+            "doc.pdf": self.pdf_bytes,
+            "doc.json": json.dumps(sidecar).encode("utf-8"),
+            "labels.json": json.dumps(labels).encode("utf-8"),
+        }
+
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-missing-rel-label",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["completed"], f"Errors: {result.get('errors')}")
+        self.assertEqual(result["annotation_sidecars_processed"], 1)
+        # Both text annotations should import fine
+        self.assertEqual(result["annotations_imported"], 2)
+        # Relationship with missing label should be skipped (not crash)
+        self.assertEqual(Relationship.objects.filter(corpus=self.corpus).count(), 0)
