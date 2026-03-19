@@ -9,6 +9,10 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
+from opencontractserver.pipeline.base.file_types import (
+    FILE_TYPE_TO_MIME,
+    FileTypeEnum,
+)
 from opencontractserver.pipeline.registry import (
     ComponentType,
     PipelineComponentDefinition,
@@ -475,3 +479,58 @@ class TestSupportedMimeTypes(TestCase):
                 f"fully_supported mismatch for {entry['file_type']}: "
                 f"coverage={coverage}, fully_supported={entry['fully_supported']}",
             )
+
+    def test_get_components_by_mimetype_cached_unknown_mime(self):
+        """Unknown MIME type returns empty component lists."""
+        result = get_components_by_mimetype_cached("application/x-unknown-test")
+        self.assertEqual(result["parsers"], [])
+        self.assertEqual(result["embedders"], [])
+        self.assertEqual(result["thumbnailers"], [])
+        self.assertEqual(result["post_processors"], [])
+
+    def test_get_supported_mime_types_skips_unmapped_filetype(self):
+        """FileTypeEnum members without a MIME mapping are skipped with a warning."""
+        get_supported_mime_types.cache_clear()
+        with patch.dict(FILE_TYPE_TO_MIME, {"pdf": "application/pdf"}, clear=True):
+            get_supported_mime_types.cache_clear()
+            result = get_supported_mime_types()
+            file_types = {entry["file_type"] for entry in result}
+            # Only "pdf" should be present since we cleared all other mappings
+            self.assertIn("pdf", file_types)
+            self.assertNotIn("txt", file_types)
+            self.assertNotIn("docx", file_types)
+
+
+class TestFileTypeEnum(TestCase):
+    """Tests for FileTypeEnum methods and properties."""
+
+    def test_from_mimetype_known(self):
+        """from_mimetype returns correct enum for known MIME types."""
+        self.assertEqual(
+            FileTypeEnum.from_mimetype("application/pdf"), FileTypeEnum.PDF
+        )
+        self.assertEqual(FileTypeEnum.from_mimetype("text/plain"), FileTypeEnum.TXT)
+
+    def test_from_mimetype_unknown(self):
+        """from_mimetype returns None for unknown MIME types."""
+        self.assertIsNone(FileTypeEnum.from_mimetype("application/x-nonexistent"))
+
+    def test_from_mimetype_legacy_alias(self):
+        """from_mimetype resolves legacy MIME aliases."""
+        result = FileTypeEnum.from_mimetype("application/txt")
+        self.assertEqual(result, FileTypeEnum.TXT)
+
+    def test_mimetype_property(self):
+        """mimetype property returns canonical MIME type string."""
+        self.assertEqual(FileTypeEnum.PDF.mimetype, "application/pdf")
+        self.assertEqual(FileTypeEnum.TXT.mimetype, "text/plain")
+        self.assertEqual(
+            FileTypeEnum.DOCX.mimetype,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+    def test_label_property(self):
+        """label property returns human-readable labels."""
+        self.assertEqual(FileTypeEnum.PDF.label, "PDF")
+        self.assertEqual(FileTypeEnum.TXT.label, "Plain Text")
+        self.assertEqual(FileTypeEnum.DOCX.label, "Word Document")
