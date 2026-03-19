@@ -87,15 +87,6 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
       [preferredParsers, preferredEmbedders, preferredThumbnailers]
     );
 
-    // Build a lookup from MIME type to short label from dynamic data
-    const mimeToShortLabel = useMemo(
-      () =>
-        Object.fromEntries(
-          supportedMimeTypes.map((m) => [m.mimetype, m.fileType.toUpperCase()])
-        ),
-      [supportedMimeTypes]
-    );
-
     // Pre-compute available components per stage per MIME type
     const availableComponents = useMemo(() => {
       const result: Record<
@@ -108,7 +99,7 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
       };
 
       for (const mime of supportedMimeTypes) {
-        const shortLabel = mimeToShortLabel[mime.mimetype] || mime.mimetype;
+        const shortLabel = mime.fileType.toUpperCase();
         for (const stage of STAGES) {
           result[stage.key][mime.mimetype] = components[stage.key].filter(
             (comp) => isComponentAvailable(comp, shortLabel, enabledComponents)
@@ -117,7 +108,7 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
       }
 
       return result;
-    }, [components, supportedMimeTypes, mimeToShortLabel, enabledComponents]);
+    }, [components, supportedMimeTypes, enabledComponents]);
 
     const handleChange = useCallback(
       (stage: StageType, mimeType: string, value: string) => {

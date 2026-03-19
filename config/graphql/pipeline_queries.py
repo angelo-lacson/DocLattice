@@ -16,6 +16,7 @@ from config.graphql.graphene_types import (
     StageCoverageType,
     SupportedMimeTypeType,
 )
+from opencontractserver.pipeline.registry import get_supported_mime_types
 
 logger = logging.getLogger(__name__)
 
@@ -184,8 +185,6 @@ class PipelineQueryMixin:
         Derives supported file types from the pipeline component registry
         rather than static configuration.
         """
-        from opencontractserver.pipeline.registry import get_supported_mime_types
-
         entries = get_supported_mime_types()
         return [
             SupportedMimeTypeType(

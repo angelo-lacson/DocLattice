@@ -52,7 +52,14 @@ class FileTypeEnum(str, Enum):
     @property
     def mimetype(self) -> str:
         """Return the canonical MIME type string for this file type."""
-        return FILE_TYPE_TO_MIME[self.value]
+        try:
+            return FILE_TYPE_TO_MIME[self.value]
+        except KeyError:
+            raise KeyError(
+                f"No MIME mapping for FileTypeEnum member {self.value!r}. "
+                f"Add an entry to MIME_TO_FILE_TYPE in "
+                f"opencontractserver/pipeline/base/file_types.py."
+            )
 
     @property
     def label(self) -> str:

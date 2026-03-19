@@ -421,8 +421,9 @@ class TestSupportedMimeTypes(TestCase):
     def test_get_supported_mime_types_pdf_has_parser(self):
         """PDF should have at least one parser available."""
         result = get_supported_mime_types()
-        pdf_entry = next(e for e in result if e["file_type"] == "pdf")
-        self.assertTrue(pdf_entry["stage_coverage"]["parser"])
+        by_file_type = {e["file_type"]: e for e in result}
+        self.assertIn("pdf", by_file_type)
+        self.assertTrue(by_file_type["pdf"]["stage_coverage"]["parser"])
 
     def test_get_allowed_mime_types_returns_list(self):
         """get_allowed_mime_types should return a list of MIME type strings."""

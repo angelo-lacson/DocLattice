@@ -42,6 +42,7 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models import Q, QuerySet
 
+from opencontractserver.pipeline.registry import get_allowed_mime_types
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import (
     set_permissions_for_obj_to_user,
@@ -1470,8 +1471,6 @@ class DocumentFolderService:
                 return None, "Unable to determine file type"
         else:
             mime_type = kind.mime
-
-        from opencontractserver.pipeline.registry import get_allowed_mime_types
 
         if mime_type not in get_allowed_mime_types():
             return None, f"Unallowed filetype: {mime_type}"

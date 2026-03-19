@@ -5,7 +5,7 @@ import pkgutil
 from typing import Any, Optional, Union
 
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
-from opencontractserver.pipeline.base.file_types import FileTypeEnum
+from opencontractserver.pipeline.base.file_types import FILE_TYPE_TO_MIME, FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
 from opencontractserver.pipeline.base.post_processor import BasePostProcessor
 from opencontractserver.pipeline.base.thumbnailer import BaseThumbnailGenerator
@@ -435,8 +435,6 @@ def find_embedder_for_filetype(
     """
     # Ensure we're working with a mimetype string, not a FileTypeEnum
     if isinstance(mimetype_or_enum, FileTypeEnum):
-        from opencontractserver.pipeline.base.file_types import FILE_TYPE_TO_MIME
-
         mimetype = FILE_TYPE_TO_MIME.get(mimetype_or_enum.value)
         if not mimetype:
             logger.warning(

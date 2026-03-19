@@ -22,7 +22,13 @@ from functools import lru_cache
 from typing import Any, Optional
 
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
-from opencontractserver.pipeline.base.file_types import FileTypeEnum
+from opencontractserver.pipeline.base.file_types import (
+    FILE_TYPE_LABELS,
+    FILE_TYPE_TO_MIME,
+    LEGACY_MIME_ALIASES,
+    MIME_TO_FILE_TYPE,
+    FileTypeEnum,
+)
 from opencontractserver.pipeline.base.parser import BaseParser
 from opencontractserver.pipeline.base.post_processor import BasePostProcessor
 from opencontractserver.pipeline.base.thumbnailer import BaseThumbnailGenerator
@@ -478,12 +484,13 @@ def get_components_by_mimetype_cached(
 
     Returns dict with keys: parsers, embedders, thumbnailers, post_processors
     """
-    from opencontractserver.pipeline.base.file_types import MIME_TO_FILE_TYPE
-
     registry = get_registry()
 
     # Convert MIME type to FileTypeEnum value for lookup
-    file_type_value = MIME_TO_FILE_TYPE.get(mimetype, mimetype)
+    file_type_value = MIME_TO_FILE_TYPE.get(mimetype)
+    if file_type_value is None:
+        logger.warning("Unknown MIME type %r — no FileTypeEnum mapping", mimetype)
+        file_type_value = mimetype
 
     return {
         "parsers": registry.get_parsers_for_filetype(file_type_value),
@@ -508,6 +515,9 @@ def get_all_components_cached() -> dict[str, tuple[PipelineComponentDefinition, 
     }
 
 
+# Process-level caches — cleared only by reset_registry(). If components are
+# registered or removed at runtime (e.g. via admin UI), call reset_registry()
+# to invalidate. Same lifecycle as the @lru_cache on get_registry().
 _supported_mime_types_cache: list[dict[str, object]] | None = None
 _allowed_mime_types_cache: list[str] | None = None
 
@@ -530,12 +540,6 @@ def get_supported_mime_types() -> list[dict[str, object]]:
     global _supported_mime_types_cache
     if _supported_mime_types_cache is not None:
         return _supported_mime_types_cache
-
-    from opencontractserver.pipeline.base.file_types import (
-        FILE_TYPE_LABELS,
-        FILE_TYPE_TO_MIME,
-        FileTypeEnum,
-    )
 
     registry = get_registry()
     result = []
@@ -585,8 +589,6 @@ def get_allowed_mime_types() -> list[str]:
     global _allowed_mime_types_cache
     if _allowed_mime_types_cache is not None:
         return _allowed_mime_types_cache
-
-    from opencontractserver.pipeline.base.file_types import LEGACY_MIME_ALIASES
 
     supported = get_supported_mime_types()
     allowed = [entry["mimetype"] for entry in supported if entry["fully_supported"]]
