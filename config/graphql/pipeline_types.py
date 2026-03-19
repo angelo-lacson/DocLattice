@@ -129,9 +129,11 @@ class StageCoverageType(graphene.ObjectType):
     )
     embedder = graphene.Boolean(
         required=True,
-        description="Whether at least one text embedder is registered. "
-        "Embedders currently operate on all text types, so this reflects "
-        "global availability rather than per-file-type coverage.",
+        description="GLOBAL flag: True when at least one text embedder is registered "
+        "anywhere in the pipeline — does NOT indicate per-file-type coverage. "
+        "All current embedders operate on extracted text regardless of source "
+        "format, so this value is identical across all file types. Do not use "
+        "this field to determine whether a specific MIME type can be embedded.",
     )
     thumbnailer = graphene.Boolean(
         required=True,

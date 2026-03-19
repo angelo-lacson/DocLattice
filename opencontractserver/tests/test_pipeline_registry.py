@@ -500,6 +500,39 @@ class TestSupportedMimeTypes(TestCase):
             self.assertNotIn("txt", file_types)
             self.assertNotIn("docx", file_types)
 
+    def test_get_allowed_mime_types_falls_back_when_empty(self):
+        """When no components are registered, fall back to settings."""
+        from django.conf import settings
+
+        get_supported_mime_types.cache_clear()
+        get_allowed_mime_types.cache_clear()
+
+        # Mock get_supported_mime_types to return entries with no fully_supported
+        with patch(
+            "opencontractserver.pipeline.registry.get_supported_mime_types",
+            return_value=tuple(
+                [
+                    {
+                        "mimetype": "application/pdf",
+                        "file_type": "pdf",
+                        "label": "PDF",
+                        "fully_supported": False,
+                        "stage_coverage": {
+                            "parser": False,
+                            "embedder": False,
+                            "thumbnailer": False,
+                        },
+                    }
+                ]
+            ),
+        ):
+            get_allowed_mime_types.cache_clear()
+            result = get_allowed_mime_types()
+            # Should fall back to settings.ALLOWED_DOCUMENT_MIMETYPES
+            expected = tuple(getattr(settings, "ALLOWED_DOCUMENT_MIMETYPES", []))
+            self.assertEqual(result, expected)
+            self.assertTrue(len(result) > 0)
+
 
 class TestFileTypeEnum(TestCase):
     """Tests for FileTypeEnum methods and properties."""

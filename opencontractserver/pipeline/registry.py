@@ -598,8 +598,13 @@ def get_allowed_mime_types() -> tuple[str, ...]:
     dynamically-derived list based on registered pipeline components.
     Includes legacy MIME type aliases for backward compatibility.
 
+    Falls back to settings.ALLOWED_DOCUMENT_MIMETYPES when no components are
+    registered (fresh install, import-time failures, certain test configs).
+
     Thread-safe via @lru_cache. Cleared by reset_registry().
     """
+    from django.conf import settings
+
     supported = get_supported_mime_types()
     allowed = [entry["mimetype"] for entry in supported if entry["fully_supported"]]
 
@@ -607,6 +612,22 @@ def get_allowed_mime_types() -> tuple[str, ...]:
     for legacy, canonical in LEGACY_MIME_ALIASES.items():
         if canonical in allowed and legacy not in allowed:
             allowed.append(legacy)
+
+    if not allowed:
+        fallback = getattr(settings, "ALLOWED_DOCUMENT_MIMETYPES", [])
+        if fallback:
+            logger.warning(
+                "No pipeline components registered — falling back to "
+                "settings.ALLOWED_DOCUMENT_MIMETYPES (%d types). This may "
+                "indicate a component import failure or misconfiguration.",
+                len(fallback),
+            )
+            return tuple(fallback)
+        logger.warning(
+            "No pipeline components registered and no "
+            "settings.ALLOWED_DOCUMENT_MIMETYPES fallback — all uploads "
+            "will be rejected."
+        )
 
     return tuple(allowed)
 
