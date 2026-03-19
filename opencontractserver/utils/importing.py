@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 from config.graphql.annotation_serializers import AnnotationLabelSerializer
 from opencontractserver.annotations.models import (
+    DOC_TYPE_LABEL,
     TOKEN_LABEL,
     Annotation,
     AnnotationLabel,
@@ -357,6 +358,7 @@ def import_doc_annotations(
         if label_obj:
             annot_obj = Annotation.objects.create(
                 annotation_label=label_obj,
+                annotation_type=DOC_TYPE_LABEL,
                 document=corpus_doc,
                 corpus=corpus_obj,
                 creator_id=user_id,

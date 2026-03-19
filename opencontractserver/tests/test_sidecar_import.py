@@ -404,7 +404,9 @@ class TestSidecarImportTask(TestCase):
         self.assertEqual(doc_paths.count(), 1)
 
         corpus_doc = doc_paths.first().document
-        self.assertFalse(corpus_doc.backend_lock)
+        # backend_lock remains True until the pipeline finishes processing;
+        # sidecar annotations are additive and don't control the lock
+        self.assertTrue(corpus_doc.backend_lock)
 
         # Verify text annotations exist on the corpus document
         text_annotations = Annotation.objects.filter(
@@ -645,11 +647,12 @@ class TestSidecarImportTask(TestCase):
         self.assertEqual(annotations_qs.count(), 1)
         self.assertEqual(annotations_qs.first().raw_text, "Article I")
 
-    def test_sidecar_without_labels_file_uses_existing_labels(self):
+    def test_sidecar_without_labels_file_warns_and_skips_annotations(self):
         """
-        When no labels.json is present but the corpus already has
-        matching labels, annotations should still import if the
-        labels pre-exist.
+        When no labels.json is present but the sidecar has annotations,
+        the document is still created via the pipeline but sidecar
+        annotations are skipped with a warning (labels needed to resolve
+        annotation label references).
         """
         from opencontractserver.tasks.import_tasks import (
             import_zip_with_folder_structure,
@@ -664,9 +667,6 @@ class TestSidecarImportTask(TestCase):
         self.corpus.label_set = label_set
         self.corpus.save(update_fields=["label_set"])
 
-        # Without labels.json, sidecars are found but label_lookup is empty,
-        # so the sidecar path won't be taken (guard: `sidecar_path and label_lookup`)
-        # The document should fall through to the pipeline path
         annotations = [
             _make_annotation(
                 annot_id=1,
@@ -680,7 +680,7 @@ class TestSidecarImportTask(TestCase):
         files = {
             "doc.pdf": self.pdf_bytes,
             "doc.json": json.dumps(sidecar).encode("utf-8"),
-            # No labels.json - sidecar detected but no label_lookup
+            # No labels.json - sidecar detected but no labels available
         }
 
         zip_buffer = self._create_test_zip(files)
@@ -696,12 +696,18 @@ class TestSidecarImportTask(TestCase):
         ).get()
 
         self.assertTrue(result["completed"], f"Errors: {result.get('errors')}")
-        # Sidecar was found but labels file wasn't, so sidecar path is skipped
+        # Sidecar was found but labels file wasn't
         self.assertEqual(result["annotation_sidecars_found"], 1)
         self.assertFalse(result["labels_file_found"])
-        # The doc went through the pipeline path instead
-        self.assertEqual(result["annotation_sidecars_processed"], 0)
+        # Sidecar is processed but annotations are skipped (no labels)
+        self.assertEqual(result["annotation_sidecars_processed"], 1)
+        self.assertEqual(result["annotations_imported"], 0)
         self.assertEqual(result["files_processed"], 1)
+        # Warning should be in errors
+        self.assertTrue(
+            any("annotations skipped" in e for e in result["errors"]),
+            f"Expected warning about skipped annotations, got: {result['errors']}",
+        )
 
     def test_multiple_annotated_documents(self):
         """Import multiple annotated documents in one zip."""
