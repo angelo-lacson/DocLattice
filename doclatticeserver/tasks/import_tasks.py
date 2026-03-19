@@ -137,7 +137,7 @@ def import_document_to_corpus(
         )
 
         # Import all annotations onto the corpus copy using shared helper
-        import_doc_annotations(
+        _annot_id_map, _doc_labels_count = import_doc_annotations(
             doc_data=doc_data,
             corpus_doc=corpus_doc,
             corpus_obj=corpus_obj,
@@ -580,7 +580,7 @@ def _apply_sidecar_annotations(
                 f"Sidecar {sidecar_path} has annotations but no labels "
                 f"available — annotations skipped"
             )
-            results["annotation_sidecars_processed"] += 1
+            results["annotation_sidecars_errored"] += 1
             return
 
         # Import annotations onto the corpus document
