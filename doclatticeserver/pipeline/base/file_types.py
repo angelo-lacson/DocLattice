@@ -24,6 +24,12 @@ LEGACY_MIME_ALIASES: dict[str, str] = {
 }
 
 
+if len(FILE_TYPE_TO_MIME) != len(MIME_TO_FILE_TYPE):
+    raise ValueError(
+        "MIME_TO_FILE_TYPE has duplicate values — each file type must map to a unique MIME type"
+    )
+
+
 class FileTypeEnum(str, Enum):
     PDF = "pdf"
     TXT = "txt"
@@ -65,3 +71,10 @@ class FileTypeEnum(str, Enum):
     def label(self) -> str:
         """Return a human-readable label for this file type."""
         return FILE_TYPE_LABELS.get(self.value, self.value.upper())
+
+
+# Enforce that every FileTypeEnum member has a MIME mapping at import time,
+# so the .mimetype property can never raise KeyError at runtime.
+_missing = {ft.value for ft in FileTypeEnum} - set(FILE_TYPE_TO_MIME)
+if _missing:
+    raise ValueError(f"FileTypeEnum members missing from MIME_TO_FILE_TYPE: {_missing}")

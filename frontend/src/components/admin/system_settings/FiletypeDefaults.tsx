@@ -1,5 +1,5 @@
 import React, { memo, useMemo, useCallback } from "react";
-import { Button } from "@os-legal/ui";
+import { Button, Spinner } from "@os-legal/ui";
 import { AlertTriangle, FileText, Cpu, Settings } from "lucide-react";
 import {
   PipelineComponentType,
@@ -8,6 +8,7 @@ import {
 import { getComponentDisplayName } from "../PipelineIcons";
 import { StageType } from "./types";
 import { isComponentAvailable } from "./utils";
+import { PARTIALLY_SUPPORTED_WARNING_COLOR } from "../../../assets/configurations/constants";
 import {
   Section,
   SectionHeader,
@@ -36,6 +37,7 @@ interface FiletypeDefaultsProps {
     thumbnailers: (PipelineComponentType & { className: string })[];
   };
   supportedMimeTypes: SupportedMimeTypeType[];
+  mimeTypesLoading?: boolean;
   enabledComponents: string[];
   preferredParsers: Record<string, string>;
   preferredEmbedders: Record<string, string>;
@@ -68,6 +70,7 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
   ({
     components,
     supportedMimeTypes,
+    mimeTypesLoading,
     enabledComponents,
     preferredParsers,
     preferredEmbedders,
@@ -136,6 +139,23 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
           </DefaultsHeaderRow>
 
           {/* One row per MIME type */}
+          {mimeTypesLoading && supportedMimeTypes.length === 0 ? (
+            <FiletypeRow>
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.5rem",
+                  padding: "1rem",
+                }}
+              >
+                <Spinner size="sm" />
+                <span>Loading file types...</span>
+              </div>
+            </FiletypeRow>
+          ) : null}
           {supportedMimeTypes.map((mime) => {
             return (
               <FiletypeRow key={mime.mimetype}>
@@ -144,7 +164,9 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
                     <FileText />
                   ) : (
                     <span title="Partially supported: missing pipeline components for some stages">
-                      <AlertTriangle style={{ color: "#D69E2E" }} />
+                      <AlertTriangle
+                        style={{ color: PARTIALLY_SUPPORTED_WARNING_COLOR }}
+                      />
                     </span>
                   )}
                   {mime.label}
