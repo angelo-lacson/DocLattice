@@ -152,9 +152,10 @@ export async function getCachedPDFUrl(
 }
 
 /**
- * In-memory cache for DOCX bytes, keyed by URL to avoid refetching on Apollo refetch.
- * Capped at 3 entries to bound memory usage; oldest entry (first Map key) is evicted
- * when the limit is reached. Each entry is also garbage-collected on page refresh.
+ * In-memory LRU cache for DOCX bytes, keyed by URL to avoid refetching on Apollo
+ * refetch. Capped at DOCX_CACHE_MAX_ENTRIES; least-recently-used entry is evicted
+ * when the limit is reached. Uses Map insertion-order semantics: a cache hit
+ * deletes and re-inserts the entry so it becomes the most recent.
  */
 const docxBytesCache = new Map<string, Uint8Array>();
 
@@ -164,16 +165,21 @@ const docxBytesCache = new Map<string, Uint8Array>();
  */
 export async function getDocxBytes(url: string): Promise<Uint8Array> {
   const cached = docxBytesCache.get(url);
-  if (cached) return cached;
+  if (cached) {
+    // Promote to most-recently-used by re-inserting
+    docxBytesCache.delete(url);
+    docxBytesCache.set(url, cached);
+    return cached;
+  }
 
   const response = await axios.get(url, { responseType: "arraybuffer" });
   const bytes = new Uint8Array(response.data);
 
-  // Evict oldest entry if cache is at capacity
+  // Evict least-recently-used entry if cache is at capacity
   if (docxBytesCache.size >= DOCX_CACHE_MAX_ENTRIES) {
-    const oldestKey = docxBytesCache.keys().next().value;
-    if (oldestKey !== undefined) {
-      docxBytesCache.delete(oldestKey);
+    const lruKey = docxBytesCache.keys().next().value;
+    if (lruKey !== undefined) {
+      docxBytesCache.delete(lruKey);
     }
   }
 

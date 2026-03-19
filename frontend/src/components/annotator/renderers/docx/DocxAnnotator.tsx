@@ -79,9 +79,10 @@ const PROJECTION_SETTINGS: ExternalAnnotationProjectionSettings = {
   cssClassPrefix: CSS_CLASS_PREFIX,
   labelMode: AnnotationLabelMode.Tooltip,
   includeMetadata: true,
-  // Validation disabled because both backend (Docxodus microservice) and frontend
-  // (Docxodus WASM) use the same library, guaranteeing character offset alignment.
-  validateBeforeProjection: false,
+  // Both backend (Docxodus microservice) and frontend (Docxodus WASM) use the same
+  // library, so offsets should align. Validation is kept enabled as a safety net in
+  // case the two sides drift to different versions.
+  validateBeforeProjection: true,
 };
 
 interface DocxAnnotatorProps {

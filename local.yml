@@ -74,11 +74,9 @@ services:
     container_name: docling-parser
 
   docxodus-parser:
-    # WARNING: :main is a mutable tag. The frontend WASM (docxodus@5.5.0 in
-    # package.json) and this microservice must use the same Docxodus version for
-    # character offset alignment. Pin to a semver tag (e.g., :v5.5.0) once
-    # published to guarantee alignment.
-    image: ghcr.io/open-source-legal/docxodus-service:main
+    # The frontend WASM (docxodus@5.5.0 in package.json) and this microservice
+    # must use the same Docxodus version for character offset alignment.
+    image: ghcr.io/open-source-legal/docxodus-service:v1.0.0
     container_name: docxodus-parser
 
   vector-embedder:
