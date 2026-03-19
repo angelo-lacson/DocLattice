@@ -26,6 +26,7 @@ from doclatticeserver.corpuses.models import Corpus, TemporaryFileHandle
 from doclatticeserver.documents.models import Document
 from doclatticeserver.types.dicts import DocLatticeAnnotatedDocumentImportType
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.compact_pawls import compact_pawls_pages
 from doclatticeserver.utils.files import is_plaintext_content
 from doclatticeserver.utils.importing import (
     import_doc_annotations,
@@ -109,7 +110,9 @@ def import_document_to_corpus(
 
         doc_data = document_import_data["doc_data"]
         pawls_parse_file = ContentFile(
-            json.dumps(doc_data["pawls_file_content"]).encode("utf-8"),
+            json.dumps(compact_pawls_pages(doc_data["pawls_file_content"])).encode(
+                "utf-8"
+            ),
             name="pawls_tokens.json",
         )
 

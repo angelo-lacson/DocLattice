@@ -35,6 +35,7 @@ from doclatticeserver.types.dicts import (
     DocLatticeRelationshipPythonType,
     StructuralAnnotationSetExport,
 )
+from doclatticeserver.utils.compact_pawls import expand_pawls_pages
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -59,7 +60,7 @@ def package_structural_annotation_set(
         pawls_content = []
         if structural_set.pawls_parse_file:
             with structural_set.pawls_parse_file.open("r") as f:
-                pawls_content = json.load(f)
+                pawls_content = expand_pawls_pages(json.load(f))
 
         # Read text extract
         txt_content = ""
