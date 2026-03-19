@@ -52,6 +52,7 @@ def _build_sidecar_json(
     annotations: list[dict] | None = None,
     doc_labels: list[str] | None = None,
     relationships: list[dict] | None = None,
+    skip_pipeline: bool = False,
 ) -> dict:
     """
     Build a realistic OpenContractDocExport dict using real fixture data.
@@ -81,6 +82,9 @@ def _build_sidecar_json(
 
     if relationships is not None:
         result["relationships"] = relationships
+
+    if skip_pipeline:
+        result["skip_pipeline"] = True
 
     return result
 
@@ -1014,7 +1018,7 @@ class TestSidecarImportTask(TestCase):
         self.assertEqual(result["annotation_sidecars_errored"], 1)
         self.assertEqual(result["annotation_sidecars_processed"], 0)
         self.assertTrue(
-            any("Sidecar annotation error" in e for e in result["errors"]),
+            any("Sidecar read error" in e for e in result["errors"]),
             f"Expected sidecar error message, got: {result['errors']}",
         )
 
@@ -1114,3 +1118,108 @@ class TestSidecarImportTask(TestCase):
         self.assertEqual(result["annotations_imported"], 2)
         # Relationship with missing label should be skipped (not crash)
         self.assertEqual(Relationship.objects.filter(corpus=self.corpus).count(), 0)
+
+    def test_skip_pipeline_creates_document_from_export_data(self):
+        """
+        When the sidecar contains skip_pipeline=True, the document is created
+        directly from the sidecar's export data — no parser pipeline triggered.
+        PAWLs data, text content, and annotations all come from the sidecar.
+        """
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        annotations = [
+            _make_annotation(1, "Section Title", "Heading", 0, 0, 1),
+        ]
+        sidecar = _build_sidecar_json(
+            title="Pipeline-Skipped Doc",
+            annotations=annotations,
+            skip_pipeline=True,
+        )
+
+        labels = _build_labels_json(
+            text_labels={"Heading": _make_label_data("Heading")},
+        )
+
+        files = {
+            "doc.pdf": self.pdf_bytes,
+            "doc.json": json.dumps(sidecar).encode("utf-8"),
+            "labels.json": json.dumps(labels).encode("utf-8"),
+        }
+
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-skip-pipeline",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["completed"], f"Errors: {result.get('errors')}")
+        self.assertTrue(result["success"], f"Errors: {result.get('errors')}")
+        self.assertEqual(result["files_processed"], 1)
+        self.assertEqual(result["pipeline_skipped"], 1)
+        self.assertEqual(result["annotation_sidecars_processed"], 1)
+        self.assertEqual(result["annotations_imported"], 1)
+
+        # Verify the document was created with sidecar content
+        from opencontractserver.documents.models import Document
+
+        doc_id = int(result["document_ids"][0])
+        doc = Document.objects.get(pk=doc_id)
+        # Document should NOT be backend_locked (pipeline was skipped, not pending)
+        self.assertFalse(doc.backend_lock)
+        # PAWLs data should be populated from the sidecar
+        self.assertTrue(bool(doc.pawls_parse_file))
+        # Text content should be populated from the sidecar
+        self.assertTrue(bool(doc.txt_extract_file))
+
+    def test_skip_pipeline_false_uses_pipeline(self):
+        """
+        When skip_pipeline is absent or False, the document goes through
+        the pipeline as normal (additive behavior).
+        """
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        annotations = [
+            _make_annotation(1, "Section Title", "Heading", 0, 0, 1),
+        ]
+        # skip_pipeline defaults to False
+        sidecar = _build_sidecar_json(annotations=annotations)
+
+        labels = _build_labels_json(
+            text_labels={"Heading": _make_label_data("Heading")},
+        )
+
+        files = {
+            "doc.pdf": self.pdf_bytes,
+            "doc.json": json.dumps(sidecar).encode("utf-8"),
+            "labels.json": json.dumps(labels).encode("utf-8"),
+        }
+
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-no-skip-pipeline",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["completed"], f"Errors: {result.get('errors')}")
+        self.assertEqual(result["files_processed"], 1)
+        # Pipeline was NOT skipped
+        self.assertEqual(result["pipeline_skipped"], 0)
+        # Sidecar annotations still applied (additively)
+        self.assertEqual(result["annotation_sidecars_processed"], 1)
+        self.assertEqual(result["annotations_imported"], 1)
