@@ -425,10 +425,10 @@ class TestSupportedMimeTypes(TestCase):
         self.assertIn("pdf", by_file_type)
         self.assertTrue(by_file_type["pdf"]["stage_coverage"]["parser"])
 
-    def test_get_allowed_mime_types_returns_list(self):
-        """get_allowed_mime_types should return a list of MIME type strings."""
+    def test_get_allowed_mime_types_returns_sequence(self):
+        """get_allowed_mime_types should return a sequence of MIME type strings."""
         allowed = get_allowed_mime_types()
-        self.assertIsInstance(allowed, list)
+        self.assertIsInstance(allowed, (list, tuple))
         for mime in allowed:
             self.assertIsInstance(mime, str)
             self.assertIn("/", mime)

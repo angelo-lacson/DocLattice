@@ -16,7 +16,12 @@ from config.graphql.graphene_types import (
     StageCoverageType,
     SupportedMimeTypeType,
 )
-from opencontractserver.pipeline.registry import get_supported_mime_types
+from opencontractserver.pipeline.base.file_types import FILE_TYPE_TO_MIME
+from opencontractserver.pipeline.registry import (
+    get_all_components_cached,
+    get_components_by_mimetype_cached,
+    get_supported_mime_types,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,14 +53,7 @@ class PipelineQueryMixin:
         Returns:
             PipelineComponentsType: The pipeline components grouped by type.
         """
-        from opencontractserver.pipeline.registry import (
-            get_all_components_cached,
-            get_components_by_mimetype_cached,
-        )
-
         if mimetype:
-            from opencontractserver.pipeline.base.file_types import FILE_TYPE_TO_MIME
-
             mime_type_str = FILE_TYPE_TO_MIME.get(mimetype.value)
 
             # Get compatible components from cached registry
@@ -173,8 +171,9 @@ class PipelineQueryMixin:
     supported_mime_types = graphene.List(
         SupportedMimeTypeType,
         description="Dynamically derived list of MIME types supported by registered "
-        "pipeline components. Each entry indicates whether all required "
-        "pipeline stages (parser, embedder, thumbnailer) are available.",
+        "pipeline components. Each entry indicates per-stage availability "
+        "(parser, embedder, thumbnailer) and whether required stages "
+        "(parser and embedder) are covered.",
     )
 
     @login_required

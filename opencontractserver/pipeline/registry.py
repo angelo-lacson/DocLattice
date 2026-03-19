@@ -515,14 +515,8 @@ def get_all_components_cached() -> dict[str, tuple[PipelineComponentDefinition, 
     }
 
 
-# Process-level caches — cleared only by reset_registry(). If components are
-# registered or removed at runtime (e.g. via admin UI), call reset_registry()
-# to invalidate. Same lifecycle as the @lru_cache on get_registry().
-_supported_mime_types_cache: list[dict[str, object]] | None = None
-_allowed_mime_types_cache: list[str] | None = None
-
-
-def get_supported_mime_types() -> list[dict[str, object]]:
+@lru_cache(maxsize=None)
+def get_supported_mime_types() -> tuple[dict[str, object], ...]:
     """
     Derive supported MIME types dynamically from registered pipeline components.
 
@@ -530,17 +524,15 @@ def get_supported_mime_types() -> list[dict[str, object]]:
     for each required pipeline stage: parser and embedder. Thumbnailer coverage
     is informational but not required for upload acceptance.
 
-    Returns a list of dicts, each containing:
+    Thread-safe via @lru_cache. Cleared by reset_registry().
+
+    Returns a tuple of dicts, each containing:
         - mimetype: canonical MIME type string
         - file_type: short label (e.g. "pdf")
         - label: human-readable label (e.g. "PDF")
         - fully_supported: True if all required stages have at least one component
         - stage_coverage: dict of stage -> bool indicating availability
     """
-    global _supported_mime_types_cache
-    if _supported_mime_types_cache is not None:
-        return _supported_mime_types_cache
-
     registry = get_registry()
     result = []
 
@@ -552,15 +544,16 @@ def get_supported_mime_types() -> list[dict[str, object]]:
             continue
 
         has_parser = len(registry.get_parsers_for_filetype(ft_value)) > 0
-        # TODO: Embedders currently work on all text types (not filtered by
-        # file type). If a file-type-specific embedder is added, this check
-        # should be updated to query per-file-type coverage.
-        has_embedder = len(registry.embedders) > 0
+        # TODO(#1119): Embedders currently work on all text types (not filtered
+        # by file type). If a file-type-specific embedder is added, update this
+        # check to query per-file-type coverage. Until then, has_embedder is
+        # True whenever *any* embedder is registered.
+        has_any_embedder = len(registry.embedders) > 0
         has_thumbnailer = len(registry.get_thumbnailers_for_filetype(ft_value)) > 0
 
         stage_coverage = {
             "parser": has_parser,
-            "embedder": has_embedder,
+            "embedder": has_any_embedder,
             "thumbnailer": has_thumbnailer,
         }
 
@@ -569,27 +562,25 @@ def get_supported_mime_types() -> list[dict[str, object]]:
                 "mimetype": mime,
                 "file_type": ft_value,
                 "label": FILE_TYPE_LABELS.get(ft_value, ft_value.upper()),
-                "fully_supported": has_parser and has_embedder,
+                "fully_supported": has_parser and has_any_embedder,
                 "stage_coverage": stage_coverage,
             }
         )
 
-    _supported_mime_types_cache = result
-    return result
+    return tuple(result)
 
 
-def get_allowed_mime_types() -> list[str]:
+@lru_cache(maxsize=None)
+def get_allowed_mime_types() -> tuple[str, ...]:
     """
-    Return the list of MIME types that are fully supported by the pipeline.
+    Return the MIME types that are fully supported by the pipeline.
 
     This replaces the static settings.ALLOWED_DOCUMENT_MIMETYPES with a
     dynamically-derived list based on registered pipeline components.
     Includes legacy MIME type aliases for backward compatibility.
-    """
-    global _allowed_mime_types_cache
-    if _allowed_mime_types_cache is not None:
-        return _allowed_mime_types_cache
 
+    Thread-safe via @lru_cache. Cleared by reset_registry().
+    """
     supported = get_supported_mime_types()
     allowed = [entry["mimetype"] for entry in supported if entry["fully_supported"]]
 
@@ -598,8 +589,7 @@ def get_allowed_mime_types() -> list[str]:
         if canonical in allowed and legacy not in allowed:
             allowed.append(legacy)
 
-    _allowed_mime_types_cache = allowed
-    return allowed
+    return tuple(allowed)
 
 
 def reset_registry() -> None:
@@ -608,9 +598,8 @@ def reset_registry() -> None:
 
     Useful for testing or if components are dynamically added.
     """
-    global _supported_mime_types_cache, _allowed_mime_types_cache
     PipelineComponentRegistry._instance = None
     PipelineComponentRegistry._initialized = False
     get_registry.cache_clear()
-    _supported_mime_types_cache = None
-    _allowed_mime_types_cache = None
+    get_supported_mime_types.cache_clear()
+    get_allowed_mime_types.cache_clear()
