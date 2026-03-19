@@ -102,7 +102,12 @@ def import_annotations(
     # First pass: Create annotations without parents
     for annotation_data in annotations_data:
         label_name: str = annotation_data["annotationLabel"]
-        label_obj = label_lookup[label_name]
+        label_obj = label_lookup.get(label_name)
+        if label_obj is None:
+            logger.warning(
+                f"Skipping annotation: label '{label_name}' not found in label_lookup"
+            )
+            continue
 
         # Ensure annotation_type is never None by falling back to label_type
         # if the field is missing or explicitly None
@@ -194,7 +199,12 @@ def import_relationships(
     for relationship_data in relationships_data:
         label_name = relationship_data["relationshipLabel"]
         structural = relationship_data.get("structural", False)
-        label_obj = label_lookup[label_name]
+        label_obj = label_lookup.get(label_name)
+        if label_obj is None:
+            logger.warning(
+                f"Skipping relationship: label '{label_name}' not found in label_lookup"
+            )
+            continue
 
         new_relationship = Relationship.objects.create(
             relationship_label=label_obj,

@@ -583,6 +583,11 @@ def _apply_sidecar_annotations(
             results["annotation_sidecars_processed"] += 1
             return
 
+        # Count doc-level annotations that will be created
+        doc_labels_created = sum(
+            1 for name in doc_data.get("doc_labels", []) if doc_label_lookup.get(name)
+        )
+
         # Import annotations onto the corpus document
         annot_id_map = import_doc_annotations(
             doc_data=doc_data,
@@ -592,7 +597,7 @@ def _apply_sidecar_annotations(
             label_lookup=label_lookup,
             doc_label_lookup=doc_label_lookup,
         )
-        results["annotations_imported"] += len(annot_id_map)
+        results["annotations_imported"] += len(annot_id_map) + doc_labels_created
 
         # Import intra-document relationships from the sidecar
         relationships_data = doc_data.get("relationships", [])
@@ -872,8 +877,9 @@ def import_zip_with_folder_structure(
             # These are needed when importing annotation sidecars
             label_lookup: dict[str, "AnnotationLabel"] = {}
             doc_label_lookup: dict[str, "AnnotationLabel"] = {}
-            if manifest.labels_file and manifest.annotation_sidecars:
+            if manifest.labels_file:
                 results["labels_file_found"] = True
+            if manifest.labels_file and manifest.annotation_sidecars:
                 try:
                     with import_zip.open(manifest.labels_file) as labels_handle:
                         labels_data = json.loads(labels_handle.read().decode("UTF-8"))

@@ -397,7 +397,7 @@ class TestSidecarImportTask(TestCase):
         self.assertEqual(result["annotation_sidecars_errored"], 0)
 
         # Verify annotations were created (2 text + 1 doc-level)
-        self.assertEqual(result["annotations_imported"], 2)
+        self.assertEqual(result["annotations_imported"], 3)
 
         # Verify document exists in corpus
         doc_paths = DocumentPath.objects.filter(corpus=self.corpus)
@@ -658,7 +658,9 @@ class TestSidecarImportTask(TestCase):
             import_zip_with_folder_structure,
         )
 
-        # Pre-create a label set with matching labels on the corpus
+        # Attach a pre-existing label set to ensure the auto-creation code
+        # path is NOT exercised here — this test only verifies the
+        # "sidecar without labels.json" warning, not label set creation.
         label_set = LabelSet.objects.create(
             title="Pre-existing labels",
             creator=self.user,
