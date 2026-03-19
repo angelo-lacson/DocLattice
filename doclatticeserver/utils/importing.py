@@ -347,7 +347,7 @@ def import_doc_annotations(
     user_id: int,
     label_lookup: dict[str, AnnotationLabel],
     doc_label_lookup: dict[str, AnnotationLabel],
-) -> dict[str | int, int]:
+) -> tuple[dict[str | int, int], int]:
     """
     Import both document-level and text-level annotations for a document.
 
@@ -360,9 +360,12 @@ def import_doc_annotations(
         doc_label_lookup: Doc-type label lookup keyed by label text.
 
     Returns:
-        Mapping of old annotation IDs to new annotation PKs.
+        Tuple of (annot_id_map, doc_labels_created) where:
+        - annot_id_map: Mapping of old annotation IDs to new annotation PKs.
+        - doc_labels_created: Number of doc-level annotations actually created.
     """
     # Import document-level annotations
+    doc_labels_created = 0
     for doc_label_name in doc_data.get("doc_labels", []):
         label_obj = doc_label_lookup.get(doc_label_name)
         if label_obj:
@@ -374,6 +377,7 @@ def import_doc_annotations(
                 creator_id=user_id,
             )
             set_permissions_for_obj_to_user(user_id, annot_obj, [PermissionTypes.ALL])
+            doc_labels_created += 1
 
     # Import text annotations
     annot_id_map = import_annotations(
@@ -385,4 +389,4 @@ def import_doc_annotations(
         label_type=TOKEN_LABEL,
     )
 
-    return annot_id_map
+    return annot_id_map, doc_labels_created
