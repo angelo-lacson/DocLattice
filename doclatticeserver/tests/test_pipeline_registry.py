@@ -389,6 +389,12 @@ class TestCreateDefinitionSettingsSchemaError(TestCase):
 class TestSupportedMimeTypes(TestCase):
     """Tests for get_supported_mime_types() and get_allowed_mime_types()."""
 
+    def setUp(self):
+        reset_registry()
+
+    def tearDown(self):
+        reset_registry()
+
     def test_get_supported_mime_types_returns_all_file_types(self):
         """Every FileTypeEnum member should appear in the result."""
         from doclatticeserver.pipeline.base.file_types import FileTypeEnum
@@ -415,13 +421,14 @@ class TestSupportedMimeTypes(TestCase):
     def test_get_supported_mime_types_pdf_has_parser(self):
         """PDF should have at least one parser available."""
         result = get_supported_mime_types()
-        pdf_entry = next(e for e in result if e["file_type"] == "pdf")
-        self.assertTrue(pdf_entry["stage_coverage"]["parser"])
+        by_file_type = {e["file_type"]: e for e in result}
+        self.assertIn("pdf", by_file_type)
+        self.assertTrue(by_file_type["pdf"]["stage_coverage"]["parser"])
 
-    def test_get_allowed_mime_types_returns_list(self):
-        """get_allowed_mime_types should return a list of MIME type strings."""
+    def test_get_allowed_mime_types_returns_sequence(self):
+        """get_allowed_mime_types should return a sequence of MIME type strings."""
         allowed = get_allowed_mime_types()
-        self.assertIsInstance(allowed, list)
+        self.assertIsInstance(allowed, (list, tuple))
         for mime in allowed:
             self.assertIsInstance(mime, str)
             self.assertIn("/", mime)
@@ -433,12 +440,16 @@ class TestSupportedMimeTypes(TestCase):
         if "text/plain" in allowed:
             self.assertIn("application/txt", allowed)
 
-    def test_fully_supported_requires_all_stages(self):
-        """A file type is fully_supported only if all stages have components."""
+    def test_fully_supported_requires_parser_and_embedder(self):
+        """A file type is fully_supported if it has a parser and embedder.
+
+        Thumbnailer is optional — file types without a thumbnailer (e.g. DOCX)
+        are still uploadable and processable.
+        """
         result = get_supported_mime_types()
         for entry in result:
             coverage = entry["stage_coverage"]
-            expected = all(coverage.values())
+            expected = coverage["parser"] and coverage["embedder"]
             self.assertEqual(
                 entry["fully_supported"],
                 expected,

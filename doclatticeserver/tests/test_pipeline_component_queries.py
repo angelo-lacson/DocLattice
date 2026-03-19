@@ -643,11 +643,12 @@ class TestPostProcessor(BasePostProcessor):
         self.assertTrue(txt_entry["stageCoverage"]["parser"])
         self.assertTrue(txt_entry["stageCoverage"]["embedder"])
 
-        # DOCX has no thumbnailer, so should not be fully supported
+        # DOCX has no thumbnailer but is still fully supported
+        # (fully_supported requires parser + embedder only)
         self.assertIn("docx", by_file_type)
         docx_entry = by_file_type["docx"]
         self.assertFalse(docx_entry["stageCoverage"]["thumbnailer"])
-        self.assertFalse(docx_entry["fullySupported"])
+        self.assertTrue(docx_entry["fullySupported"])
 
     def test_supported_mime_types_requires_auth(self):
         """Test that supportedMimeTypes requires authentication."""

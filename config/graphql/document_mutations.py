@@ -38,6 +38,7 @@ from doclatticeserver.constants.zip_import import ZIP_MAX_TOTAL_SIZE_BYTES
 from doclatticeserver.corpuses.models import Corpus, CorpusFolder, TemporaryFileHandle
 from doclatticeserver.documents.models import Document, DocumentPath
 from doclatticeserver.extracts.models import Extract
+from doclatticeserver.pipeline.registry import get_allowed_mime_types
 from doclatticeserver.tasks import (
     build_label_lookups_task,
     burn_doc_annotations,
@@ -163,8 +164,6 @@ class UploadDocument(graphene.Mutation):
                     )
             else:
                 kind = kind.mime
-
-            from doclatticeserver.pipeline.registry import get_allowed_mime_types
 
             if kind not in get_allowed_mime_types():
                 return UploadDocument(

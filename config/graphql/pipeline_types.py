@@ -156,8 +156,9 @@ class SupportedMimeTypeType(graphene.ObjectType):
     )
     fully_supported = graphene.Boolean(
         required=True,
-        description="Whether all required pipeline stages (parser, embedder, thumbnailer) "
-        "have at least one component for this file type.",
+        description="Whether the required pipeline stages (parser and embedder) "
+        "have at least one component for this file type. "
+        "Thumbnailer is optional — file types without one are still uploadable.",
     )
     stage_coverage = graphene.Field(
         StageCoverageType,

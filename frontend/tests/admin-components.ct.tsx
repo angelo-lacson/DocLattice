@@ -640,7 +640,7 @@ const mockSupportedMimeTypes = [
     mimetype:
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     fileType: "docx",
-    label: "DOCX",
+    label: "Word Document",
     fullySupported: true,
     stageCoverage: { parser: true, embedder: true, thumbnailer: false },
   },
@@ -1361,7 +1361,7 @@ test.describe("SystemSettings Component", () => {
     // Check MIME type labels (from supportedMimeTypes mock data)
     await expect(page.locator("text=PDF").first()).toBeVisible();
     await expect(page.locator("text=Plain Text").first()).toBeVisible();
-    await expect(page.locator("text=DOCX").first()).toBeVisible();
+    await expect(page.locator("text=Word Document").first()).toBeVisible();
 
     // Check select dropdowns exist (3 MIME types x 3 stages = 9 minimum)
     const selects = page.locator("select").filter({ visible: true });
