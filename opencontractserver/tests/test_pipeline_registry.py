@@ -389,6 +389,12 @@ class TestCreateDefinitionSettingsSchemaError(TestCase):
 class TestSupportedMimeTypes(TestCase):
     """Tests for get_supported_mime_types() and get_allowed_mime_types()."""
 
+    def setUp(self):
+        reset_registry()
+
+    def tearDown(self):
+        reset_registry()
+
     def test_get_supported_mime_types_returns_all_file_types(self):
         """Every FileTypeEnum member should appear in the result."""
         from opencontractserver.pipeline.base.file_types import FileTypeEnum
@@ -433,12 +439,16 @@ class TestSupportedMimeTypes(TestCase):
         if "text/plain" in allowed:
             self.assertIn("application/txt", allowed)
 
-    def test_fully_supported_requires_all_stages(self):
-        """A file type is fully_supported only if all stages have components."""
+    def test_fully_supported_requires_parser_and_embedder(self):
+        """A file type is fully_supported if it has a parser and embedder.
+
+        Thumbnailer is optional — file types without a thumbnailer (e.g. DOCX)
+        are still uploadable and processable.
+        """
         result = get_supported_mime_types()
         for entry in result:
             coverage = entry["stage_coverage"]
-            expected = all(coverage.values())
+            expected = coverage["parser"] and coverage["embedder"]
             self.assertEqual(
                 entry["fully_supported"],
                 expected,
