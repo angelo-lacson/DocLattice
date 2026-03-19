@@ -374,6 +374,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   const [dragStartWidth, setDragStartWidth] = useState(0);
   const [isMinimized, setIsMinimized] = useState(false);
   const documentAreaRef = useRef<HTMLDivElement>(null);
+  const docxLoadCancelRef = useRef<() => void>(() => {});
 
   const [showGraph, setShowGraph] = useState(false);
 
@@ -720,6 +721,13 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     }) => {
       if (!doc.pdfFile) return;
 
+      // Cancel any in-flight DOCX load to prevent stale state updates
+      docxLoadCancelRef.current();
+      let cancelled = false;
+      docxLoadCancelRef.current = () => {
+        cancelled = true;
+      };
+
       setViewState(ViewState.LOADING);
       setDocxBytes(null);
 
@@ -734,6 +742,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
       Promise.all([docxPromise, textPromise])
         .then(([bytes, txt]) => {
+          if (cancelled) return;
           routingLogger.debug(
             "[DOCX Load] Batching DOCX completion state updates"
           );
@@ -745,6 +754,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           routingLogger.debug("=== DOCUMENT LOAD COMPLETE ===");
         })
         .catch((err) => {
+          if (cancelled) return;
           setViewState(ViewState.ERROR);
           routingLogger.debug("=== DOCUMENT LOAD FAILED ===");
           toast.error(
@@ -805,6 +815,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   /* Reset DOCX bytes on unmount to avoid stale WASM data when navigating away */
   useEffect(() => {
     return () => {
+      docxLoadCancelRef.current();
       setDocxBytes(null);
     };
   }, [setDocxBytes]);

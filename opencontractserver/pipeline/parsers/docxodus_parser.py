@@ -71,6 +71,16 @@ class DocxodusServiceParser(BaseParser):
                 )
             },
         )
+        max_file_size_mb: int = field(
+            default=50,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description="Maximum DOCX file size in MB before base64 encoding",
+                    env_var="DOCXODUS_MAX_FILE_SIZE_MB",
+                )
+            },
+        )
 
     def __init__(self):
         """Initialize the Docxodus REST parser with settings from PipelineSettings."""
@@ -79,6 +89,7 @@ class DocxodusServiceParser(BaseParser):
         self.service_url = s.service_url
         self.request_timeout = s.request_timeout
         self.use_cloud_run_iam_auth = s.use_cloud_run_iam_auth
+        self.max_file_size_mb = s.max_file_size_mb
 
         logger.info(
             f"DocxodusServiceParser initialized with service URL: {self.service_url}"
@@ -113,6 +124,16 @@ class DocxodusServiceParser(BaseParser):
         # Read DOCX bytes from storage
         with default_storage.open(document.pdf_file.name, "rb") as f:
             docx_bytes = f.read()
+
+        # Reject files exceeding the configured size limit
+        file_size_mb = len(docx_bytes) / (1024 * 1024)
+        if file_size_mb > self.max_file_size_mb:
+            raise DocumentParsingError(
+                f"DOCX file for document {doc_id} is {file_size_mb:.1f} MB, "
+                f"exceeding the {self.max_file_size_mb} MB limit. "
+                f"Adjust DOCXODUS_MAX_FILE_SIZE_MB to increase the limit.",
+                is_transient=False,
+            )
 
         # Base64-encode for JSON transport
         docx_base64 = base64.b64encode(docx_bytes).decode("utf-8")

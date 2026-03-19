@@ -3,8 +3,8 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import {
   DocxAnnotatorTestWrapper,
   DocxAnnotatorEditableWrapper,
+  sampleDocText,
 } from "./DocxAnnotatorTestWrapper";
-import { sampleDocText } from "./DocxAnnotatorTestWrapper";
 import { docScreenshot } from "./utils/docScreenshot";
 import { setupDocxodusWasm } from "./utils/docxodusWasm";
 import { setupDocxFixture } from "./utils/docxFixture";

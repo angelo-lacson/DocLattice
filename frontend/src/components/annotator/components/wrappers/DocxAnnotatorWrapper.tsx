@@ -49,7 +49,7 @@ interface DocxAnnotatorWrapperProps {
   allowInput: boolean;
 }
 
-export const DocxAnnotatorWrapper: React.FC<DocxAnnotatorWrapperProps> = ({
+const DocxAnnotatorWrapper: React.FC<DocxAnnotatorWrapperProps> = ({
   readOnly,
   allowInput,
 }) => {
