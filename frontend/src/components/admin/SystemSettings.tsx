@@ -178,7 +178,7 @@ export const SystemSettings: React.FC = () => {
 
   const { data: mimeTypesData, loading: mimeTypesLoading } =
     useQuery<SupportedMimeTypesQueryResult>(GET_SUPPORTED_MIME_TYPES, {
-      fetchPolicy: "cache-and-network",
+      fetchPolicy: "cache-first",
     });
 
   // Mutations

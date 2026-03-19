@@ -8,6 +8,7 @@ import {
 import { getComponentDisplayName } from "../PipelineIcons";
 import { StageType } from "./types";
 import { isComponentAvailable } from "./utils";
+import { PARTIALLY_SUPPORTED_WARNING_COLOR } from "../../../assets/configurations/constants";
 import {
   Section,
   SectionHeader,
@@ -163,7 +164,9 @@ export const FiletypeDefaults = memo<FiletypeDefaultsProps>(
                     <FileText />
                   ) : (
                     <span title="Partially supported: missing pipeline components for some stages">
-                      <AlertTriangle style={{ color: "#D69E2E" }} />
+                      <AlertTriangle
+                        style={{ color: PARTIALLY_SUPPORTED_WARNING_COLOR }}
+                      />
                     </span>
                   )}
                   {mime.label}

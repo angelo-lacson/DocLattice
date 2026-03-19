@@ -563,7 +563,7 @@ def get_supported_mime_types() -> tuple[SupportedMimeTypeEntry, ...]:
             continue
 
         has_parser = len(registry.get_parsers_for_filetype(ft_value)) > 0
-        # TODO(#1119): Embedders currently work on all text types (not filtered
+        # TODO: Embedders currently work on all text types (not filtered
         # by file type). If a file-type-specific embedder is added, update this
         # check to query per-file-type coverage. Until then, has_embedder is
         # True whenever *any* embedder is registered.

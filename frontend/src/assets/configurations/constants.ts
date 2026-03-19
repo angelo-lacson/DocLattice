@@ -311,6 +311,9 @@ export const MESSAGE_COUNT_COLORS = {
   ZERO_OPACITY: 0.9,
 } as const;
 
+// Warning color for partially supported file types (amber/yellow)
+export const PARTIALLY_SUPPORTED_WARNING_COLOR = "#D69E2E";
+
 // Processing failure UI colors (used in DocumentItem, ModernDocumentItem)
 export const FAILURE_COLORS = {
   ICON_BG: "#dc2626",
