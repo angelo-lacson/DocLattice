@@ -265,6 +265,8 @@ Image tokens carry a 6th element with compact metadata:
 [0.0, 100.0, 200.0, 300.0, "", {"p": "documents/123/images/page_0_img_0.jpg", "f": "jpeg", "ch": "a1b2c3..."}]
 ```
 
+> **Note:** The presence of a 6th element (the metadata dict) is what distinguishes image tokens from text tokens in v2. On decode, `expand_pawls_pages()` reconstructs the `is_image: true` field from this — v2 does not store `is_image` explicitly.
+
 ### Five Compression Techniques
 
 | # | Technique | Savings | Details |
@@ -336,7 +338,7 @@ The frontend never writes PAWLs — it only fetches and renders. So it only need
 
 ### Write Paths (Where v2 Encoding Happens)
 
-Primary entry points that persist PAWLs files automatically compact to v2. If a page exceeds `MAX_TOKENS_PER_PAGE` (100,000), that page falls back to v1 format.
+Primary entry points that persist PAWLs files automatically compact to v2. If any page exceeds `MAX_TOKENS_PER_PAGE` (100,000), the **entire document** falls back to v1 format.
 
 | Write Path | File | What It Does |
 |------------|------|--------------|
