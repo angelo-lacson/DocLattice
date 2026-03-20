@@ -22,6 +22,7 @@ import React, {
   useMemo,
 } from "react";
 import {
+  ANNOTATION_LABEL_CLASS,
   getGlobalOffsetFromDomPosition,
   pickClosestOccurrence,
 } from "./docxOffsetUtils";
@@ -599,6 +600,9 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       if (!selection || selection.isCollapsed || !selection.toString().trim())
         return;
 
+      // Ignore selections that originate outside the DOCX container
+      if (!containerRef.current?.contains(selection.anchorNode)) return;
+
       const selectedText = selection.toString().trim();
 
       const occurrences = findTextOccurrences(docText, selectedText);
@@ -615,7 +619,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
             contentEl,
             selection.anchorNode,
             selection.anchorOffset,
-            `${CSS_CLASS_PREFIX}label`
+            ANNOTATION_LABEL_CLASS
           );
 
           if (anchorOffset !== null) {

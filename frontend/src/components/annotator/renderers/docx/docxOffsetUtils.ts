@@ -6,8 +6,8 @@
  * multiple times in a document.
  */
 
-/** CSS class prefix for annotation label elements injected by the WASM renderer. */
-const ANNOTATION_LABEL_CLASS = "oc-annot-label";
+/** CSS class for annotation label elements injected by the WASM renderer. */
+export const ANNOTATION_LABEL_CLASS = "oc-annot-label";
 
 /**
  * Compute an approximate character offset from a DOM selection point.
@@ -51,7 +51,7 @@ export function getGlobalOffsetFromDomPosition(
       let parent = n.parentElement;
       while (parent && parent !== container) {
         if (parent.classList.contains(cssClassPrefix)) {
-          return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_SKIP;
         }
         parent = parent.parentElement;
       }
