@@ -7,6 +7,7 @@ import requests
 from django.core.files.storage import default_storage
 from requests.exceptions import ConnectionError, RequestException, Timeout
 
+from opencontractserver.annotations.models import LABEL_TYPES
 from opencontractserver.pipeline.base.exceptions import DocumentParsingError
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.parser import BaseParser
@@ -41,7 +42,7 @@ class DocxodusServiceParser(BaseParser):
         """Configuration schema for DocxodusServiceParser."""
 
         service_url: str = field(
-            default="",
+            default="http://docxodus-parser:8080/parse",
             metadata={
                 "pipeline_setting": PipelineSetting(
                     setting_type=SettingType.REQUIRED,
@@ -265,10 +266,19 @@ class DocxodusServiceParser(BaseParser):
 
     @staticmethod
     def _normalize_annotation(ann: dict[str, Any]) -> dict[str, Any]:
-        """Normalize a single annotation dict from camelCase to snake_case."""
+        """Normalize annotation fields to match the OpenContractDocExport format.
+
+        The export format uses a mix of camelCase and snake_case:
+        - annotationLabel, rawText stay camelCase (used by import_annotations)
+        - annotationJson → annotation_json (snake_case in import code)
+        - annotationType → annotation_type (dropped if not a valid LABEL_TYPES value)
+        - contentModalities → content_modalities
+        - parentId → parent_id
+        """
+        valid_annotation_types = {choice[0] for choice in LABEL_TYPES}
+
         ann_mappings = {
             "annotationJson": "annotation_json",
-            "annotationLabel": "annotation_label",
             "parentId": "parent_id",
             "annotationType": "annotation_type",
             "contentModalities": "content_modalities",
@@ -278,6 +288,11 @@ class DocxodusServiceParser(BaseParser):
         for key, value in ann.items():
             normalized_key = ann_mappings.get(key, key)
             normalized[normalized_key] = value
+
+        # Drop invalid annotation_type so import_annotations falls back to
+        # the label_type determined by file type (e.g. SPAN_LABEL for DOCX).
+        if normalized.get("annotation_type") not in valid_annotation_types:
+            normalized.pop("annotation_type", None)
 
         return normalized
 

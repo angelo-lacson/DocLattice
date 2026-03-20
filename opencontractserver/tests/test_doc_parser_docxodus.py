@@ -131,7 +131,7 @@ class TestDocxodusServiceParser(TestCase):
         self.assertEqual(len(result["labelled_text"]), 1)
 
         ann = result["labelled_text"][0]
-        self.assertEqual(ann["annotation_label"], "PARAGRAPH")
+        self.assertEqual(ann["annotationLabel"], "PARAGRAPH")
         self.assertEqual(ann["rawText"], "Hello World")
 
         # Verify request was made with base64-encoded DOCX
@@ -209,11 +209,14 @@ class TestDocxodusServiceParser(TestCase):
         self.assertEqual(normalized["file_type"], "docx")
 
         # Annotation field normalization
+        # annotationLabel and rawText stay camelCase (OpenContractDocExport format)
         ann = normalized["labelled_text"][0]
-        self.assertEqual(ann["annotation_label"], "HEADING")
+        self.assertEqual(ann["annotationLabel"], "HEADING")
+        self.assertEqual(ann["rawText"], "Title")
         self.assertEqual(ann["annotation_json"], {"start": 0, "end": 5})
         self.assertEqual(ann["parent_id"], "parent-1")
-        self.assertEqual(ann["annotation_type"], "text")
+        # "text" is not a valid LABEL_TYPES value, so annotation_type is dropped
+        self.assertNotIn("annotation_type", ann)
         self.assertEqual(ann["content_modalities"], ["text"])
 
         # Relationship field normalization
