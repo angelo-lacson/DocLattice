@@ -22,6 +22,7 @@ import React, {
   useMemo,
 } from "react";
 import {
+  ANNOTATION_LABEL_CLASS,
   getGlobalOffsetFromDomPosition,
   pickClosestOccurrence,
 } from "./docxOffsetUtils";
@@ -66,6 +67,31 @@ interface ChatSourceHighlight {
 
 const EMPTY_CHAT_SOURCES: ChatSourceHighlight[] = [];
 
+/**
+ * Replace HTML named entities (e.g. &nbsp;, &ndash;) with XML-safe numeric
+ * references (&#160;, &#8211;). The docxodus WASM projection parses HTML as
+ * XML internally, and XML only recognises &amp; &lt; &gt; &quot; &apos;.
+ *
+ * Uses a regex to find all `&name;` patterns and resolves them via a temporary
+ * DOM element, which handles the full HTML entity set.
+ */
+function replaceHtmlEntitiesWithNumeric(html: string): string {
+  // XML built-in entities — leave these as-is
+  const XML_ENTITIES = new Set(["amp", "lt", "gt", "quot", "apos"]);
+
+  const textarea = document.createElement("textarea");
+
+  return html.replace(/&([a-zA-Z][a-zA-Z0-9]*);/g, (match, name) => {
+    if (XML_ENTITIES.has(name)) return match;
+    // Resolve the entity via the browser's HTML parser
+    textarea.innerHTML = match;
+    const resolved = textarea.value;
+    if (resolved === match) return match; // Unknown entity, leave as-is
+    // Convert to numeric character reference
+    return `&#${resolved.codePointAt(0)};`;
+  });
+}
+
 /** CSS class prefix for annotation elements produced by the projector. */
 const CSS_CLASS_PREFIX = "oc-annot-";
 
@@ -74,10 +100,26 @@ const SEARCH_RESULT_LABEL_ID = "__search_result__";
 const CHAT_SOURCE_LABEL_ID = "__chat_source__";
 const CHAT_SOURCE_SELECTED_LABEL_ID = "__chat_source_selected__";
 
+/**
+ * DOMPurify config that preserves docxodus formatting (styles, classes)
+ * while blocking scripts, event handlers, and dangerous elements.
+ */
+const SANITIZE_CONFIG: DOMPurify.Config = {
+  FORCE_BODY: true,
+  ADD_ATTR: [
+    "data-annotation-id",
+    "data-label-id",
+    "data-label",
+    "class",
+    "style",
+  ],
+  ADD_TAGS: ["style"],
+};
+
 /** Stable projection settings shared by projection and CSS generation. */
 const PROJECTION_SETTINGS: ExternalAnnotationProjectionSettings = {
   cssClassPrefix: CSS_CLASS_PREFIX,
-  labelMode: AnnotationLabelMode.Tooltip,
+  labelMode: AnnotationLabelMode.Above,
   includeMetadata: true,
   // Both backend (Docxodus microservice) and frontend (Docxodus WASM) use the same
   // library, so offsets should align. Validation is kept enabled as a safety net in
@@ -163,7 +205,7 @@ function buildExternalAnnotationSet(
 
   const labelledText = filteredAnnotations.map((ann) => ({
     id: ann.id,
-    annotationLabel: ann.annotationLabel?.text ?? "Unknown",
+    annotationLabel: ann.annotationLabel?.id ?? "Unknown",
     rawText: ann.rawText,
     page: 0,
     annotationJson: ann.json
@@ -180,7 +222,7 @@ function buildExternalAnnotationSet(
       const text = docText.slice(sr.start_index, sr.end_index);
       labelledText.push({
         id: `__sr_${i}`,
-        annotationLabel: "Search Result",
+        annotationLabel: SEARCH_RESULT_LABEL_ID,
         rawText: text,
         page: 0,
         annotationJson: { start: sr.start_index, end: sr.end_index, text },
@@ -196,7 +238,9 @@ function buildExternalAnnotationSet(
     const isSelected = cs.sourceId === selectedChatSourceId;
     labelledText.push({
       id: `__cs_${cs.sourceId}`,
-      annotationLabel: isSelected ? "Chat Source (Active)" : "Chat Source",
+      annotationLabel: isSelected
+        ? CHAT_SOURCE_SELECTED_LABEL_ID
+        : CHAT_SOURCE_LABEL_ID,
       rawText: text,
       page: 0,
       annotationJson: { start: cs.start_index, end: cs.end_index, text },
@@ -368,13 +412,13 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     convertDocxToHtml(docxBytes)
       .then((html) => {
         if (!cancelled) {
-          // Security: HTML originates from user-uploaded DOCX processed by Docxodus WASM.
-          // DOMPurify strips all script/event handler vectors by default. The ADD_ATTR
-          // whitelist only permits data-* attributes used for annotation projection,
-          // which cannot execute JavaScript. Links and src/action attrs are stripped.
-          const sanitized = DOMPurify.sanitize(html, {
-            ADD_ATTR: ["data-annotation-id", "data-label-id", "data-label"],
-          });
+          // Sanitize while preserving docxodus formatting (see SANITIZE_CONFIG).
+          let sanitized = DOMPurify.sanitize(html, SANITIZE_CONFIG);
+          // DOMPurify outputs HTML named entities (e.g. &nbsp;) that are invalid
+          // in XML. The docxodus WASM ProjectAnnotationsOntoHtml parses the HTML as
+          // XML internally, so convert all named entities to numeric references.
+          // We use the browser's own parser to resolve entities correctly.
+          sanitized = replaceHtmlEntitiesWithNumeric(sanitized);
           setBaseHtml(sanitized);
           // Show the base HTML immediately to avoid a "Projecting annotations..."
           // flash while the projection effect runs.
@@ -419,11 +463,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     projectAnnotationsOntoHtml(baseHtml, annotationSet, PROJECTION_SETTINGS)
       .then((html) => {
         if (!cancelled) {
-          setAnnotatedHtml(
-            DOMPurify.sanitize(html, {
-              ADD_ATTR: ["data-annotation-id", "data-label-id", "data-label"],
-            })
-          );
+          setAnnotatedHtml(DOMPurify.sanitize(html, SANITIZE_CONFIG));
         }
       })
       .catch((err) => {
@@ -477,6 +517,13 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
   useEffect(() => {
     if (!wasmReady) return;
     let cancelled = false;
+
+    // Empty visibleLabels means "no filter active" — show all annotations.
+    // Only compute hidden labels when a filter is explicitly set.
+    if (visibleLabels.length === 0) {
+      setVisibilityCss("");
+      return;
+    }
 
     const visibleLabelIds = new Set(visibleLabels.map((l) => l.id));
     const allLabelIds = new Set(
@@ -553,6 +600,9 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       if (!selection || selection.isCollapsed || !selection.toString().trim())
         return;
 
+      // Ignore selections that originate outside the DOCX container
+      if (!containerRef.current?.contains(selection.anchorNode)) return;
+
       const selectedText = selection.toString().trim();
 
       const occurrences = findTextOccurrences(docText, selectedText);
@@ -569,7 +619,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
             contentEl,
             selection.anchorNode,
             selection.anchorOffset,
-            `${CSS_CLASS_PREFIX}label`
+            ANNOTATION_LABEL_CLASS
           );
 
           if (anchorOffset !== null) {
@@ -764,8 +814,6 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
         dangerouslySetInnerHTML={{ __html: annotatedHtml }}
         style={{
           padding: "1.5rem",
-          lineHeight: 1.6,
-          color: OS_LEGAL_COLORS.textPrimary,
           backgroundColor: OS_LEGAL_COLORS.background,
         }}
       />
