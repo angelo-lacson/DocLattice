@@ -131,7 +131,7 @@ class TestDocxodusServiceParser(TestCase):
         self.assertEqual(len(result["labelled_text"]), 1)
 
         ann = result["labelled_text"][0]
-        self.assertEqual(ann["annotationLabel"], "PARAGRAPH")
+        self.assertEqual(ann["annotation_label"], "PARAGRAPH")
         self.assertEqual(ann["rawText"], "Hello World")
 
         # Verify request was made with base64-encoded DOCX
@@ -210,6 +210,7 @@ class TestDocxodusServiceParser(TestCase):
 
         # Annotation field normalization
         ann = normalized["labelled_text"][0]
+        self.assertEqual(ann["annotation_label"], "HEADING")
         self.assertEqual(ann["annotation_json"], {"start": 0, "end": 5})
         self.assertEqual(ann["parent_id"], "parent-1")
         self.assertEqual(ann["annotation_type"], "text")
