@@ -63,7 +63,7 @@ class LlamaParseParser(BaseParser):
     )
     author = "DocLattice Team"
     dependencies = ["llama-parse"]
-    supported_file_types = [FileTypeEnum.PDF, FileTypeEnum.DOCX]
+    supported_file_types = [FileTypeEnum.PDF]
 
     # Mapping from LlamaParse element types to DocLattice annotation labels
     ELEMENT_TYPE_MAPPING = {
