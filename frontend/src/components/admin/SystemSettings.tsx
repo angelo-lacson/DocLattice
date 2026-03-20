@@ -176,10 +176,13 @@ export const SystemSettings: React.FC = () => {
     fetchPolicy: "cache-and-network",
   });
 
-  const { data: mimeTypesData, loading: mimeTypesLoading } =
-    useQuery<SupportedMimeTypesQueryResult>(GET_SUPPORTED_MIME_TYPES, {
-      fetchPolicy: "cache-first",
-    });
+  const {
+    data: mimeTypesData,
+    loading: mimeTypesLoading,
+    error: mimeTypesError,
+  } = useQuery<SupportedMimeTypesQueryResult>(GET_SUPPORTED_MIME_TYPES, {
+    fetchPolicy: "cache-first",
+  });
 
   // Mutations
   const [updateSettings, { loading: updating }] = useMutation(
@@ -664,7 +667,7 @@ export const SystemSettings: React.FC = () => {
   }
 
   // Error state
-  const queryError = settingsError || componentsError;
+  const queryError = settingsError || componentsError || mimeTypesError;
   if (queryError) {
     return (
       <Container>
