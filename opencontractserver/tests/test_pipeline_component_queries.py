@@ -462,10 +462,10 @@ class TestPostProcessor(BasePostProcessor):
 
         data = result["data"]["pipelineComponents"]
 
-        # LlamaParseParser supports DOCX, so we expect at least one parser
+        # DocxodusServiceParser supports DOCX
         parsers = data["parsers"]
         parser_titles = [parser["title"] for parser in parsers]
-        self.assertIn("LlamaParse Parser", parser_titles)
+        self.assertIn("Docxodus Parser (REST)", parser_titles)
 
         # DocxThumbnailGenerator supports DOCX
         thumbnailers = data["thumbnailers"]
@@ -644,11 +644,10 @@ class TestPostProcessor(BasePostProcessor):
         self.assertTrue(txt_entry["stageCoverage"]["parser"])
         self.assertTrue(txt_entry["stageCoverage"]["embedder"])
 
-        # DOCX has no thumbnailer but is still fully supported
-        # (fully_supported requires parser + embedder only)
+        # DOCX now has parser, embedder, and thumbnailer (DocxThumbnailGenerator)
         self.assertIn("docx", by_file_type)
         docx_entry = by_file_type["docx"]
-        self.assertFalse(docx_entry["stageCoverage"]["thumbnailer"])
+        self.assertTrue(docx_entry["stageCoverage"]["thumbnailer"])
         self.assertTrue(docx_entry["fullySupported"])
 
     def test_supported_mime_types_requires_auth(self):
