@@ -23,6 +23,7 @@ services:
         condition: service_started
       docxodus-parser:
         condition: service_started
+        required: false
     volumes:
       - .:/app:z
     env_file:
@@ -74,9 +75,9 @@ services:
     container_name: docling-parser
 
   docxodus-parser:
-    # The frontend WASM (docxodus@5.5.0 in package.json) and this microservice
+    # The frontend WASM (docxodus in package.json) and this microservice
     # must use the same Docxodus version for character offset alignment.
-    image: ghcr.io/open-source-legal/docxodus-service:v1.0.0
+    image: ghcr.io/open-source-legal/docxodus-service:1.1.0-docxodus5.4.2
     container_name: docxodus-parser
 
   vector-embedder:
@@ -108,6 +109,7 @@ services:
         condition: service_started
       docxodus-parser:
         condition: service_started
+        required: false
     volumes:
       - .:/app:z
     env_file:
@@ -128,6 +130,7 @@ services:
         condition: service_started
       docxodus-parser:
         condition: service_started
+        required: false
     volumes:
       - .:/app:z
     env_file:

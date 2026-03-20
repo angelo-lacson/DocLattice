@@ -268,6 +268,7 @@ class DocxodusServiceParser(BaseParser):
         """Normalize a single annotation dict from camelCase to snake_case."""
         ann_mappings = {
             "annotationJson": "annotation_json",
+            "annotationLabel": "annotation_label",
             "parentId": "parent_id",
             "annotationType": "annotation_type",
             "contentModalities": "content_modalities",
