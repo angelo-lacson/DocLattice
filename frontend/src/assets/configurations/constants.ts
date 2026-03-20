@@ -250,7 +250,10 @@ export const PIPELINE_UI = {
  */
 export const LEGACY_TEXT_MIME_TYPE = "application/txt";
 
-// Supported MIME types for pipeline configuration
+/**
+ * @deprecated Use the `supportedMimeTypes` GraphQL query instead.
+ * Retained as a static fallback for components that haven't migrated yet.
+ */
 export const SUPPORTED_MIME_TYPES = [
   { value: "application/pdf", label: "PDF", shortLabel: "PDF" },
   { value: "text/plain", label: "Plain Text", shortLabel: "TXT" },
@@ -307,6 +310,9 @@ export const MESSAGE_COUNT_COLORS = {
   /** Zero-count badge opacity */
   ZERO_OPACITY: 0.9,
 } as const;
+
+// Warning color for partially supported file types (amber/yellow)
+export const PARTIALLY_SUPPORTED_WARNING_COLOR = "#D69E2E";
 
 // Processing failure UI colors (used in DocumentItem, ModernDocumentItem)
 export const FAILURE_COLORS = {

@@ -36,6 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Dynamic MIME type support from pipeline components** (Closes #1059): Supported file types are now derived dynamically from registered pipeline components instead of being hardcoded. Changes include:
+  - New `get_supported_mime_types()` and `get_allowed_mime_types()` functions in `opencontractserver/pipeline/registry.py` that compute supported file types by intersecting component coverage across parser, embedder, and thumbnailer stages
+  - New `supportedMimeTypes` GraphQL query (`config/graphql/pipeline_queries.py`) returning per-file-type support level with stage coverage details
+  - New `SupportedMimeTypeType` and `StageCoverageType` GraphQL types (`config/graphql/pipeline_types.py`)
+  - Centralized MIME ↔ file type mappings (`MIME_TO_FILE_TYPE`, `FILE_TYPE_TO_MIME`, `FILE_TYPE_LABELS`, `LEGACY_MIME_ALIASES`) in `opencontractserver/pipeline/base/file_types.py`, replacing scattered inline dicts
+  - Upload validation in `document_mutations.py`, `folder_service.py`, and `import_tasks.py` now uses the dynamic registry instead of `settings.ALLOWED_DOCUMENT_MIMETYPES`
+  - Frontend `FiletypeDefaults` component fetches supported MIME types via GraphQL query instead of using hardcoded `SUPPORTED_MIME_TYPES` constant
+  - Warning icon displayed for partially-supported file types (e.g., DOCX which lacks a thumbnailer)
+  - `FileTypeEnum` gains `.mimetype` and `.label` properties and supports legacy MIME aliases in `from_mimetype()`
 - **Compact PAWLs v2 format for ~67% storage reduction** (PR #1112): New v2 compact format for PAWLs files (per-page token bounding boxes) that reduces storage from ~500+ KB to ~180 KB for a typical 9-page PDF. Changes include:
   - Core encode/decode in `opencontractserver/utils/compact_pawls.py` (Python) and `frontend/src/utils/compactPawls.ts` (TypeScript)
   - Array-based tokens `[x, y, w, h, "text"]` instead of verbose dicts, shortened page keys, implicit page index, coordinate precision normalization
