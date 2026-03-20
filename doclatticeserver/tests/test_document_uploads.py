@@ -1,6 +1,5 @@
 import io
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from docx import Document as DocxDocument
@@ -12,6 +11,7 @@ from pptx import Presentation
 from config.graphql.schema import schema
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document as DocumentModel
+from doclatticeserver.pipeline.registry import get_allowed_mime_types
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.files import base_64_encode_bytes
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
@@ -90,7 +90,7 @@ class UploadDocumentMutationTestCase(TestCase):
             raise ValueError(f"Unsupported file type for generation: {file_type}")
 
     def test_upload_document(self):
-        allowed_mimetypes = set(settings.ALLOWED_DOCUMENT_MIMETYPES)
+        allowed_mimetypes = set(get_allowed_mime_types())
 
         file_types_to_test = {
             "pdf": "application/pdf",
