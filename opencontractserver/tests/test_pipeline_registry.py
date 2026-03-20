@@ -457,11 +457,45 @@ class TestSupportedMimeTypes(TestCase):
             self.assertIn("/", mime)
 
     def test_get_allowed_mime_types_includes_legacy_aliases(self):
-        """Legacy MIME aliases should be included if their canonical type is supported."""
+        """Legacy MIME aliases should be included if their canonical type is supported.
+
+        Registers a mock parser and embedder for txt so the non-fallback path
+        runs and legacy alias expansion (application/txt → text/plain) is tested.
+        """
+        registry = get_registry()
+
+        mock_parser = PipelineComponentDefinition(
+            name="MockTxtParser",
+            class_name="tests.MockTxtParser",
+            component_type=ComponentType.PARSER,
+            title="Mock TXT Parser",
+            module_name="mock",
+            description="Mock parser for test",
+            author="test",
+            dependencies=(),
+            supported_file_types=("txt",),
+        )
+        registry._parsers_by_filetype.setdefault("txt", []).append(mock_parser)
+
+        mock_embedder = PipelineComponentDefinition(
+            name="MockEmbedder",
+            class_name="tests.MockEmbedder",
+            component_type=ComponentType.EMBEDDER,
+            title="Mock Embedder",
+            module_name="mock",
+            description="Mock embedder for test",
+            author="test",
+            dependencies=(),
+            supported_file_types=(),
+        )
+        registry._embedders = registry._embedders + (mock_embedder,)
+
+        get_supported_mime_types.cache_clear()
+        get_allowed_mime_types.cache_clear()
+
         allowed = get_allowed_mime_types()
-        # If text/plain is supported, application/txt should also be in the list
-        if "text/plain" in allowed:
-            self.assertIn("application/txt", allowed)
+        self.assertIn("text/plain", allowed)
+        self.assertIn("application/txt", allowed)
 
     def test_fully_supported_requires_parser_and_embedder(self):
         """A file type is fully_supported if it has a parser and embedder.
