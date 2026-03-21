@@ -591,8 +591,8 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
   }, [selectedAnnotations, paginationReady]);
 
   // Handle text selection for new annotation creation.
-  // Supports cross-page selections by using DOM offset resolution
-  // to find the start/end in docText, falling back to text matching.
+  // Uses findTextOccurrences for text matching and DOM position for
+  // disambiguation when the same text appears multiple times.
   const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
       try {
@@ -605,54 +605,85 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
         // Ignore selections that originate outside the DOCX container
         if (!containerRef.current?.contains(selection.anchorNode)) return;
 
-        const contentEl = containerRef.current?.querySelector(
-          ".docx-content"
-        ) as HTMLElement | null;
-        if (!contentEl) return;
+        // Get the raw selected text. For cross-page selections this may
+        // include page number artifacts (e.g. "...text\n1\nmore text...").
+        // Clean it by removing isolated numbers on their own lines
+        // (PaginatedDocument page numbers).
+        const rawText = selection.toString();
+        const cleanedText = rawText
+          .replace(/\n\d+\n/g, "\n") // Remove "1", "2" etc. between newlines
+          .trim();
 
-        // Try DOM-based offset resolution first (works for cross-page
-        // selections where the selected text includes page artifacts).
-        const anchorOffset = getGlobalOffsetFromDomPosition(
-          contentEl,
-          selection.anchorNode,
-          selection.anchorOffset,
-          ANNOTATION_LABEL_CLASS
-        );
-        const focusOffset = getGlobalOffsetFromDomPosition(
-          contentEl,
-          selection.focusNode,
-          selection.focusOffset,
-          ANNOTATION_LABEL_CLASS
-        );
+        if (!cleanedText) return;
 
-        let start: number;
-        let end: number;
-        let selectedText: string;
+        // Search for the cleaned text in docText
+        let occurrences = findTextOccurrences(docText, cleanedText);
 
-        if (anchorOffset !== null && focusOffset !== null) {
-          // DOM offsets resolved — use them directly (handles cross-page)
-          start = Math.min(anchorOffset, focusOffset);
-          end = Math.max(anchorOffset, focusOffset);
-          selectedText = docText.substring(start, end);
-        } else {
-          // Fallback: text-based matching (single page, no page artifacts)
-          selectedText = selection.toString().trim();
-          const occurrences = findTextOccurrences(docText, selectedText);
-          if (occurrences.length === 0) return;
-
-          let match = occurrences[0];
-          if (occurrences.length > 1 && anchorOffset !== null) {
-            match = pickClosestOccurrence(occurrences, anchorOffset);
+        // If no exact match (common for cross-page selections with whitespace
+        // differences), try collapsing whitespace for a fuzzy match
+        if (occurrences.length === 0) {
+          const normalized = cleanedText.replace(/\s+/g, " ");
+          occurrences = findTextOccurrences(
+            docText.replace(/\s+/g, " "),
+            normalized
+          );
+          // Map back to original docText offsets by searching from the
+          // normalized match position
+          if (occurrences.length > 0) {
+            const approxStart = occurrences[0].start;
+            // Find the actual position in docText near this offset
+            const searchWindow = docText.substring(
+              Math.max(0, approxStart - 50),
+              approxStart + cleanedText.length + 50
+            );
+            const firstWords = cleanedText.substring(0, 30);
+            const idx = searchWindow.indexOf(firstWords);
+            if (idx >= 0) {
+              const realStart = Math.max(0, approxStart - 50) + idx;
+              // Find the end by matching the last few words
+              const lastWords = cleanedText.substring(cleanedText.length - 30);
+              const endSearch = docText.indexOf(
+                lastWords,
+                realStart + cleanedText.length - 60
+              );
+              if (endSearch >= 0) {
+                occurrences = [
+                  { start: realStart, end: endSearch + lastWords.length },
+                ];
+              }
+            }
           }
-          start = match.start;
-          end = match.end;
         }
 
-        if (!selectedText.trim() || start === end) return;
+        if (occurrences.length === 0) return;
+
+        let match = occurrences[0];
+
+        // Disambiguate if multiple matches using DOM position
+        if (occurrences.length > 1) {
+          const contentEl = containerRef.current?.querySelector(
+            ".docx-content"
+          ) as HTMLElement | null;
+          if (contentEl) {
+            const anchorOffset = getGlobalOffsetFromDomPosition(
+              contentEl,
+              selection.anchorNode,
+              selection.anchorOffset,
+              ANNOTATION_LABEL_CLASS
+            );
+            if (anchorOffset !== null) {
+              match = pickClosestOccurrence(occurrences, anchorOffset);
+            }
+          }
+        }
 
         const menuPos = clampMenuPosition(e.clientX, e.clientY);
         setMenuPosition(menuPos);
-        setPendingSelection({ text: selectedText, start, end });
+        setPendingSelection({
+          text: docText.substring(match.start, match.end),
+          start: match.start,
+          end: match.end,
+        });
       } catch (err) {
         console.warn("Error handling text selection:", err);
       }
