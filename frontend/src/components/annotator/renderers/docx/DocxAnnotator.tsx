@@ -847,6 +847,10 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
         style={{
           padding: "1.5rem",
           backgroundColor: OS_LEGAL_COLORS.background,
+          width: "100%",
+          boxSizing: "border-box",
+          overflowWrap: "break-word",
+          wordBreak: "break-word",
         }}
       />
 
