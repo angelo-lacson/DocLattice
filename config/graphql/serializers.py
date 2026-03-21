@@ -199,6 +199,7 @@ class AnnotationSerializer(serializers.ModelSerializer):
             "id",
             "page",
             "raw_text",
+            "long_description",
             "annotation_json",
             "annotation_label",
             "is_public",

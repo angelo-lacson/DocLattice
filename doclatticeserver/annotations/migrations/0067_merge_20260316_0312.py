@@ -6,6 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
+        ("annotations", "0066_annotation_long_description"),
         ("annotations", "0066_remove_annotation_tokens_jsons_bounding_box"),
         ("annotations", "0066_reset_database_level_hnsw_settings"),
     ]
