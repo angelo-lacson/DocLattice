@@ -433,8 +433,13 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
           // DOMPurify outputs HTML named entities (e.g. &nbsp;) that are invalid
           // in XML. The docxodus WASM ProjectAnnotationsOntoHtml parses the HTML as
           // XML internally, so convert all named entities to numeric references.
-          // We use the browser's own parser to resolve entities correctly.
           sanitized = replaceHtmlEntitiesWithNumeric(sanitized);
+          // DOMPurify with FORCE_BODY strips <html>/<head>/<body> wrappers,
+          // potentially leaving multiple top-level elements (e.g. <style> + <div>).
+          // The WASM XML parser requires a single root, so wrap if needed.
+          if (!sanitized.trimStart().startsWith("<div")) {
+            sanitized = `<div>${sanitized}</div>`;
+          }
           setBaseHtml(sanitized);
           // Show the base HTML immediately to avoid a "Projecting annotations..."
           // flash while the projection effect runs.
