@@ -240,6 +240,7 @@ class OpenContractsAnnotationPythonType(TypedDict):
     content_modalities: NotRequired[
         list[str]
     ]  # ["TEXT"], ["IMAGE"], or ["TEXT", "IMAGE"]
+    long_description: NotRequired[Optional[str]]
 
 
 class SpanAnnotation(TypedDict):

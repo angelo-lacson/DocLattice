@@ -8,11 +8,14 @@ import { DocumentTableOfContents } from "../src/components/corpuses/DocumentTabl
 import {
   GET_DOCUMENT_RELATIONSHIPS,
   GET_CORPUS_DOCUMENTS_FOR_TOC,
+  GET_DOCUMENT_ANNOTATION_INDEX,
 } from "../src/graphql/queries";
 import { openedCorpus, tocExpandAll } from "../src/graphql/cache";
 import {
   DOCUMENT_RELATIONSHIP_TOC_LIMIT,
   CORPUS_DOCUMENTS_TOC_LIMIT,
+  DOCUMENT_ANNOTATION_INDEX_LIMIT,
+  OC_SECTION_LABEL,
 } from "../src/assets/configurations/constants";
 
 // Test corpus ID
@@ -348,6 +351,131 @@ const mockDeepHierarchy = [
   },
 ];
 
+// Sections for Parent Document (doc-1)
+const parentDocSections = [
+  {
+    node: {
+      id: "annot-p1",
+      rawText: "1. Introduction",
+      longDescription: "Overview of the agreement structure and purpose.",
+      page: 1,
+      parent: null,
+      __typename: "AnnotationType" as const,
+    },
+    __typename: "AnnotationTypeEdge" as const,
+  },
+  {
+    node: {
+      id: "annot-p2",
+      rawText: "1.1 Scope",
+      longDescription: null,
+      page: 2,
+      parent: { id: "annot-p1" },
+      __typename: "AnnotationType" as const,
+    },
+    __typename: "AnnotationTypeEdge" as const,
+  },
+  {
+    node: {
+      id: "annot-p3",
+      rawText: "2. Terms and Conditions",
+      longDescription: "Core terms governing the relationship between parties.",
+      page: 4,
+      parent: null,
+      __typename: "AnnotationType" as const,
+    },
+    __typename: "AnnotationTypeEdge" as const,
+  },
+];
+
+// Sections for Child Document 1 (doc-2)
+const child1DocSections = [
+  {
+    node: {
+      id: "annot-c1",
+      rawText: "A. Definitions",
+      longDescription: null,
+      page: 1,
+      parent: null,
+      __typename: "AnnotationType" as const,
+    },
+    __typename: "AnnotationTypeEdge" as const,
+  },
+  {
+    node: {
+      id: "annot-c2",
+      rawText: "B. Obligations",
+      longDescription: null,
+      page: 3,
+      parent: null,
+      __typename: "AnnotationType" as const,
+    },
+    __typename: "AnnotationTypeEdge" as const,
+  },
+];
+
+// Sections for Child Document 2 (doc-3)
+const child2DocSections = [
+  {
+    node: {
+      id: "annot-d1",
+      rawText: "I. Liability",
+      longDescription: null,
+      page: 1,
+      parent: null,
+      __typename: "AnnotationType" as const,
+    },
+    __typename: "AnnotationTypeEdge" as const,
+  },
+];
+
+// Helper: create an annotation index mock with specific entries
+const annotationIndexMockWithEntries = (
+  documentId: string,
+  entries: typeof parentDocSections
+): MockedResponse => ({
+  request: {
+    query: GET_DOCUMENT_ANNOTATION_INDEX,
+    variables: {
+      documentId,
+      corpusId: TEST_CORPUS_ID,
+      labelText: OC_SECTION_LABEL,
+      first: DOCUMENT_ANNOTATION_INDEX_LIMIT,
+    },
+  },
+  result: {
+    data: {
+      annotations: {
+        edges: entries,
+        totalCount: entries.length,
+        __typename: "AnnotationTypeConnection",
+      },
+    },
+  },
+});
+
+// Helper: create an empty annotation index mock for a given document ID
+const emptyAnnotationIndexMock = (documentId: string): MockedResponse => ({
+  request: {
+    query: GET_DOCUMENT_ANNOTATION_INDEX,
+    variables: {
+      documentId,
+      corpusId: TEST_CORPUS_ID,
+      labelText: OC_SECTION_LABEL,
+      first: DOCUMENT_ANNOTATION_INDEX_LIMIT,
+    },
+  },
+  result: {
+    data: {
+      annotations: {
+        edges: [],
+        totalCount: 0,
+        __typename: "AnnotationTypeConnection",
+      },
+    },
+  },
+});
+
 // Cache configuration
 const createTestCache = () =>
   new InMemoryCache({
@@ -359,6 +487,11 @@ const createTestCache = () =>
             "documentId",
           ]),
           documents: relayStylePagination(["inCorpusWithId"]),
+          annotations: relayStylePagination([
+            "documentId",
+            "corpusId",
+            "annotationLabel_Text",
+          ]),
         },
       },
       DocumentRelationshipType: {
@@ -367,11 +500,19 @@ const createTestCache = () =>
       DocumentType: {
         keyFields: ["id"],
       },
+      AnnotationType: {
+        keyFields: ["id"],
+      },
     },
   });
 
 interface Props {
-  mockType?: "default" | "empty" | "noParentRelationships" | "deepHierarchy";
+  mockType?:
+    | "default"
+    | "empty"
+    | "noParentRelationships"
+    | "deepHierarchy"
+    | "hybrid";
   maxDepth?: number;
 }
 
@@ -455,6 +596,41 @@ export const DocumentTableOfContentsTestWrapper: React.FC<Props> = ({
         { ...emptyDocumentsMock },
       ];
     }
+
+    // Build annotation index mocks — populated for "hybrid", empty otherwise
+    const buildAnnotationIndexMocks = (): MockedResponse[] => {
+      if (mockType === "hybrid") {
+        // Each document gets its own section entries
+        const pairs: [string, typeof parentDocSections][] = [
+          ["doc-1", parentDocSections],
+          ["doc-2", child1DocSections],
+          ["doc-3", child2DocSections],
+        ];
+        return pairs.flatMap(([id, entries]) => {
+          const mock = annotationIndexMockWithEntries(id, entries);
+          return [mock, { ...mock }];
+        });
+      }
+
+      // All other types get empty annotation index mocks
+      const getDocumentIds = (): string[] => {
+        if (mockType === "noParentRelationships") return ["doc-a", "doc-b"];
+        if (mockType === "deepHierarchy")
+          return [
+            "doc-root",
+            "doc-level1",
+            "doc-level2",
+            "doc-level3",
+            "doc-level4",
+          ];
+        return ["doc-1", "doc-2", "doc-3"]; // default
+      };
+      return getDocumentIds().flatMap((id) => {
+        const mock = emptyAnnotationIndexMock(id);
+        return [mock, { ...mock }];
+      });
+    };
+    const annotationIndexMocks = buildAnnotationIndexMocks();
 
     if (mockType === "noParentRelationships") {
       // Documents exist but no parent relationships - shows docs as standalone root items
@@ -541,10 +717,12 @@ export const DocumentTableOfContentsTestWrapper: React.FC<Props> = ({
         { ...noParentRelsMock },
         standaloneDocsMock,
         { ...standaloneDocsMock },
+        ...annotationIndexMocks,
       ];
     }
 
     // Select appropriate mock data for relationships and documents
+    // "hybrid" uses the same parent/child structure as "default"
     const relationshipsMockData =
       mockType === "deepHierarchy"
         ? mockDeepHierarchy
@@ -585,6 +763,7 @@ export const DocumentTableOfContentsTestWrapper: React.FC<Props> = ({
       { ...relationshipsMock },
       documentsMock,
       { ...documentsMock },
+      ...annotationIndexMocks,
     ];
   };
 

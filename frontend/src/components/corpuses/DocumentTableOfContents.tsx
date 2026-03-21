@@ -39,6 +39,7 @@ import {
   DOCUMENT_RELATIONSHIP_TOC_LIMIT,
   CORPUS_DOCUMENTS_TOC_LIMIT,
 } from "../../assets/configurations/constants";
+import { DocumentAnnotationIndex } from "./DocumentAnnotationIndex";
 
 // ============================================================================
 // TYPES
@@ -331,10 +332,10 @@ const WarningBanner = styled.div`
   gap: 12px;
   padding: 12px 16px;
   margin-bottom: 16px;
-  background: #fef3c7;
-  border: 1px solid #f59e0b;
+  background: ${OS_LEGAL_COLORS.warningSurface};
+  border: 1px solid ${OS_LEGAL_COLORS.warningBorder};
   border-radius: 8px;
-  color: #92400e;
+  color: ${OS_LEGAL_COLORS.warningText};
   font-size: 0.875rem;
 
   .warning-icon {
@@ -387,6 +388,59 @@ const formatFileType = (fileType?: string): string => {
     .toUpperCase()
     .slice(0, 8);
 };
+
+// ============================================================================
+// WRAPPER (module-level to avoid React remount anti-pattern)
+// ============================================================================
+
+const TocWrapper: React.FC<{
+  embedded?: boolean;
+  showExpandToggle?: boolean;
+  allNodeIds: string[];
+  allExpanded: boolean;
+  onToggleExpandAll: () => void;
+  children: React.ReactNode;
+}> = ({
+  embedded,
+  showExpandToggle = false,
+  allNodeIds,
+  allExpanded,
+  onToggleExpandAll,
+  children,
+}) =>
+  embedded ? (
+    <Container $embedded>{children}</Container>
+  ) : (
+    <Container>
+      <Header>
+        <HeaderLeft>
+          <Title>
+            <ListTree size={18} />
+            Table of Contents
+          </Title>
+        </HeaderLeft>
+        {showExpandToggle && allNodeIds.length > 0 && (
+          <ExpandToggleButton
+            onClick={onToggleExpandAll}
+            aria-label={allExpanded ? "Collapse all" : "Expand all"}
+          >
+            {allExpanded ? (
+              <>
+                <ChevronsDownUp size={14} />
+                Collapse All
+              </>
+            ) : (
+              <>
+                <ChevronsUpDown size={14} />
+                Expand All
+              </>
+            )}
+          </ExpandToggleButton>
+        )}
+      </Header>
+      {children}
+    </Container>
+  );
 
 // ============================================================================
 // COMPONENT
@@ -778,131 +832,131 @@ export const DocumentTableOfContents: React.FC<
     }
   };
 
+  // True when there is exactly one top-level document with no children in the
+  // relationship tree. In this mode we skip the document header row and show
+  // the annotation index directly. Uses rootNodes (unfiltered) so that a
+  // search filter cannot accidentally flip the layout.
+  const isSingleTopLevelLeaf = useMemo(() => {
+    return rootNodes.length === 1 && rootNodes[0].children.length === 0;
+  }, [rootNodes]);
+
   // Render a tree node recursively
-  const renderNode = (node: DocumentNode, depth: number) => {
+  const renderNode = (
+    node: DocumentNode,
+    depth: number,
+    skipDocHeader = false
+  ) => {
     const isExpanded = expandedNodes.has(node.id);
     const hasChildren = node.children.length > 0;
     const hasDescription = Boolean(node.description);
     const FileIcon = getFileIcon(node.fileType);
+    // All document nodes are expandable — they may contain child documents
+    // or an annotation index (OC_SECTION annotations). The query for the
+    // annotation index fires lazily on expand, so we can't know upfront
+    // whether a leaf document has sections.
+    const isExpandable = true;
 
     return (
       <TreeNode key={node.id} $depth={depth}>
-        <NodeItem
-          $hasChildren={hasChildren}
-          $hasDescription={hasDescription}
-          onClick={() => handleDocumentClick(node)}
-          onKeyDown={(e) => handleKeyDown(e, node, hasChildren, isExpanded)}
-          role="treeitem"
-          tabIndex={0}
-          aria-expanded={hasChildren ? isExpanded : undefined}
-          aria-label={`${node.title}${
-            hasChildren ? `, ${isExpanded ? "expanded" : "collapsed"}` : ""
-          }`}
-        >
-          <ChevronContainer
-            className="chevron"
-            $visible={hasChildren}
-            onClick={(e) => hasChildren && toggleNode(node.id, e)}
-            aria-hidden="true"
+        {!skipDocHeader && (
+          <NodeItem
+            $hasChildren={isExpandable}
+            $hasDescription={hasDescription}
+            onClick={() => handleDocumentClick(node)}
+            onKeyDown={(e) => handleKeyDown(e, node, isExpandable, isExpanded)}
+            role="treeitem"
+            tabIndex={0}
+            aria-expanded={isExpandable ? isExpanded : undefined}
+            aria-label={`${node.title}${
+              isExpandable ? `, ${isExpanded ? "expanded" : "collapsed"}` : ""
+            }`}
           >
-            {hasChildren &&
-              (isExpanded ? (
-                <ChevronDown size={14} />
-              ) : (
-                <ChevronRight size={14} />
-              ))}
-          </ChevronContainer>
+            <ChevronContainer
+              className="chevron"
+              $visible={isExpandable}
+              onClick={(e) => isExpandable && toggleNode(node.id, e)}
+              aria-hidden="true"
+            >
+              {isExpandable &&
+                (isExpanded ? (
+                  <ChevronDown size={14} />
+                ) : (
+                  <ChevronRight size={14} />
+                ))}
+            </ChevronContainer>
 
-          <IconContainer $fileType={node.fileType}>
-            <FileIcon size={20} />
-          </IconContainer>
+            <IconContainer $fileType={node.fileType}>
+              <FileIcon size={20} />
+            </IconContainer>
 
-          <NodeContent>
-            <NodeTitle title={node.title}>{node.title}</NodeTitle>
-            {node.description && (
-              <NodeDescription title={node.description}>
-                {node.description}
-              </NodeDescription>
-            )}
-            <NodeMeta>
-              <FileTypeBadge>{formatFileType(node.fileType)}</FileTypeBadge>
-            </NodeMeta>
-          </NodeContent>
-        </NodeItem>
-        {hasChildren && isExpanded && (
+            <NodeContent>
+              <NodeTitle title={node.title}>{node.title}</NodeTitle>
+              {node.description && (
+                <NodeDescription title={node.description}>
+                  {node.description}
+                </NodeDescription>
+              )}
+              <NodeMeta>
+                <FileTypeBadge>{formatFileType(node.fileType)}</FileTypeBadge>
+              </NodeMeta>
+            </NodeContent>
+          </NodeItem>
+        )}
+        {isExpanded && hasChildren && (
           <div role="group">
             {node.children.map((child) => renderNode(child, depth + 1))}
           </div>
+        )}
+        {/* Only mount (and query) the annotation index when the node is
+            visible — either because the doc header is skipped (single-doc
+            mode) or because the user has expanded this node. */}
+        {(skipDocHeader || isExpanded) && (
+          <DocumentAnnotationIndex
+            documentId={node.id}
+            documentSlug={node.slug}
+            corpusId={corpusId}
+            maxDepth={maxDepth}
+            embedded
+            filterQuery={filterQuery}
+          />
         )}
       </TreeNode>
     );
   };
 
-  // Wrapper component that conditionally renders container
-  const Wrapper: React.FC<{
-    children: React.ReactNode;
-    showExpandToggle?: boolean;
-  }> = ({ children, showExpandToggle = false }) =>
-    embedded ? (
-      <Container $embedded>{children}</Container>
-    ) : (
-      <Container>
-        <Header>
-          <HeaderLeft>
-            <Title>
-              <ListTree size={18} />
-              Table of Contents
-            </Title>
-          </HeaderLeft>
-          {showExpandToggle && allNodeIds.length > 0 && (
-            <ExpandToggleButton
-              onClick={handleToggleExpandAll}
-              aria-label={allExpanded ? "Collapse all" : "Expand all"}
-            >
-              {allExpanded ? (
-                <>
-                  <ChevronsDownUp size={14} />
-                  Collapse All
-                </>
-              ) : (
-                <>
-                  <ChevronsUpDown size={14} />
-                  Expand All
-                </>
-              )}
-            </ExpandToggleButton>
-          )}
-        </Header>
-        {children}
-      </Container>
-    );
+  const wrapperProps = {
+    embedded,
+    allNodeIds,
+    allExpanded,
+    onToggleExpandAll: handleToggleExpandAll,
+  };
 
   if (loading) {
     return (
-      <Wrapper>
+      <TocWrapper {...wrapperProps}>
         <LoadingState>
           <Spinner size="lg" />
           <span>Loading document structure...</span>
         </LoadingState>
-      </Wrapper>
+      </TocWrapper>
     );
   }
 
   if (error) {
     return (
-      <Wrapper>
+      <TocWrapper {...wrapperProps}>
         <ErrorState>
           <AlertTriangle size={32} className="error-icon" />
           <div>Failed to load document structure</div>
         </ErrorState>
-      </Wrapper>
+      </TocWrapper>
     );
   }
 
   if (filteredNodes.length === 0) {
     // Show empty state when there are no documents (or filter matched nothing)
     return (
-      <Wrapper>
+      <TocWrapper {...wrapperProps}>
         <TreeContainer>
           <div className="empty-state">
             <ListTree size={48} className="empty-icon" />
@@ -916,12 +970,12 @@ export const DocumentTableOfContents: React.FC<
             </div>
           </div>
         </TreeContainer>
-      </Wrapper>
+      </TocWrapper>
     );
   }
 
   return (
-    <Wrapper showExpandToggle>
+    <TocWrapper {...wrapperProps} showExpandToggle>
       {isLimitExceeded && (
         <WarningBanner role="alert">
           <AlertTriangle size={18} className="warning-icon" />
@@ -944,9 +998,11 @@ export const DocumentTableOfContents: React.FC<
         </WarningBanner>
       )}
       <TreeContainer role="tree" aria-label="Document hierarchy">
-        {filteredNodes.map((node) => renderNode(node, 0))}
+        {isSingleTopLevelLeaf
+          ? filteredNodes.map((node) => renderNode(node, 0, true))
+          : filteredNodes.map((node) => renderNode(node, 0))}
       </TreeContainer>
-    </Wrapper>
+    </TocWrapper>
   );
 };
 
