@@ -660,6 +660,7 @@ class Corpus(TreeNode):
                 icon=document.icon,
                 md_summary_file=document.md_summary_file,
                 page_count=document.page_count,
+                custom_meta=document.custom_meta,  # Inherit custom metadata
                 is_public=document.is_public,  # Inherit public status
                 version_tree_id=tree_id,  # NEW isolated version tree
                 is_current=True,
