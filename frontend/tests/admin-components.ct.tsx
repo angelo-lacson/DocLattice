@@ -1675,7 +1675,13 @@ test.describe("SystemSettings Component", () => {
 
     const component = await mount(
       <SystemSettingsWrapper
-        mocks={[settingsMock, componentsMock, resetMock, refetchMock]}
+        mocks={[
+          settingsMock,
+          componentsMock,
+          mimeTypesMock,
+          resetMock,
+          refetchMock,
+        ]}
       />
     );
 
@@ -1778,6 +1784,7 @@ test.describe("SystemSettings Component", () => {
         mocks={[
           settingsMock,
           componentsMock,
+          mimeTypesMock,
           updateSecretsMock,
           refetchMock,
           componentsRefetchMock,
@@ -1891,6 +1898,7 @@ test.describe("SystemSettings Component", () => {
         mocks={[
           settingsMock,
           componentsMock,
+          mimeTypesMock,
           deleteSecretsMock,
           refetchMock,
           componentsRefetchMock,
