@@ -441,6 +441,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     projectAnnotationsOntoHtml(baseHtml, annotationSet, PROJECTION_SETTINGS)
       .then((html) => {
         if (!cancelled) {
+          setPaginationReady(false);
           setAnnotatedHtml(DOMPurify.sanitize(html, SANITIZE_CONFIG));
         }
       })
