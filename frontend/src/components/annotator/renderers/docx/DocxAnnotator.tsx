@@ -351,6 +351,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
   const [wasmReady, setWasmReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
+  const [paginationReady, setPaginationReady] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -399,6 +400,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
           const sanitized = DOMPurify.sanitize(html, SANITIZE_CONFIG);
           setBaseHtml(sanitized);
           setAnnotatedHtml(sanitized);
+          setPaginationReady(false);
           setConverting(false);
         }
       })
@@ -569,54 +571,25 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
 
   // ── Effect 7: Scroll to selected annotation ─────────────────────────
   // When selectedAnnotations changes, scroll the first selected annotation
-  // into view (matching TXT/PDF behavior). PaginatedDocument creates its
-  // own scroll container, so we find the annotation element and its nearest
-  // scrollable ancestor to scroll within.
+  // into view (matching TXT/PDF behavior). Gated on paginationReady to
+  // ensure PaginatedDocument has finished rendering the DOM elements.
   useEffect(() => {
-    if (selectedAnnotations.length === 0 || !containerRef.current) return;
+    if (
+      selectedAnnotations.length === 0 ||
+      !paginationReady ||
+      !containerRef.current
+    )
+      return;
 
-    // Small delay to ensure PaginatedDocument has rendered the content
-    const timer = setTimeout(() => {
-      if (!containerRef.current) return;
+    const targetId = selectedAnnotations[0];
+    const targetEl = containerRef.current.querySelector(
+      `[data-annotation-id="${CSS.escape(targetId)}"]`
+    ) as HTMLElement | null;
 
-      const targetId = selectedAnnotations[0];
-      const targetEl = containerRef.current.querySelector(
-        `[data-annotation-id="${CSS.escape(targetId)}"]`
-      ) as HTMLElement | null;
+    if (!targetEl) return;
 
-      if (!targetEl) return;
-
-      // Find the nearest scrollable ancestor (PaginatedDocument's container)
-      let scrollParent: HTMLElement | null = targetEl.parentElement;
-      while (scrollParent) {
-        const style = getComputedStyle(scrollParent);
-        const overflowY = style.overflowY;
-        if (
-          (overflowY === "auto" || overflowY === "scroll") &&
-          scrollParent.scrollHeight > scrollParent.clientHeight
-        ) {
-          break;
-        }
-        scrollParent = scrollParent.parentElement;
-      }
-
-      if (scrollParent) {
-        const parentRect = scrollParent.getBoundingClientRect();
-        const targetRect = targetEl.getBoundingClientRect();
-        scrollParent.scrollTo({
-          top:
-            targetRect.top -
-            parentRect.top +
-            scrollParent.scrollTop -
-            parentRect.height / 2 +
-            targetRect.height / 2,
-          behavior: "smooth",
-        });
-      }
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, [selectedAnnotations]);
+    targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [selectedAnnotations, paginationReady]);
 
   // Handle text selection for new annotation creation.
   const handleMouseUp = useCallback(
@@ -887,6 +860,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
           showPageNumbers={true}
           pageGap={20}
           backgroundColor={OS_LEGAL_COLORS.background}
+          onPaginationComplete={() => setPaginationReady(true)}
         />
       </div>
 
