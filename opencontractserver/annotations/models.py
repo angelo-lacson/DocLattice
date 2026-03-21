@@ -851,6 +851,12 @@ class Annotation(BaseOCModel, HasEmbeddingMixin):
 
     page = django.db.models.IntegerField(default=1, blank=False)
     raw_text = django.db.models.TextField(null=True, blank=True)
+    long_description = django.db.models.TextField(
+        null=True,
+        blank=True,
+        help_text="Optional markdown description for this annotation, "
+        "e.g. a section summary in a document index.",
+    )
     search_vector = SearchVectorField(null=True)
     json = NullableJSONField(default=jsonfield_default_value, null=False)
 

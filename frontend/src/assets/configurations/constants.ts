@@ -186,6 +186,14 @@ export const DOCUMENT_RELATIONSHIP_TOC_LIMIT = 500;
 // Backend enforces max 100 records per page on documents connection
 export const CORPUS_DOCUMENTS_TOC_LIMIT = 100;
 
+// Document annotation index (within-document TOC)
+// Keep in sync with opencontractserver/constants/annotations.py
+export const DOCUMENT_ANNOTATION_INDEX_LIMIT = 500;
+export const DOCUMENT_ANNOTATION_INDEX_MAX_DEPTH = 6;
+// Built-in annotation label names (OC_ namespace)
+// Keep in sync with opencontractserver/constants/annotations.py
+export const OC_SECTION_LABEL = "OC_SECTION";
+
 // Document search/picker limits
 export const DOCUMENT_PICKER_SEARCH_LIMIT = 20;
 

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/experimental-ct-react";
 import { DocumentTableOfContentsTestWrapper } from "./DocumentTableOfContentsTestWrapper";
+import { docScreenshot } from "./utils/docScreenshot";
 
 test.describe("DocumentTableOfContents", () => {
   test("shows standalone documents when no parent relationships exist", async ({
@@ -18,6 +19,7 @@ test.describe("DocumentTableOfContents", () => {
     // Both docs should be visible as root-level items (no hierarchy)
     await expect(page.getByText("Doc A")).toBeVisible();
     await expect(page.getByText("Doc B")).toBeVisible();
+    await docScreenshot(page, "corpus--toc--standalone-documents");
   });
 
   test("shows empty state when corpus has no documents", async ({
@@ -35,6 +37,7 @@ test.describe("DocumentTableOfContents", () => {
     await expect(
       page.getByText("This corpus doesn't have any documents yet")
     ).toBeVisible();
+    await docScreenshot(page, "corpus--toc--empty-state");
   });
 
   test("renders header with parent relationships", async ({ mount, page }) => {
@@ -72,6 +75,7 @@ test.describe("DocumentTableOfContents", () => {
       timeout: 5000,
     });
     await expect(page.getByText("Child Document 2")).toBeVisible();
+    await docScreenshot(page, "corpus--toc--expanded-children");
   });
 
   test("tree nodes have proper ARIA attributes", async ({ mount, page }) => {
@@ -299,5 +303,59 @@ test.describe("DocumentTableOfContents", () => {
     await expect(page.getByText("Level 4 Document")).toBeVisible({
       timeout: 5000,
     });
+  });
+
+  test("hybrid view shows document hierarchy with nested annotation indices", async ({
+    mount,
+    page,
+  }) => {
+    await mount(<DocumentTableOfContentsTestWrapper mockType="hybrid" />);
+
+    // Wait for the TOC to render
+    await expect(page.getByText("Table of Contents")).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(page.getByText("Parent Document")).toBeVisible();
+
+    // Expand parent document — use its treeitem's chevron directly
+    const parentItem = page.getByRole("treeitem", {
+      name: /Parent Document/,
+    });
+    await parentItem.locator(".chevron").click();
+
+    // Child documents should appear
+    await expect(page.getByText("Child Document 1")).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.getByText("Child Document 2")).toBeVisible();
+
+    // Parent document's annotation index sections should appear
+    await expect(page.getByText("1. Introduction")).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.getByText("2. Terms and Conditions")).toBeVisible();
+
+    // Expand Child Document 1 to see its sections
+    const child1Item = page.getByRole("treeitem", {
+      name: /Child Document 1/,
+    });
+    await child1Item.locator(".chevron").click();
+
+    await expect(page.getByText("A. Definitions")).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.getByText("B. Obligations")).toBeVisible();
+
+    // Expand Child Document 2 to see its sections
+    const child2Item = page.getByRole("treeitem", {
+      name: /Child Document 2/,
+    });
+    await child2Item.locator(".chevron").click();
+
+    await expect(page.getByText("I. Liability")).toBeVisible({
+      timeout: 5000,
+    });
+
+    await docScreenshot(page, "corpus--toc--hybrid-index");
   });
 });
