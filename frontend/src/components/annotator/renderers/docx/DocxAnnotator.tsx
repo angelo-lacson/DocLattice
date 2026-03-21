@@ -755,6 +755,11 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       .join("\n");
 
     return `
+      /* Constrain docxodus content divs to container width so text-align
+         and word-wrap work correctly (they default to content-sized). */
+      .docx-content > div {
+        max-width: 100%;
+      }
       /* Annotation spans need relative positioning for ::before labels */
       .${CSS_CLASS_PREFIX}single,
       .${CSS_CLASS_PREFIX}start {
