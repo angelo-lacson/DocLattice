@@ -364,10 +364,12 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
   maxHeight = "100%",
   maxWidth = "100%",
 }) => {
-  // Cached base HTML from one-time DOCX conversion (sanitized)
+  // Cached base HTML from one-time DOCX conversion (sanitized, style blocks extracted)
   const [baseHtml, setBaseHtml] = useState<string>("");
   // Annotated HTML with all annotations projected
   const [annotatedHtml, setAnnotatedHtml] = useState<string>("");
+  // Document formatting CSS extracted from docxodus HTML output
+  const [docxCss, setDocxCss] = useState<string>("");
   // CSS from docxodus for annotation highlight styles
   const [annotationCss, setAnnotationCss] = useState<string>("");
   // CSS for toggling label visibility without re-projecting
@@ -434,13 +436,20 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
           // in XML. The docxodus WASM ProjectAnnotationsOntoHtml parses the HTML as
           // XML internally, so convert all named entities to numeric references.
           sanitized = replaceHtmlEntitiesWithNumeric(sanitized);
-          // DOMPurify with FORCE_BODY strips <html>/<head>/<body> wrappers,
-          // potentially leaving multiple top-level elements (e.g. <style> + <div>).
-          // The WASM XML parser requires a single root, so wrap if needed.
-          if (!sanitized.trimStart().startsWith("<div")) {
-            sanitized = `<div>${sanitized}</div>`;
-          }
-          setBaseHtml(sanitized);
+          // Extract <style> blocks from sanitized HTML. DOMPurify with FORCE_BODY
+          // strips <html>/<head>/<body> wrappers, leaving <style> + <div> as
+          // siblings. The WASM XML parser requires a single root, so we separate
+          // styles (rendered via React <style> tag) from content (passed to WASM).
+          const styleBlocks: string[] = [];
+          const contentHtml = sanitized.replace(
+            /<style[^>]*>([\s\S]*?)<\/style>/gi,
+            (_match, css) => {
+              styleBlocks.push(css);
+              return "";
+            }
+          );
+          setDocxCss(styleBlocks.join("\n"));
+          setBaseHtml(contentHtml);
           // Show the base HTML immediately to avoid a "Projecting annotations..."
           // flash while the projection effect runs.
           setAnnotatedHtml(sanitized);
@@ -866,6 +875,7 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       onMouseUp={handleMouseUp}
       onClick={handleClick}
     >
+      <style>{docxCss}</style>
       <style>{annotationCss}</style>
       <style>{visibilityCss}</style>
       <style>{customCss}</style>
