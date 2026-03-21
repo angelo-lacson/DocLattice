@@ -319,8 +319,6 @@ test.describe("UnifiedContentFeed - Read-only Mode", () => {
     // Get the PostItNote button — use toHaveCSS for retry-based style assertion
     const firstNote = page.locator("button").filter({ hasText: "Test Note 1" });
     await expect(firstNote).toBeVisible();
-
-    // Check cursor style — toHaveCSS retries until styled-components injects the CSS
     await expect(firstNote).toHaveCSS("cursor", "default");
   });
 
