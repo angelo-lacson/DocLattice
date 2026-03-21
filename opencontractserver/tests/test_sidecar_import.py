@@ -1305,7 +1305,7 @@ class TestSidecarImportTask(TestCase):
 
         labels = _build_labels_json()
 
-        meta_csv = "path,title,description\n/doc.pdf,CSV Title,CSV description\n"
+        meta_csv = "source_path,title,description\n/doc.pdf,CSV Title,CSV description\n"
 
         files = {
             "doc.pdf": self.pdf_bytes,

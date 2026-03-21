@@ -25,6 +25,7 @@ from opencontractserver.constants.document_processing import (
     DEFAULT_DOCUMENT_PATH_PREFIX,
     MAX_FILENAME_LENGTH,
 )
+from opencontractserver.constants.zip_import import ZIP_MAX_SIDECAR_SIZE_BYTES
 from opencontractserver.corpuses.models import Corpus, TemporaryFileHandle
 from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.registry import get_allowed_mime_types
@@ -552,12 +553,21 @@ def _read_sidecar(
         KeyError: If the sidecar path is not found in the zip.
         ValueError: If the sidecar exceeds ZIP_MAX_SIDECAR_SIZE_BYTES.
     """
-    from opencontractserver.constants.zip_import import ZIP_MAX_SIDECAR_SIZE_BYTES
-
     # sidecar_path is the *original* (unsanitized) zip entry name stored in
     # manifest.annotation_sidecars.  This is safe: ZipFile.open() performs a
     # name lookup against the zip's central directory — it does NOT touch the
     # filesystem and cannot be used for path-traversal.
+
+    # Pre-read size check using the central directory's declared size.
+    # This avoids allocating memory for oversized sidecars.  A malicious zip
+    # could forge this value, so we keep a post-read assertion as well.
+    info = import_zip.getinfo(sidecar_path)
+    if info.file_size > ZIP_MAX_SIDECAR_SIZE_BYTES:
+        raise ValueError(
+            f"Sidecar {sidecar_path} declares {info.file_size} bytes, "
+            f"exceeds limit of {ZIP_MAX_SIDECAR_SIZE_BYTES} bytes"
+        )
+
     with import_zip.open(sidecar_path) as sidecar_handle:
         raw = sidecar_handle.read()
         if len(raw) > ZIP_MAX_SIDECAR_SIZE_BYTES:
@@ -1089,7 +1099,9 @@ def import_zip_with_folder_structure(
                             if doc_title != entry.filename:
                                 doc_obj.title = doc_title
                                 update_fields.append("title")
-                            if doc_description != f"Imported from zip (job: {job_id})":
+                            if description or (
+                                doc_metadata and doc_metadata.description
+                            ):
                                 doc_obj.description = doc_description
                                 update_fields.append("description")
                             if custom_meta:
