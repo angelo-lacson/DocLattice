@@ -24,6 +24,14 @@ export const isPdfFileType = (fileType: string | null | undefined): boolean =>
 export const isDocxFileType = (fileType: string | null | undefined): boolean =>
   fileType === DOCX_MIME_TYPE;
 
+/**
+ * Check if a file type uses span-based annotations (character offsets).
+ * This includes TXT and DOCX — as opposed to PDF which uses token-based annotations.
+ */
+export const isSpanBasedFileType = (
+  fileType: string | null | undefined
+): boolean => isTextFileType(fileType) || isDocxFileType(fileType);
+
 export const downloadFile = async (url: string): Promise<void> => {
   try {
     const res = await Axios.get(url, {
