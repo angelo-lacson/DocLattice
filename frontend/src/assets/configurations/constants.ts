@@ -251,6 +251,18 @@ export const PIPELINE_UI = {
 export const LEGACY_TEXT_MIME_TYPE = "application/txt";
 
 /**
+ * Standard MIME type for DOCX (Word) documents.
+ */
+export const DOCX_MIME_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+/**
+ * Maximum number of DOCX byte arrays to cache in memory.
+ * Oldest entry is evicted when the limit is reached.
+ */
+export const DOCX_CACHE_MAX_ENTRIES = 3;
+
+/**
  * @deprecated Use the `supportedMimeTypes` GraphQL query instead.
  * Retained as a static fallback for components that haven't migrated yet.
  */
@@ -258,8 +270,7 @@ export const SUPPORTED_MIME_TYPES = [
   { value: "application/pdf", label: "PDF", shortLabel: "PDF" },
   { value: "text/plain", label: "Plain Text", shortLabel: "TXT" },
   {
-    value:
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    value: DOCX_MIME_TYPE,
     label: "Word Document",
     shortLabel: "DOCX",
   },

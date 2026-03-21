@@ -428,11 +428,11 @@ class TestPostProcessor(BasePostProcessor):
         post_processor_titles = [pp["title"] for pp in post_processors]
         self.assertIn("Test PostProcessor", post_processor_titles)
 
-    def test_pipeline_components_query_with_mimetype_no_components(self):
-        """Test querying pipeline components with a mimetype that has limited components.
+    def test_pipeline_components_query_with_mimetype_docx(self):
+        """Test querying pipeline components filtered to DOCX file type.
 
-        Note: DOCX now has LlamaParseParser support, but no thumbnailer support.
-        This test verifies the filtering behavior for file types with partial support.
+        DOCX has parser support (LlamaParse, Docxodus) and thumbnailer support
+        (DocxThumbnailGenerator). This test verifies the filtering behavior.
         """
 
         # Use the enum value, not the full MIME type
@@ -462,13 +462,14 @@ class TestPostProcessor(BasePostProcessor):
 
         data = result["data"]["pipelineComponents"]
 
-        # LlamaParseParser supports DOCX, so we expect at least one parser
+        # DocxodusServiceParser supports DOCX
         parsers = data["parsers"]
         parser_titles = [parser["title"] for parser in parsers]
-        self.assertIn("LlamaParse Parser", parser_titles)
+        self.assertIn("Docxodus Parser (REST)", parser_titles)
 
-        # No thumbnailers support DOCX
-        self.assertEqual(len(data["thumbnailers"]), 0)
+        # DocxThumbnailGenerator supports DOCX
+        thumbnailers = data["thumbnailers"]
+        self.assertGreaterEqual(len(thumbnailers), 1)
 
         # Embedders are included regardless of mimetype in our utils
         embedders = data["embedders"]
@@ -643,11 +644,10 @@ class TestPostProcessor(BasePostProcessor):
         self.assertTrue(txt_entry["stageCoverage"]["parser"])
         self.assertTrue(txt_entry["stageCoverage"]["embedder"])
 
-        # DOCX has no thumbnailer but is still fully supported
-        # (fully_supported requires parser + embedder only)
+        # DOCX now has parser, embedder, and thumbnailer (DocxThumbnailGenerator)
         self.assertIn("docx", by_file_type)
         docx_entry = by_file_type["docx"]
-        self.assertFalse(docx_entry["stageCoverage"]["thumbnailer"])
+        self.assertTrue(docx_entry["stageCoverage"]["thumbnailer"])
         self.assertTrue(docx_entry["fullySupported"])
 
     def test_supported_mime_types_requires_auth(self):
