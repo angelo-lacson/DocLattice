@@ -569,19 +569,53 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
 
   // ── Effect 7: Scroll to selected annotation ─────────────────────────
   // When selectedAnnotations changes, scroll the first selected annotation
-  // into view (matching TXT/PDF behavior). Uses scrollIntoView since
-  // PaginatedDocument manages its own internal scroll container.
+  // into view (matching TXT/PDF behavior). PaginatedDocument creates its
+  // own scroll container, so we find the annotation element and its nearest
+  // scrollable ancestor to scroll within.
   useEffect(() => {
     if (selectedAnnotations.length === 0 || !containerRef.current) return;
 
-    const targetId = selectedAnnotations[0];
-    const targetEl = containerRef.current.querySelector(
-      `[data-annotation-id="${CSS.escape(targetId)}"]`
-    ) as HTMLElement | null;
+    // Small delay to ensure PaginatedDocument has rendered the content
+    const timer = setTimeout(() => {
+      if (!containerRef.current) return;
 
-    if (!targetEl) return;
+      const targetId = selectedAnnotations[0];
+      const targetEl = containerRef.current.querySelector(
+        `[data-annotation-id="${CSS.escape(targetId)}"]`
+      ) as HTMLElement | null;
 
-    targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (!targetEl) return;
+
+      // Find the nearest scrollable ancestor (PaginatedDocument's container)
+      let scrollParent: HTMLElement | null = targetEl.parentElement;
+      while (scrollParent) {
+        const style = getComputedStyle(scrollParent);
+        const overflowY = style.overflowY;
+        if (
+          (overflowY === "auto" || overflowY === "scroll") &&
+          scrollParent.scrollHeight > scrollParent.clientHeight
+        ) {
+          break;
+        }
+        scrollParent = scrollParent.parentElement;
+      }
+
+      if (scrollParent) {
+        const parentRect = scrollParent.getBoundingClientRect();
+        const targetRect = targetEl.getBoundingClientRect();
+        scrollParent.scrollTo({
+          top:
+            targetRect.top -
+            parentRect.top +
+            scrollParent.scrollTop -
+            parentRect.height / 2 +
+            targetRect.height / 2,
+          behavior: "smooth",
+        });
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, [selectedAnnotations]);
 
   // Handle text selection for new annotation creation.
