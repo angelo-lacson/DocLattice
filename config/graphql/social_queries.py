@@ -5,6 +5,7 @@ GraphQL query mixin for badge, leaderboard, community, notification, and agent q
 import logging
 
 import graphene
+from django.core.cache import cache
 from django.db.models import Q
 from graphene import relay
 from graphene_django.filter import DjangoFilterConnectionField
@@ -33,6 +34,7 @@ from config.graphql.graphene_types import (
 )
 from opencontractserver.badges.criteria_registry import BadgeCriteriaRegistry
 from opencontractserver.badges.models import Badge, UserBadge
+from opencontractserver.constants.community_stats import COMMUNITY_STATS_CACHE_TTL
 from opencontractserver.conversations.models import (
     ChatMessage,
     Conversation,
@@ -605,6 +607,10 @@ class SocialQueryMixin:
         Issue: #613 - Create leaderboard and community stats dashboard
         Epic: #572 - Social Features Epic
 
+        Uses Django cache with a short TTL to avoid re-running 7+ COUNT
+        queries on every landing page load. Cache is keyed by user type
+        (anonymous vs authenticated user ID) and optional corpus_id.
+
         Args:
             corpus_id: Optional corpus ID for corpus-specific stats
 
@@ -619,9 +625,8 @@ class SocialQueryMixin:
 
         from opencontractserver.annotations.models import Annotation
 
-        # UserBadge is imported at top level
-
         User = get_user_model()
+        user = info.context.user
 
         # Get corpus if specified
         corpus_django_pk = None
@@ -629,11 +634,43 @@ class SocialQueryMixin:
             try:
                 _, corpus_django_pk = from_global_id(corpus_id)
                 # Verify user has access to this corpus
-                Corpus.objects.visible_to_user(info.context.user).get(
-                    id=corpus_django_pk
-                )
+                Corpus.objects.visible_to_user(user).get(id=corpus_django_pk)
             except Corpus.DoesNotExist:
                 raise GraphQLError("Corpus not found or access denied")
+
+        # Build cache key based on user identity and corpus scope
+        user_key = "anon" if user.is_anonymous else f"user:{user.id}"
+        corpus_key = f":corpus:{corpus_django_pk}" if corpus_django_pk else ""
+        cache_key = f"community_stats:{user_key}{corpus_key}"
+
+        cached = cache.get(cache_key)
+        if cached is not None:
+            # Reconstruct Graphene types from cached primitives
+            badge_distribution = []
+            if cached.get("badge_distribution"):
+                badge_ids = [b["badge_id"] for b in cached["badge_distribution"]]
+                badges_by_id = Badge.objects.in_bulk(badge_ids) if badge_ids else {}
+                badge_distribution = [
+                    BadgeDistributionType(
+                        badge=badges_by_id[b["badge_id"]],
+                        award_count=b["award_count"],
+                        unique_recipients=b["unique_recipients"],
+                    )
+                    for b in cached["badge_distribution"]
+                    if b["badge_id"] in badges_by_id
+                ]
+            return CommunityStatsType(
+                total_users=cached["total_users"],
+                total_messages=cached["total_messages"],
+                total_threads=cached["total_threads"],
+                total_annotations=cached["total_annotations"],
+                total_badges_awarded=cached["total_badges_awarded"],
+                badge_distribution=badge_distribution,
+                messages_this_week=cached["messages_this_week"],
+                messages_this_month=cached["messages_this_month"],
+                active_users_this_week=cached["active_users_this_week"],
+                active_users_this_month=cached["active_users_this_month"],
+            )
 
         # Calculate date cutoffs
         now = timezone.now()
@@ -641,14 +678,13 @@ class SocialQueryMixin:
         month_ago = now - timedelta(days=30)
 
         # Get visible users
-        users = User.objects.visible_to_user(info.context.user).filter(is_active=True)
+        users = User.objects.visible_to_user(user).filter(is_active=True)
         total_users = users.count()
 
         # Total messages
-        # Filter by visible conversations since ChatMessage doesn't inherit conversation visibility
-        visible_conversations_stats = Conversation.objects.visible_to_user(
-            info.context.user
-        )
+        # Filter by visible conversations since ChatMessage doesn't
+        # inherit conversation visibility
+        visible_conversations_stats = Conversation.objects.visible_to_user(user)
         message_query = ChatMessage.objects.filter(
             msg_type=MessageTypeChoices.HUMAN,
             conversation__in=visible_conversations_stats,
@@ -678,13 +714,13 @@ class SocialQueryMixin:
         # Total threads
         thread_query = Conversation.objects.filter(
             conversation_type="thread"
-        ).visible_to_user(info.context.user)
+        ).visible_to_user(user)
         if corpus_django_pk:
             thread_query = thread_query.filter(chat_with_corpus_id=corpus_django_pk)
         total_threads = thread_query.count()
 
         # Total annotations
-        annotation_query = Annotation.objects.visible_to_user(info.context.user)
+        annotation_query = Annotation.objects.visible_to_user(user)
         if corpus_django_pk:
             annotation_query = annotation_query.filter(
                 document__corpus__id=corpus_django_pk
@@ -699,25 +735,53 @@ class SocialQueryMixin:
             )
         total_badges_awarded = badge_query.count()
 
-        # Badge distribution
+        # Badge distribution - batch-load badges to avoid N+1
         badge_distribution = []
-        badge_stats = (
+        badge_stats = list(
             badge_query.values("badge")
             .annotate(
-                award_count=Count("id"), unique_recipients=Count("user", distinct=True)
+                award_count=Count("id"),
+                unique_recipients=Count("user", distinct=True),
             )
             .order_by("-award_count")[:10]
         )
 
-        for stat in badge_stats:
-            badge = Badge.objects.get(id=stat["badge"])
-            badge_distribution.append(
-                BadgeDistributionType(
-                    badge=badge,
-                    award_count=stat["award_count"],
-                    unique_recipients=stat["unique_recipients"],
-                )
-            )
+        if badge_stats:
+            badge_ids = [stat["badge"] for stat in badge_stats]
+            badges_by_id = Badge.objects.in_bulk(badge_ids)
+            for stat in badge_stats:
+                badge_obj = badges_by_id.get(stat["badge"])
+                if badge_obj:
+                    badge_distribution.append(
+                        BadgeDistributionType(
+                            badge=badge_obj,
+                            award_count=stat["award_count"],
+                            unique_recipients=stat["unique_recipients"],
+                        )
+                    )
+
+        # Cache primitive data only — avoids pickling Graphene ObjectTypes
+        # and Django model instances, which is fragile with Redis/Memcached.
+        cache_payload = {
+            "total_users": total_users,
+            "total_messages": total_messages,
+            "total_threads": total_threads,
+            "total_annotations": total_annotations,
+            "total_badges_awarded": total_badges_awarded,
+            "badge_distribution": [
+                {
+                    "badge_id": stat["badge"],
+                    "award_count": stat["award_count"],
+                    "unique_recipients": stat["unique_recipients"],
+                }
+                for stat in badge_stats
+            ],
+            "messages_this_week": messages_this_week,
+            "messages_this_month": messages_this_month,
+            "active_users_this_week": active_users_week,
+            "active_users_this_month": active_users_month,
+        }
+        cache.set(cache_key, cache_payload, COMMUNITY_STATS_CACHE_TTL)
 
         return CommunityStatsType(
             total_users=total_users,
