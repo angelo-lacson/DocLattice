@@ -53,9 +53,7 @@ import { clampMenuPosition } from "../../../../utils/layout";
 import DOMPurify from "dompurify";
 import { Tag, X } from "lucide-react";
 import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
-import { PermissionTypes } from "../../../types";
-import { Label, LabelContainer } from "../txt/StyledComponents";
-import RadialButtonCloud, { CloudButtonItem } from "../txt/RadialButtonCloud";
+import { hexToRgb } from "../../../../utils/transform";
 
 /** Stable empty arrays to avoid re-render loops. */
 const EMPTY_ANNOTATIONS: ServerSpanAnnotation[] = [];
@@ -334,8 +332,6 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
   getSpan,
   createAnnotation,
   deleteAnnotation,
-  approveAnnotation,
-  rejectAnnotation,
   selectedAnnotations,
   setSelectedAnnotations,
   showStructuralAnnotations,
@@ -360,17 +356,6 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
   const [converting, setConverting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  // Annotation label overlay positions (computed from DOM after render)
-  const [labelPositions, setLabelPositions] = useState<
-    {
-      annotationId: string;
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    }[]
-  >([]);
 
   // Context menu state for annotation creation
   const [menuPosition, setMenuPosition] = useState<{
@@ -598,58 +583,6 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     return () => cancelAnimationFrame(timer);
   }, [annotatedHtml, onAnnotationRefChange]);
 
-  // ── Effect 7: Compute annotation label overlay positions ─────────
-  // After annotated HTML renders, find each [data-annotation-id] element
-  // and compute its position relative to the scroll container for the
-  // React-rendered label overlay (same pattern as TxtAnnotator).
-  useEffect(() => {
-    if (!annotatedHtml || !containerRef.current) {
-      setLabelPositions([]);
-      return;
-    }
-
-    const timer = requestAnimationFrame(() => {
-      const container = containerRef.current;
-      if (!container) return;
-
-      const containerRect = container.getBoundingClientRect();
-      const scrollTop = container.scrollTop;
-      const scrollLeft = container.scrollLeft;
-
-      const positions: typeof labelPositions = [];
-      const seen = new Set<string>();
-
-      container.querySelectorAll("[data-annotation-id]").forEach((el) => {
-        const id = el.getAttribute("data-annotation-id");
-        if (!id || id.startsWith("__sr_") || id.startsWith("__cs_")) return;
-        if (seen.has(id)) return;
-        seen.add(id);
-
-        const rect = el.getBoundingClientRect();
-        positions.push({
-          annotationId: id,
-          x: rect.left - containerRect.left + scrollLeft,
-          y: rect.top - containerRect.top + scrollTop,
-          width: rect.width,
-          height: rect.height,
-        });
-      });
-
-      setLabelPositions(positions);
-    });
-
-    return () => cancelAnimationFrame(timer);
-  }, [annotatedHtml, annotations, selectedAnnotations]);
-
-  // Lookup map for annotation objects by ID (for label overlays)
-  const annotationById = useMemo(() => {
-    const map = new Map<string, ServerSpanAnnotation>();
-    for (const ann of annotations) {
-      map.set(ann.id, ann);
-    }
-    return map;
-  }, [annotations]);
-
   // Handle text selection for new annotation creation.
   const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
@@ -762,8 +695,9 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // App-specific CSS for selection highlights and hover effects.
-  // Layered after annotationCss and visibilityCss so these override.
+  // App-specific CSS for annotation highlights, labels, and hover effects.
+  // Labels are rendered via CSS ::before pseudo-elements on the first span
+  // of each annotation, avoiding DOM disruption from inline label elements.
   const customCss = useMemo(() => {
     const selectedStyles = selectedAnnotations
       .map(
@@ -777,7 +711,55 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       )
       .join("\n");
 
+    // Build per-label ::before rules with the label's color.
+    // Uses data-label-id to match and data-label for the text content.
+    const labelColorMap = new Map<string, string>();
+    for (const label of availableLabels) {
+      labelColorMap.set(label.id, label.color || "cccccc");
+    }
+
+    const labelStyles = [...labelColorMap.entries()]
+      .map(([labelId, color]) => {
+        const rgb = hexToRgb(color);
+        const bgColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`;
+        return `
+      /* Highlight background for label ${CSS.escape(labelId)} */
+      .${CSS_CLASS_PREFIX}highlight[data-label-id="${CSS.escape(labelId)}"] {
+        background-color: ${bgColor};
+        border-bottom: 2px solid #${color.replace("#", "")};
+      }
+      /* Label tag on first span of annotation */
+      .${CSS_CLASS_PREFIX}single[data-label-id="${CSS.escape(
+          labelId
+        )}"]::before,
+      .${CSS_CLASS_PREFIX}start[data-label-id="${CSS.escape(
+          labelId
+        )}"]::before {
+        content: attr(data-label);
+        position: absolute;
+        top: -1.4em;
+        left: 0;
+        font-size: 0.65em;
+        line-height: 1;
+        padding: 1px 4px;
+        border-radius: 3px;
+        background-color: #${color.replace("#", "")};
+        color: white;
+        white-space: nowrap;
+        pointer-events: auto;
+        cursor: pointer;
+        z-index: 10;
+      }
+      `;
+      })
+      .join("\n");
+
     return `
+      /* Annotation spans need relative positioning for ::before labels */
+      .${CSS_CLASS_PREFIX}single,
+      .${CSS_CLASS_PREFIX}start {
+        position: relative;
+      }
       [data-annotation-id] {
         cursor: pointer;
         transition: outline 0.15s ease, background-color 0.15s ease;
@@ -791,17 +773,20 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
         background-color: ${OS_LEGAL_COLORS.searchHighlight} !important;
         cursor: default;
       }
+      [data-annotation-id^="__sr_"]::before { display: none; }
       /* Chat source highlighting */
       [data-annotation-id^="__cs_"] {
         background-color: ${OS_LEGAL_COLORS.chatSourceHighlight} !important;
         cursor: default;
       }
+      [data-annotation-id^="__cs_"]::before { display: none; }
       [data-annotation-id^="__cs_"][data-label="${CHAT_SOURCE_SELECTED_LABEL_ID}"] {
         background-color: ${OS_LEGAL_COLORS.chatSourceHighlightActive} !important;
       }
+      ${labelStyles}
       ${selectedStyles}
     `;
-  }, [selectedAnnotations]);
+  }, [selectedAnnotations, availableLabels]);
 
   if (error) {
     return (
@@ -864,77 +849,6 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
           backgroundColor: OS_LEGAL_COLORS.background,
         }}
       />
-
-      {/* Annotation label overlays with action controls */}
-      {labelPositions.map(({ annotationId, x, y, width, height }, idx) => {
-        const annotation = annotationById.get(annotationId);
-        if (!annotation) return null;
-
-        const labelColor = annotation.annotationLabel?.color || "#cccccc";
-
-        const actions: CloudButtonItem[] = [];
-        if (
-          !readOnly &&
-          !annotation.structural &&
-          annotation.myPermissions.includes(PermissionTypes.CAN_REMOVE)
-        ) {
-          actions.push({
-            name: "trash",
-            color: "#d3d3d3",
-            tooltip: "Delete Annotation",
-            onClick: () => deleteAnnotation(annotation.id),
-          });
-        }
-        if (approveAnnotation) {
-          actions.push({
-            name: "thumbs up",
-            color: "#b3b3b3",
-            tooltip: "Approve Annotation",
-            onClick: () => approveAnnotation(annotation.id),
-          });
-        }
-        if (rejectAnnotation) {
-          actions.push({
-            name: "thumbs down",
-            color: "#c3c3c3",
-            tooltip: "Reject Annotation",
-            onClick: () => rejectAnnotation(annotation.id),
-          });
-        }
-
-        return (
-          <LabelContainer
-            key={`${annotationId}-${idx}`}
-            style={{
-              position: "absolute",
-              left: `${x}px`,
-              top: `${y}px`,
-              width: `${width}px`,
-              height: `${height}px`,
-              zIndex: 1000 + idx,
-              pointerEvents: "auto",
-            }}
-            color={labelColor}
-          >
-            <Label
-              color={labelColor}
-              $index={idx}
-              onClick={(e: React.MouseEvent) => {
-                e.stopPropagation();
-                setSelectedAnnotations([annotationId]);
-              }}
-            >
-              {annotation.annotationLabel?.text || "Unknown"}
-            </Label>
-            {actions.length > 0 && (
-              <RadialButtonCloud
-                parentBackgroundColor={labelColor}
-                actions={actions}
-              />
-            )}
-          </LabelContainer>
-        );
-      })}
 
       {/* Annotation creation menu */}
       {menuPosition && pendingSelection && (
