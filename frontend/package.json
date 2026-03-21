@@ -41,7 +41,7 @@
     "axios": "^1.13.5",
     "d3": "^7.9.0",
     "date-fns": "^4.1.0",
-    "docxodus": "5.5.0",
+    "docxodus": "5.5.2",
     "dompurify": "^3.3.3",
     "framer-motion": "6.*",
     "fuse.js": "^6.5.3",

@@ -70,29 +70,9 @@ interface ChatSourceHighlight {
 
 const EMPTY_CHAT_SOURCES: ChatSourceHighlight[] = [];
 
-/**
- * Replace HTML named entities (e.g. &nbsp;, &ndash;) with XML-safe numeric
- * references (&#160;, &#8211;). The docxodus WASM projection parses HTML as
- * XML internally, and XML only recognises &amp; &lt; &gt; &quot; &apos;.
- *
- * Uses a regex to find all `&name;` patterns and resolves them via a temporary
- * DOM element, which handles the full HTML entity set.
- */
-function replaceHtmlEntitiesWithNumeric(html: string): string {
-  // XML built-in entities — leave these as-is
-  const XML_ENTITIES = new Set(["amp", "lt", "gt", "quot", "apos"]);
-
-  const textarea = document.createElement("textarea");
-
-  return html.replace(/&([a-zA-Z][a-zA-Z0-9]*);/g, (match, name) => {
-    if (XML_ENTITIES.has(name)) return match;
-    // Resolve the entity via the browser's HTML parser
-    textarea.innerHTML = match;
-    const resolved = textarea.value;
-    if (resolved === match) return match; // Unknown entity, leave as-is
-    // Convert to numeric character reference
-    return `&#${resolved.codePointAt(0)};`;
-  });
+/** Remove <style> tags from HTML (styles are rendered separately via React). */
+function stripStyleTags(html: string): string {
+  return html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
 }
 
 /** CSS class prefix for annotation elements produced by the projector. */
@@ -431,15 +411,10 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       .then((html) => {
         if (!cancelled) {
           // Sanitize while preserving docxodus formatting (see SANITIZE_CONFIG).
-          let sanitized = DOMPurify.sanitize(html, SANITIZE_CONFIG);
-          // DOMPurify outputs HTML named entities (e.g. &nbsp;) that are invalid
-          // in XML. The docxodus WASM ProjectAnnotationsOntoHtml parses the HTML as
-          // XML internally, so convert all named entities to numeric references.
-          sanitized = replaceHtmlEntitiesWithNumeric(sanitized);
-          // Extract <style> blocks from sanitized HTML. DOMPurify with FORCE_BODY
-          // strips <html>/<head>/<body> wrappers, leaving <style> + <div> as
-          // siblings. The WASM XML parser requires a single root, so we separate
-          // styles (rendered via React <style> tag) from content (passed to WASM).
+          const sanitized = DOMPurify.sanitize(html, SANITIZE_CONFIG);
+          // Extract <style> blocks for separate rendering via React <style> tag.
+          // The content HTML goes to dangerouslySetInnerHTML, while styles are
+          // rendered as siblings so they apply correctly.
           const styleBlocks: string[] = [];
           const contentHtml = sanitized.replace(
             /<style[^>]*>([\s\S]*?)<\/style>/gi,
@@ -449,10 +424,11 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
             }
           );
           setDocxCss(styleBlocks.join("\n"));
-          setBaseHtml(contentHtml);
-          // Show the base HTML immediately to avoid a "Projecting annotations..."
-          // flash while the projection effect runs.
-          setAnnotatedHtml(sanitized);
+          // Store full sanitized HTML for WASM projection (docxodus 5.5.2+
+          // handles multiple roots and HTML entities internally).
+          setBaseHtml(sanitized);
+          // Show content immediately while projection effect runs.
+          setAnnotatedHtml(contentHtml);
           setConverting(false);
         }
       })
@@ -486,20 +462,21 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     );
 
     if (annotationSet.labelledText.length === 0) {
-      setAnnotatedHtml(baseHtml);
+      setAnnotatedHtml(stripStyleTags(baseHtml));
       return;
     }
 
     projectAnnotationsOntoHtml(baseHtml, annotationSet, PROJECTION_SETTINGS)
       .then((html) => {
         if (!cancelled) {
-          setAnnotatedHtml(DOMPurify.sanitize(html, SANITIZE_CONFIG));
+          const sanitized = DOMPurify.sanitize(html, SANITIZE_CONFIG);
+          setAnnotatedHtml(stripStyleTags(sanitized));
         }
       })
       .catch((err) => {
         if (!cancelled) {
           console.error("Annotation projection error:", err);
-          setAnnotatedHtml(baseHtml);
+          setAnnotatedHtml(stripStyleTags(baseHtml));
         }
       });
 
