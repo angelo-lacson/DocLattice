@@ -34,6 +34,7 @@ import {
   generateAnnotationVisibilityCss,
   findTextOccurrences,
   AnnotationLabelMode,
+  PaginationMode,
 } from "docxodus";
 import type {
   ExternalAnnotationSet,
@@ -392,7 +393,9 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     let cancelled = false;
     setConverting(true);
 
-    convertDocxToHtml(docxBytes)
+    convertDocxToHtml(docxBytes, {
+      paginationMode: PaginationMode.Paginated,
+    })
       .then((html) => {
         if (!cancelled) {
           // Sanitize while preserving docxodus formatting (see SANITIZE_CONFIG).
