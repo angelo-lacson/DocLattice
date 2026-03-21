@@ -3895,10 +3895,10 @@ dir-glob@^3.0.1:
   dependencies:
     path-type "^4.0.0"
 
-docxodus@5.5.2:
-  version "5.5.2"
-  resolved "https://registry.yarnpkg.com/docxodus/-/docxodus-5.5.2.tgz#6361d3aff8b285ca88f2ac61ee35c69b865a5204"
-  integrity sha512-c9sjEIgv+kPFrtRjzzc8wgsJFfsBPK8Djf7BlVMddTclC6BjzpLgjTD+oVDe7/Lmc6IMfW64pUVccfjn1Dx2zg==
+docxodus@5.5.3:
+  version "5.5.3"
+  resolved "https://registry.yarnpkg.com/docxodus/-/docxodus-5.5.3.tgz#76fb42cc3221e63f70f5ec7e71d59d91e9853717"
+  integrity sha512-llgB2xKH6OPcf6KRXQNSg7MibNAneNlFcaWJUNYrMorpo3wnEqbnptV+b8qgYjcPTseWMeCri57h0+K5gHutSA==
 
 dom-accessibility-api@^0.5.9:
   version "0.5.16"
