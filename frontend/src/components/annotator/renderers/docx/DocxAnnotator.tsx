@@ -36,8 +36,6 @@ import {
   AnnotationLabelMode,
   PaginationMode,
 } from "docxodus";
-// @ts-expect-error -- tsconfig uses moduleResolution:"node" which doesn't
-// support package.json "exports" subpaths. The import works at runtime via Vite.
 import { PaginatedDocument } from "docxodus/react";
 import type {
   ExternalAnnotationSet,
