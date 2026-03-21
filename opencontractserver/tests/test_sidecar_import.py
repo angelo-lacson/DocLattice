@@ -1338,3 +1338,137 @@ class TestSidecarImportTask(TestCase):
         doc = Document.objects.get(pk=doc_id)
         self.assertEqual(doc.title, "CSV Title")
         self.assertEqual(doc.description, "CSV description")
+
+    def test_oversized_sidecar_pre_read_rejected(self):
+        """
+        When a sidecar's declared size in the zip central directory exceeds
+        ZIP_MAX_SIDECAR_SIZE_BYTES, the read is rejected before allocation.
+        The document falls through to pipeline creation.
+        """
+        from unittest.mock import patch
+
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        sidecar = _build_sidecar_json(skip_pipeline=True)
+        sidecar_bytes = json.dumps(sidecar).encode("utf-8")
+        labels = _build_labels_json()
+
+        files = {
+            "doc.pdf": self.pdf_bytes,
+            "doc.json": sidecar_bytes,
+            "labels.json": json.dumps(labels).encode("utf-8"),
+        }
+
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        # Patch the limit to be smaller than the sidecar
+        with patch(
+            "opencontractserver.tasks.import_tasks.ZIP_MAX_SIDECAR_SIZE_BYTES",
+            10,
+        ):
+            result = import_zip_with_folder_structure.apply(
+                kwargs={
+                    "temporary_file_handle_id": handle.id,
+                    "user_id": self.user.id,
+                    "job_id": "test-oversized-sidecar-pre",
+                    "corpus_id": self.corpus.id,
+                }
+            ).get()
+
+        self.assertTrue(result["completed"], f"Errors: {result.get('errors')}")
+        self.assertEqual(result["files_processed"], 1)
+        # Sidecar should be errored (size check rejected it)
+        self.assertEqual(result["annotation_sidecars_errored"], 1)
+        self.assertTrue(
+            any("exceeds limit" in e for e in result["errors"]),
+            f"Expected size limit error, got: {result['errors']}",
+        )
+        # Document should still be created via pipeline fallback
+        self.assertEqual(result["pipeline_skipped"], 0)
+
+    def test_oversized_sidecar_post_read_rejected(self):
+        """
+        Defence-in-depth: when the central directory declares a small size
+        but the actual decompressed data exceeds the limit, the post-read
+        check catches it.  Uses a mock ZipFile to simulate a forged central
+        directory entry.
+        """
+        from unittest.mock import MagicMock, patch
+
+        from opencontractserver.tasks.import_tasks import _read_sidecar
+
+        large_data = b'{"key": "' + b"x" * 200 + b'"}'
+
+        # Mock ZipFile where getinfo reports small size but read returns large
+        mock_info = MagicMock()
+        mock_info.file_size = 10  # forged: passes pre-read
+
+        mock_handle = MagicMock()
+        mock_handle.read.return_value = large_data
+        mock_handle.__enter__ = MagicMock(return_value=mock_handle)
+        mock_handle.__exit__ = MagicMock(return_value=False)
+
+        mock_zip = MagicMock()
+        mock_zip.getinfo.return_value = mock_info
+        mock_zip.open.return_value = mock_handle
+
+        with patch(
+            "opencontractserver.tasks.import_tasks.ZIP_MAX_SIDECAR_SIZE_BYTES",
+            100,
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                _read_sidecar(mock_zip, "doc.json")
+
+        self.assertIn("exceeds limit", str(ctx.exception))
+
+    def test_skip_pipeline_with_custom_meta_and_public(self):
+        """
+        When skip_pipeline=True and custom_meta / make_public are passed,
+        those fields are applied to the document after creation.
+        """
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        sidecar = _build_sidecar_json(
+            title="Sidecar Title",
+            description="Sidecar description",
+            skip_pipeline=True,
+        )
+        labels = _build_labels_json()
+
+        files = {
+            "doc.pdf": self.pdf_bytes,
+            "doc.json": json.dumps(sidecar).encode("utf-8"),
+            "labels.json": json.dumps(labels).encode("utf-8"),
+        }
+
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        test_meta = {"source": "unit_test", "priority": 1}
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-skip-pipeline-meta-public",
+                "corpus_id": self.corpus.id,
+                "custom_meta": test_meta,
+                "make_public": True,
+            }
+        ).get()
+
+        self.assertTrue(result["completed"], f"Errors: {result.get('errors')}")
+        self.assertTrue(result["success"], f"Errors: {result.get('errors')}")
+        self.assertEqual(result["pipeline_skipped"], 1)
+
+        from opencontractserver.documents.models import Document
+
+        doc_id = int(result["document_ids"][0])
+        doc = Document.objects.get(pk=doc_id)
+        self.assertEqual(doc.custom_meta, test_meta)
+        self.assertTrue(doc.is_public)
