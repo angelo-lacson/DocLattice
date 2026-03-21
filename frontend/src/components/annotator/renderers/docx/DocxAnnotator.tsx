@@ -569,30 +569,19 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
 
   // ── Effect 7: Scroll to selected annotation ─────────────────────────
   // When selectedAnnotations changes, scroll the first selected annotation
-  // into view within the container (matching TXT/PDF behavior).
+  // into view (matching TXT/PDF behavior). Uses scrollIntoView since
+  // PaginatedDocument manages its own internal scroll container.
   useEffect(() => {
     if (selectedAnnotations.length === 0 || !containerRef.current) return;
 
-    const container = containerRef.current;
     const targetId = selectedAnnotations[0];
-    const targetEl = container.querySelector(
+    const targetEl = containerRef.current.querySelector(
       `[data-annotation-id="${CSS.escape(targetId)}"]`
     ) as HTMLElement | null;
 
     if (!targetEl) return;
 
-    const containerRect = container.getBoundingClientRect();
-    const targetRect = targetEl.getBoundingClientRect();
-
-    container.scrollTo({
-      top:
-        targetRect.top -
-        containerRect.top +
-        container.scrollTop -
-        containerRect.height / 2 +
-        targetRect.height / 2,
-      behavior: "smooth",
-    });
+    targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [selectedAnnotations]);
 
   // Handle text selection for new annotation creation.
