@@ -36,6 +36,9 @@ import {
   AnnotationLabelMode,
   PaginationMode,
 } from "docxodus";
+// @ts-expect-error -- tsconfig uses moduleResolution:"node" which doesn't
+// support package.json "exports" subpaths. The import works at runtime via Vite.
+import { PaginatedDocument } from "docxodus/react";
 import type {
   ExternalAnnotationSet,
   ExternalAnnotationProjectionSettings,
@@ -68,11 +71,6 @@ interface ChatSourceHighlight {
 }
 
 const EMPTY_CHAT_SOURCES: ChatSourceHighlight[] = [];
-
-/** Remove <style> tags from HTML (styles are rendered separately via React). */
-function stripStyleTags(html: string): string {
-  return html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
-}
 
 /** CSS class prefix for annotation elements produced by the projector. */
 const CSS_CLASS_PREFIX = "oc-annot-";
@@ -341,12 +339,10 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
   maxHeight = "100%",
   maxWidth = "100%",
 }) => {
-  // Cached base HTML from one-time DOCX conversion (sanitized, style blocks extracted)
+  // Cached base HTML from one-time DOCX conversion (sanitized)
   const [baseHtml, setBaseHtml] = useState<string>("");
-  // Annotated HTML with all annotations projected
+  // Annotated HTML with all annotations projected (passed to PaginatedDocument)
   const [annotatedHtml, setAnnotatedHtml] = useState<string>("");
-  // Document formatting CSS extracted from docxodus HTML output
-  const [docxCss, setDocxCss] = useState<string>("");
   // CSS from docxodus for annotation highlight styles
   const [annotationCss, setAnnotationCss] = useState<string>("");
   // CSS for toggling label visibility without re-projecting
@@ -399,24 +395,10 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       .then((html) => {
         if (!cancelled) {
           // Sanitize while preserving docxodus formatting (see SANITIZE_CONFIG).
+          // PaginatedDocument handles styles internally so no extraction needed.
           const sanitized = DOMPurify.sanitize(html, SANITIZE_CONFIG);
-          // Extract <style> blocks for separate rendering via React <style> tag.
-          // The content HTML goes to dangerouslySetInnerHTML, while styles are
-          // rendered as siblings so they apply correctly.
-          const styleBlocks: string[] = [];
-          const contentHtml = sanitized.replace(
-            /<style[^>]*>([\s\S]*?)<\/style>/gi,
-            (_match, css) => {
-              styleBlocks.push(css);
-              return "";
-            }
-          );
-          setDocxCss(styleBlocks.join("\n"));
-          // Store full sanitized HTML for WASM projection (docxodus 5.5.2+
-          // handles multiple roots and HTML entities internally).
           setBaseHtml(sanitized);
-          // Show content immediately while projection effect runs.
-          setAnnotatedHtml(contentHtml);
+          setAnnotatedHtml(sanitized);
           setConverting(false);
         }
       })
@@ -450,21 +432,20 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
     );
 
     if (annotationSet.labelledText.length === 0) {
-      setAnnotatedHtml(stripStyleTags(baseHtml));
+      setAnnotatedHtml(baseHtml);
       return;
     }
 
     projectAnnotationsOntoHtml(baseHtml, annotationSet, PROJECTION_SETTINGS)
       .then((html) => {
         if (!cancelled) {
-          const sanitized = DOMPurify.sanitize(html, SANITIZE_CONFIG);
-          setAnnotatedHtml(stripStyleTags(sanitized));
+          setAnnotatedHtml(DOMPurify.sanitize(html, SANITIZE_CONFIG));
         }
       })
       .catch((err) => {
         if (!cancelled) {
           console.error("Annotation projection error:", err);
-          setAnnotatedHtml(stripStyleTags(baseHtml));
+          setAnnotatedHtml(baseHtml);
         }
       });
 
@@ -845,22 +826,18 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
       onMouseUp={handleMouseUp}
       onClick={handleClick}
     >
-      <style>{docxCss}</style>
       <style>{annotationCss}</style>
       <style>{visibilityCss}</style>
       <style>{customCss}</style>
-      <div
-        className="docx-content"
-        dangerouslySetInnerHTML={{ __html: annotatedHtml }}
-        style={{
-          padding: "1.5rem",
-          backgroundColor: OS_LEGAL_COLORS.background,
-          width: "100%",
-          boxSizing: "border-box",
-          overflowWrap: "break-word",
-          wordBreak: "break-word",
-        }}
-      />
+      <div className="docx-content">
+        <PaginatedDocument
+          html={annotatedHtml}
+          scale={zoomLevel}
+          showPageNumbers={true}
+          pageGap={20}
+          backgroundColor={OS_LEGAL_COLORS.background}
+        />
+      </div>
 
       {/* Annotation creation menu */}
       {menuPosition && pendingSelection && (
