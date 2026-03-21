@@ -44,13 +44,15 @@ export function getGlobalOffsetFromDomPosition(
     }
   }
 
+  // Classes whose text content is NOT part of docText and should be skipped.
+  // Includes annotation labels (WASM renderer) and page numbers (PaginatedDocument).
+  const SKIP_CLASSES = [cssClassPrefix, "page-number"];
+
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
     acceptNode: (n: Node) => {
-      // Skip text nodes inside annotation label elements — these are
-      // injected by the WASM renderer and are not part of docText.
       let parent = n.parentElement;
       while (parent && parent !== container) {
-        if (parent.classList.contains(cssClassPrefix)) {
+        if (SKIP_CLASSES.some((cls) => parent!.classList.contains(cls))) {
           return NodeFilter.FILTER_SKIP;
         }
         parent = parent.parentElement;

@@ -591,49 +591,71 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
   }, [selectedAnnotations, paginationReady]);
 
   // Handle text selection for new annotation creation.
+  // Supports cross-page selections by using DOM offset resolution
+  // to find the start/end in docText, falling back to text matching.
   const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
-      if (readOnly || !allowInput || !selectedLabelTypeId) return;
+      try {
+        if (readOnly || !allowInput || !selectedLabelTypeId) return;
 
-      const selection = window.getSelection();
-      if (!selection || selection.isCollapsed || !selection.toString().trim())
-        return;
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || !selection.toString().trim())
+          return;
 
-      // Ignore selections that originate outside the DOCX container
-      if (!containerRef.current?.contains(selection.anchorNode)) return;
+        // Ignore selections that originate outside the DOCX container
+        if (!containerRef.current?.contains(selection.anchorNode)) return;
 
-      const selectedText = selection.toString().trim();
-
-      const occurrences = findTextOccurrences(docText, selectedText);
-      if (occurrences.length === 0) return;
-
-      let match = occurrences[0];
-
-      if (occurrences.length > 1) {
         const contentEl = containerRef.current?.querySelector(
           ".docx-content"
         ) as HTMLElement | null;
-        if (contentEl) {
-          const anchorOffset = getGlobalOffsetFromDomPosition(
-            contentEl,
-            selection.anchorNode,
-            selection.anchorOffset,
-            ANNOTATION_LABEL_CLASS
-          );
+        if (!contentEl) return;
 
-          if (anchorOffset !== null) {
+        // Try DOM-based offset resolution first (works for cross-page
+        // selections where the selected text includes page artifacts).
+        const anchorOffset = getGlobalOffsetFromDomPosition(
+          contentEl,
+          selection.anchorNode,
+          selection.anchorOffset,
+          ANNOTATION_LABEL_CLASS
+        );
+        const focusOffset = getGlobalOffsetFromDomPosition(
+          contentEl,
+          selection.focusNode,
+          selection.focusOffset,
+          ANNOTATION_LABEL_CLASS
+        );
+
+        let start: number;
+        let end: number;
+        let selectedText: string;
+
+        if (anchorOffset !== null && focusOffset !== null) {
+          // DOM offsets resolved — use them directly (handles cross-page)
+          start = Math.min(anchorOffset, focusOffset);
+          end = Math.max(anchorOffset, focusOffset);
+          selectedText = docText.substring(start, end);
+        } else {
+          // Fallback: text-based matching (single page, no page artifacts)
+          selectedText = selection.toString().trim();
+          const occurrences = findTextOccurrences(docText, selectedText);
+          if (occurrences.length === 0) return;
+
+          let match = occurrences[0];
+          if (occurrences.length > 1 && anchorOffset !== null) {
             match = pickClosestOccurrence(occurrences, anchorOffset);
           }
+          start = match.start;
+          end = match.end;
         }
-      }
 
-      const menuPos = clampMenuPosition(e.clientX, e.clientY);
-      setMenuPosition(menuPos);
-      setPendingSelection({
-        text: selectedText,
-        start: match.start,
-        end: match.end,
-      });
+        if (!selectedText.trim() || start === end) return;
+
+        const menuPos = clampMenuPosition(e.clientX, e.clientY);
+        setMenuPosition(menuPos);
+        setPendingSelection({ text: selectedText, start, end });
+      } catch (err) {
+        console.warn("Error handling text selection:", err);
+      }
     },
     [readOnly, allowInput, selectedLabelTypeId, docText]
   );
