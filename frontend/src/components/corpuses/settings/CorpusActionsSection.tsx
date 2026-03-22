@@ -2,7 +2,8 @@
  * CorpusActionsSection - Corpus actions list with add/edit/delete functionality
  * and integrated template library picker.
  */
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Button, IconButton } from "@os-legal/ui";
 import { useQuery, useMutation } from "@apollo/client";
 import styled from "styled-components";
@@ -94,9 +95,7 @@ const PickerContainer = styled.div`
 `;
 
 const PickerDropdown = styled.div`
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
+  position: fixed;
   width: 380px;
   max-height: 320px;
   overflow-y: auto;
@@ -121,7 +120,9 @@ const PickerItem = styled.button<{ disabled?: boolean }>`
   cursor: ${({ disabled }) => (disabled ? "not-allowed" : "pointer")};
   opacity: ${({ disabled }) => (disabled ? 0.5 : 1)};
   pointer-events: ${({ disabled }) => (disabled ? "none" : "auto")};
-  transition: background 0.15s ease, opacity 0.15s ease;
+  transition:
+    background 0.15s ease,
+    opacity 0.15s ease;
 
   &:hover {
     background: ${({ disabled }) =>
@@ -193,24 +194,46 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
 }) => {
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerContainerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+
+  // Compute dropdown position from the button's bounding rect
+  const updateDropdownPosition = useCallback(() => {
+    if (!pickerContainerRef.current) return;
+    const rect = pickerContainerRef.current.getBoundingClientRect();
+    setDropdownPos({
+      top: rect.bottom + 4,
+      left: rect.right - 380, // align right edge with button
+    });
+  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
     if (!pickerOpen) return;
 
+    updateDropdownPosition();
+
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
       if (
         pickerContainerRef.current &&
-        !pickerContainerRef.current.contains(target)
+        !pickerContainerRef.current.contains(target) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target)
       ) {
         setPickerOpen(false);
       }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [pickerOpen]);
+    window.addEventListener("scroll", updateDropdownPosition, true);
+    window.addEventListener("resize", updateDropdownPosition);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", updateDropdownPosition, true);
+      window.removeEventListener("resize", updateDropdownPosition);
+    };
+  }, [pickerOpen, updateDropdownPosition]);
 
   // Fetch available templates only when picker is open
   const { data: templatesData, loading: templatesLoading } = useQuery<
@@ -231,10 +254,12 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
 
   // Filter out templates already added to the corpus
   const addedTemplateIds = new Set(
-    actions.filter((a) => a.sourceTemplate?.id).map((a) => a.sourceTemplate!.id)
+    actions
+      .filter((a) => a.sourceTemplate?.id)
+      .map((a) => a.sourceTemplate!.id),
   );
   const availableTemplates = templates.filter(
-    (t) => !addedTemplateIds.has(t.id)
+    (t) => !addedTemplateIds.has(t.id),
   );
 
   const handleAddTemplate = async (templateId: string) => {
@@ -247,7 +272,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
         onUpdate?.();
       } else {
         toast.error(
-          data?.addTemplateToCorpus?.message || "Failed to add template"
+          data?.addTemplateToCorpus?.message || "Failed to add template",
         );
       }
     } catch (error: unknown) {
@@ -301,42 +326,47 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
             >
               Add from Library
             </Button>
-            {pickerOpen && (
-              <PickerDropdown>
-                {templatesLoading ? (
-                  <PickerEmpty>Loading templates…</PickerEmpty>
-                ) : availableTemplates.length === 0 ? (
-                  <PickerEmpty>All templates have been added</PickerEmpty>
-                ) : (
-                  availableTemplates.map((template) => (
-                    <PickerItem
-                      key={template.id}
-                      disabled={addingTemplate}
-                      onClick={() => handleAddTemplate(template.id)}
-                    >
-                      <Cpu
-                        size={16}
-                        style={{
-                          color: OS_LEGAL_COLORS.accent,
-                          flexShrink: 0,
-                        }}
-                      />
-                      <PickerItemInfo>
-                        <PickerItemName>{template.name}</PickerItemName>
-                        {template.description && (
-                          <PickerItemDesc>
-                            {template.description}
-                          </PickerItemDesc>
-                        )}
-                      </PickerItemInfo>
-                      <TriggerBadge type={getTriggerType(template.trigger)}>
-                        {getTriggerLabel(template.trigger)}
-                      </TriggerBadge>
-                    </PickerItem>
-                  ))
-                )}
-              </PickerDropdown>
-            )}
+            {pickerOpen &&
+              createPortal(
+                <PickerDropdown
+                  ref={dropdownRef}
+                  style={{ top: dropdownPos.top, left: dropdownPos.left }}
+                >
+                  {templatesLoading ? (
+                    <PickerEmpty>Loading templates…</PickerEmpty>
+                  ) : availableTemplates.length === 0 ? (
+                    <PickerEmpty>All templates have been added</PickerEmpty>
+                  ) : (
+                    availableTemplates.map((template) => (
+                      <PickerItem
+                        key={template.id}
+                        disabled={addingTemplate}
+                        onClick={() => handleAddTemplate(template.id)}
+                      >
+                        <Cpu
+                          size={16}
+                          style={{
+                            color: OS_LEGAL_COLORS.accent,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <PickerItemInfo>
+                          <PickerItemName>{template.name}</PickerItemName>
+                          {template.description && (
+                            <PickerItemDesc>
+                              {template.description}
+                            </PickerItemDesc>
+                          )}
+                        </PickerItemInfo>
+                        <TriggerBadge type={getTriggerType(template.trigger)}>
+                          {getTriggerLabel(template.trigger)}
+                        </TriggerBadge>
+                      </PickerItem>
+                    ))
+                  )}
+                </PickerDropdown>,
+                document.body,
+              )}
           </PickerContainer>
           <Button
             variant="primary"
