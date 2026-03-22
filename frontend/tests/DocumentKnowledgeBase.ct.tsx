@@ -17,6 +17,7 @@ import { test, expect } from "@playwright/experimental-ct-react";
 
 import { Page } from "@playwright/test";
 import { docScreenshot } from "./utils/docScreenshot";
+import { LabelDisplayBehavior } from "../src/types/graphql-api";
 
 // Import the new Wrapper component
 import { DocumentKnowledgeBaseTestWrapper } from "./DocumentKnowledgeBaseTestWrapper";
@@ -2422,6 +2423,51 @@ test("PDF annotations render with soft bounding boxes on canvas", async ({
   // Capture the PDF area showing annotation overlays with softened styling
   const pdfContainer = page.locator("#pdf-container");
   await docScreenshot(page, "annotations--pdf-canvas--soft-bounding-boxes", {
+    element: pdfContainer,
+  });
+});
+
+test("PDF annotations with labels always visible", async ({ mount, page }) => {
+  await mount(
+    <DocumentKnowledgeBaseTestWrapper
+      mocks={[
+        ...graphqlMocks,
+        ...createSummaryMocks(PDF_DOC_ID_FOR_STRUCTURAL_TEST, CORPUS_ID),
+      ]}
+      documentId={PDF_DOC_ID_FOR_STRUCTURAL_TEST}
+      corpusId={CORPUS_ID}
+      showBoundingBoxes={true}
+      showSelectedOnly={false}
+      showLabels={LabelDisplayBehavior.ALWAYS}
+    />
+  );
+
+  // Wait for document to load
+  await expect(
+    page.getByRole("heading", {
+      name: mockPdfDocumentForStructuralTest.title ?? "",
+    })
+  ).toBeVisible({ timeout: LONG_TIMEOUT });
+
+  // Wait for PDF canvas to render
+  const pdfCanvas = page.locator("#pdf-container canvas").first();
+  await expect(pdfCanvas).toBeVisible({ timeout: LONG_TIMEOUT });
+
+  // Wait for annotations and labels to render
+  await page.waitForTimeout(2000);
+
+  // Verify annotation boundary is visible
+  const selectionBoundary = page.locator(
+    `[id="SELECTION_${mockAnnotationNonStructural1.id}"]`
+  );
+  await expect(selectionBoundary).toBeVisible({ timeout: LONG_TIMEOUT });
+
+  // Hide floating controls for clean screenshot
+  await hideFloatingControls(page);
+
+  // Capture the PDF area showing annotations with labels
+  const pdfContainer = page.locator("#pdf-container");
+  await docScreenshot(page, "annotations--pdf-canvas--with-labels", {
     element: pdfContainer,
   });
 });
