@@ -11,7 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`skip_pipeline=True` silently ignored `meta.csv` metadata** (Closes #1131): Documents created via the `skip_pipeline` path in `import_zip_with_folder_structure` now have their title, description, custom_meta, and is_public fields applied from `meta.csv` and task-level parameters, matching the behavior of the normal pipeline path (`opencontractserver/tasks/import_tasks.py`).
 - **Incomplete assertion in `test_malformed_labels_json_records_error`** (Closes #1131): The test now also asserts that `annotation_sidecars_errored` is incremented when labels.json is malformed and a sidecar contains annotations (`opencontractserver/tests/test_sidecar_import.py`).
-- **`annotation_type=DOC_TYPE_LABEL` was silently added for doc-level labels** (Closes #1131): `import_doc_annotations` in `opencontractserver/utils/importing.py` correctly sets `annotation_type=DOC_TYPE_LABEL` when creating document-level annotations from sidecar import. Previously this field was missing, causing doc-level annotations to default to the wrong type.
 
 ### Added
 
