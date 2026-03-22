@@ -5,7 +5,7 @@ import { VerticallyJustifiedEndDiv } from "../../sidebar/common";
 
 import { ResultBoundary } from "./ResultBoundary";
 import { BoundingBox, TextSearchTokenResult } from "../../../types";
-import { getBorderWidthFromBounds } from "../../../../utils/transform";
+
 import { SearchSelectionTokens } from "./SelectionTokens";
 import { LabelTagContainer } from "./Containers";
 import { PDFPageInfo } from "../../types/pdf";
@@ -80,7 +80,7 @@ export const SearchResult: React.FC<SearchResultProps> = ({
         {showInfo && !hideLabels ? (
           <SelectionInfo
             bounds={scaledBounds}
-            border={getBorderWidthFromBounds(scaledBounds)}
+            border={0}
             color={color}
             showBoundingBox={showBoundingBox}
           >
@@ -134,19 +134,19 @@ interface SelectionInfoProps {
 }
 
 const SelectionInfo = styled.div.attrs<SelectionInfoProps>(
-  ({ border, bounds, color, showBoundingBox }) => ({
+  ({ bounds, color, showBoundingBox }) => ({
     style: {
       position: "absolute",
       width: `${bounds.right - bounds.left}px`,
-      right: `-${border}px`,
+      right: "0px",
       transform: "translateY(-100%)",
-      border: showBoundingBox
-        ? `${border}px solid ${color}`
-        : `${border}px solid ${color} transparent`,
+      border: "none",
+      borderRadius: "4px 4px 0 0",
       background: showBoundingBox ? color : "rgba(255, 255, 255, 0.0)",
       fontWeight: "bold",
       fontSize: "12px",
       userSelect: "none",
+      transition: "all 0.3s ease",
     },
   })
 )`

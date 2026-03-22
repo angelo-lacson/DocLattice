@@ -27,6 +27,7 @@ const TokenDiv = styled.div<{
   background-color: ${(props) => props.$color ?? "rgba(255, 255, 0, 0.3)"};
   opacity: ${(props) => (props.$hidden ? 0 : props.$highOpacity ? 0.5 : 0.3)};
   pointer-events: none;
+  border-radius: 3px;
   transition: opacity 0.2s ease-in-out;
 `;
 

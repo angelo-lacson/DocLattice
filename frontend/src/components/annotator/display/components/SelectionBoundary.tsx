@@ -1,10 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import styled, { css } from "styled-components";
 import { BoundingBox } from "../../../types";
-import {
-  getBorderWidthFromBounds,
-  hexToRgb,
-} from "../../../../utils/transform";
+import { hexToRgb } from "../../../../utils/transform";
 import { pulseGreen, pulseMaroon } from "../effects";
 import { useAnnotationRefs } from "../../hooks/useAnnotationRefs";
 import { useAtomValue } from "jotai";
@@ -33,7 +30,7 @@ const BoundarySpan = styled.span.attrs<{
   $rotateY: number;
   $bounds: BoundingBox;
   $backgroundColor: string;
-  $border: number;
+  $boxShadow: string;
   $color: string;
   $hidden: boolean;
   $showBoundingBox: boolean;
@@ -49,25 +46,28 @@ const BoundarySpan = styled.span.attrs<{
     transform: `rotateY(${props.$rotateY}deg) rotateX(${props.$rotateX}deg)`,
     backgroundColor: props.$backgroundColor,
     zIndex: 2,
-    border:
-      props.$showBoundingBox && !props.$hidden
-        ? `${props.$border}px solid ${props.$color}`
-        : "none",
+    border: "none",
+    boxShadow: props.$boxShadow,
     transformOrigin: "top left",
-    transition: "background-color 0.2s ease",
+    transition:
+      "background-color 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease",
   },
 }))`
+  border-radius: 4px;
+
   ${(props) =>
     props.$approved &&
     css`
-      border: 2px solid green !important;
+      box-shadow: inset 0 0 0 1.5px rgba(46, 204, 113, 0.5),
+        0 0 8px 1px rgba(46, 204, 113, 0.25) !important;
       animation: ${pulseGreen} 2s infinite;
     `}
 
   ${(props) =>
     props.$rejected &&
     css`
-      border: 2px solid maroon !important;
+      box-shadow: inset 0 0 0 1.5px rgba(128, 0, 0, 0.5),
+        0 0 8px 1px rgba(128, 0, 0, 0.25) !important;
       animation: ${pulseMaroon} 2s infinite;
     `}
 `;
@@ -114,8 +114,17 @@ export const SelectionBoundary: React.FC<SelectionBoundaryProps> = ({
   const rotateX = height < 0 ? -180 : 0;
   const rgbColor = hexToRgb(color);
   const opacity = !showBoundingBox || hidden ? 0 : selected ? 0.4 : 0.1;
-  const border = getBorderWidthFromBounds(bounds);
   const backgroundColor = `rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, ${opacity})`;
+
+  // Soft box-shadow replaces the old hard solid border.
+  // An inset shadow gives a gentle inner edge, while a faint outer glow
+  // lets the annotation "breathe" into the surrounding page.
+  const boxShadow =
+    showBoundingBox && !hidden
+      ? selected
+        ? `inset 0 0 0 1.5px rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, 0.55), 0 0 10px 1px rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, 0.2)`
+        : `inset 0 0 0 1px rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, 0.35), 0 0 6px 0px rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, 0.1)`
+      : "none";
 
   const handleClick = (e: React.MouseEvent) => {
     if (isCreatingAnnotation) return;
@@ -154,7 +163,7 @@ export const SelectionBoundary: React.FC<SelectionBoundaryProps> = ({
       $rotateY={rotateY}
       $showBoundingBox={showBoundingBox}
       $hidden={hidden}
-      $border={border}
+      $boxShadow={boxShadow}
       $color={color}
       $backgroundColor={backgroundColor}
       $bounds={bounds}

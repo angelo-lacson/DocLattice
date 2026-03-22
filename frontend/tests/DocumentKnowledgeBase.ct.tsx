@@ -2332,6 +2332,10 @@ test("filters annotations in unified feed with structural toggle", async ({
   await expect(nonStructuralAnnotation).toBeVisible({ timeout: LONG_TIMEOUT });
   await expect(structuralAnnotation).not.toBeVisible({ timeout: LONG_TIMEOUT });
 
+  // Capture screenshot showing softened PDF annotations with feed panel
+  await hideFloatingControls(page);
+  await docScreenshot(page, "annotations--pdf-feed--with-soft-highlights");
+
   // Open filter dropdown - look for the button with Filter icon and "Content Types" text
   const filterDropdown = page
     .locator("div")
