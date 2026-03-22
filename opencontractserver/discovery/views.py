@@ -1,8 +1,9 @@
 """
 Dynamic discovery endpoints for crawlers and AI agents.
 
-Serves robots.txt, llms.txt, llms-full.txt, sitemap.xml, and
-.well-known/mcp.json with live data from the database.
+Serves robots.txt, llms.txt, llms-full.txt, sitemap.xml,
+.well-known/mcp.json, and a RESTful search API with live data
+from the database.
 """
 
 import json
@@ -11,16 +12,17 @@ from xml.etree.ElementTree import Element, SubElement, tostring
 
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import Count, Q
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.views.decorators.cache import cache_page
 from django.views.decorators.http import require_GET
 
 from opencontractserver.constants.discovery import (
     DISCOVERY_CACHE_SECONDS,
     MAX_PUBLIC_CORPUSES,
+    MAX_SEARCH_RESULTS,
 )
 from opencontractserver.corpuses.models import Corpus
-from opencontractserver.documents.models import DocumentPath
+from opencontractserver.documents.models import Document, DocumentPath
 
 try:
     from opencontractserver.mcp.config import RATE_LIMIT_REQUESTS
@@ -194,6 +196,13 @@ def llms_txt(request: HttpRequest) -> HttpResponse:
         "- `document://{corpus_slug}/{document_slug}` - Document with text",
         "- `annotation://{corpus_slug}/{document_slug}/{annotation_id}` - Annotation details",
         "- `thread://{corpus_slug}/threads/{thread_id}` - Discussion thread",
+        "",
+        "## REST Search API",
+        "",
+        (
+            f"A simple JSON search endpoint at `{base_url}/api/search/?q=QUERY` "
+            "is available for crawlers and lightweight integrations."
+        ),
         "",
     ]
 
@@ -461,6 +470,38 @@ def llms_full_txt(request: HttpRequest) -> HttpResponse:
         "}",
         "```",
         "",
+        "## REST Search API",
+        "",
+        (
+            f"A lightweight JSON search endpoint is available at "
+            f"`{base_url}/api/search/` for crawlers and integrations that "
+            "prefer simple HTTP GET over GraphQL or MCP."
+        ),
+        "",
+        "### GET /api/search/",
+        "",
+        "Parameters (query string):",
+        "- q (string, required): Search query text",
+        "- corpus (string, optional): Corpus slug to scope the search",
+        "- limit (int, optional, default 10, max 50): Number of results",
+        "",
+        "Example:",
+        "```bash",
+        f"curl '{base_url}/api/search/?q=indemnification&corpus=my-corpus&limit=5'",
+        "```",
+        "",
+        (
+            "Returns: { query, corpus?, results: [{ type, slug, title, "
+            "description, similarity_score }] }"
+        ),
+        "",
+        (
+            "When a corpus is specified, semantic vector search is attempted "
+            "first and falls back to text matching. Without a corpus, the "
+            "endpoint searches across all public corpus titles/descriptions "
+            "and document titles/descriptions."
+        ),
+        "",
         "## Corpus-Scoped Endpoints",
         "",
         (
@@ -637,3 +678,158 @@ def well_known_mcp(request: HttpRequest) -> HttpResponse:
         json.dumps(data, indent=2),
         content_type="application/json; charset=utf-8",
     )
+
+
+# ---------------------------------------------------------------------------
+# Public search API  (GET /api/search/)
+# ---------------------------------------------------------------------------
+@require_GET
+def search_api(request: HttpRequest) -> JsonResponse:
+    """RESTful search endpoint for crawlers and lightweight integrations.
+
+    Accepts GET requests with query parameters and returns JSON results.
+    Only searches public corpuses visible to anonymous users.
+
+    Query parameters:
+        q (required): Search query text.
+        corpus (optional): Corpus slug to scope the search.
+        limit (optional): Max results, capped at MAX_SEARCH_RESULTS (default 10).
+
+    When ``corpus`` is provided the endpoint attempts semantic (vector)
+    search and falls back to text matching.  Without ``corpus`` it performs
+    a text search across all public corpus titles/descriptions and document
+    titles/descriptions.
+    """
+    query = request.GET.get("q", "").strip()
+    if not query:
+        return JsonResponse(
+            {"error": "Missing required query parameter 'q'."},
+            status=400,
+        )
+
+    corpus_slug = request.GET.get("corpus", "").strip() or None
+    try:
+        limit = min(max(int(request.GET.get("limit", 10)), 1), MAX_SEARCH_RESULTS)
+    except (ValueError, TypeError):
+        limit = 10
+
+    anonymous = AnonymousUser()
+
+    if corpus_slug:
+        return _search_within_corpus(query, corpus_slug, limit, anonymous)
+
+    return _search_global(query, limit, anonymous)
+
+
+def _search_within_corpus(
+    query: str, corpus_slug: str, limit: int, user
+) -> JsonResponse:
+    """Search documents within a single public corpus."""
+    try:
+        corpus = Corpus.objects.visible_to_user(user).get(slug=corpus_slug)
+    except Corpus.DoesNotExist:
+        return JsonResponse({"error": "Corpus not found."}, status=404)
+
+    corpus_doc_ids = corpus.get_documents().values_list("id", flat=True)
+    results = []
+
+    # Attempt vector search first
+    try:
+        embedder_path, query_vector = corpus.embed_text(query)
+        if query_vector:
+            doc_results = list(
+                Document.objects.visible_to_user(user)
+                .filter(id__in=corpus_doc_ids)
+                .search_by_embedding(query_vector, embedder_path, top_k=limit)
+            )
+            for doc in doc_results:
+                results.append(
+                    {
+                        "type": "document",
+                        "slug": doc.slug,
+                        "title": doc.title or "",
+                        "description": (doc.description or "")[:200],
+                        "corpus": corpus_slug,
+                        "similarity_score": float(getattr(doc, "similarity_score", 0)),
+                    }
+                )
+            return JsonResponse(
+                {"query": query, "corpus": corpus_slug, "results": results}
+            )
+    except (ValueError, TypeError, AttributeError):
+        pass
+    except RuntimeError:
+        logger.debug("Vector search unavailable, falling back to text search")
+
+    # Text search fallback
+    documents = list(
+        Document.objects.visible_to_user(user)
+        .filter(id__in=corpus_doc_ids)
+        .filter(Q(title__icontains=query) | Q(description__icontains=query))[:limit]
+    )
+    for doc in documents:
+        results.append(
+            {
+                "type": "document",
+                "slug": doc.slug,
+                "title": doc.title or "",
+                "description": (doc.description or "")[:200],
+                "corpus": corpus_slug,
+                "similarity_score": None,
+            }
+        )
+
+    return JsonResponse({"query": query, "corpus": corpus_slug, "results": results})
+
+
+def _search_global(query: str, limit: int, user) -> JsonResponse:
+    """Search across all public corpuses and their documents."""
+    results: list[dict] = []
+
+    # Search corpuses by title/description
+    matching_corpuses = list(
+        Corpus.objects.visible_to_user(user)
+        .filter(Q(title__icontains=query) | Q(description__icontains=query))
+        .order_by("-created")[:limit]
+    )
+    for corpus in matching_corpuses:
+        results.append(
+            {
+                "type": "corpus",
+                "slug": corpus.slug,
+                "title": corpus.title or "",
+                "description": (corpus.description or "")[:200],
+                "similarity_score": None,
+            }
+        )
+
+    # Search documents across all public corpuses (fill remaining slots)
+    remaining = limit - len(results)
+    if remaining > 0:
+        public_corpus_ids = Corpus.objects.visible_to_user(user).values_list(
+            "id", flat=True
+        )
+        matching_docs = list(
+            Document.objects.visible_to_user(user)
+            .filter(
+                document_paths__corpus_id__in=public_corpus_ids,
+                document_paths__is_current=True,
+                document_paths__is_deleted=False,
+            )
+            .filter(Q(title__icontains=query) | Q(description__icontains=query))
+            .select_related()
+            .distinct()
+            .order_by("-modified")[:remaining]
+        )
+        for doc in matching_docs:
+            results.append(
+                {
+                    "type": "document",
+                    "slug": doc.slug,
+                    "title": doc.title or "",
+                    "description": (doc.description or "")[:200],
+                    "similarity_score": None,
+                }
+            )
+
+    return JsonResponse({"query": query, "results": results})
