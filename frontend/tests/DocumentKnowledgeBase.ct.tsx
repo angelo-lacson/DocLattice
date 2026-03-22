@@ -2360,6 +2360,73 @@ test("filters annotations in unified feed with structural toggle", async ({
 });
 
 /* --------------------------------------------------------------------- */
+/* PDF annotation bounding boxes rendered on canvas                       */
+/* --------------------------------------------------------------------- */
+test("PDF annotations render with soft bounding boxes on canvas", async ({
+  mount,
+  page,
+}) => {
+  await mount(
+    <DocumentKnowledgeBaseTestWrapper
+      mocks={[
+        ...graphqlMocks,
+        ...createSummaryMocks(PDF_DOC_ID_FOR_STRUCTURAL_TEST, CORPUS_ID),
+      ]}
+      documentId={PDF_DOC_ID_FOR_STRUCTURAL_TEST}
+      corpusId={CORPUS_ID}
+      showBoundingBoxes={true}
+      showSelectedOnly={false}
+    />
+  );
+
+  // Wait for document to load
+  await expect(
+    page.getByRole("heading", {
+      name: mockPdfDocumentForStructuralTest.title ?? "",
+    })
+  ).toBeVisible({ timeout: LONG_TIMEOUT });
+
+  // Wait for PDF canvas to render
+  const pdfCanvas = page.locator("#pdf-container canvas").first();
+  await expect(pdfCanvas).toBeVisible({ timeout: LONG_TIMEOUT });
+
+  // Wait for annotations to render on the canvas
+  await page.waitForTimeout(2000);
+
+  // Verify the SelectionBoundary span is rendered on the PDF overlay
+  const selectionBoundary = page.locator(
+    `[id="SELECTION_${mockAnnotationNonStructural1.id}"]`
+  );
+  await expect(selectionBoundary).toBeVisible({ timeout: LONG_TIMEOUT });
+
+  // Verify the boundary has rounded corners and soft box-shadow (no hard border)
+  const styles = await selectionBoundary.evaluate((el) => {
+    const computed = window.getComputedStyle(el);
+    return {
+      borderRadius: computed.borderRadius,
+      border: computed.border,
+      boxShadow: computed.boxShadow,
+    };
+  });
+  // Border should be "none" (0px), border-radius should be 4px
+  expect(styles.border).toContain("0px");
+  expect(styles.borderRadius).toBe("4px");
+  // Box-shadow should be present (not "none")
+  expect(styles.boxShadow).not.toBe("none");
+
+  console.log("[TEST] Verified soft annotation styling on PDF canvas:", styles);
+
+  // Hide floating controls for clean screenshot
+  await hideFloatingControls(page);
+
+  // Capture the PDF area showing annotation overlays with softened styling
+  const pdfContainer = page.locator("#pdf-container");
+  await docScreenshot(page, "annotations--pdf-canvas--soft-bounding-boxes", {
+    element: pdfContainer,
+  });
+});
+
+/* --------------------------------------------------------------------- */
 /* search using FloatingDocumentInput                                     */
 /* --------------------------------------------------------------------- */
 test("Search jumps to first 'Transfer Taxes' hit using floating input", async ({
