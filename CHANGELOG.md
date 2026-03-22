@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test for `skip_pipeline=True` with `meta.csv` metadata** (Closes #1131): New test `test_skip_pipeline_applies_metadata_from_csv` verifies that pipeline-skipped documents correctly receive title and description overrides from `meta.csv`.
 - **Per-sidecar JSON size limit** (Closes #1131): Added `ZIP_MAX_SIDECAR_SIZE_BYTES` constant (10 MB default) in `opencontractserver/constants/zip_import.py`. Sidecars exceeding this limit are skipped with an error, preventing oversized JSON from consuming excessive memory during import (`opencontractserver/tasks/import_tasks.py`).
 
+### Changed
+
+- **Reorganized upload documentation into dedicated `docs/upload_methods/` section**: Consolidated scattered upload-related docs into 8 user-facing reference pages covering single upload, bulk ZIP import, corpus export/import, annotated document import, worker uploads, supported formats, and annotation side effects. Simplified `docs/walkthrough/step-1-add-documents.md` and `docs/walkthrough/advanced/export-import-corpuses.md` to reference the new guides. Trimmed `docs/architecture/bulk-import.md` to focus on internal implementation. Removed obsolete `docs/features/zip_import_with_folders_design.md` design doc (feature is fully implemented).
+
 ## [Unreleased] - 2026-03-18
 
 ### Added
