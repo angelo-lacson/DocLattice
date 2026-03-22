@@ -50,24 +50,24 @@ const BoundarySpan = styled.span.attrs<{
     boxShadow: props.$boxShadow,
     transformOrigin: "top left",
     transition:
-      "background-color 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease",
+      "background-color 0.4s ease, box-shadow 0.4s ease, opacity 0.4s ease",
   },
 }))`
-  border-radius: 4px;
+  border-radius: 6px;
 
   ${(props) =>
     props.$approved &&
     css`
-      box-shadow: inset 0 0 0 1.5px rgba(46, 204, 113, 0.5),
-        0 0 8px 1px rgba(46, 204, 113, 0.25) !important;
+      box-shadow: 0 0 12px 3px rgba(46, 204, 113, 0.18),
+        0 0 4px 1px rgba(46, 204, 113, 0.12) !important;
       animation: ${pulseGreen} 2s infinite;
     `}
 
   ${(props) =>
     props.$rejected &&
     css`
-      box-shadow: inset 0 0 0 1.5px rgba(128, 0, 0, 0.5),
-        0 0 8px 1px rgba(128, 0, 0, 0.25) !important;
+      box-shadow: 0 0 12px 3px rgba(128, 0, 0, 0.18),
+        0 0 4px 1px rgba(128, 0, 0, 0.12) !important;
       animation: ${pulseMaroon} 2s infinite;
     `}
 `;
@@ -112,18 +112,25 @@ export const SelectionBoundary: React.FC<SelectionBoundaryProps> = ({
   const height = bounds.bottom - bounds.top;
   const rotateY = width < 0 ? -180 : 0;
   const rotateX = height < 0 ? -180 : 0;
-  const rgbColor = hexToRgb(color);
-  const opacity = !showBoundingBox || hidden ? 0 : selected ? 0.4 : 0.1;
-  const backgroundColor = `rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, ${opacity})`;
+  const { r, g, b } = hexToRgb(color);
+  const opacity = !showBoundingBox || hidden ? 0 : selected ? 0.18 : 0.06;
+  const backgroundColor = `rgba(${r}, ${g}, ${b}, ${opacity})`;
 
-  // Soft box-shadow replaces the old hard solid border.
-  // An inset shadow gives a gentle inner edge, while a faint outer glow
-  // lets the annotation "breathe" into the surrounding page.
+  // Layered diffuse glow — no hard edges at all. The bounding box becomes
+  // a warm halo around the annotation region rather than a rectangle.
   const boxShadow =
     showBoundingBox && !hidden
       ? selected
-        ? `inset 0 0 0 1.5px rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, 0.55), 0 0 10px 1px rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, 0.2)`
-        : `inset 0 0 0 1px rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, 0.35), 0 0 6px 0px rgba(${rgbColor.r}, ${rgbColor.g}, ${rgbColor.b}, 0.1)`
+        ? [
+            `0 0 14px 4px rgba(${r}, ${g}, ${b}, 0.13)`,
+            `0 0 5px 1px rgba(${r}, ${g}, ${b}, 0.10)`,
+            `inset 0 0 8px 2px rgba(${r}, ${g}, ${b}, 0.07)`,
+          ].join(", ")
+        : [
+            `0 0 10px 2px rgba(${r}, ${g}, ${b}, 0.07)`,
+            `0 0 3px 0px rgba(${r}, ${g}, ${b}, 0.05)`,
+            `inset 0 0 6px 1px rgba(${r}, ${g}, ${b}, 0.04)`,
+          ].join(", ")
       : "none";
 
   const handleClick = (e: React.MouseEvent) => {

@@ -26,8 +26,10 @@ import {
   selectedExtractIds,
   selectedThreadId,
   showAnnotationBoundingBoxes,
+  showAnnotationLabels,
   showSelectedAnnotationOnly,
 } from "../src/graphql/cache";
+import { LabelDisplayBehavior } from "../src/types/graphql-api";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { CentralRouteManager } from "../src/routing/CentralRouteManager";
 import { GET_DOCUMENT_ANNOTATIONS_ONLY } from "../src/graphql/queries";
@@ -107,6 +109,7 @@ interface WrapperProps {
   initialUrl?: string;
   showBoundingBoxes?: boolean;
   showSelectedOnly?: boolean;
+  showLabels?: LabelDisplayBehavior;
 }
 
 // Create a diagnostic component to monitor atom state
@@ -4378,6 +4381,7 @@ export const DocumentKnowledgeBaseTestWrapper: React.FC<WrapperProps> = ({
   initialUrl,
   showBoundingBoxes = false,
   showSelectedOnly = true,
+  showLabels = LabelDisplayBehavior.ON_HOVER,
 }) => {
   // Create default annotation mock that will be added to all test mocks
   const defaultAnnotationsMock = {
@@ -4419,6 +4423,7 @@ export const DocumentKnowledgeBaseTestWrapper: React.FC<WrapperProps> = ({
   // Set annotation display reactive vars before component mounts
   showAnnotationBoundingBoxes(showBoundingBoxes);
   showSelectedAnnotationOnly(showSelectedOnly);
+  showAnnotationLabels(showLabels);
 
   // Set reactive vars that CentralRouteManager would normally set
   // Component tests run in isolation, so we set these directly

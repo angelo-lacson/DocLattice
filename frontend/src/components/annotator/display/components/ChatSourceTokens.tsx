@@ -25,10 +25,14 @@ const TokenDiv = styled.div<{
 }>`
   position: absolute;
   background-color: ${(props) => props.$color ?? "rgba(255, 255, 0, 0.3)"};
-  opacity: ${(props) => (props.$hidden ? 0 : props.$highOpacity ? 0.5 : 0.3)};
+  opacity: ${(props) => (props.$hidden ? 0 : props.$highOpacity ? 0.38 : 0.22)};
   pointer-events: none;
-  border-radius: 3px;
-  transition: opacity 0.2s ease-in-out;
+  border-radius: 4px;
+  box-shadow: ${(props) =>
+    props.$hidden
+      ? "none"
+      : `0 0 4px 1px ${props.$color ?? "rgba(255, 255, 0, 0.15)"}`};
+  transition: opacity 0.3s ease-in-out;
 `;
 
 export const ChatSourceTokens: FC<ChatSourceTokensProps> = ({
@@ -59,10 +63,10 @@ export const ChatSourceTokens: FC<ChatSourceTokensProps> = ({
         // Scale the token bounds using pageInfo to maintain consistency with SearchResult and Selection rescaling
         const b = pageInfo.getScaledTokenBounds(pageToken);
         const style = {
-          left: `${b.left}px`,
-          top: `${b.top}px`,
-          width: `${b.right - b.left}px`,
-          height: `${b.bottom - b.top}px`,
+          left: `${b.left - 1}px`,
+          top: `${b.top - 1}px`,
+          width: `${b.right - b.left + 2}px`,
+          height: `${b.bottom - b.top + 2}px`,
         };
 
         return (

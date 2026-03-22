@@ -24,18 +24,24 @@ interface TokenSpanProps {
 
 export const TokenSpan = styled.span.attrs<
   TokenSpanProps & { theme: DefaultTheme }
->((props) => ({
-  style: {
-    background: props.isSelected
-      ? props.color
-        ? props.color.toUpperCase()
-        : props.theme.color.B3
-      : "none",
-    opacity: props.hidden ? 0.0 : props.highOpacity ? 0.4 : 0.2,
-  },
-}))`
+>((props) => {
+  const bg = props.isSelected
+    ? props.color
+      ? props.color.toUpperCase()
+      : props.theme.color.B3
+    : "none";
+  return {
+    style: {
+      background: bg,
+      opacity: props.hidden ? 0.0 : props.highOpacity ? 0.38 : 0.22,
+      boxShadow:
+        props.isSelected && !props.hidden ? `0 0 4px 1px ${bg}` : "none",
+    },
+  };
+})`
   position: absolute;
-  border-radius: 3px;
+  border-radius: 4px;
+  transition: opacity 0.3s ease-in-out;
 `;
 
 interface SelectionTokenSpanProps
@@ -59,23 +65,29 @@ interface SelectionTokenSpanThemeProps extends SelectionTokenSpanProps {
 }
 
 export const SelectionTokenSpan = styled.span.attrs<SelectionTokenSpanThemeProps>(
-  (props) => ({
-    id: props.id,
-    style: {
-      background: props.isSelected
-        ? props.color
-          ? props.color.toUpperCase()
-          : props.theme.color.B3
-        : "none",
-      opacity: props.hidden ? 0.0 : props.highOpacity ? 0.4 : 0.2,
-      left: `${props.left}px`,
-      top: `${props.top}px`,
-      width: `${props.right - props.left}px`,
-      height: `${props.bottom - props.top}px`,
-      pointerEvents: props.pointerEvents,
-    },
-  })
+  (props) => {
+    const bg = props.isSelected
+      ? props.color
+        ? props.color.toUpperCase()
+        : props.theme.color.B3
+      : "none";
+    return {
+      id: props.id,
+      style: {
+        background: bg,
+        opacity: props.hidden ? 0.0 : props.highOpacity ? 0.38 : 0.22,
+        left: `${props.left - 1}px`,
+        top: `${props.top - 1}px`,
+        width: `${props.right - props.left + 2}px`,
+        height: `${props.bottom - props.top + 2}px`,
+        pointerEvents: props.pointerEvents,
+        boxShadow:
+          props.isSelected && !props.hidden ? `0 0 4px 1px ${bg}` : "none",
+      },
+    };
+  }
 )`
   position: absolute;
-  border-radius: 3px;
+  border-radius: 4px;
+  transition: opacity 0.3s ease-in-out;
 `;

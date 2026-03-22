@@ -17,22 +17,30 @@ interface SelectionBoxProps {
   $hidden?: boolean;
 }
 
-// Update the styled component definition to include the custom props
+// Highlighter-pen effect: generous rounding, low opacity, and a soft
+// same-colour blur that feathers the edges into the page.
 const SelectionBox = styled.span.attrs<SelectionBoxProps>((props) => ({
   style: {
-    left: `${props.$left}px`,
-    top: `${props.$top}px`,
-    width: `${props.$right && props.$left ? props.$right - props.$left : 0}px`,
-    height: `${props.$bottom && props.$top ? props.$bottom - props.$top : 0}px`,
+    left: `${(props.$left ?? 0) - 1}px`,
+    top: `${(props.$top ?? 0) - 1}px`,
+    width: `${
+      props.$right && props.$left ? props.$right - props.$left + 2 : 0
+    }px`,
+    height: `${
+      props.$bottom && props.$top ? props.$bottom - props.$top + 2 : 0
+    }px`,
     backgroundColor: props.$color || "yellow",
-    opacity: props.$highOpacity ? 0.5 : 0.3,
+    opacity: props.$highOpacity ? 0.38 : 0.22,
     display: props.$hidden ? "none" : "block",
+    boxShadow: props.$hidden
+      ? "none"
+      : `0 0 4px 1px ${props.$color || "rgba(255,255,0,0.15)"}`,
   },
 }))<SelectionBoxProps>`
   position: absolute;
   pointer-events: none;
-  border-radius: 3px;
-  transition: opacity 0.2s ease-in-out;
+  border-radius: 4px;
+  transition: opacity 0.3s ease-in-out;
 `;
 
 export interface SelectionTokenGroupProps {
