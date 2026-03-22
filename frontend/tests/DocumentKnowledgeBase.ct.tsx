@@ -2408,10 +2408,10 @@ test("PDF annotations render with soft bounding boxes on canvas", async ({
       boxShadow: computed.boxShadow,
     };
   });
-  // Border should be "none" (0px), border-radius should be 4px
+  // Border should be "none" (0px), border-radius should be 6px
   expect(styles.border).toContain("0px");
-  expect(styles.borderRadius).toBe("4px");
-  // Box-shadow should be present (not "none")
+  expect(styles.borderRadius).toBe("6px");
+  // Box-shadow should be a diffuse glow (not "none", no hard inset lines)
   expect(styles.boxShadow).not.toBe("none");
 
   console.log("[TEST] Verified soft annotation styling on PDF canvas:", styles);

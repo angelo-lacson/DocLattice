@@ -14,15 +14,15 @@ export const SelectionContainer = styled.div<{
     | undefined;
 }>`
   position: absolute;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
   background-color: ${(props) =>
-    props.showBoundingBox ? `${props.color}33` : "transparent"};
-  transition: background-color 0.2s ease;
+    props.showBoundingBox ? `${props.color}1a` : "transparent"};
+  transition: background-color 0.4s ease;
 
   &:hover {
     background-color: ${(props) =>
-      props.showBoundingBox ? `${props.color}66` : "transparent"};
+      props.showBoundingBox ? `${props.color}33` : "transparent"};
   }
 `;
 
@@ -46,7 +46,7 @@ export const SelectionInfo = styled.div<SelectionInfoProps>`
   width: ${(props) => props.$bounds.right - props.$bounds.left}px;
   right: 0px;
   bottom: calc(100% - 2px);
-  border-radius: 4px 4px 0 0;
+  border-radius: 6px 6px 0 0;
   background: ${(props) =>
     props.$showBoundingBox ? props.$color : "rgba(255, 255, 255, 0.9)"};
   padding: 1px 8px;
@@ -54,24 +54,18 @@ export const SelectionInfo = styled.div<SelectionInfoProps>`
   font-size: 12px;
   user-select: none;
   box-sizing: border-box;
-  transition: all 0.3s ease-in-out;
+  transition: all 0.4s ease-in-out;
 
   ${(props) =>
     props.$approved &&
     css`
-      box-shadow: inset 0 1.5px 0 0 rgba(46, 204, 113, 0.6),
-        inset 1.5px 0 0 0 rgba(46, 204, 113, 0.6),
-        inset -1.5px 0 0 0 rgba(46, 204, 113, 0.6),
-        0 -2px 8px rgba(46, 204, 113, 0.15);
+      box-shadow: 0 -2px 10px 2px rgba(46, 204, 113, 0.12);
     `}
 
   ${(props) =>
     props.$rejected &&
     css`
-      box-shadow: inset 0 1.5px 0 0 rgba(231, 76, 60, 0.6),
-        inset 1.5px 0 0 0 rgba(231, 76, 60, 0.6),
-        inset -1.5px 0 0 0 rgba(231, 76, 60, 0.6),
-        0 -2px 8px rgba(231, 76, 60, 0.15);
+      box-shadow: 0 -2px 10px 2px rgba(231, 76, 60, 0.12);
     `}
 
   * {
@@ -109,7 +103,8 @@ export const LabelTagContainer = styled.div<{
   align-items: center;
   background-color: ${(props) => props.$color};
   color: ${(props) => getContrastColor(props.$color)};
-  padding: 2px 6px;
-  border-radius: 3px;
+  padding: 2px 8px;
+  border-radius: 5px;
   position: relative;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 `;
