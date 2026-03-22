@@ -230,7 +230,7 @@ def llms_txt(request: HttpRequest) -> HttpResponse:
             "",
             f"- [Full MCP documentation]({base_url}/llms-full.txt)",
             "- [Source code](https://github.com/Open-Source-Legal/OpenContracts)",
-            "- [Project documentation](https://opencontracts.opensource.legal)",
+            "- [Project documentation](https://contracts.opensource.legal)",
             "",
         ]
     )
@@ -563,7 +563,7 @@ def llms_full_txt(request: HttpRequest) -> HttpResponse:
             "## Links",
             "",
             "- [Source code](https://github.com/Open-Source-Legal/OpenContracts)",
-            "- [Project site](https://opencontracts.opensource.legal)",
+            "- [Project site](https://contracts.opensource.legal)",
             "- [MCP specification](https://modelcontextprotocol.io)",
             "",
         ]
