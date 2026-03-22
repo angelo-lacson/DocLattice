@@ -69,7 +69,6 @@ export const SettingsCard = styled.section`
   border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
   box-shadow: ${OS_LEGAL_SHADOWS.card};
   margin-bottom: 1.5rem;
-  overflow: hidden;
   transition: box-shadow 0.2s ease;
 
   &:hover {
@@ -89,6 +88,8 @@ export const SettingsCardHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   background: ${OS_LEGAL_COLORS.surfaceHover};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard}
+    ${OS_LEGAL_SPACING.borderRadiusCard} 0 0;
 `;
 
 /** Section title with teal accent bar */
