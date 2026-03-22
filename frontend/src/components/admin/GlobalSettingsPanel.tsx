@@ -10,68 +10,75 @@ import {
   OS_LEGAL_SHADOWS,
 } from "../../assets/configurations/osLegalStyles";
 
-const Container = styled.div`
-  padding: 2rem;
-  max-width: 1200px;
+const PageContainer = styled.div`
+  height: 100%;
+  background: ${OS_LEGAL_COLORS.background};
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+  overflow-y: auto;
+  overflow-x: hidden;
+`;
+
+const ContentContainer = styled.main`
+  max-width: 900px;
   margin: 0 auto;
+  padding: 48px 24px 80px;
 
   @media (max-width: 768px) {
-    padding: 1rem;
+    padding: 32px 16px 60px;
   }
 
   @media (max-width: 480px) {
-    padding: 0.75rem;
+    padding: 24px 12px 48px;
   }
 `;
 
-const PageHeader = styled.div`
-  margin-bottom: 2rem;
+const HeroSection = styled.section`
+  margin-bottom: 48px;
 
   @media (max-width: 768px) {
-    margin-bottom: 1.5rem;
-    text-align: center;
+    margin-bottom: 32px;
   }
 `;
 
-const PageTitle = styled.h1`
+const HeroTitle = styled.h1`
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySerif};
-  font-size: 1.75rem;
-  font-weight: 700;
+  font-size: 42px;
+  font-weight: 400;
+  line-height: 1.2;
   color: ${OS_LEGAL_COLORS.textPrimary};
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 16px;
 
   @media (max-width: 768px) {
-    font-size: 1.5rem;
-    justify-content: center;
+    font-size: 32px;
   }
 
   @media (max-width: 480px) {
-    font-size: 1.3rem;
+    font-size: 26px;
   }
 `;
 
-const PageDescription = styled.p`
-  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+const HeroSubtitle = styled.p`
+  font-size: 17px;
+  line-height: 1.6;
   color: ${OS_LEGAL_COLORS.textSecondary};
-  font-size: 1rem;
   margin: 0;
-  line-height: 1.5;
+  max-width: 600px;
 
   @media (max-width: 768px) {
-    font-size: 0.9rem;
+    font-size: 15px;
   }
 `;
 
 const SettingsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1.5rem;
 
   @media (max-width: 768px) {
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: 1rem;
   }
 
@@ -100,7 +107,6 @@ const SettingsCard = styled.div<{ $disabled?: boolean }>`
       border-color: ${OS_LEGAL_COLORS.borderHover};
     }
 
-    /* Disable hover transforms on touch devices */
     @media (hover: none) {
       &:hover {
         transform: none;
@@ -255,43 +261,45 @@ export const GlobalSettingsPanel: React.FC = () => {
   };
 
   return (
-    <Container>
-      <PageHeader>
-        <PageTitle>
-          <Settings size={28} color={OS_LEGAL_COLORS.accent} />
-          Admin Settings
-        </PageTitle>
-        <PageDescription>
-          Manage global settings, configurations, and administrative features
-          for OpenContracts.
-        </PageDescription>
-      </PageHeader>
+    <PageContainer>
+      <ContentContainer>
+        <HeroSection>
+          <HeroTitle>
+            <Settings size={32} color={OS_LEGAL_COLORS.accent} />
+            Admin Settings
+          </HeroTitle>
+          <HeroSubtitle>
+            Manage global settings, configurations, and administrative features
+            for OpenContracts.
+          </HeroSubtitle>
+        </HeroSection>
 
-      <SettingsGrid>
-        {settingsItems.map((item) => {
-          const IconComponent = item.icon;
-          return (
-            <SettingsCard
-              key={item.id}
-              data-testid={`settings-card-${item.id}`}
-              $disabled={item.comingSoon}
-              onClick={() => handleCardClick(item)}
-            >
-              <CardIconWrapper $gradient={item.gradient}>
-                <IconComponent size={24} color="white" />
-              </CardIconWrapper>
-              <CardTitle>
-                {item.title}
-                {item.comingSoon && (
-                  <ComingSoonBadge>Coming Soon</ComingSoonBadge>
-                )}
-              </CardTitle>
-              <CardDescription>{item.description}</CardDescription>
-            </SettingsCard>
-          );
-        })}
-      </SettingsGrid>
-    </Container>
+        <SettingsGrid>
+          {settingsItems.map((item) => {
+            const IconComponent = item.icon;
+            return (
+              <SettingsCard
+                key={item.id}
+                data-testid={`settings-card-${item.id}`}
+                $disabled={item.comingSoon}
+                onClick={() => handleCardClick(item)}
+              >
+                <CardIconWrapper $gradient={item.gradient}>
+                  <IconComponent size={24} color="white" />
+                </CardIconWrapper>
+                <CardTitle>
+                  {item.title}
+                  {item.comingSoon && (
+                    <ComingSoonBadge>Coming Soon</ComingSoonBadge>
+                  )}
+                </CardTitle>
+                <CardDescription>{item.description}</CardDescription>
+              </SettingsCard>
+            );
+          })}
+        </SettingsGrid>
+      </ContentContainer>
+    </PageContainer>
   );
 };
 

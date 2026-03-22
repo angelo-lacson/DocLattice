@@ -131,6 +131,10 @@ test.describe("GlobalSettingsPanel Component", () => {
     await expect(page.locator("text=System Settings")).toBeVisible();
     await expect(page.locator("text=User Management")).toBeVisible();
 
+    await docScreenshot(page, "admin--settings-panel--desktop", {
+      fullPage: true,
+    });
+
     await component.unmount();
   });
 
@@ -160,6 +164,44 @@ test.describe("GlobalSettingsPanel Component", () => {
     await expect(
       page.locator("text=Configure global AI agents available")
     ).toBeVisible();
+
+    await component.unmount();
+  });
+
+  test("should render responsively at tablet width", async ({
+    mount,
+    page,
+  }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    const component = await mount(<GlobalSettingsPanelWrapper />);
+
+    await expect(page.locator("text=Admin Settings")).toBeVisible();
+    await expect(page.locator("text=Badge Management")).toBeVisible();
+
+    await docScreenshot(page, "admin--settings-panel--tablet", {
+      fullPage: true,
+    });
+
+    await component.unmount();
+  });
+
+  test("should render responsively at mobile width", async ({
+    mount,
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    const component = await mount(<GlobalSettingsPanelWrapper />);
+
+    await expect(page.locator("text=Admin Settings")).toBeVisible();
+    await expect(page.locator("text=Badge Management")).toBeVisible();
+
+    // On mobile, cards should stack in a single column
+    const grid = page.locator('[data-testid="settings-card-badges"]').first();
+    await expect(grid).toBeVisible();
+
+    await docScreenshot(page, "admin--settings-panel--mobile", {
+      fullPage: true,
+    });
 
     await component.unmount();
   });
