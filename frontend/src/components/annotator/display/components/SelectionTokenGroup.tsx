@@ -31,11 +31,8 @@ const SelectionBox = styled.span.attrs<SelectionBoxProps>((props) => ({
 }))<SelectionBoxProps>`
   position: absolute;
   pointer-events: none;
-  ${(props) =>
-    props.$isSelected &&
-    `
-    border: 2px solid blue;
-  `}
+  border-radius: 3px;
+  transition: opacity 0.2s ease-in-out;
 `;
 
 export interface SelectionTokenGroupProps {

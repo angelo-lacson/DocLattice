@@ -44,7 +44,7 @@ interface SelectionInfoProps {
 export const SelectionInfo = styled.div<SelectionInfoProps>`
   position: absolute;
   width: ${(props) => props.$bounds.right - props.$bounds.left}px;
-  right: -${(props) => props.$border + ((props?.$approved ? 1 : props?.$rejected) ? -1 : 0)}px;
+  right: 0px;
   bottom: calc(100% - 2px);
   border-radius: 4px 4px 0 0;
   background: ${(props) =>
@@ -54,24 +54,24 @@ export const SelectionInfo = styled.div<SelectionInfoProps>`
   font-size: 12px;
   user-select: none;
   box-sizing: border-box;
-  transition: all 0.2s ease-in-out;
+  transition: all 0.3s ease-in-out;
 
   ${(props) =>
     props.$approved &&
     css`
-      border-top: 2px solid #2ecc71;
-      border-left: 2px solid #2ecc71;
-      border-right: 2px solid #2ecc71;
-      box-shadow: 0 0 8px rgba(46, 204, 113, 0.2);
+      box-shadow: inset 0 1.5px 0 0 rgba(46, 204, 113, 0.6),
+        inset 1.5px 0 0 0 rgba(46, 204, 113, 0.6),
+        inset -1.5px 0 0 0 rgba(46, 204, 113, 0.6),
+        0 -2px 8px rgba(46, 204, 113, 0.15);
     `}
 
   ${(props) =>
     props.$rejected &&
     css`
-      border-top: 2px solid #e74c3c;
-      border-left: 2px solid #e74c3c;
-      border-right: 2px solid #e74c3c;
-      box-shadow: 0 0 8px rgba(231, 76, 60, 0.2);
+      box-shadow: inset 0 1.5px 0 0 rgba(231, 76, 60, 0.6),
+        inset 1.5px 0 0 0 rgba(231, 76, 60, 0.6),
+        inset -1.5px 0 0 0 rgba(231, 76, 60, 0.6),
+        0 -2px 8px rgba(231, 76, 60, 0.15);
     `}
 
   * {
