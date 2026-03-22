@@ -1096,9 +1096,17 @@ def import_zip_with_folder_structure(
                             # create_document_from_export_data doesn't know
                             # about (it uses sidecar title/description only).
                             update_fields = ["backend_lock"]
+                            # Title: override when it differs from the bare
+                            # filename (i.e. title_prefix or meta.csv supplied
+                            # a real title).
                             if doc_title != entry.filename:
                                 doc_obj.title = doc_title
                                 update_fields.append("title")
+                            # Description: only override when an explicit
+                            # source exists (task param or meta.csv).  Without
+                            # this guard the generic "Imported from zip …"
+                            # fallback would overwrite the sidecar's own
+                            # description.
                             if description or (
                                 doc_metadata and doc_metadata.description
                             ):
