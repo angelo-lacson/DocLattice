@@ -283,6 +283,12 @@ export const OverflowHiddenFill = styled.div`
   overflow: hidden;
 `;
 
+export const ScrollableFillPanel = styled.div`
+  flex: 1;
+  overflow: auto;
+  padding: 0.5rem 0;
+`;
+
 export const SidebarHeader = styled.div`
   padding: 1rem 1.5rem;
   border-bottom: 1px solid ${OS_LEGAL_COLORS.border};

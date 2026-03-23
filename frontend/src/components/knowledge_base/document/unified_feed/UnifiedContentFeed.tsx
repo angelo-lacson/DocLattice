@@ -36,6 +36,7 @@ import { FetchMoreOnVisible } from "../../../widgets/infinite_scroll/FetchMoreOn
 import { ContentItemRenderer } from "./ContentItemRenderer";
 import { RelationshipActionModal } from "./RelationshipActionModal";
 import { useRelationshipActions } from "../../../annotator/hooks/useRelationshipActions";
+import { STRUCTURAL_LABEL_PREFIX } from "../../../../assets/configurations/constants";
 
 interface UnifiedContentFeedProps {
   /** Document notes */
@@ -254,7 +255,7 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
         }
 
         // Always hide OC_* prefixed annotations (platform-generated structural labels)
-        if (ann.annotationLabel.text?.startsWith("OC_")) {
+        if (ann.annotationLabel.text?.startsWith(STRUCTURAL_LABEL_PREFIX)) {
           return;
         }
 
