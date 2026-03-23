@@ -14,6 +14,7 @@ import {
   ExtractHeaderTitle,
   ExtractHeaderSubtitle,
   OverflowHiddenFill,
+  ScrollableFillPanel,
   SidebarHeader,
   SidebarHeaderContent,
   SidebarHeaderTitle,
@@ -129,13 +130,13 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
   if (sidebarViewMode === "index") {
     return (
       <FlexColumnPanel>
-        <div style={{ flex: 1, overflow: "auto", padding: "8px 0" }}>
+        <ScrollableFillPanel>
           <DocumentAnnotationIndex
             documentId={documentId}
             corpusId={corpusId}
             embedded
           />
-        </div>
+        </ScrollableFillPanel>
       </FlexColumnPanel>
     );
   }

@@ -267,12 +267,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
       if (historyIdx > 0) {
         routingLogger.debug(
-          `[DocumentKnowledgeBase] Navigating back (historyIdx=${historyIdx})`,
+          `[DocumentKnowledgeBase] Navigating back (historyIdx=${historyIdx})`
         );
         navigate(-1);
       } else {
         routingLogger.debug(
-          "[DocumentKnowledgeBase] Navigating to /documents (no history)",
+          "[DocumentKnowledgeBase] Navigating to /documents (no history)"
         );
         navigate("/documents");
       }
@@ -281,7 +281,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     try {
       const timestamp = new Date().toISOString();
       routingLogger.debug(
-        `🚪 [DocumentKnowledgeBase] ════════ handleClose START ════════`,
+        `🚪 [DocumentKnowledgeBase] ════════ handleClose START ════════`
       );
       routingLogger.debug("[DocumentKnowledgeBase] Timestamp:", timestamp);
       routingLogger.debug("[DocumentKnowledgeBase] Current state:", {
@@ -294,18 +294,18 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
       if (onClose) {
         routingLogger.debug(
-          "[DocumentKnowledgeBase] ✅ Decision: Calling provided onClose callback",
+          "[DocumentKnowledgeBase] ✅ Decision: Calling provided onClose callback"
         );
         onClose();
       } else {
         console.warn(
-          "[DocumentKnowledgeBase] ⚠️  Decision: No onClose callback - using browser history fallback",
+          "[DocumentKnowledgeBase] ⚠️  Decision: No onClose callback - using browser history fallback"
         );
         navigateBackOrFallback();
       }
 
       routingLogger.debug(
-        "[DocumentKnowledgeBase] ════════ handleClose END ════════",
+        "[DocumentKnowledgeBase] ════════ handleClose END ════════"
       );
     } catch (error) {
       console.error("[DocumentKnowledgeBase] ❌ ERROR in handleClose:", error);
@@ -319,7 +319,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   if (!documentId || documentId === "") {
     console.error(
       "DocumentKnowledgeBase: Invalid documentId provided:",
-      documentId,
+      documentId
     );
     return (
       <Modal open onClose={handleClose} size="sm">
@@ -364,7 +364,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       "Panel width calculation - mode:",
       mode,
       "width:",
-      width,
+      width
     );
     return width;
   }, [mode, customWidth]);
@@ -381,7 +381,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   // This layer state still determines whether to show the knowledge base layout vs document layout
   const [activeLayer, setActiveLayer] = useState<"knowledge" | "document">(
-    "document",
+    "document"
   );
 
   const [viewState, setViewState] = useState<ViewState>(ViewState.LOADING);
@@ -486,7 +486,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       }
       return originalCreateAnnotationHandler(annotation);
     },
-    [corpusId, originalCreateAnnotationHandler],
+    [corpusId, originalCreateAnnotationHandler]
   );
 
   const [markdownContent, setMarkdownContent] = useState<string | null>(null);
@@ -590,24 +590,24 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
    * @param data - The query result containing document + corpus info
    */
   const processAnnotationsData = (
-    data: GetDocumentKnowledgeAndAnnotationsOutput,
+    data: GetDocumentKnowledgeAndAnnotationsOutput
   ) => {
     if (data?.document) {
       // Backend now filters out analysis annotations when analysisId is not provided
       const processedAnnotations =
         data.document.allAnnotations?.map((annotation) =>
-          convertToServerAnnotation(annotation),
+          convertToServerAnnotation(annotation)
         ) ?? [];
 
       const structuralAnnotations =
         data.document.allStructuralAnnotations?.map((annotation) =>
-          convertToServerAnnotation(annotation),
+          convertToServerAnnotation(annotation)
         ) ?? [];
 
       const processedDocTypeAnnotations = convertToDocTypeAnnotations(
         data.document.allAnnotations?.filter(
-          (ann) => ann.annotationLabel.labelType === LabelType.DocTypeLabel,
-        ) ?? [],
+          (ann) => ann.annotationLabel.labelType === LabelType.DocTypeLabel
+        ) ?? []
       );
 
       // Update pdfAnnotations atom with ONLY non-structural annotations
@@ -618,8 +618,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             processedAnnotations, // Don't include structural here
             prev.relations,
             processedDocTypeAnnotations,
-            true,
-          ),
+            true
+          )
       );
 
       // **Store the initial annotations**
@@ -628,7 +628,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       // Process structural annotations
       if (data.document.allStructuralAnnotations) {
         const structuralAnns = data.document.allStructuralAnnotations.map(
-          (ann) => convertToServerAnnotation(ann),
+          (ann) => convertToServerAnnotation(ann)
         );
         setStructuralAnnotations(structuralAnns);
       }
@@ -645,8 +645,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               .filter((id): id is string => id !== undefined),
             rel.relationshipLabel,
             rel.id,
-            rel.structural,
-          ),
+            rel.structural
+          )
       );
 
       // Store the initial relations
@@ -658,8 +658,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             prev.annotations,
             processedRelationships || [],
             prev.docTypes,
-            true,
-          ),
+            true
+          )
       );
 
       // Prepare the update payload for the corpus state atom
@@ -668,7 +668,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       // Process corpus permissions if available
       if (data.corpus?.myPermissions) {
         corpusUpdatePayload.myPermissions = getPermissions(
-          data.corpus.myPermissions,
+          data.corpus.myPermissions
         );
       }
 
@@ -677,17 +677,17 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         const allLabels = data.corpus.labelSet.allAnnotationLabels ?? [];
         // Filter labels by type
         corpusUpdatePayload.spanLabels = allLabels.filter(
-          (label) => label.labelType === LabelType.SpanLabel,
+          (label) => label.labelType === LabelType.SpanLabel
         );
         corpusUpdatePayload.humanSpanLabels = corpusUpdatePayload.spanLabels; // Assuming they are the same initially
         corpusUpdatePayload.relationLabels = allLabels.filter(
-          (label) => label.labelType === LabelType.RelationshipLabel,
+          (label) => label.labelType === LabelType.RelationshipLabel
         );
         corpusUpdatePayload.docTypeLabels = allLabels.filter(
-          (label) => label.labelType === LabelType.DocTypeLabel,
+          (label) => label.labelType === LabelType.DocTypeLabel
         );
         corpusUpdatePayload.humanTokenLabels = allLabels.filter(
-          (label) => label.labelType === LabelType.TokenLabel,
+          (label) => label.labelType === LabelType.TokenLabel
         );
       }
 
@@ -737,7 +737,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         ? getDocumentRawText(
             doc.txtExtractFile,
             doc.id,
-            doc.pdfFileHash ?? undefined,
+            doc.pdfFileHash ?? undefined
           )
         : Promise.resolve("");
 
@@ -745,7 +745,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         .then(([bytes, txt]) => {
           if (cancelled) return;
           routingLogger.debug(
-            "[DOCX Load] Batching DOCX completion state updates",
+            "[DOCX Load] Batching DOCX completion state updates"
           );
           unstable_batchedUpdates(() => {
             setDocxBytes(bytes);
@@ -761,11 +761,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           toast.error(
             `Error loading DOCX content: ${
               err instanceof Error ? err.message : String(err)
-            }`,
+            }`
           );
         });
     },
-    [setViewState, setDocxBytes, setDocText],
+    [setViewState, setDocxBytes, setDocText]
   );
 
   // We'll store the measured containerWidth here
@@ -791,7 +791,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         setScrollContainerRef(null);
       }
     },
-    [setContainerWidth, setScrollContainerRef],
+    [setContainerWidth, setScrollContainerRef]
   );
 
   // Watch for width changes when sidebar opens/closes
@@ -828,7 +828,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         setShiftDown(false);
       }
     },
-    [setShiftDown],
+    [setShiftDown]
   );
 
   const handleKeyDownPress = useCallback(
@@ -838,7 +838,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         setShiftDown(true);
       }
     },
-    [setShiftDown],
+    [setShiftDown]
   );
 
   // Fetch document data - either with corpus context or without
@@ -910,7 +910,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             // --- DETAILED LOGGING FOR PAWLS DATA ---
             if (!pawlsData) {
               console.error(
-                "onCompleted: PAWLS data received is null or undefined!",
+                "onCompleted: PAWLS data received is null or undefined!"
               );
             }
             // --- END DETAILED LOGGING ---
@@ -931,10 +931,10 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                     p.pageNumber - 1,
                     viewport.width,
                     viewport.height,
-                    pageNum,
+                    pageNum
                   );
                   return new PDFPageInfo(p, pageTokens, zoomLevel);
-                }) as unknown as Promise<PDFPageInfo>,
+                }) as unknown as Promise<PDFPageInfo>
               );
             }
             return Promise.all(loadPagesPromises);
@@ -942,7 +942,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           .then((loadedPages) => {
             // Batch PDF completion state updates to prevent cascading re-renders
             routingLogger.debug(
-              "[PDF Load] 🔄 Batching PDF completion state updates",
+              "[PDF Load] 🔄 Batching PDF completion state updates"
             );
             unstable_batchedUpdates(() => {
               setPages(loadedPages);
@@ -966,7 +966,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             toast.error(
               `Error loading PDF details: ${
                 err instanceof Error ? err.message : String(err)
-              }`,
+              }`
             );
           });
       } else if (
@@ -984,12 +984,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         getDocumentRawText(
           data.document.txtExtractFile,
           docId,
-          textHash ?? undefined,
+          textHash ?? undefined
         )
           .then((txt) => {
             // Batch text file completion state updates
             routingLogger.debug(
-              "[Text Load] Batching text completion state updates",
+              "[Text Load] Batching text completion state updates"
             );
             unstable_batchedUpdates(() => {
               setDocText(txt);
@@ -1004,7 +1004,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             toast.error(
               `Error loading text content: ${
                 err instanceof Error ? err.message : String(err)
-              }`,
+              }`
             );
           });
       } else if (
@@ -1020,7 +1020,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       } else {
         console.warn(
           "onCompleted: Unsupported file type or missing file path.",
-          data.document.fileType,
+          data.document.fileType
         );
         setViewState(ViewState.ERROR); // Treat unsupported as error
       }
@@ -1034,7 +1034,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       const benign404 =
         error?.graphQLErrors?.length === 1 &&
         error.graphQLErrors[0].message.includes(
-          "Document matching query does not exist",
+          "Document matching query does not exist"
         );
 
       if (benign404) {
@@ -1059,7 +1059,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       authReady,
       documentId,
       corpusId,
-    },
+    }
   );
 
   const {
@@ -1082,7 +1082,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             hasDocument: !!data?.document,
             hasStructuralAnnotations:
               data?.document?.allStructuralAnnotations?.length ?? 0,
-          },
+          }
         );
         if (!data?.document) {
           console.error("onCompleted: No document data received.");
@@ -1093,7 +1093,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
         // Batch initial state updates to prevent cascading re-renders
         routingLogger.debug(
-          "[onCompleted] 🔄 Batching initial state updates (document-only)",
+          "[onCompleted] 🔄 Batching initial state updates (document-only)"
         );
         unstable_batchedUpdates(() => {
           setDocumentType(data.document.fileType ?? "");
@@ -1110,7 +1110,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         if (isPdfFileType(data.document.fileType) && data.document.pdfFile) {
           setViewState(ViewState.LOADING);
           const loadingTask: PDFDocumentLoadingTask = getDocument(
-            data.document.pdfFile,
+            data.document.pdfFile
           );
           loadingTask.onProgress = (p: { loaded: number; total: number }) => {
             setProgress(Math.round((p.loaded / p.total) * 100));
@@ -1122,7 +1122,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             .then(([pdfDocProxy, pawlsData]) => {
               if (!pawlsData) {
                 console.error(
-                  "onCompleted: PAWLS data received is null or undefined!",
+                  "onCompleted: PAWLS data received is null or undefined!"
                 );
               }
 
@@ -1142,10 +1142,10 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                       p.pageNumber - 1,
                       viewport.width,
                       viewport.height,
-                      pageNum,
+                      pageNum
                     );
                     return new PDFPageInfo(p, pageTokens, zoomLevel);
-                  }) as unknown as Promise<PDFPageInfo>,
+                  }) as unknown as Promise<PDFPageInfo>
                 );
               }
               return Promise.all(loadPagesPromises);
@@ -1153,7 +1153,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             .then((loadedPages) => {
               // Batch PDF completion state updates (document-only)
               routingLogger.debug(
-                "[PDF Load] 🔄 Batching PDF completion state updates (document-only)",
+                "[PDF Load] 🔄 Batching PDF completion state updates (document-only)"
               );
               unstable_batchedUpdates(() => {
                 setPages(loadedPages);
@@ -1175,7 +1175,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               toast.error(
                 `Error loading PDF details: ${
                   err instanceof Error ? err.message : String(err)
-                }`,
+                }`
               );
             });
         } else if (
@@ -1193,7 +1193,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             .then((txt) => {
               // Batch text file completion state updates (document-only)
               routingLogger.debug(
-                "[Text Load] Batching text completion state updates (document-only)",
+                "[Text Load] Batching text completion state updates (document-only)"
               );
               unstable_batchedUpdates(() => {
                 setDocText(txt);
@@ -1208,7 +1208,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               toast.error(
                 `Error loading text content: ${
                   err instanceof Error ? err.message : String(err)
-                }`,
+                }`
               );
             });
         } else if (
@@ -1222,7 +1222,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         } else {
           console.warn(
             "onCompleted: Unsupported file type or missing file path.",
-            data.document.fileType,
+            data.document.fileType
           );
           setViewState(ViewState.ERROR);
         }
@@ -1231,13 +1231,13 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
         // Batch structural annotation updates (document-only)
         routingLogger.debug(
-          "[onCompleted] 🔄 Batching structural annotation updates (document-only)",
+          "[onCompleted] 🔄 Batching structural annotation updates (document-only)"
         );
         unstable_batchedUpdates(() => {
           // Process structural annotations even without corpus
           if (data.document.allStructuralAnnotations) {
             const structuralAnns = data.document.allStructuralAnnotations.map(
-              (ann) => convertToServerAnnotation(ann),
+              (ann) => convertToServerAnnotation(ann)
             );
             setStructuralAnnotations(structuralAnns);
           } else {
@@ -1256,13 +1256,13 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                   .filter((id): id is string => id !== undefined),
                 rel.relationshipLabel,
                 rel.id,
-                rel.structural,
-              ),
+                rel.structural
+              )
           );
 
           // Set annotations with structural relationships (no regular annotations without corpus)
           setPdfAnnotations(
-            new PdfAnnotations([], processedRelationships || [], [], true),
+            new PdfAnnotations([], processedRelationships || [], [], true)
           );
         });
       },
@@ -1273,7 +1273,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       },
       fetchPolicy: "network-only",
       nextFetchPolicy: "no-cache",
-    },
+    }
   );
 
   // Lightweight query for fetching just annotations when switching analyses
@@ -1309,22 +1309,22 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   // Fetch versioned markdown description for corpus info display
   const corpusMdContent = useCorpusMdDescription(
-    corpusData?.corpus?.mdDescription,
+    corpusData?.corpus?.mdDescription
   );
 
   // Process lightweight annotations data (used when switching analyses)
   const processAnnotationsOnlyData = (
-    data: GetDocumentAnnotationsOnlyOutput,
+    data: GetDocumentAnnotationsOnlyOutput
   ) => {
     if (data?.document) {
       const processedAnnotations =
         data.document.allAnnotations?.map((annotation) =>
-          convertToServerAnnotation(annotation),
+          convertToServerAnnotation(annotation)
         ) ?? [];
 
       const structuralAnnotations =
         data.document.allStructuralAnnotations?.map((annotation) =>
-          convertToServerAnnotation(annotation),
+          convertToServerAnnotation(annotation)
         ) ?? [];
 
       // Update pdfAnnotations atom with ONLY non-structural annotations
@@ -1335,14 +1335,14 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             processedAnnotations, // Don't include structural here
             prev.relations, // Keep existing relations initially
             prev.docTypes, // Keep existing doc types
-            true,
-          ),
+            true
+          )
       );
 
       // Process structural annotations
       if (data.document.allStructuralAnnotations) {
         const structuralAnns = data.document.allStructuralAnnotations.map(
-          (ann) => convertToServerAnnotation(ann),
+          (ann) => convertToServerAnnotation(ann)
         );
         setStructuralAnnotations(structuralAnns);
       }
@@ -1359,8 +1359,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               .filter((id): id is string => id !== undefined),
             rel.relationshipLabel,
             rel.id,
-            rel.structural,
-          ),
+            rel.structural
+          )
       );
 
       setPdfAnnotations(
@@ -1369,8 +1369,8 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
             prev.annotations,
             processedRelationships || [],
             prev.docTypes,
-            true,
-          ),
+            true
+          )
       );
     }
   };
@@ -1413,10 +1413,10 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   };
 
   const notes = corpusId
-    ? (corpusData?.document?.allNotes ?? [])
-    : (documentOnlyData?.document?.allNotes ?? []);
+    ? corpusData?.document?.allNotes ?? []
+    : documentOnlyData?.document?.allNotes ?? [];
   const docRelationships = corpusId
-    ? (corpusData?.document?.allDocRelationships ?? [])
+    ? corpusData?.document?.allDocRelationships ?? []
     : [];
 
   // Resize handlers
@@ -1442,7 +1442,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       const deltaPercentage = (deltaX / windowWidth) * 100;
       const newWidth = Math.max(
         15,
-        Math.min(95, dragStartWidth + deltaPercentage),
+        Math.min(95, dragStartWidth + deltaPercentage)
       );
 
       // Snap to preset widths if close
@@ -1457,7 +1457,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         setCustomWidth(newWidth);
       }
     },
-    [isDragging, dragStartX, dragStartWidth, setMode, setCustomWidth],
+    [isDragging, dragStartX, dragStartWidth, setMode, setCustomWidth]
   );
 
   const handleResizeEnd = useCallback(() => {
@@ -1526,7 +1526,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   }, [combinedData?.document?.mdSummaryFile]);
 
   const [selectedNote, setSelectedNote] = useState<(typeof notes)[0] | null>(
-    null,
+    null
   );
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [showNewNoteModal, setShowNewNoteModal] = useState(false);
@@ -1900,7 +1900,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           <HeaderButton
             onClick={(e) => {
               routingLogger.debug(
-                `🖱️  [DocumentKnowledgeBase] ════════ BACK BUTTON CLICKED ════════`,
+                `🖱️  [DocumentKnowledgeBase] ════════ BACK BUTTON CLICKED ════════`
               );
               routingLogger.debug(
                 "[DocumentKnowledgeBase] Button click event:",
@@ -1910,7 +1910,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                   currentTarget: e.currentTarget,
                   target: e.target,
                   currentUrl: window.location.pathname + window.location.search,
-                },
+                }
               );
               handleClose();
             }}
@@ -1997,7 +1997,7 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               {mainLayerContent}
               <EnhancedLabelSelector
                 sidebarWidth="0px"
-                activeSpanLabel={canEdit ? (activeSpanLabel ?? null) : null}
+                activeSpanLabel={canEdit ? activeSpanLabel ?? null : null}
                 setActiveLabel={canEdit ? setActiveSpanLabel : () => {}}
                 showRightPanel={showRightPanel}
                 panelOffset={floatingControlsState.offset}
