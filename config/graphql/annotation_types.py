@@ -68,11 +68,12 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         if self.structural_set_id:
             structural_set = self.structural_set
             if structural_set is not None:
-                # Use prefetched documents if available
-                docs = structural_set.documents.all()
-                if docs:
-                    return docs[0]
-            # Fallback to DB query if not prefetched
+                # Use prefetched documents if available (evaluates prefetch cache)
+                prefetched = list(structural_set.documents.all())
+                if prefetched:
+                    return prefetched[0]
+            # Fallback to DB query if not prefetched (avoids circular import
+            # with documents.models at module level)
             from opencontractserver.documents.models import Document
 
             return Document.objects.filter(
