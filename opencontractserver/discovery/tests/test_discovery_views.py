@@ -431,6 +431,7 @@ class SearchApiTest(TestCase):
             document=cls.public_doc,
             corpus=cls.public_corpus,
             creator=cls.owner,
+            version_number=1,
             is_current=True,
             is_deleted=False,
         )
@@ -438,6 +439,7 @@ class SearchApiTest(TestCase):
             document=cls.private_doc,
             corpus=cls.private_corpus,
             creator=cls.owner,
+            version_number=1,
             is_current=True,
             is_deleted=False,
         )
