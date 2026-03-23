@@ -1,5 +1,8 @@
 # PDF Loading Performance Optimization Plan
 
+> **Status**: Phase 1 (lazy structural annotation loading) implemented in PR #1154.
+> Phases 2–5 are future work — they are not yet started.
+
 ## Problem Statement
 
 Loading a 100-200 page document in `DocumentKnowledgeBase` is unacceptably slow. The root cause is that the initial GraphQL query (`GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS`) fetches **all structural annotations, all corpus annotations, and all relationships in a single monolithic query** — with no pagination.
