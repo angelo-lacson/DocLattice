@@ -3,7 +3,8 @@ Tests for batch embedding functionality.
 
 Tests the batch embedding pipeline: BaseEmbedder.embed_texts_batch(),
 _batch_embed_text_annotations(), MicroserviceEmbedder.embed_texts_batch(),
-and calculate_embeddings_for_annotation_batch() with true batch API calls.
+calculate_embeddings_for_annotation_batch() with true batch API calls,
+and integration tests for the full Celery task.
 """
 
 import unittest
@@ -20,7 +21,10 @@ from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.embedders.sent_transformer_microservice import (
     MicroserviceEmbedder,
 )
-from opencontractserver.tasks.embeddings_task import _batch_embed_text_annotations
+from opencontractserver.tasks.embeddings_task import (
+    _batch_embed_text_annotations,
+    calculate_embeddings_for_annotation_batch,
+)
 from opencontractserver.types.enums import ContentModality
 
 
@@ -422,3 +426,138 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         self.assertIsNotNone(result[0])
         self.assertIsNone(result[1])  # NaN item
         self.assertIsNotNone(result[2])
+
+
+class TestCalculateEmbeddingsForAnnotationBatch(unittest.TestCase):
+    """Integration tests for the calculate_embeddings_for_annotation_batch task."""
+
+    def _mock_objects(self, annotations):
+        """Build a mock manager whose select_related().filter() yields annotations."""
+        mock_qs = MagicMock()
+        mock_qs.filter.return_value = mock_qs
+        mock_qs.__iter__ = lambda self_: iter(annotations)
+
+        mock_mgr = MagicMock()
+        mock_mgr.select_related.return_value = mock_qs
+        return mock_mgr
+
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_batch_path_text_only(self, mock_ann_cls, mock_get_component):
+        """Explicit embedder_path routes text-only annotations through batch path."""
+        annots = [
+            _make_mock_annotation(1, "Hello world"),
+            _make_mock_annotation(2, "Second text"),
+        ]
+        mock_ann_cls.objects = self._mock_objects(annots)
+        mock_get_component.return_value = DummyEmbedder384
+
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[1, 2],
+            embedder_path="test.DummyEmbedder384",
+        )
+
+        self.assertEqual(result["total"], 2)
+        self.assertEqual(result["succeeded"], 2)
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["skipped"], 0)
+        for annot in annots:
+            annot.add_embedding.assert_called_once()
+
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
+    def test_batch_path_empty_ids(self, mock_get_component):
+        """Empty annotation_ids returns immediately with zero counts."""
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[],
+            embedder_path="test.DummyEmbedder384",
+        )
+
+        self.assertEqual(result["total"], 0)
+        self.assertEqual(result["succeeded"], 0)
+        mock_get_component.assert_not_called()
+
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_batch_path_missing_annotations(self, mock_ann_cls, mock_get_component):
+        """Annotations not found in DB are counted as skipped."""
+        annot1 = _make_mock_annotation(1, "Hello")
+        mock_ann_cls.objects = self._mock_objects([annot1])
+        mock_get_component.return_value = DummyEmbedder384
+
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[1, 2, 3],
+            embedder_path="test.DummyEmbedder384",
+        )
+
+        self.assertEqual(result["total"], 3)
+        self.assertEqual(result["succeeded"], 1)
+        self.assertEqual(result["skipped"], 2)
+
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_batch_path_embedder_load_failure(self, mock_ann_cls, mock_get_component):
+        """Failing to load the embedder class fails all annotations."""
+        mock_get_component.side_effect = ImportError("Module not found")
+
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[1, 2],
+            embedder_path="nonexistent.Embedder",
+        )
+
+        self.assertEqual(result["total"], 2)
+        self.assertEqual(result["failed"], 2)
+        self.assertIn("Failed to load embedder", result["errors"][0])
+
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_batch_path_with_batch_failure(self, mock_ann_cls, mock_get_component):
+        """Batch embed failure marks all annotations as failed."""
+        annots = [_make_mock_annotation(i, f"Text {i}") for i in range(3)]
+        mock_ann_cls.objects = self._mock_objects(annots)
+        mock_get_component.return_value = FailingBatchEmbedder
+
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[0, 1, 2],
+            embedder_path="test.FailingBatchEmbedder",
+        )
+
+        self.assertEqual(result["total"], 3)
+        self.assertEqual(result["failed"], 3)
+        self.assertEqual(result["succeeded"], 0)
+
+    @patch("opencontractserver.tasks.embeddings_task._apply_dual_embedding_strategy")
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_dual_strategy_path(self, mock_ann_cls, mock_dual_strategy):
+        """Without explicit embedder_path, uses dual embedding strategy."""
+        annot = _make_mock_annotation(1, "Hello")
+        annot.corpus_id = 10
+        mock_ann_cls.objects = self._mock_objects([annot])
+
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[1],
+            corpus_id=10,
+            embedder_path=None,
+        )
+
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(result["succeeded"], 1)
+        mock_dual_strategy.assert_called_once()
+
+    @patch("opencontractserver.tasks.embeddings_task._apply_dual_embedding_strategy")
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_dual_strategy_path_failure(self, mock_ann_cls, mock_dual_strategy):
+        """Dual strategy exception marks annotation as failed."""
+        annot = _make_mock_annotation(1, "Hello")
+        annot.corpus_id = 10
+        mock_ann_cls.objects = self._mock_objects([annot])
+        mock_dual_strategy.side_effect = RuntimeError("Embedder crashed")
+
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[1],
+            corpus_id=10,
+            embedder_path=None,
+        )
+
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(result["failed"], 1)
+        self.assertIn("Embedder crashed", result["errors"][0])

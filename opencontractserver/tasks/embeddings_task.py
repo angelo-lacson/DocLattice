@@ -457,7 +457,7 @@ def _batch_embed_text_annotations(
     for annot in annotations:
         text = annot.raw_text or ""
         if not text.strip():
-            logger.info(f"Annotation {annot.id} has no text to embed, skipping.")
+            logger.debug(f"Annotation {annot.id} has no text to embed, skipping.")
             result["skipped"] += 1
             continue
         items.append((annot, text))
