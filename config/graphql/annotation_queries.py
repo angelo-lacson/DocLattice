@@ -31,7 +31,10 @@ from doclatticeserver.annotations.models import (
     Note,
     Relationship,
 )
-from doclatticeserver.constants.annotations import MANUAL_ANNOTATION_SENTINEL
+from doclatticeserver.constants.annotations import (
+    DOCUMENT_ANNOTATION_INDEX_LIMIT,
+    MANUAL_ANNOTATION_SENTINEL,
+)
 from doclatticeserver.documents.models import Document
 from doclatticeserver.types.enums import LabelType
 
@@ -60,6 +63,8 @@ class AnnotationQueryMixin:
         created_by_analysis_ids=graphene.String(),
         created_with_analyzer_id=graphene.String(),
         order_by=graphene.String(),
+        # Higher limit for Document Annotation Index which needs full hierarchy
+        max_limit=DOCUMENT_ANNOTATION_INDEX_LIMIT,
     )
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_MEDIUM"))
