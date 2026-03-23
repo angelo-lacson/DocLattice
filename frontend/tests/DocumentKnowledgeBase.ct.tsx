@@ -962,13 +962,7 @@ test("TXT document allows creating annotations via text selection", async ({
   const selectedText = await page.evaluate(() =>
     window.getSelection()?.toString()
   );
-  console.log(`[TEST] Selected text: "${selectedText}"`);
-
   if (!selectedText || selectedText.length === 0) {
-    console.log(
-      "[TEST WARNING] No text was selected, trying alternative approach"
-    );
-
     // Alternative: Select text programmatically
     const selectionResult = await page.evaluate(() => {
       const container = document.querySelector('[data-testid="txt-annotator"]');
@@ -1006,8 +1000,6 @@ test("TXT document allows creating annotations via text selection", async ({
         textNodeFound: false,
       };
     });
-
-    console.log(`[TEST] Alternative selection result:`, selectionResult);
   }
 
   console.log("[TEST] Completed text selection");
