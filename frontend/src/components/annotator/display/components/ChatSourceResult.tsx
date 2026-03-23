@@ -9,6 +9,7 @@ import { useAnnotationDisplay } from "../../context/UISettingsAtom";
 import { BoundingBox } from "../../../types";
 import { useAnnotationRefs } from "../../hooks/useAnnotationRefs";
 import { LabelDisplayBehavior } from "../../../../types/graphql-api";
+import { ANNOTATION_BOUNDARY_RADIUS } from "../../../../assets/configurations/constants";
 
 /**
  * Props for rendering a chat message source on a PDF page.
@@ -88,7 +89,6 @@ export const ChatSourceResult = ({
       >
         {showInfo && !hideLabels ? (
           <SelectionInfo
-            border={0}
             bounds={bounds}
             color={color}
             showBoundingBox={showBoundingBox}
@@ -129,7 +129,6 @@ export const ChatSourceResult = ({
  * Props for the selection info overlay that displays label details.
  */
 interface SelectionInfoProps {
-  border: number;
   bounds: BoundingBox;
   color: string;
   showBoundingBox: boolean;
@@ -144,7 +143,7 @@ const SelectionInfo = styled.div.attrs<SelectionInfoProps>(
       right: "0px",
       transform: "translateY(-100%)",
       border: "none",
-      borderRadius: "4px 4px 0 0",
+      borderRadius: `${ANNOTATION_BOUNDARY_RADIUS} ${ANNOTATION_BOUNDARY_RADIUS} 0 0`,
       background: showBoundingBox ? color : "rgba(255, 255, 255, 0.0)",
       fontWeight: "bold",
       fontSize: "12px",
