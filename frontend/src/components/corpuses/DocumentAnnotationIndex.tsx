@@ -2,7 +2,7 @@ import React, { useMemo, useEffect, useRef, useState } from "react";
 import { useQuery, useReactiveVar } from "@apollo/client";
 import styled from "styled-components";
 import { Spinner } from "@os-legal/ui";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   ChevronRight,
   ChevronDown,
@@ -20,7 +20,10 @@ import {
   AnnotationIndexNode,
 } from "../../graphql/queries";
 import { openedCorpus, tocExpandAll } from "../../graphql/cache";
-import { navigateToRelationshipDocument } from "../../utils/navigationUtils";
+import {
+  navigateToRelationshipDocument,
+  updateAnnotationSelectionParams,
+} from "../../utils/navigationUtils";
 import {
   OS_LEGAL_COLORS,
   OS_LEGAL_SPACING,
@@ -407,6 +410,7 @@ export const DocumentAnnotationIndex: React.FC<
   filterQuery,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(
     new Set()
@@ -620,16 +624,25 @@ export const DocumentAnnotationIndex: React.FC<
     }
   }, [filterQuery, allNodeIds]);
 
-  // Handle section click - navigate to the document and select the annotation
+  // Handle section click - select annotation via URL params (routing mantra)
   const handleSectionClick = (node: SectionNode) => {
-    const corpus = openedCorpus();
-    navigateToRelationshipDocument(
-      { id: documentId, title: node.title, slug: documentSlug },
-      corpus,
-      navigate,
-      window.location.pathname,
-      { annotationIds: [node.id] }
-    );
+    if (embedded) {
+      // Already on the document page — update ?ann= to select the annotation.
+      // CentralRouteManager will sync selectedAnnotationIds, triggering scroll.
+      updateAnnotationSelectionParams(location, navigate, {
+        annotationIds: [node.id],
+      });
+    } else {
+      // Corpus-level TOC — navigate to the document page with annotation selected
+      const corpus = openedCorpus();
+      navigateToRelationshipDocument(
+        { id: documentId, title: node.title, slug: documentSlug },
+        corpus,
+        navigate,
+        window.location.pathname,
+        { annotationIds: [node.id] }
+      );
+    }
   };
 
   // Toggle tree expansion
