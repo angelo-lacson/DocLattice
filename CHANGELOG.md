@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-03-23
 
+### Added
+
+- **Sidecar JSON schema validation before annotation import** (Closes #1127): Added `_validate_sidecar_schema()` in `opencontractserver/tasks/import_tasks.py` that validates container types (`labelled_text`, `doc_labels`, `relationships` must be lists) and required keys per entry (`annotationLabel`/`rawText`/`annotation_json` for annotations; `relationshipLabel`/`source_annotation_ids`/`target_annotation_ids` for relationships) before any database work. Invalid sidecars now increment `annotation_sidecars_errored` and log clear error messages instead of crashing or silently skipping data. Comprehensive unit and integration tests added in `opencontractserver/tests/test_sidecar_import.py`.
+
 ### Changed
 
 - **Softened PDF annotation bounding boxes to diffuse highlighter-pen aesthetic**: Replaced hard-edged borders on annotation boundaries, tokens, and label pills with multi-layer box-shadow glows. Boundaries use a three-layer shadow (outer, mid, inset) that feathers into the page. Tokens use a single-layer soft blur. Approved/rejected states pulse with matching diffuse glows instead of solid borders. Extracted shared `computeAnnotationBoxShadow` utility (`frontend/src/utils/colorUtils.ts`) to eliminate duplicated shadow logic between `SelectionBoundary` and `ResultBoundary`. Added named constants for all shadow radii, opacity levels, border-radius tiers, and status colors (`frontend/src/assets/configurations/constants.ts`). Removed dead code: `getBorderWidthFromBounds`, unused `$border` prop, unused `$isSelected` prop. Fixed `pulseMaroon` animation color mismatch (was `rgba(180, 40, 40)`, now matches static rejected state).
