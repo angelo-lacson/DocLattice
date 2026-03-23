@@ -598,12 +598,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   // thousands for large documents but are hidden by default. We defer fetching
   // them until the user toggles structural visibility on.
   // Deep-links fetch ONLY the specific referenced annotations (lightweight).
+  // Two separate lazy queries avoid a shared-ref race condition between the
+  // full-load (toggle) and targeted (deep-link) paths.
   const deepLinkedAnnotationIds = useReactiveVar(selectedAnnotationIds);
 
-  // Tracks whether the current fetch is a full load (toggle) vs targeted (deep-link)
-  const isFullStructuralFetchRef = useRef(false);
-
-  const [fetchStructuralAnnotations] = useLazyQuery<
+  const [fetchAllStructural] = useLazyQuery<
     GetDocumentStructuralAnnotationsOutput,
     GetDocumentStructuralAnnotationsInput
   >(GET_DOCUMENT_STRUCTURAL_ANNOTATIONS, {
@@ -613,20 +612,28 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
         const structuralAnns = data.document.allStructuralAnnotations.map(
           (ann) => convertToServerAnnotation(ann)
         );
-        if (isFullStructuralFetchRef.current) {
-          // Full fetch (toggle): replace all structural annotations
-          setStructuralAnnotations(structuralAnns);
-          setStructuralAnnotationsLoaded(true);
-        } else {
-          // Targeted fetch (deep-link): merge with existing
-          setStructuralAnnotations((prev) => {
-            const existingIds = new Set(prev.map((a) => a.id));
-            const newAnns = structuralAnns.filter(
-              (a) => !existingIds.has(a.id)
-            );
-            return newAnns.length > 0 ? [...prev, ...newAnns] : prev;
-          });
-        }
+        setStructuralAnnotations(structuralAnns);
+        setStructuralAnnotationsLoaded(true);
+      }
+    },
+  });
+
+  const [fetchTargetedStructural] = useLazyQuery<
+    GetDocumentStructuralAnnotationsOutput,
+    GetDocumentStructuralAnnotationsInput
+  >(GET_DOCUMENT_STRUCTURAL_ANNOTATIONS, {
+    fetchPolicy: "cache-and-network",
+    onCompleted: (data) => {
+      if (data?.document?.allStructuralAnnotations) {
+        const structuralAnns = data.document.allStructuralAnnotations.map(
+          (ann) => convertToServerAnnotation(ann)
+        );
+        // Merge with existing (don't replace — this is a targeted fetch)
+        setStructuralAnnotations((prev) => {
+          const existingIds = new Set(prev.map((a) => a.id));
+          const newAnns = structuralAnns.filter((a) => !existingIds.has(a.id));
+          return newAnns.length > 0 ? [...prev, ...newAnns] : prev;
+        });
       }
     },
   });
@@ -640,25 +647,33 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   // Fetch ALL structural annotations when the user toggles structural visibility
   useEffect(() => {
     if (showStructural && !structuralAnnotationsLoaded && documentId) {
-      isFullStructuralFetchRef.current = true;
-      fetchStructuralAnnotations({ variables: { documentId } });
+      fetchAllStructural({ variables: { documentId } });
     }
   }, [
     showStructural,
     structuralAnnotationsLoaded,
     documentId,
-    fetchStructuralAnnotations,
+    fetchAllStructural,
   ]);
 
-  // Fetch ONLY the deep-linked structural annotations (lightweight)
+  // Fetch ONLY the deep-linked annotations when navigating via URL.
+  // Skip if all structural annotations are already loaded (superset).
   useEffect(() => {
-    if (deepLinkedAnnotationIds.length > 0 && documentId) {
-      isFullStructuralFetchRef.current = false;
-      fetchStructuralAnnotations({
+    if (
+      deepLinkedAnnotationIds.length > 0 &&
+      documentId &&
+      !structuralAnnotationsLoaded
+    ) {
+      fetchTargetedStructural({
         variables: { documentId, annotationIds: deepLinkedAnnotationIds },
       });
     }
-  }, [deepLinkedAnnotationIds, documentId, fetchStructuralAnnotations]);
+  }, [
+    deepLinkedAnnotationIds,
+    documentId,
+    structuralAnnotationsLoaded,
+    fetchTargetedStructural,
+  ]);
 
   /**
    * processAnnotationsData
