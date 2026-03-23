@@ -5,6 +5,13 @@ import React, { FC, useEffect, useRef } from "react";
 import styled from "styled-components";
 import { PDFPageInfo } from "../../types/pdf";
 import { TokenId } from "../../types/annotations";
+import {
+  ANNOTATION_TOKEN_RADIUS,
+  TOKEN_OPACITY_HIGH,
+  TOKEN_OPACITY_LOW,
+  TOKEN_SHADOW_BLUR,
+  TOKEN_SHADOW_SPREAD,
+} from "../../../../assets/configurations/constants";
 
 /**
  * Updated to use TokenId[] instead of string[]
@@ -25,13 +32,20 @@ const TokenDiv = styled.div<{
 }>`
   position: absolute;
   background-color: ${(props) => props.$color ?? "rgba(255, 255, 0, 0.3)"};
-  opacity: ${(props) => (props.$hidden ? 0 : props.$highOpacity ? 0.38 : 0.22)};
+  opacity: ${(props) =>
+    props.$hidden
+      ? 0
+      : props.$highOpacity
+      ? TOKEN_OPACITY_HIGH
+      : TOKEN_OPACITY_LOW};
   pointer-events: none;
-  border-radius: 4px;
+  border-radius: ${ANNOTATION_TOKEN_RADIUS};
   box-shadow: ${(props) =>
     props.$hidden
       ? "none"
-      : `0 0 4px 1px ${props.$color ?? "rgba(255, 255, 0, 0.15)"}`};
+      : `0 0 ${TOKEN_SHADOW_BLUR}px ${TOKEN_SHADOW_SPREAD}px ${
+          props.$color ?? "rgba(255, 255, 0, 0.15)"
+        }`};
   transition: opacity 0.3s ease-in-out;
 `;
 

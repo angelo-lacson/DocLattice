@@ -2,6 +2,12 @@ import React, { useRef, useEffect } from "react";
 import _ from "lodash";
 import { BoundingBox } from "../../../types";
 import { hexToRgb } from "../../../../utils/transform";
+import { computeAnnotationBoxShadow } from "../../../../utils/colorUtils";
+import {
+  ANNOTATION_BOUNDARY_RADIUS,
+  BOUNDARY_OPACITY_SELECTED,
+  BOUNDARY_OPACITY_UNSELECTED,
+} from "../../../../assets/configurations/constants";
 import { useAnnotationRefs } from "../../hooks/useAnnotationRefs";
 
 interface ResultBoundaryProps {
@@ -55,7 +61,7 @@ export const ResultBoundary = ({
   const rotateY = width < 0 ? -180 : 0;
   const rotateX = height < 0 ? -180 : 0;
   let { r, g, b } = hexToRgb(color);
-  let opacity = 0.06;
+  let opacity = BOUNDARY_OPACITY_UNSELECTED;
 
   if (!showBoundingBox || hidden) {
     r = 255;
@@ -63,22 +69,12 @@ export const ResultBoundary = ({
     b = 255;
     opacity = 0.0;
   } else if (selected) {
-    opacity = 0.18;
+    opacity = BOUNDARY_OPACITY_SELECTED;
   }
 
   const boxShadow =
     showBoundingBox && !hidden
-      ? selected
-        ? [
-            `0 0 14px 4px rgba(${r}, ${g}, ${b}, 0.13)`,
-            `0 0 5px 1px rgba(${r}, ${g}, ${b}, 0.10)`,
-            `inset 0 0 8px 2px rgba(${r}, ${g}, ${b}, 0.07)`,
-          ].join(", ")
-        : [
-            `0 0 10px 2px rgba(${r}, ${g}, ${b}, 0.07)`,
-            `0 0 3px 0px rgba(${r}, ${g}, ${b}, 0.05)`,
-            `inset 0 0 6px 1px rgba(${r}, ${g}, ${b}, 0.04)`,
-          ].join(", ")
+      ? computeAnnotationBoxShadow(r, g, b, selected)
       : "none";
 
   // Handle scrolling into view if needed
@@ -134,7 +130,7 @@ export const ResultBoundary = ({
         transform: `rotateY(${rotateY}deg) rotateX(${rotateX}deg)`,
         transformOrigin: "top left",
         border: "none",
-        borderRadius: "6px",
+        borderRadius: ANNOTATION_BOUNDARY_RADIUS,
         boxShadow,
         background: `rgba(${r}, ${g}, ${b}, ${opacity})`,
         transition:

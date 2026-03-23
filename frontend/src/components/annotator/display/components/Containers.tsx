@@ -2,6 +2,7 @@ import React from "react";
 import styled, { css } from "styled-components";
 import { LabelDisplayBehavior } from "../../../../types/graphql-api";
 import { getContrastColor } from "../../../../utils/transform";
+import { ANNOTATION_BOUNDARY_RADIUS } from "../../../../assets/configurations/constants";
 import { pulseGreen, pulseMaroon } from "../effects";
 
 // ... (keep the existing interfaces)
@@ -14,7 +15,7 @@ export const SelectionContainer = styled.div<{
     | undefined;
 }>`
   position: absolute;
-  border-radius: 6px;
+  border-radius: ${ANNOTATION_BOUNDARY_RADIUS};
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
   background-color: ${(props) =>
     props.showBoundingBox ? `${props.color}1a` : "transparent"};
@@ -34,7 +35,6 @@ interface SelectionInfoProps {
     left: number;
     right: number;
   };
-  $border: number;
   $color: string;
   $showBoundingBox: boolean;
   $approved?: boolean;
@@ -46,7 +46,7 @@ export const SelectionInfo = styled.div<SelectionInfoProps>`
   width: ${(props) => props.$bounds.right - props.$bounds.left}px;
   right: 0px;
   bottom: calc(100% - 2px);
-  border-radius: 6px 6px 0 0;
+  border-radius: ${ANNOTATION_BOUNDARY_RADIUS} ${ANNOTATION_BOUNDARY_RADIUS} 0 0;
   background: ${(props) =>
     props.$showBoundingBox ? props.$color : "rgba(255, 255, 255, 0.9)"};
   padding: 1px 8px;
