@@ -18,6 +18,13 @@ DEFAULT_DOCUMENT_PATH_PREFIX = "/documents"
 # Controls how many annotations are processed per Celery task to prevent queue flooding
 EMBEDDING_BATCH_SIZE = 100
 
+# Maximum number of texts to send in a single embedder API batch request.
+# This is the sub-batch size used *within* a Celery task when calling
+# embedder.embed_texts_batch(). Kept separate from EMBEDDING_BATCH_SIZE
+# (task-level grouping) because API limits may differ from task sizing.
+# Microservice embedders typically support up to 100 texts per request.
+EMBEDDING_API_BATCH_SIZE = 50
+
 # Maximum number of embedding batch tasks to queue in a single reembed_corpus run.
 # For very large corpuses (millions of annotations), this prevents flooding the
 # Celery queue. Remaining annotations will be logged but not queued; re-running

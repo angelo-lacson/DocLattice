@@ -77,6 +77,36 @@ class MicroserviceEmbedder(BaseEmbedder):
         super().__init__(**kwargs)
         logger.info("MicroserviceEmbedder initialized.")
 
+    def _get_service_config(self, all_kwargs: dict) -> tuple[str, str, dict]:
+        """
+        Get service URL, API key, and headers for the microservice.
+
+        Args:
+            all_kwargs: Keyword arguments that may override settings.
+
+        Returns:
+            Tuple of (service_url, api_key, headers)
+        """
+        s = self.settings if self.settings is not None else self.Settings()
+
+        service_url = all_kwargs.get(
+            "embeddings_microservice_url", s.embeddings_microservice_url
+        )
+        api_key = all_kwargs.get("vector_embedder_api_key", s.vector_embedder_api_key)
+        use_cloud_run_iam_auth = bool(
+            all_kwargs.get("use_cloud_run_iam_auth", s.use_cloud_run_iam_auth)
+        )
+
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if api_key:
+            headers["X-API-Key"] = api_key
+
+        headers = maybe_add_cloud_run_auth(
+            service_url, headers, force=use_cloud_run_iam_auth
+        )
+
+        return service_url, api_key, headers
+
     def _embed_text_impl(self, text: str, **all_kwargs) -> Optional[list[float]]:
         """
         Generate embeddings from text using the microservice.
@@ -92,28 +122,7 @@ class MicroserviceEmbedder(BaseEmbedder):
             f"MicroserviceEmbedder received text for embedding. Effective kwargs: {all_kwargs}"
         )
         try:
-            # Use settings from the Settings dataclass (loaded from PipelineSettings DB)
-            # Use dataclass defaults if settings not yet loaded from database
-            s = self.settings if self.settings is not None else self.Settings()
-
-            service_url = all_kwargs.get(
-                "embeddings_microservice_url", s.embeddings_microservice_url
-            )
-            api_key = all_kwargs.get(
-                "vector_embedder_api_key", s.vector_embedder_api_key
-            )
-            use_cloud_run_iam_auth = bool(
-                all_kwargs.get("use_cloud_run_iam_auth", s.use_cloud_run_iam_auth)
-            )
-
-            headers: dict[str, str] = {"Content-Type": "application/json"}
-            if api_key:
-                headers["X-API-Key"] = api_key
-
-            # Attach Cloud Run IAM id_token if applicable/forced
-            headers = maybe_add_cloud_run_auth(
-                service_url, headers, force=use_cloud_run_iam_auth
-            )
+            service_url, _, headers = self._get_service_config(all_kwargs)
 
             response = requests.post(
                 f"{service_url}/embeddings",
@@ -152,4 +161,72 @@ class MicroserviceEmbedder(BaseEmbedder):
             logger.error(
                 f"MicroserviceEmbedder - failed to generate embeddings due to error: {e}"
             )
+            return None
+
+    def embed_texts_batch(
+        self, texts: list[str], **direct_kwargs
+    ) -> Optional[list[Optional[list[float]]]]:
+        """
+        Generate embeddings for multiple texts in one HTTP request.
+
+        Uses the microservice's /embeddings/batch endpoint for better throughput
+        than sequential single-text calls.
+
+        Args:
+            texts: List of text strings to embed (max 100).
+            **direct_kwargs: Additional keyword arguments.
+
+        Returns:
+            List of embedding vectors, or None on error.
+        """
+        if not texts:
+            return []
+
+        if len(texts) > 100:
+            logger.warning(f"Batch size {len(texts)} exceeds max 100. Truncating.")
+            texts = texts[:100]
+
+        merged_kwargs = {**self.get_component_settings(), **direct_kwargs}
+
+        try:
+            service_url, _, headers = self._get_service_config(merged_kwargs)
+
+            if not service_url:
+                logger.error("No service URL configured for batch text embedding")
+                return None
+
+            response = requests.post(
+                f"{service_url}/embeddings/batch",
+                json={"texts": texts},
+                headers=headers,
+                timeout=60,
+            )
+
+            if response.status_code == 200:
+                embeddings_array = np.array(response.json()["embeddings"])
+                if embeddings_array.ndim == 3:
+                    embeddings_array = embeddings_array.squeeze(axis=1)
+                if np.isnan(embeddings_array).any():
+                    nan_indices = np.where(np.isnan(embeddings_array).any(axis=1))[0]
+                    logger.error(
+                        f"Batch text embeddings contain NaN values at "
+                        f"indices: {nan_indices.tolist()}. Batch size: {len(texts)}"
+                    )
+                    return None
+                return embeddings_array.tolist()
+            elif 400 <= response.status_code < 500:
+                logger.error(
+                    f"Batch text embedding service returned client error "
+                    f"{response.status_code}. Batch size: {len(texts)}"
+                )
+                return None
+            else:
+                logger.error(
+                    f"Batch text embedding service returned status "
+                    f"{response.status_code}. This may be a transient error."
+                )
+                return None
+
+        except Exception as e:
+            logger.error(f"Failed to generate batch text embeddings: {e}")
             return None

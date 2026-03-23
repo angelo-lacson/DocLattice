@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Batch embedding API calls for annotation embeddings**: Refactored `calculate_embeddings_for_annotation_batch` Celery task to use `embed_texts_batch()` for text-only annotations instead of embedding one-at-a-time. Added `embed_texts_batch()` to `BaseEmbedder` (sequential fallback), `MicroserviceEmbedder` (HTTP `/embeddings/batch` endpoint), and test embedders. Multimodal annotations still processed individually. New `EMBEDDING_API_BATCH_SIZE` constant (50) controls sub-batch sizing within tasks (`opencontractserver/constants/document_processing.py`). Extracted `_get_service_config()` helper in `MicroserviceEmbedder` to eliminate config duplication.
+
 - **Softened PDF annotation bounding boxes to diffuse highlighter-pen aesthetic**: Replaced hard-edged borders on annotation boundaries, tokens, and label pills with multi-layer box-shadow glows. Boundaries use a three-layer shadow (outer, mid, inset) that feathers into the page. Tokens use a single-layer soft blur. Approved/rejected states pulse with matching diffuse glows instead of solid borders. Extracted shared `computeAnnotationBoxShadow` utility (`frontend/src/utils/colorUtils.ts`) to eliminate duplicated shadow logic between `SelectionBoundary` and `ResultBoundary`. Added named constants for all shadow radii, opacity levels, border-radius tiers, and status colors (`frontend/src/assets/configurations/constants.ts`). Removed dead code: `getBorderWidthFromBounds`, unused `$border` prop, unused `$isSelected` prop. Fixed `pulseMaroon` animation color mismatch (was `rgba(180, 40, 40)`, now matches static rejected state).
 
 ## [Previous Unreleased] - 2026-03-21
