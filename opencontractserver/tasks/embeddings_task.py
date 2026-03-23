@@ -153,6 +153,12 @@ def _create_embedding_for_annotation(
             )
     else:
         # Standard text-only embedding
+        if has_images and not can_embed_images:
+            logger.debug(
+                f"Annotation {annotation.id} has image content "
+                f"(modalities={modalities}) but embedder {embedder_path} "
+                f"does not support images; image content will be dropped."
+            )
         return _create_text_embedding(
             annotation,
             embedder,
@@ -446,15 +452,15 @@ def _batch_embed_text_annotations(
         api_batch_size: Max texts per ``embed_texts_batch`` call.
         result: Mutable summary dict (keys: succeeded, failed, skipped, errors).
     """
-    # Build (index, annotation, text) tuples, filtering out empties
-    items: list[tuple[int, Annotation, str]] = []
-    for idx, annot in enumerate(annotations):
+    # Build (annotation, text) tuples, filtering out empties
+    items: list[tuple[Annotation, str]] = []
+    for annot in annotations:
         text = annot.raw_text or ""
         if not text.strip():
             logger.info(f"Annotation {annot.id} has no text to embed, skipping.")
             result["skipped"] += 1
             continue
-        items.append((idx, annot, text))
+        items.append((annot, text))
 
     if not items:
         return
@@ -462,7 +468,7 @@ def _batch_embed_text_annotations(
     # Process in sub-batches
     for chunk_start in range(0, len(items), api_batch_size):
         chunk = items[chunk_start : chunk_start + api_batch_size]
-        texts = [text for _, _, text in chunk]
+        texts = [text for _, text in chunk]
 
         logger.info(
             f"Calling embed_texts_batch for {len(texts)} texts "
@@ -474,7 +480,7 @@ def _batch_embed_text_annotations(
             vectors = embedder.embed_texts_batch(texts)
         except Exception as e:
             logger.error(f"embed_texts_batch failed: {e}")
-            for _, annot, _ in chunk:
+            for annot, _ in chunk:
                 result["failed"] += 1
                 result["errors"].append(
                     f"Annotation {annot.id}: batch embed call failed: {e}"
@@ -483,7 +489,7 @@ def _batch_embed_text_annotations(
 
         if vectors is None:
             logger.error("embed_texts_batch returned None for entire sub-batch")
-            for _, annot, _ in chunk:
+            for annot, _ in chunk:
                 result["failed"] += 1
                 result["errors"].append(
                     f"Annotation {annot.id}: batch embed returned None"
@@ -495,7 +501,7 @@ def _batch_embed_text_annotations(
                 f"Vector count mismatch: sent {len(chunk)} texts, "
                 f"received {len(vectors)} vectors. Failing entire chunk."
             )
-            for _, annot, _ in chunk:
+            for annot, _ in chunk:
                 result["failed"] += 1
                 result["errors"].append(
                     f"Annotation {annot.id}: vector count mismatch "
@@ -504,7 +510,7 @@ def _batch_embed_text_annotations(
             continue
 
         # Store each vector
-        for (_, annot, _), vector in zip(chunk, vectors):
+        for (annot, _), vector in zip(chunk, vectors):
             if vector is None:
                 result["failed"] += 1
                 result["errors"].append(

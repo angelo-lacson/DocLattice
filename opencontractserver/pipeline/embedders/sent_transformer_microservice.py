@@ -188,6 +188,12 @@ class MicroserviceEmbedder(BaseEmbedder):
         Raises:
             ValueError: If len(texts) exceeds MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE.
         """
+        if not self.supports_text:
+            logger.warning(
+                f"{self.__class__.__name__} does not support text embeddings."
+            )
+            return None
+
         if not texts:
             return []
 
