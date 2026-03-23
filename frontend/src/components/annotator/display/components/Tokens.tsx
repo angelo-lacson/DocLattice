@@ -2,6 +2,7 @@ import styled, { DefaultTheme } from "styled-components";
 import _ from "lodash";
 import {
   ANNOTATION_TOKEN_RADIUS,
+  TOKEN_EXPANSION_PX,
   TOKEN_OPACITY_HIGH,
   TOKEN_OPACITY_LOW,
   TOKEN_SHADOW_BLUR,
@@ -93,10 +94,10 @@ export const SelectionTokenSpan = styled.span.attrs<SelectionTokenSpanThemeProps
           : props.highOpacity
           ? TOKEN_OPACITY_HIGH
           : TOKEN_OPACITY_LOW,
-        left: `${props.left - 1}px`,
-        top: `${props.top - 1}px`,
-        width: `${props.right - props.left + 2}px`,
-        height: `${props.bottom - props.top + 2}px`,
+        left: `${props.left - TOKEN_EXPANSION_PX}px`,
+        top: `${props.top - TOKEN_EXPANSION_PX}px`,
+        width: `${props.right - props.left + TOKEN_EXPANSION_PX * 2}px`,
+        height: `${props.bottom - props.top + TOKEN_EXPANSION_PX * 2}px`,
         pointerEvents: props.pointerEvents,
         boxShadow:
           props.isSelected && !props.hidden

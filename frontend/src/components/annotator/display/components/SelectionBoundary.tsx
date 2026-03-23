@@ -4,6 +4,7 @@ import { BoundingBox } from "../../../types";
 import { hexToRgb } from "../../../../utils/transform";
 import { computeAnnotationBoxShadow } from "../../../../utils/colorUtils";
 import {
+  APPROVED_RGB,
   REJECTED_RGB,
   ANNOTATION_BOUNDARY_RADIUS,
   BOUNDARY_OPACITY_SELECTED,
@@ -65,8 +66,10 @@ const BoundarySpan = styled.span.attrs<{
   ${(props) =>
     props.$approved &&
     css`
-      box-shadow: 0 0 12px 3px rgba(46, 204, 113, 0.18),
-        0 0 4px 1px rgba(46, 204, 113, 0.12) !important;
+      box-shadow: 0 0 12px 3px
+          rgba(${APPROVED_RGB.r}, ${APPROVED_RGB.g}, ${APPROVED_RGB.b}, 0.18),
+        0 0 4px 1px
+          rgba(${APPROVED_RGB.r}, ${APPROVED_RGB.g}, ${APPROVED_RGB.b}, 0.12) !important;
       animation: ${pulseGreen} 2s infinite;
     `}
 

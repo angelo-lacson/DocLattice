@@ -377,7 +377,7 @@ def sync_admin_claims_from_payload(user, payload):
     namespace = getattr(
         settings,
         "AUTH0_ADMIN_CLAIM_NAMESPACE",
-        "https://doclattice.opensource.legal/",
+        "https://contracts.opensource.legal/",
     )
 
     logger.debug(
