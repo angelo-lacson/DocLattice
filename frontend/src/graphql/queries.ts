@@ -3191,7 +3191,7 @@ export interface GetDocumentStructuralAnnotationsOutput {
 export const GET_DOCUMENT_STRUCTURAL_ANNOTATIONS = gql`
   query GetDocumentStructuralAnnotations(
     $documentId: ID!
-    $annotationIds: [ID]
+    $annotationIds: [ID!]
   ) {
     document(id: $documentId) {
       id

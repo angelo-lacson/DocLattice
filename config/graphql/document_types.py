@@ -151,7 +151,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     all_structural_annotations = graphene.List(
         AnnotationType,
-        annotation_ids=graphene.List(graphene.ID),
+        annotation_ids=graphene.List(graphene.NonNull(graphene.ID)),
     )
 
     def resolve_all_structural_annotations(self, info, annotation_ids=None):
@@ -163,7 +163,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             document_id=self.id,
             user=getattr(info.context, "user", None),
             structural=True,
-            use_cache=True,
+            use_cache=annotation_ids is None,
         )
         if annotation_ids:
             django_pks = [from_global_id(gid)[1] for gid in annotation_ids]
