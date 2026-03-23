@@ -33,6 +33,7 @@ import { ChatTray } from "../right_tray/ChatTray";
 import { SafeMarkdown } from "../../markdown/SafeMarkdown";
 import { SingleDocumentExtractResults } from "../../../annotator/sidebar/SingleDocumentExtractResults";
 import { DocumentDiscussionsContent } from "../../../discussions/DocumentDiscussionsContent";
+import { DocumentAnnotationIndex } from "../../../corpuses/DocumentAnnotationIndex";
 
 export interface RightPanelContentProps {
   /** Whether the right panel is currently shown */
@@ -123,6 +124,21 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
       hasActiveSearch={!!searchText}
     />
   );
+
+  // Handle index mode - show document annotation index (TOC)
+  if (sidebarViewMode === "index") {
+    return (
+      <FlexColumnPanel>
+        <div style={{ flex: 1, overflow: "auto", padding: "8px 0" }}>
+          <DocumentAnnotationIndex
+            documentId={documentId}
+            corpusId={corpusId}
+            embedded
+          />
+        </div>
+      </FlexColumnPanel>
+    );
+  }
 
   // Handle extract mode - show extract results
   if (sidebarViewMode === "extract" && selectedExtract) {
