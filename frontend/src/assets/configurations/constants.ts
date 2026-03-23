@@ -443,6 +443,9 @@ export const TOKEN_OPACITY_LOW = 0.22;
 export const TOKEN_SHADOW_BLUR = 4;
 export const TOKEN_SHADOW_SPREAD = 1;
 
+// Token expansion (px added around each token to close inter-token gaps)
+export const TOKEN_EXPANSION_PX = 1;
+
 // PAWLs coordinate normalization
 /** Half a PDF point tolerance for comparing PAWLs vs PDF.js page dimensions */
 export const PAWLS_COORDINATE_EPSILON = 0.5;
