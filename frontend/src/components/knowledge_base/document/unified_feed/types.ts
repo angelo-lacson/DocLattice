@@ -67,5 +67,5 @@ export interface UnifiedFeedState {
 }
 
 export interface SidebarViewMode {
-  mode: "chat" | "feed" | "extract" | "analysis" | "discussions";
+  mode: "index" | "chat" | "feed" | "extract" | "analysis" | "discussions";
 }

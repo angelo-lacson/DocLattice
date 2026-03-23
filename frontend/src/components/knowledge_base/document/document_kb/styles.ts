@@ -283,6 +283,12 @@ export const OverflowHiddenFill = styled.div`
   overflow: hidden;
 `;
 
+export const ScrollableFillPanel = styled.div`
+  flex: 1;
+  overflow: auto;
+  padding: 0.5rem 0;
+`;
+
 export const SidebarHeader = styled.div`
   padding: 1rem 1.5rem;
   border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
@@ -444,5 +450,24 @@ export const CompactAnnotationFeed = styled.div`
   .page-header {
     background: linear-gradient(to right, #fef3c7 0%, #fef9e7 100%) !important;
     border-left: 3px solid ${OS_LEGAL_COLORS.folderIcon} !important;
+  }
+`;
+
+export const ExpandCollapseButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: 6px;
+  background: ${OS_LEGAL_COLORS.surface};
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 `;
