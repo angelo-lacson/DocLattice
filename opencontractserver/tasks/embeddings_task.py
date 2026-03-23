@@ -6,6 +6,7 @@ from celery.utils.log import get_task_logger
 from django.contrib.auth import get_user_model
 
 from opencontractserver.annotations.models import Annotation, Note
+from opencontractserver.constants.document_processing import EMBEDDING_API_BATCH_SIZE
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
@@ -489,6 +490,19 @@ def _batch_embed_text_annotations(
                 )
             continue
 
+        if len(vectors) != len(chunk):
+            logger.error(
+                f"Vector count mismatch: sent {len(chunk)} texts, "
+                f"received {len(vectors)} vectors. Failing entire chunk."
+            )
+            for _, annot, _ in chunk:
+                result["failed"] += 1
+                result["errors"].append(
+                    f"Annotation {annot.id}: vector count mismatch "
+                    f"({len(vectors)} vectors for {len(chunk)} texts)"
+                )
+            continue
+
         # Store each vector
         for (_, annot, _), vector in zip(chunk, vectors):
             if vector is None:
@@ -550,10 +564,6 @@ def calculate_embeddings_for_annotation_batch(
     Returns:
         dict: Summary with counts of succeeded, failed, and skipped annotations
     """
-    from opencontractserver.constants.document_processing import (
-        EMBEDDING_API_BATCH_SIZE,
-    )
-
     result = {
         "total": len(annotation_ids),
         "succeeded": 0,

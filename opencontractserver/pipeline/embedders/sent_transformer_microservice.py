@@ -5,6 +5,11 @@ from typing import Optional
 import numpy as np
 import requests
 
+from opencontractserver.constants.document_processing import (
+    EMBEDDER_BATCH_REQUEST_TIMEOUT_SECONDS,
+    EMBEDDER_SINGLE_REQUEST_TIMEOUT_SECONDS,
+    MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE,
+)
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.settings_schema import (
@@ -77,15 +82,15 @@ class MicroserviceEmbedder(BaseEmbedder):
         super().__init__(**kwargs)
         logger.info("MicroserviceEmbedder initialized.")
 
-    def _get_service_config(self, all_kwargs: dict) -> tuple[str, str, dict]:
+    def _get_service_config(self, all_kwargs: dict) -> tuple[str, dict]:
         """
-        Get service URL, API key, and headers for the microservice.
+        Get service URL and headers for the microservice.
 
         Args:
             all_kwargs: Keyword arguments that may override settings.
 
         Returns:
-            Tuple of (service_url, api_key, headers)
+            Tuple of (service_url, headers)
         """
         s = self.settings if self.settings is not None else self.Settings()
 
@@ -105,7 +110,7 @@ class MicroserviceEmbedder(BaseEmbedder):
             service_url, headers, force=use_cloud_run_iam_auth
         )
 
-        return service_url, api_key, headers
+        return service_url, headers
 
     def _embed_text_impl(self, text: str, **all_kwargs) -> Optional[list[float]]:
         """
@@ -122,13 +127,13 @@ class MicroserviceEmbedder(BaseEmbedder):
             f"MicroserviceEmbedder received text for embedding. Effective kwargs: {all_kwargs}"
         )
         try:
-            service_url, _, headers = self._get_service_config(all_kwargs)
+            service_url, headers = self._get_service_config(all_kwargs)
 
             response = requests.post(
                 f"{service_url}/embeddings",
                 json={"text": text},
                 headers=headers,
-                timeout=30,
+                timeout=EMBEDDER_SINGLE_REQUEST_TIMEOUT_SECONDS,
             )
 
             if response.status_code == 200:
@@ -173,23 +178,30 @@ class MicroserviceEmbedder(BaseEmbedder):
         than sequential single-text calls.
 
         Args:
-            texts: List of text strings to embed (max 100).
+            texts: List of text strings to embed.
             **direct_kwargs: Additional keyword arguments.
 
         Returns:
-            List of embedding vectors, or None on error.
+            List of embedding vectors (None per item on failure),
+            or None if the entire batch fails.
+
+        Raises:
+            ValueError: If len(texts) exceeds MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE.
         """
         if not texts:
             return []
 
-        if len(texts) > 100:
-            logger.warning(f"Batch size {len(texts)} exceeds max 100. Truncating.")
-            texts = texts[:100]
+        if len(texts) > MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE:
+            raise ValueError(
+                f"Batch size {len(texts)} exceeds maximum "
+                f"{MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE}. "
+                f"Callers must sub-batch before calling embed_texts_batch()."
+            )
 
         merged_kwargs = {**self.get_component_settings(), **direct_kwargs}
 
         try:
-            service_url, _, headers = self._get_service_config(merged_kwargs)
+            service_url, headers = self._get_service_config(merged_kwargs)
 
             if not service_url:
                 logger.error("No service URL configured for batch text embedding")
@@ -199,21 +211,33 @@ class MicroserviceEmbedder(BaseEmbedder):
                 f"{service_url}/embeddings/batch",
                 json={"texts": texts},
                 headers=headers,
-                timeout=60,
+                timeout=EMBEDDER_BATCH_REQUEST_TIMEOUT_SECONDS,
             )
 
             if response.status_code == 200:
                 embeddings_array = np.array(response.json()["embeddings"])
                 if embeddings_array.ndim == 3:
                     embeddings_array = embeddings_array.squeeze(axis=1)
-                if np.isnan(embeddings_array).any():
-                    nan_indices = np.where(np.isnan(embeddings_array).any(axis=1))[0]
+
+                if len(embeddings_array) != len(texts):
                     logger.error(
-                        f"Batch text embeddings contain NaN values at "
-                        f"indices: {nan_indices.tolist()}. Batch size: {len(texts)}"
+                        f"Vector count mismatch: sent {len(texts)} texts, "
+                        f"received {len(embeddings_array)} vectors"
                     )
                     return None
-                return embeddings_array.tolist()
+
+                # Handle NaN values per-item rather than failing the whole batch
+                results: list[Optional[list[float]]] = []
+                for i, row in enumerate(embeddings_array):
+                    if np.isnan(row).any():
+                        logger.error(
+                            f"Embedding at index {i} contains NaN values, "
+                            f"returning None for this item"
+                        )
+                        results.append(None)
+                    else:
+                        results.append(row.tolist())
+                return results
             elif 400 <= response.status_code < 500:
                 logger.error(
                     f"Batch text embedding service returned client error "

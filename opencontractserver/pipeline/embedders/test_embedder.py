@@ -83,24 +83,6 @@ class TestEmbedder(BaseEmbedder):
         )
         return vector
 
-    def embed_texts_batch(
-        self, texts: list[str], **direct_kwargs
-    ) -> Optional[list[Optional[list[float]]]]:
-        """
-        Generate deterministic fake embeddings for a batch of texts.
-
-        Processes all texts locally without any external calls, matching
-        the per-text behavior of embed_text().
-
-        Args:
-            texts: List of text strings to embed.
-            **direct_kwargs: Ignored (for API compatibility).
-
-        Returns:
-            List of embedding vectors.
-        """
-        return [self.embed_text(text, **direct_kwargs) for text in texts]
-
 
 class TestMultimodalEmbedder(BaseEmbedder):
     """
@@ -153,18 +135,3 @@ class TestMultimodalEmbedder(BaseEmbedder):
             vector.append(float_val)
 
         return vector
-
-    def embed_texts_batch(
-        self, texts: list[str], **direct_kwargs
-    ) -> Optional[list[Optional[list[float]]]]:
-        """
-        Generate deterministic fake embeddings for a batch of texts.
-
-        Args:
-            texts: List of text strings to embed.
-            **direct_kwargs: Ignored (for API compatibility).
-
-        Returns:
-            List of embedding vectors.
-        """
-        return [self.embed_text(text, **direct_kwargs) for text in texts]

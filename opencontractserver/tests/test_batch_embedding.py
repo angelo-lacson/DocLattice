@@ -2,16 +2,24 @@
 Tests for batch embedding functionality.
 
 Tests the batch embedding pipeline: BaseEmbedder.embed_texts_batch(),
-_batch_embed_text_annotations(), and calculate_embeddings_for_annotation_batch()
-with true batch API calls.
+_batch_embed_text_annotations(), MicroserviceEmbedder.embed_texts_batch(),
+and calculate_embeddings_for_annotation_batch() with true batch API calls.
 """
 
 import unittest
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
+import numpy as np
+
+from opencontractserver.constants.document_processing import (
+    MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE,
+)
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
+from opencontractserver.pipeline.embedders.sent_transformer_microservice import (
+    MicroserviceEmbedder,
+)
 from opencontractserver.tasks.embeddings_task import _batch_embed_text_annotations
 from opencontractserver.types.enums import ContentModality
 
@@ -93,6 +101,26 @@ class NullBatchEmbedder(BaseEmbedder):
         self, texts: list[str], **direct_kwargs
     ) -> Optional[list[Optional[list[float]]]]:
         return None
+
+
+class MismatchCountEmbedder(BaseEmbedder):
+    """Embedder that returns fewer vectors than texts sent."""
+
+    title = "Mismatch Count"
+    description = "Returns fewer vectors than texts"
+    author = "Test"
+    dependencies = []
+    vector_size = 384
+    supported_file_types = [FileTypeEnum.PDF]
+
+    def _embed_text_impl(self, text: str, **all_kwargs) -> Optional[list[float]]:
+        return [0.1] * self.vector_size
+
+    def embed_texts_batch(
+        self, texts: list[str], **direct_kwargs
+    ) -> Optional[list[Optional[list[float]]]]:
+        # Return one fewer vector than texts sent
+        return [[0.1] * self.vector_size for _ in texts[:-1]]
 
 
 class TestBaseEmbedderBatchFallback(unittest.TestCase):
@@ -258,3 +286,139 @@ class TestBatchEmbedTextAnnotations(unittest.TestCase):
         self.assertEqual(result["failed"], 1)
         self.assertEqual(len(result["errors"]), 1)
         self.assertIn("store failed", result["errors"][0])
+
+    def test_vector_count_mismatch(self):
+        """When embedder returns fewer vectors than texts, entire chunk fails."""
+        annots = [_make_mock_annotation(i, f"Text {i}") for i in range(3)]
+        embedder = MismatchCountEmbedder()
+        result = self._make_result()
+
+        _batch_embed_text_annotations(
+            annots, embedder, "test.MismatchCount", 50, result
+        )
+
+        self.assertEqual(result["failed"], 3)
+        self.assertEqual(result["succeeded"], 0)
+        for error in result["errors"]:
+            self.assertIn("vector count mismatch", error)
+
+
+class TestMicroserviceEmbedderBatch(unittest.TestCase):
+    """Test MicroserviceEmbedder.embed_texts_batch with mocked HTTP calls."""
+
+    def _make_embedder(self):
+        """Create a MicroserviceEmbedder with settings populated."""
+        embedder = MicroserviceEmbedder()
+        embedder._settings = MicroserviceEmbedder.Settings(
+            embeddings_microservice_url="http://test-service:8080",
+        )
+        return embedder
+
+    def _mock_response(self, status_code, embeddings=None):
+        """Create a mock requests.Response."""
+        resp = MagicMock()
+        resp.status_code = status_code
+        if embeddings is not None:
+            resp.json.return_value = {"embeddings": embeddings}
+        return resp
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_successful_batch(self, mock_post):
+        """Successful batch returns list of vectors."""
+        embedder = self._make_embedder()
+        vectors = np.array([[0.1] * 384, [0.2] * 384]).tolist()
+        mock_post.return_value = self._mock_response(200, vectors)
+
+        result = embedder.embed_texts_batch(["hello", "world"])
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result), 2)
+        mock_post.assert_called_once()
+        call_kwargs = mock_post.call_args
+        self.assertIn("/embeddings/batch", call_kwargs[0][0])
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_client_error_returns_none(self, mock_post):
+        """4xx response returns None."""
+        embedder = self._make_embedder()
+        mock_post.return_value = self._mock_response(400)
+
+        result = embedder.embed_texts_batch(["hello"])
+
+        self.assertIsNone(result)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_server_error_returns_none(self, mock_post):
+        """5xx response returns None."""
+        embedder = self._make_embedder()
+        mock_post.return_value = self._mock_response(500)
+
+        result = embedder.embed_texts_batch(["hello"])
+
+        self.assertIsNone(result)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_exception_returns_none(self, mock_post):
+        """Network exception returns None."""
+        embedder = self._make_embedder()
+        mock_post.side_effect = ConnectionError("Connection refused")
+
+        result = embedder.embed_texts_batch(["hello"])
+
+        self.assertIsNone(result)
+
+    def test_exceeding_max_batch_size_raises(self):
+        """Exceeding max batch size raises ValueError."""
+        embedder = self._make_embedder()
+        texts = [f"text {i}" for i in range(MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE + 1)]
+
+        with self.assertRaises(ValueError) as ctx:
+            embedder.embed_texts_batch(texts)
+        self.assertIn("exceeds maximum", str(ctx.exception))
+
+    def test_empty_list_returns_empty(self):
+        """Empty input returns empty list without HTTP call."""
+        embedder = self._make_embedder()
+        result = embedder.embed_texts_batch([])
+        self.assertEqual(result, [])
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_vector_count_mismatch_returns_none(self, mock_post):
+        """Mismatched vector count returns None."""
+        embedder = self._make_embedder()
+        # Send 3 texts but return only 2 vectors
+        vectors = np.array([[0.1] * 384, [0.2] * 384]).tolist()
+        mock_post.return_value = self._mock_response(200, vectors)
+
+        result = embedder.embed_texts_batch(["a", "b", "c"])
+
+        self.assertIsNone(result)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_nan_values_handled_per_item(self, mock_post):
+        """NaN values in individual embeddings return None for those items only."""
+        embedder = self._make_embedder()
+        vec_good = [0.1] * 384
+        vec_nan = [float("nan")] * 384
+        vectors = [vec_good, vec_nan, vec_good]
+        mock_post.return_value = self._mock_response(200, vectors)
+
+        result = embedder.embed_texts_batch(["a", "b", "c"])
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result), 3)
+        self.assertIsNotNone(result[0])
+        self.assertIsNone(result[1])  # NaN item
+        self.assertIsNotNone(result[2])

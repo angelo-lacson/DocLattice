@@ -25,6 +25,17 @@ EMBEDDING_BATCH_SIZE = 100
 # Microservice embedders typically support up to 100 texts per request.
 EMBEDDING_API_BATCH_SIZE = 50
 
+# Maximum number of texts accepted by MicroserviceEmbedder.embed_texts_batch().
+# Exceeding this raises ValueError rather than silently truncating.
+MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE = 100
+
+# HTTP request timeout (seconds) for single-text embedding calls.
+EMBEDDER_SINGLE_REQUEST_TIMEOUT_SECONDS = 30
+
+# HTTP request timeout (seconds) for batch embedding calls.
+# Larger than the single timeout because batches process multiple texts.
+EMBEDDER_BATCH_REQUEST_TIMEOUT_SECONDS = 60
+
 # Maximum number of embedding batch tasks to queue in a single reembed_corpus run.
 # For very large corpuses (millions of annotations), this prevents flooding the
 # Celery queue. Remaining annotations will be logged but not queued; re-running
