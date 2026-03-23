@@ -199,7 +199,7 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
 
   /* Multi-select state */
   const [selectedAnnotationIds, setSelectedAnnotationIds] = useState<string[]>(
-    []
+    [],
   );
   const [showRelationshipModal, setShowRelationshipModal] = useState(false);
 
@@ -250,6 +250,11 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
       allAnnotations.forEach((ann) => {
         // Filter structural annotations based on showStructural setting
         if (ann.structural && !showStructural) {
+          return;
+        }
+
+        // Always hide OC_* prefixed annotations (platform-generated structural labels)
+        if (ann.annotationLabel.text?.startsWith("OC_")) {
           return;
         }
 
@@ -477,7 +482,7 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
           // Check if annotation participates in any relationships (adds badge rows)
           const hasBadges = allRelationships.some(
             (rel) =>
-              rel.sourceIds.includes(ann.id) || rel.targetIds.includes(ann.id)
+              rel.sourceIds.includes(ann.id) || rel.targetIds.includes(ann.id),
           );
           const base = hasBadges
             ? ESTIMATED_HEIGHTS.annotationWithBadges
@@ -492,7 +497,7 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
           return ESTIMATED_HEIGHTS.annotation;
       }
     },
-    [virtualItems, allRelationships]
+    [virtualItems, allRelationships],
   );
 
   /* Custom DynamicRowHeight with per-type estimates and ResizeObserver.
@@ -524,7 +529,7 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
         if (changed) {
           setHeightMapVersion((v) => v + 1);
         }
-      })
+      }),
   );
 
   // Clean up observer on unmount
@@ -551,7 +556,7 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
         }
       },
       observeRowElements: (
-        elements: Element[] | NodeListOf<Element>
+        elements: Element[] | NodeListOf<Element>,
       ): (() => void) => {
         const arr = Array.from(elements);
         arr.forEach((el) => observer.observe(el));
@@ -559,7 +564,7 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [estimateRowHeight, observer, heightMapVersion]
+    [estimateRowHeight, observer, heightMapVersion],
   );
 
   /* Row renderer component for List */
@@ -659,12 +664,12 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
   /* Relationship modal handlers */
   const handleAddToExistingRelationship = async (
     relationshipId: string,
-    role: "source" | "target"
+    role: "source" | "target",
   ) => {
     await addAnnotationsToRelationship(
       relationshipId,
       selectedAnnotationIds,
-      role
+      role,
     );
     setSelectedAnnotationIds([]);
   };
@@ -672,7 +677,7 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
   const handleCreateNewRelationship = async (
     labelId: string,
     sourceIds: string[],
-    targetIds: string[]
+    targetIds: string[],
   ) => {
     if (!documentId || !selectedCorpus?.id) {
       console.error("Missing document or corpus ID", {
@@ -687,7 +692,7 @@ export const UnifiedContentFeed: React.FC<UnifiedContentFeedProps> = ({
       targetIds,
       labelId,
       selectedCorpus.id,
-      documentId
+      documentId,
     );
     setSelectedAnnotationIds([]);
   };

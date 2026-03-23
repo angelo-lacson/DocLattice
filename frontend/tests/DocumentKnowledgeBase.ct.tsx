@@ -97,7 +97,7 @@ try {
 } catch (err) {
   console.error(
     `[MOCK PREP ERROR] Failed to read or parse ${TEST_PAWLS_PATH}:`,
-    err
+    err,
   );
   mockPawlsDataContent = null;
 }
@@ -117,7 +117,7 @@ async function registerRestMocks(page: Page): Promise<void> {
       body: JSON.stringify(mockPawlsDataContent),
     });
     console.log(
-      `[MOCK] Served PAWLS JSON successfully for ${route.request().url()}`
+      `[MOCK] Served PAWLS JSON successfully for ${route.request().url()}`,
     );
   });
   await page.route(`**/${mockTxtDocument.txtExtractFile}`, (route) =>
@@ -135,20 +135,20 @@ Additional content here includes various sentences that can be annotated. Each s
 to test the annotation functionality. The text selection mechanism should work properly when there is sufficient content.
 
 Final paragraph with more content to ensure we have plenty of text to work with during testing.`,
-    })
+    }),
   );
   await page.route(`**/${mockPdfDocument.mdSummaryFile}`, (route) =>
     route.fulfill({
       status: 200,
       contentType: "text/markdown",
       body: "# Mock Summary Title\n\nMock summary details.",
-    })
+    }),
   );
   await page.route(MOCK_PDF_URL, async (route) => {
     console.log(`[MOCK] PDF file request: ${route.request().url()}`);
     if (!fs.existsSync(TEST_PDF_PATH)) {
       console.error(
-        `[MOCK ERROR] Test PDF file not found at: ${TEST_PDF_PATH}`
+        `[MOCK ERROR] Test PDF file not found at: ${TEST_PDF_PATH}`,
       );
       return route.fulfill({ status: 404, body: "Test PDF not found" });
     }
@@ -167,11 +167,11 @@ Final paragraph with more content to ensure we have plenty of text to work with 
   // Add route for the new test PDF URL, can reuse the same physical file
   await page.route(MOCK_PDF_URL_FOR_STRUCTURAL_TEST, async (route) => {
     console.log(
-      `[MOCK] PDF file request (structural test): ${route.request().url()}`
+      `[MOCK] PDF file request (structural test): ${route.request().url()}`,
     );
     if (!fs.existsSync(TEST_PDF_PATH)) {
       console.error(
-        `[MOCK ERROR] Test PDF file not found at: ${TEST_PDF_PATH}`
+        `[MOCK ERROR] Test PDF file not found at: ${TEST_PDF_PATH}`,
       );
       return route.fulfill({ status: 404, body: "Test PDF not found" });
     }
@@ -193,7 +193,7 @@ Final paragraph with more content to ensure we have plenty of text to work with 
       status: 200,
       contentType: "text/plain",
       body: `Hello World. This is a sample DOCX document for testing. This paragraph contains an Important Clause that should be annotated. The Definition section explains key terms used throughout.`,
-    })
+    }),
   );
   // DOCX file route
   await page.route(`**${MOCK_DOCX_URL}`, async (route) => {
@@ -330,10 +330,12 @@ test.beforeEach(async ({ page }) => {
     }
   });
   page.on("requestfailed", (req) =>
-    console.warn(`[⚠️ FAILED Request] ${req.failure()?.errorText} ${req.url()}`)
+    console.warn(
+      `[⚠️ FAILED Request] ${req.failure()?.errorText} ${req.url()}`,
+    ),
   );
   page.on("pageerror", (err) =>
-    console.error(`[PAGE ERROR] ${err.message}\n${err.stack}`)
+    console.error(`[PAGE ERROR] ${err.message}\n${err.stack}`),
   );
   page.on("console", (msg) => {
     if (msg.type() === "error") {
@@ -352,12 +354,12 @@ test("fullscreen modal covers the entire viewport", async ({ mount, page }) => {
       mocks={graphqlMocksWithChat}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for the modal to render — the heading proves the content is up
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // The .fullscreen-modal element should cover the viewport
@@ -381,12 +383,12 @@ test("renders PDF document and can open summary via floating preview", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Document title should be visible
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // PDF should be visible by default (no layer switching needed)
@@ -432,7 +434,7 @@ test("PDF container renders with virtualized pages", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // PDF is visible by default, no layer switching needed
@@ -443,7 +445,7 @@ test("PDF container renders with virtualized pages", async ({
   await expect(firstCanvas).toBeVisible({ timeout: LONG_TIMEOUT });
 
   const pagePlaceholders = pdfContainer.locator(
-    '> div[style*="position: relative;"] > div[style*="position: absolute;"]'
+    '> div[style*="position: relative;"] > div[style*="position: absolute;"]',
   );
   await expect(pagePlaceholders).toHaveCount(23, { timeout: LONG_TIMEOUT });
 
@@ -459,7 +461,7 @@ test("PDF container renders with virtualized pages", async ({
   const scrollHeight = await pdfContainer.evaluate((node) => node.scrollHeight);
 
   console.log(
-    `[TEST] pdfContainer clientHeight: ${clientHeight}, scrollHeight: ${scrollHeight}`
+    `[TEST] pdfContainer clientHeight: ${clientHeight}, scrollHeight: ${scrollHeight}`,
   );
 
   let currentScrollTop = 0;
@@ -497,7 +499,7 @@ test("PDF container renders with virtualized pages", async ({
           if (hasCanvas) {
             renderedPageIndices.add(j);
             console.log(
-              `[TEST] Rendered canvas for page index ${j} at scrollTop ${currentScrollTop}`
+              `[TEST] Rendered canvas for page index ${j} at scrollTop ${currentScrollTop}`,
             );
             madeProgressInStep = true;
           }
@@ -528,7 +530,7 @@ test("PDF container renders with virtualized pages", async ({
           if ((await placeholder.locator("canvas").count()) > 0) {
             renderedPageIndices.add(j);
             console.log(
-              `[TEST] Rendered canvas for page index ${j} at final scrollTop`
+              `[TEST] Rendered canvas for page index ${j} at final scrollTop`,
             );
           }
         }
@@ -541,7 +543,7 @@ test("PDF container renders with virtualized pages", async ({
     console.warn(
       `[TEST] Still missing ${
         totalPages - renderedPageIndices.size
-      } pages. Performing a final check scan.`
+      } pages. Performing a final check scan.`,
     );
     for (let j = 0; j < totalPages; j++) {
       if (!renderedPageIndices.has(j)) {
@@ -550,7 +552,7 @@ test("PDF container renders with virtualized pages", async ({
           renderedPageIndices.add(j);
         } else {
           console.warn(
-            `[TEST FINAL SCAN] Page index ${j} did not render a canvas.`
+            `[TEST FINAL SCAN] Page index ${j} did not render a canvas.`,
           );
         }
       }
@@ -559,7 +561,7 @@ test("PDF container renders with virtualized pages", async ({
 
   expect(renderedPageIndices.size).toBe(totalPages);
   console.log(
-    `[TEST SUCCESS] Verified that all ${totalPages} pages rendered a canvas at some point during scroll.`
+    `[TEST SUCCESS] Verified that all ${totalPages} pages rendered a canvas at some point during scroll.`,
   );
 });
 
@@ -569,12 +571,12 @@ test("renders TXT document with chat panel open", async ({ mount, page }) => {
       mocks={[...graphqlMocks, ...createSummaryMocks(TXT_DOC_ID, CORPUS_ID)]}
       documentId={TXT_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Document title should be visible
   await expect(
-    page.getByRole("heading", { name: mockTxtDocument.title ?? "" })
+    page.getByRole("heading", { name: mockTxtDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Click ChatIndicator to open sidebar - it's the button on the right edge with MessageSquare icon
@@ -612,10 +614,10 @@ Additional content here includes various sentences that can be annotated. Each s
 to test the annotation functionality. The text selection mechanism should work properly when there is sufficient content.
 
 Final paragraph with more content to ensure we have plenty of text to work with during testing.`,
-    { timeout: LONG_TIMEOUT }
+    { timeout: LONG_TIMEOUT },
   );
   await expect(
-    page.locator("#pdf-container .react-pdf__Page__canvas")
+    page.locator("#pdf-container .react-pdf__Page__canvas"),
   ).toBeHidden({ timeout: LONG_TIMEOUT });
 });
 
@@ -628,12 +630,12 @@ test("PDF document renders PDF annotator component", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // PDF annotator should be visible
@@ -661,12 +663,12 @@ test("TXT document renders TXT annotator component", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(TXT_DOC_ID, CORPUS_ID)]}
       documentId={TXT_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockTxtDocument.title ?? "" })
+    page.getByRole("heading", { name: mockTxtDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // TXT annotator wrapper should be visible
@@ -696,7 +698,7 @@ to test the annotation functionality. The text selection mechanism should work p
 Final paragraph with more content to ensure we have plenty of text to work with during testing.`,
     {
       timeout: LONG_TIMEOUT,
-    }
+    },
   );
 
   // Verify no PDF canvas is rendered
@@ -711,12 +713,12 @@ test("TXT document displays existing annotations", async ({ mount, page }) => {
       mocks={[...graphqlMocks, ...createSummaryMocks(TXT_DOC_ID, CORPUS_ID)]}
       documentId={TXT_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockTxtDocument.title ?? "" })
+    page.getByRole("heading", { name: mockTxtDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Wait for TXT annotator to be visible
@@ -729,7 +731,7 @@ test("TXT document displays existing annotations", async ({ mount, page }) => {
   // Check that annotated spans are rendered with highlights
   // The TxtAnnotator creates spans with data-span-index attribute
   const annotatedSpans = txtAnnotator.locator(
-    '[data-testid^="annotated-span-"]'
+    '[data-testid^="annotated-span-"]',
   );
 
   // Should have at least some spans (the text is broken into spans based on annotations)
@@ -747,7 +749,7 @@ test("TXT document displays existing annotations", async ({ mount, page }) => {
   // For now, let's just verify that the annotations are displayed with the correct styling
   // The hover interaction seems to have issues in the test environment
   console.log(
-    "[TEST] Skipping hover label test - annotations are correctly displayed"
+    "[TEST] Skipping hover label test - annotations are correctly displayed",
   );
 
   // Hide floating controls for a clean documentation screenshot
@@ -766,12 +768,12 @@ test("TXT annotations appear in unified feed when clicked", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(TXT_DOC_ID, CORPUS_ID)]}
       documentId={TXT_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockTxtDocument.title ?? "" })
+    page.getByRole("heading", { name: mockTxtDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Wait for TXT annotator to be visible
@@ -806,7 +808,7 @@ test("TXT annotations appear in unified feed when clicked", async ({
 
   expect(count1 + count2).toBeGreaterThan(0);
   console.log(
-    `[TEST SUCCESS] Found ${count1 + count2} annotations in unified feed`
+    `[TEST SUCCESS] Found ${count1 + count2} annotations in unified feed`,
   );
 
   // Hide floating controls and multi-select checkboxes for a clean screenshot
@@ -814,7 +816,7 @@ test("TXT annotations appear in unified feed when clicked", async ({
   await page.evaluate(() => {
     document
       .querySelectorAll<HTMLElement>(
-        "i.square.outline.icon, i.check.square.icon"
+        "i.square.outline.icon, i.check.square.icon",
       )
       .forEach((el) => (el.style.display = "none"));
   });
@@ -835,12 +837,12 @@ test("TXT document allows creating annotations via text selection", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(TXT_DOC_ID, CORPUS_ID)]}
       documentId={TXT_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockTxtDocument.title ?? "" })
+    page.getByRole("heading", { name: mockTxtDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Wait for TXT annotator to be visible
@@ -849,7 +851,7 @@ test("TXT document allows creating annotations via text selection", async ({
 
   // First select a label from the label selector
   const labelSelectorButton = page.locator(
-    '[data-testid="label-selector-toggle-button"]'
+    '[data-testid="label-selector-toggle-button"]',
   );
   await expect(labelSelectorButton).toBeVisible({ timeout: LONG_TIMEOUT });
   await labelSelectorButton.click();
@@ -916,7 +918,7 @@ test("TXT document allows creating annotations via text selection", async ({
       // Look for longer text
       targetSpan = span;
       console.log(
-        `[TEST] Found target span at index ${i} with text: "${text}"`
+        `[TEST] Found target span at index ${i} with text: "${text}"`,
       );
       break;
     }
@@ -941,7 +943,7 @@ test("TXT document allows creating annotations via text selection", async ({
   const endY = startY;
 
   console.log(
-    `[TEST] Selecting text from (${startX}, ${startY}) to (${endX}, ${endY})`
+    `[TEST] Selecting text from (${startX}, ${startY}) to (${endX}, ${endY})`,
   );
 
   // Perform the drag selection
@@ -960,20 +962,20 @@ test("TXT document allows creating annotations via text selection", async ({
 
   // Verify selection happened by checking for selected text
   const selectedText = await page.evaluate(() =>
-    window.getSelection()?.toString()
+    window.getSelection()?.toString(),
   );
   console.log(`[TEST] Selected text: "${selectedText}"`);
 
   if (!selectedText || selectedText.length === 0) {
     console.log(
-      "[TEST WARNING] No text was selected, trying alternative approach"
+      "[TEST WARNING] No text was selected, trying alternative approach",
     );
 
     // Alternative: Select text programmatically
     const selectionResult = await page.evaluate(() => {
       const container = document.querySelector('[data-testid="txt-annotator"]');
       const textNode = container?.querySelector(
-        "span[data-span-index]"
+        "span[data-span-index]",
       )?.firstChild;
       if (textNode && textNode.nodeType === Node.TEXT_NODE) {
         const range = document.createRange();
@@ -1037,7 +1039,7 @@ test("TXT document allows creating annotations via text selection", async ({
   // Check if annotation count increased
   if (newAnnotationOnPage > initialAnnotationCount) {
     console.log(
-      `[TEST SUCCESS] New annotation created on document (${initialAnnotationCount} -> ${newAnnotationOnPage})`
+      `[TEST SUCCESS] New annotation created on document (${initialAnnotationCount} -> ${newAnnotationOnPage})`,
     );
   } else {
     console.log(`[TEST WARNING] No new annotation detected on document`);
@@ -1081,12 +1083,12 @@ test("DOCX document renders DOCX annotator via WASM", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(DOCX_DOC_ID, CORPUS_ID)]}
       documentId={DOCX_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document title to load
   await expect(
-    page.getByRole("heading", { name: mockDocxDocument.title ?? "" })
+    page.getByRole("heading", { name: mockDocxDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // DOCX annotator should be visible (WASM-rendered)
@@ -1129,12 +1131,12 @@ test("selects a label and creates an annotation via unified feed", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // PDF is visible by default
@@ -1144,7 +1146,7 @@ test("selects a label and creates an annotation via unified feed", async ({
 
   // Wait for the label selector to be ready
   const labelSelectorButton = page.locator(
-    '[data-testid="label-selector-toggle-button"]'
+    '[data-testid="label-selector-toggle-button"]',
   );
   await expect(labelSelectorButton).toBeVisible({ timeout: LONG_TIMEOUT });
   // Open the selector and choose the first label
@@ -1179,7 +1181,7 @@ test("selects a label and creates an annotation via unified feed", async ({
   await page.mouse.move(
     layerBox!.x + endX,
     layerBox!.y + endY,
-    { steps: 10 } // More gradual movement
+    { steps: 10 }, // More gradual movement
   );
   await page.waitForTimeout(100); // Brief pause
   await page.mouse.up();
@@ -1242,12 +1244,12 @@ test("keyboard shortcut 'C' copies selected text", async ({ mount, page }) => {
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // PDF should be visible
@@ -1264,13 +1266,13 @@ test("keyboard shortcut 'C' copies selected text", async ({ mount, page }) => {
   // Create a selection
   await page.mouse.move(
     layerBox!.x + layerBox!.width * 0.5,
-    layerBox!.y + layerBox!.height * 0.1
+    layerBox!.y + layerBox!.height * 0.1,
   );
   await page.mouse.down();
   await page.mouse.move(
     layerBox!.x + layerBox!.width * 0.5,
     layerBox!.y + layerBox!.height * 0.1 + 100,
-    { steps: 10 }
+    { steps: 10 },
   );
   await page.mouse.up();
 
@@ -1290,7 +1292,7 @@ test("keyboard shortcut 'C' copies selected text", async ({ mount, page }) => {
 
   // Verify clipboard content (in Playwright we can read clipboard)
   const clipboardText = await page.evaluate(() =>
-    navigator.clipboard.readText()
+    navigator.clipboard.readText(),
   );
   expect(clipboardText).toBeTruthy();
   console.log("[TEST SUCCESS] Text copied to clipboard:", clipboardText);
@@ -1305,17 +1307,17 @@ test("keyboard shortcut 'A' applies label to create annotation", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Select a label first
   const labelSelectorButton = page.locator(
-    '[data-testid="label-selector-toggle-button"]'
+    '[data-testid="label-selector-toggle-button"]',
   );
   await expect(labelSelectorButton).toBeVisible({ timeout: LONG_TIMEOUT });
   await labelSelectorButton.click();
@@ -1330,13 +1332,13 @@ test("keyboard shortcut 'A' applies label to create annotation", async ({
 
   await page.mouse.move(
     layerBox!.x + layerBox!.width * 0.5,
-    layerBox!.y + layerBox!.height * 0.1
+    layerBox!.y + layerBox!.height * 0.1,
   );
   await page.mouse.down();
   await page.mouse.move(
     layerBox!.x + layerBox!.width * 0.5,
     layerBox!.y + layerBox!.height * 0.1 + 100,
-    { steps: 10 }
+    { steps: 10 },
   );
   await page.mouse.up();
 
@@ -1380,12 +1382,12 @@ test("ESC key cancels selection and closes action menu", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   const firstPageContainer = page.locator(".PageAnnotationsContainer").first();
@@ -1396,13 +1398,13 @@ test("ESC key cancels selection and closes action menu", async ({
   console.log("[TEST] Testing ESC during active selection");
   await page.mouse.move(
     layerBox!.x + layerBox!.width * 0.5,
-    layerBox!.y + layerBox!.height * 0.1
+    layerBox!.y + layerBox!.height * 0.1,
   );
   await page.mouse.down();
   await page.mouse.move(
     layerBox!.x + layerBox!.width * 0.5,
     layerBox!.y + layerBox!.height * 0.1 + 50,
-    { steps: 5 }
+    { steps: 5 },
   );
 
   // Press ESC while still dragging
@@ -1418,13 +1420,13 @@ test("ESC key cancels selection and closes action menu", async ({
   console.log("[TEST] Testing ESC with action menu visible");
   await page.mouse.move(
     layerBox!.x + layerBox!.width * 0.5,
-    layerBox!.y + layerBox!.height * 0.2
+    layerBox!.y + layerBox!.height * 0.2,
   );
   await page.mouse.down();
   await page.mouse.move(
     layerBox!.x + layerBox!.width * 0.5,
     layerBox!.y + layerBox!.height * 0.2 + 100,
-    { steps: 10 }
+    { steps: 10 },
   );
   await page.mouse.up();
 
@@ -1448,17 +1450,17 @@ test("cancel button dismisses selection without action", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Select a label to verify cancel works with label selected
   const labelSelectorButton = page.locator(
-    '[data-testid="label-selector-toggle-button"]'
+    '[data-testid="label-selector-toggle-button"]',
   );
   await expect(labelSelectorButton).toBeVisible({ timeout: LONG_TIMEOUT });
   await labelSelectorButton.click();
@@ -1473,13 +1475,13 @@ test("cancel button dismisses selection without action", async ({
 
   await page.mouse.move(
     layerBox!.x + layerBox!.width * 0.5,
-    layerBox!.y + layerBox!.height * 0.1
+    layerBox!.y + layerBox!.height * 0.1,
   );
   await page.mouse.down();
   await page.mouse.move(
     layerBox!.x + layerBox!.width * 0.5,
     layerBox!.y + layerBox!.height * 0.1 + 100,
-    { steps: 10 }
+    { steps: 10 },
   );
   await page.mouse.up();
 
@@ -1528,7 +1530,7 @@ test("cancel button dismisses selection without action", async ({
   await expect(annotationInFeed).not.toBeVisible({ timeout: 2000 });
 
   console.log(
-    "[TEST SUCCESS] Cancel button dismissed selection without creating annotation"
+    "[TEST SUCCESS] Cancel button dismissed selection without creating annotation",
   );
 });
 
@@ -1544,12 +1546,12 @@ test("mobile: long press and drag creates selection on touch devices", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // PDF should be visible
@@ -1559,7 +1561,7 @@ test("mobile: long press and drag creates selection on touch devices", async ({
 
   // Select a label first
   const labelSelectorButton = page.locator(
-    '[data-testid="label-selector-toggle-button"]'
+    '[data-testid="label-selector-toggle-button"]',
   );
   await expect(labelSelectorButton).toBeVisible({ timeout: LONG_TIMEOUT });
   await labelSelectorButton.click();
@@ -1665,12 +1667,12 @@ test("mobile: long press and drag creates selection on touch devices", async ({
 
     if (selectionCount > 0) {
       console.log(
-        `[TEST SUCCESS] Found ${selectionCount} selections on page after touch interaction`
+        `[TEST SUCCESS] Found ${selectionCount} selections on page after touch interaction`,
       );
     } else {
       // The console logs already showed successful creation, so we can consider this a pass
       console.log(
-        "[TEST SUCCESS] Mobile long press selection created annotation (verified via console logs)"
+        "[TEST SUCCESS] Mobile long press selection created annotation (verified via console logs)",
       );
     }
   }
@@ -1688,12 +1690,12 @@ test("mobile: moving finger during long press wait cancels selection", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Get the selection layer
@@ -1775,12 +1777,12 @@ test("mobile: pinch zoom adjusts document zoom level", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Wait for PDF to be rendered
@@ -1825,7 +1827,7 @@ test("mobile: pinch zoom adjusts document zoom level", async ({
       });
       document.dispatchEvent(touchstart);
     },
-    [centerX, centerY, initialDistance]
+    [centerX, centerY, initialDistance],
   );
 
   await page.waitForTimeout(100);
@@ -1861,7 +1863,7 @@ test("mobile: pinch zoom adjusts document zoom level", async ({
       });
       document.dispatchEvent(touchmove);
     },
-    [centerX, centerY, zoomedDistance]
+    [centerX, centerY, zoomedDistance],
   );
 
   await page.waitForTimeout(100);
@@ -1918,7 +1920,7 @@ test("mobile: pinch zoom adjusts document zoom level", async ({
       });
       document.dispatchEvent(touchstart);
     },
-    [centerX, centerY, 200]
+    [centerX, centerY, 200],
   );
 
   await page.waitForTimeout(100);
@@ -1950,7 +1952,7 @@ test("mobile: pinch zoom adjusts document zoom level", async ({
       });
       document.dispatchEvent(touchmove);
     },
-    [centerX, centerY, 50]
+    [centerX, centerY, 50],
   ); // Fingers now only 50px apart
 
   await page.waitForTimeout(100);
@@ -1972,7 +1974,7 @@ test("mobile: pinch zoom adjusts document zoom level", async ({
   console.log("[TEST] Final zoom after pinch in:", finalZoomText);
 
   console.log(
-    "[TEST SUCCESS] Pinch zoom successfully adjusted document zoom level"
+    "[TEST SUCCESS] Pinch zoom successfully adjusted document zoom level",
   );
 });
 
@@ -1988,12 +1990,12 @@ test("mobile: pinch zoom and long press selection work independently", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Wait for PDF to be rendered
@@ -2003,7 +2005,7 @@ test("mobile: pinch zoom and long press selection work independently", async ({
 
   // Select a label for annotations
   const labelSelectorButton = page.locator(
-    '[data-testid="label-selector-toggle-button"]'
+    '[data-testid="label-selector-toggle-button"]',
   );
   await expect(labelSelectorButton).toBeVisible({ timeout: LONG_TIMEOUT });
   await labelSelectorButton.click();
@@ -2045,7 +2047,7 @@ test("mobile: pinch zoom and long press selection work independently", async ({
       });
       document.dispatchEvent(touchstart);
     },
-    [centerX, centerY]
+    [centerX, centerY],
   );
 
   await page.waitForTimeout(100);
@@ -2077,7 +2079,7 @@ test("mobile: pinch zoom and long press selection work independently", async ({
       });
       document.dispatchEvent(touchmove);
     },
-    [centerX, centerY]
+    [centerX, centerY],
   );
 
   await page.waitForTimeout(100);
@@ -2202,7 +2204,7 @@ test("mobile: pinch zoom and long press selection work independently", async ({
       });
       document.dispatchEvent(touchstart);
     },
-    [touchX, touchY]
+    [touchX, touchY],
   );
 
   // Wait for long press duration
@@ -2225,7 +2227,7 @@ test("mobile: pinch zoom and long press selection work independently", async ({
 
   // Test 4: Verify single finger can still select after two-finger gesture
   console.log(
-    "[TEST] Testing single finger selection works after two-finger gesture"
+    "[TEST] Testing single finger selection works after two-finger gesture",
   );
 
   // Now try single finger again
@@ -2274,11 +2276,11 @@ test("mobile: pinch zoom and long press selection work independently", async ({
   // Action menu should appear again
   await expect(actionMenu).toBeVisible({ timeout: LONG_TIMEOUT });
   console.log(
-    "[TEST] Single finger selection still works after two-finger gesture"
+    "[TEST] Single finger selection still works after two-finger gesture",
   );
 
   console.log(
-    "[TEST SUCCESS] Pinch zoom and long press selection work independently"
+    "[TEST SUCCESS] Pinch zoom and long press selection work independently",
   );
 });
 
@@ -2294,14 +2296,14 @@ test("filters annotations in unified feed with structural toggle", async ({
       ]}
       documentId={PDF_DOC_ID_FOR_STRUCTURAL_TEST}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
     page.getByRole("heading", {
       name: mockPdfDocumentForStructuralTest.title ?? "",
-    })
+    }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Open sidebar via ChatIndicator
@@ -2323,10 +2325,10 @@ test("filters annotations in unified feed with structural toggle", async ({
   await page.waitForTimeout(500);
 
   const nonStructuralAnnotation = page.locator(
-    `[data-annotation-id="${mockAnnotationNonStructural1.id}"]`
+    `[data-annotation-id="${mockAnnotationNonStructural1.id}"]`,
   );
   const structuralAnnotation = page.locator(
-    `[data-annotation-id="${mockAnnotationStructural1.id}"]`
+    `[data-annotation-id="${mockAnnotationStructural1.id}"]`,
   );
 
   // Initial State: Non-structural visible, structural hidden
@@ -2356,7 +2358,7 @@ test("filters annotations in unified feed with structural toggle", async ({
   // TODO: The structural toggle is likely in ViewSettingsPopup or similar
   // For now, skip this test as we need to investigate the actual UI structure
   console.log(
-    "[TEST] Structural toggle test needs investigation of actual UI structure"
+    "[TEST] Structural toggle test needs investigation of actual UI structure",
   );
 });
 
@@ -2377,14 +2379,14 @@ test("PDF annotations render with soft bounding boxes on canvas", async ({
       corpusId={CORPUS_ID}
       showBoundingBoxes={true}
       showSelectedOnly={false}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
     page.getByRole("heading", {
       name: mockPdfDocumentForStructuralTest.title ?? "",
-    })
+    }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Wait for PDF canvas to render
@@ -2396,7 +2398,7 @@ test("PDF annotations render with soft bounding boxes on canvas", async ({
 
   // Verify the SelectionBoundary span is rendered on the PDF overlay
   const selectionBoundary = page.locator(
-    `[id="SELECTION_${mockAnnotationNonStructural1.id}"]`
+    `[id="SELECTION_${mockAnnotationNonStructural1.id}"]`,
   );
   await expect(selectionBoundary).toBeVisible({ timeout: LONG_TIMEOUT });
 
@@ -2439,14 +2441,14 @@ test("PDF annotations with labels always visible", async ({ mount, page }) => {
       showBoundingBoxes={true}
       showSelectedOnly={false}
       showLabels={LabelDisplayBehavior.ALWAYS}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
     page.getByRole("heading", {
       name: mockPdfDocumentForStructuralTest.title ?? "",
-    })
+    }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Wait for PDF canvas to render
@@ -2458,7 +2460,7 @@ test("PDF annotations with labels always visible", async ({ mount, page }) => {
 
   // Verify annotation boundary is visible
   const selectionBoundary = page.locator(
-    `[id="SELECTION_${mockAnnotationNonStructural1.id}"]`
+    `[id="SELECTION_${mockAnnotationNonStructural1.id}"]`,
   );
   await expect(selectionBoundary).toBeVisible({ timeout: LONG_TIMEOUT });
 
@@ -2485,12 +2487,12 @@ test("Search jumps to first 'Transfer Taxes' hit using floating input", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   /* 2️⃣  wait until document loads */
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // PDF is visible by default
@@ -2542,7 +2544,7 @@ test("Search jumps to first 'Transfer Taxes' hit using floating input", async ({
       await highlight.elementHandle(),
       await page.locator("#pdf-container").elementHandle(),
     ],
-    { timeout: LONG_TIMEOUT }
+    { timeout: LONG_TIMEOUT },
   );
 
   /* 7️⃣  assert highlight is within viewport */
@@ -2569,12 +2571,12 @@ test("Chat source chip in unified feed centres its highlight in PDF", async ({
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait until document loads
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Open sidebar
@@ -2607,7 +2609,7 @@ test("Chat source chip in unified feed centres its highlight in PDF", async ({
   // Wait for highlight to be in the DOM & scrolled into view
   const messageId = "TWVzc2FnZVR5cGU6Ng=="; // base-64 id used by the UI
   const highlight = page.locator(
-    `[id="CHAT_SOURCE_${messageId}.0"]` // an attribute selector needs no escaping
+    `[id="CHAT_SOURCE_${messageId}.0"]`, // an attribute selector needs no escaping
   );
   await expect(highlight).toBeVisible({ timeout: LONG_TIMEOUT });
 
@@ -2623,7 +2625,7 @@ test("Chat source chip in unified feed centres its highlight in PDF", async ({
       await highlight.elementHandle(),
       await page.locator("#pdf-container").elementHandle(),
     ],
-    { timeout: LONG_TIMEOUT }
+    { timeout: LONG_TIMEOUT },
   );
 
   // Final bounding-box assertion
@@ -2649,12 +2651,12 @@ test("Browser zoom controls (Ctrl+scroll, keyboard shortcuts) work correctly", a
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // PDF should be visible
@@ -2677,7 +2679,7 @@ test("Browser zoom controls (Ctrl+scroll, keyboard shortcuts) work correctly", a
   const initialZoom = parseInt(initialZoomText?.replace("%", "") || "100");
   const resetZoomLevel = initialZoom; // Store the initial zoom as the reset level
   console.log(
-    `[TEST] Initial zoom level: ${initialZoom}% (this is the reset level)`
+    `[TEST] Initial zoom level: ${initialZoom}% (this is the reset level)`,
   );
 
   // Test 1: Zoom in button click
@@ -2690,7 +2692,7 @@ test("Browser zoom controls (Ctrl+scroll, keyboard shortcuts) work correctly", a
     const btn = document.querySelector('[title="Zoom In"]');
     if (btn) {
       btn.addEventListener("click", () =>
-        console.log("[TEST] Zoom In button clicked!")
+        console.log("[TEST] Zoom In button clicked!"),
       );
     }
   });
@@ -2802,7 +2804,7 @@ test("Browser zoom controls (Ctrl+scroll, keyboard shortcuts) work correctly", a
     .isVisible()
     .catch(() => false);
   console.log(
-    `[TEST] Zoom indicator visible after Ctrl+0: ${indicatorVisible}`
+    `[TEST] Zoom indicator visible after Ctrl+0: ${indicatorVisible}`,
   );
 
   if (indicatorVisible) {
@@ -2880,7 +2882,7 @@ test("Browser zoom controls (Ctrl+scroll, keyboard shortcuts) work correctly", a
 
   // Verify we're in knowledge layer
   await expect(
-    page.getByRole("heading", { name: "Mock Summary Title" }).first()
+    page.getByRole("heading", { name: "Mock Summary Title" }).first(),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Try to zoom - should not show indicator
@@ -2930,12 +2932,12 @@ test.describe("Read-Only Mode Tests", () => {
         documentId={PDF_DOC_ID}
         corpusId={CORPUS_ID}
         readOnly={true}
-      />
+      />,
     );
 
     // Wait for document to load
     await expect(
-      page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+      page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
     ).toBeVisible({ timeout: LONG_TIMEOUT });
 
     // PDF is visible by default
@@ -2945,7 +2947,7 @@ test.describe("Read-Only Mode Tests", () => {
 
     // Wait for the label selector to be ready
     const labelSelectorButton = page.locator(
-      '[data-testid="label-selector-toggle-button"]'
+      '[data-testid="label-selector-toggle-button"]',
     );
     await expect(labelSelectorButton).toBeVisible({ timeout: LONG_TIMEOUT });
 
@@ -3001,7 +3003,7 @@ test.describe("Read-Only Mode Tests", () => {
     const applyLabelButton = page.getByTestId("apply-label-button");
     await expect(applyLabelButton).not.toBeVisible({ timeout: 3000 });
     console.log(
-      "[TEST SUCCESS] Action menu shows only copy option in read-only mode"
+      "[TEST SUCCESS] Action menu shows only copy option in read-only mode",
     );
 
     // Open sidebar to verify no annotation was created
@@ -3037,12 +3039,12 @@ test.describe("Read-Only Mode Tests", () => {
         documentId={TXT_DOC_ID}
         corpusId={CORPUS_ID}
         readOnly={true}
-      />
+      />,
     );
 
     // Wait for document to load
     await expect(
-      page.getByRole("heading", { name: mockTxtDocument.title ?? "" })
+      page.getByRole("heading", { name: mockTxtDocument.title ?? "" }),
     ).toBeVisible({ timeout: LONG_TIMEOUT });
 
     // Wait for TXT annotator to be visible
@@ -3051,7 +3053,7 @@ test.describe("Read-Only Mode Tests", () => {
 
     // Try to select a label - selector should be disabled
     const labelSelectorButton = page.locator(
-      '[data-testid="label-selector-toggle-button"]'
+      '[data-testid="label-selector-toggle-button"]',
     );
     await expect(labelSelectorButton).toBeVisible({ timeout: LONG_TIMEOUT });
     await labelSelectorButton.click();
@@ -3081,7 +3083,7 @@ test.describe("Read-Only Mode Tests", () => {
       if (text && text.length > 10 && !text.match(/^\s*$/)) {
         targetSpan = span;
         console.log(
-          `[TEST] Found target span at index ${i} with text: "${text}"`
+          `[TEST] Found target span at index ${i} with text: "${text}"`,
         );
         break;
       }
@@ -3103,7 +3105,7 @@ test.describe("Read-Only Mode Tests", () => {
     const endY = startY;
 
     console.log(
-      `[TEST] Attempting text selection in read-only mode from (${startX}, ${startY}) to (${endX}, ${endY})`
+      `[TEST] Attempting text selection in read-only mode from (${startX}, ${startY}) to (${endX}, ${endY})`,
     );
 
     // Perform the drag selection
@@ -3120,7 +3122,7 @@ test.describe("Read-Only Mode Tests", () => {
 
     // Verify selection happened
     const selectedText = await page.evaluate(() =>
-      window.getSelection()?.toString()
+      window.getSelection()?.toString(),
     );
     console.log(`[TEST] Selected text in read-only mode: "${selectedText}"`);
 
@@ -3157,7 +3159,7 @@ test.describe("Read-Only Mode Tests", () => {
       .first();
     await expect(newAnnotation).not.toBeVisible({ timeout: 3000 });
     console.log(
-      "[TEST SUCCESS] No annotation created in TXT document in read-only mode"
+      "[TEST SUCCESS] No annotation created in TXT document in read-only mode",
     );
   });
 
@@ -3171,12 +3173,12 @@ test.describe("Read-Only Mode Tests", () => {
         documentId={PDF_DOC_ID}
         corpusId={CORPUS_ID}
         readOnly={true}
-      />
+      />,
     );
 
     // Wait for document to load
     await expect(
-      page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+      page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
     ).toBeVisible({ timeout: LONG_TIMEOUT });
 
     // Open sidebar
@@ -3214,7 +3216,7 @@ test.describe("Read-Only Mode Tests", () => {
     await expect(noteModal).not.toBeVisible();
 
     console.log(
-      "[TEST SUCCESS] Note correctly non-clickable in read-only mode"
+      "[TEST SUCCESS] Note correctly non-clickable in read-only mode",
     );
   });
 
@@ -3228,12 +3230,12 @@ test.describe("Read-Only Mode Tests", () => {
         documentId={PDF_DOC_ID}
         corpusId={CORPUS_ID}
         readOnly={true}
-      />
+      />,
     );
 
     // Wait for document to load
     await expect(
-      page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+      page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
     ).toBeVisible({ timeout: LONG_TIMEOUT });
 
     // Open chat tray
@@ -3262,7 +3264,7 @@ test.describe("Read-Only Mode Tests", () => {
     });
     await expect(backButton).not.toBeVisible({ timeout: 3000 });
     console.log(
-      "[TEST SUCCESS] 'Back to Conversations' button hidden in read-only mode"
+      "[TEST SUCCESS] 'Back to Conversations' button hidden in read-only mode",
     );
 
     // Chat input should be visible (backend handles persistence)
@@ -3272,10 +3274,10 @@ test.describe("Read-Only Mode Tests", () => {
     // Verify the placeholder shows connected state
     await expect(chatInput).toHaveAttribute(
       "placeholder",
-      "Type your message..."
+      "Type your message...",
     );
     console.log(
-      "[TEST SUCCESS] Chat input visible and connected in read-only mode (backend handles persistence)"
+      "[TEST SUCCESS] Chat input visible and connected in read-only mode (backend handles persistence)",
     );
 
     // Should show a new conversation, not the conversation list
@@ -3294,17 +3296,17 @@ test.describe("Read-Only Mode Tests", () => {
         documentId={PDF_DOC_ID}
         corpusId={CORPUS_ID}
         readOnly={true}
-      />
+      />,
     );
 
     // Wait for document to load
     await expect(
-      page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+      page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
     ).toBeVisible({ timeout: LONG_TIMEOUT });
 
     // Label selector button should be visible
     const labelSelectorButton = page.locator(
-      '[data-testid="label-selector-toggle-button"]'
+      '[data-testid="label-selector-toggle-button"]',
     );
     await expect(labelSelectorButton).toBeVisible({ timeout: LONG_TIMEOUT });
 
@@ -3323,7 +3325,7 @@ test.describe("Read-Only Mode Tests", () => {
 
     if (isDisabled) {
       console.log(
-        "[TEST SUCCESS] Label selector button is disabled in read-only mode"
+        "[TEST SUCCESS] Label selector button is disabled in read-only mode",
       );
     } else {
       // If not visually disabled, clicking should not open the dropdown
@@ -3335,12 +3337,12 @@ test.describe("Read-Only Mode Tests", () => {
 
       if (labelCount === 0) {
         console.log(
-          "[TEST SUCCESS] Label selector doesn't show options in read-only mode"
+          "[TEST SUCCESS] Label selector doesn't show options in read-only mode",
         );
       } else {
         // Even if options show, they should be disabled or non-functional
         console.log(
-          "[TEST] Label options appeared, checking if they're disabled"
+          "[TEST] Label options appeared, checking if they're disabled",
         );
         const firstOption = labelOptions.first();
         await firstOption.click();
@@ -3349,7 +3351,7 @@ test.describe("Read-Only Mode Tests", () => {
         const buttonText = await labelSelectorButton.textContent();
         expect(buttonText).toContain("Select a label");
         console.log(
-          "[TEST SUCCESS] Label selection is non-functional in read-only mode"
+          "[TEST SUCCESS] Label selection is non-functional in read-only mode",
         );
       }
     }
@@ -3365,12 +3367,12 @@ test.describe("Read-Only Mode Tests", () => {
         documentId={PDF_DOC_ID}
         corpusId={CORPUS_ID}
         readOnly={true}
-      />
+      />,
     );
 
     // Wait for document to load
     await expect(
-      page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+      page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
     ).toBeVisible({ timeout: LONG_TIMEOUT });
 
     // Look for the floating summary preview button (the "book" icon)
@@ -3393,7 +3395,7 @@ test.describe("Read-Only Mode Tests", () => {
     });
     await expect(editSummaryButton).not.toBeVisible({ timeout: 3000 });
     console.log(
-      "[TEST SUCCESS] Edit Summary button correctly hidden in read-only mode"
+      "[TEST SUCCESS] Edit Summary button correctly hidden in read-only mode",
     );
   });
 
@@ -3407,12 +3409,12 @@ test.describe("Read-Only Mode Tests", () => {
         documentId={PDF_DOC_ID}
         corpusId={CORPUS_ID}
         readOnly={true}
-      />
+      />,
     );
 
     // Wait for document to load
     await expect(
-      page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+      page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
     ).toBeVisible({ timeout: LONG_TIMEOUT });
 
     // PDF should be visible
@@ -3431,13 +3433,13 @@ test.describe("Read-Only Mode Tests", () => {
     // Create a selection
     await page.mouse.move(
       layerBox!.x + layerBox!.width * 0.5,
-      layerBox!.y + layerBox!.height * 0.1
+      layerBox!.y + layerBox!.height * 0.1,
     );
     await page.mouse.down();
     await page.mouse.move(
       layerBox!.x + layerBox!.width * 0.5,
       layerBox!.y + layerBox!.height * 0.1 + 100,
-      { steps: 10 }
+      { steps: 10 },
     );
     await page.mouse.up();
     console.log("[TEST] Made selection in read-only mode");
@@ -3455,7 +3457,7 @@ test.describe("Read-Only Mode Tests", () => {
     await expect(applyLabelButton).not.toBeVisible({ timeout: 3000 });
 
     console.log(
-      "[TEST SUCCESS] Action menu shows only copy option in read-only mode"
+      "[TEST SUCCESS] Action menu shows only copy option in read-only mode",
     );
 
     // Grant clipboard permissions and test copy
@@ -3469,11 +3471,11 @@ test.describe("Read-Only Mode Tests", () => {
 
     // Verify clipboard content
     const clipboardText = await page.evaluate(() =>
-      navigator.clipboard.readText()
+      navigator.clipboard.readText(),
     );
     expect(clipboardText).toBeTruthy();
     console.log(
-      "[TEST SUCCESS] Text successfully copied to clipboard in read-only mode"
+      "[TEST SUCCESS] Text successfully copied to clipboard in read-only mode",
     );
   });
 });
@@ -3490,12 +3492,12 @@ test("Chat sources hide regular annotations and search results, but show explici
       mocks={[...graphqlMocks, ...createSummaryMocks(PDF_DOC_ID, CORPUS_ID)]}
       documentId={PDF_DOC_ID}
       corpusId={CORPUS_ID}
-    />
+    />,
   );
 
   // Wait for document to load
   await expect(
-    page.getByRole("heading", { name: mockPdfDocument.title ?? "" })
+    page.getByRole("heading", { name: mockPdfDocument.title ?? "" }),
   ).toBeVisible({ timeout: LONG_TIMEOUT });
 
   // Wait for PDF to render
@@ -3543,7 +3545,7 @@ test("Chat sources hide regular annotations and search results, but show explici
 
   // Step 3: Verify the component works correctly with chat sources
   console.log(
-    "[TEST] Step 3: Verifying component renders correctly with chat sources"
+    "[TEST] Step 3: Verifying component renders correctly with chat sources",
   );
 
   // Note: The mockPdfDocument has no annotations (allAnnotations: []),
@@ -3576,12 +3578,53 @@ test("Chat sources hide regular annotations and search results, but show explici
   // Verify chat source is still visible after view mode changes
   await expect(chatSource).toBeVisible({ timeout: LONG_TIMEOUT });
   console.log(
-    "[TEST SUCCESS] View mode switching works correctly with chat sources"
+    "[TEST SUCCESS] View mode switching works correctly with chat sources",
   );
 
   console.log(
-    "[TEST SUCCESS] Chat sources correctly manage annotation visibility"
+    "[TEST SUCCESS] Chat sources correctly manage annotation visibility",
   );
+});
+
+/* --------------------------------------------------------------------- */
+/* Index tab renders in sidebar                                           */
+/* --------------------------------------------------------------------- */
+test("Index tab is visible in sidebar tabs", async ({ mount, page }) => {
+  await mount(
+    <DocumentKnowledgeBaseTestWrapper
+      mocks={[...graphqlMocks, ...createSummaryMocks(TXT_DOC_ID, CORPUS_ID)]}
+      documentId={TXT_DOC_ID}
+      corpusId={CORPUS_ID}
+    />,
+  );
+
+  // Wait for document to load
+  await expect(
+    page.getByRole("heading", { name: mockTxtDocument.title ?? "" }),
+  ).toBeVisible({ timeout: LONG_TIMEOUT });
+
+  // Verify the Index tab is visible (first tab in sidebar)
+  const indexTab = page.getByTestId("view-mode-index");
+  await expect(indexTab).toBeVisible({ timeout: LONG_TIMEOUT });
+
+  // Verify tab order: Index, Chat, Feed, Discussions
+  const chatTab = page.getByTestId("view-mode-chat");
+  const feedTab = page.getByTestId("view-mode-feed");
+  const discussionsTab = page.getByTestId("view-mode-discussions");
+  await expect(chatTab).toBeVisible();
+  await expect(feedTab).toBeVisible();
+  await expect(discussionsTab).toBeVisible();
+
+  await docScreenshot(page, "knowledge-base--sidebar-tabs--with-index");
+
+  // Click Index tab to open the sidebar
+  await indexTab.click();
+
+  // Sidebar panel should open
+  const slidingPanel = page.locator("#sliding-panel");
+  await expect(slidingPanel).toBeVisible({ timeout: LONG_TIMEOUT });
+
+  await docScreenshot(page, "knowledge-base--index-tab--open");
 });
 
 // Helper to create summary mocks (reuse from FloatingSummaryPreview tests but inline to avoid circular dep)

@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-03-23
 
+### Added
+
+- **Index tab in document sidebar**: Added a new "Index" tab (BookOpen icon) to the document viewer sidebar, positioned first before Chat, Feed, and Discussions. The Index tab reuses the `DocumentAnnotationIndex` component to display the document's OC_SECTION-based table of contents directly in the sidebar (`frontend/src/components/knowledge_base/document/document_kb/RightPanelContent.tsx`, `frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx`).
+
 ### Changed
 
+- **OC_* annotations filtered from Feed**: Platform-generated annotations with labels prefixed `OC_` (e.g., `OC_SECTION`) are now always hidden from the UnifiedContentFeed, preventing structural index entries from cluttering the annotation feed (`frontend/src/components/knowledge_base/document/unified_feed/UnifiedContentFeed.tsx`).
+- **Improved sidebar tab spacing**: Reduced tab dimensions (76px/88px height, 36px/44px width), gap (4px), padding, icon size, and font size to prevent overlap when additional tabs are present (`frontend/src/components/knowledge_base/document/styled/SidebarTabs.tsx`).
 - **Softened PDF annotation bounding boxes to diffuse highlighter-pen aesthetic**: Replaced hard-edged borders on annotation boundaries, tokens, and label pills with multi-layer box-shadow glows. Boundaries use a three-layer shadow (outer, mid, inset) that feathers into the page. Tokens use a single-layer soft blur. Approved/rejected states pulse with matching diffuse glows instead of solid borders. Extracted shared `computeAnnotationBoxShadow` utility (`frontend/src/utils/colorUtils.ts`) to eliminate duplicated shadow logic between `SelectionBoundary` and `ResultBoundary`. Added named constants for all shadow radii, opacity levels, border-radius tiers, and status colors (`frontend/src/assets/configurations/constants.ts`). Removed dead code: `getBorderWidthFromBounds`, unused `$border` prop, unused `$isSelected` prop. Fixed `pulseMaroon` animation color mismatch (was `rgba(180, 40, 40)`, now matches static rejected state).
 
 ## [Previous Unreleased] - 2026-03-21
