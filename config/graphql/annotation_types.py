@@ -60,6 +60,27 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         description="Content modalities present in this annotation: TEXT, IMAGE, etc.",
     )
 
+    def resolve_document(self, info):
+        """Return the document, resolving via structural_set for structural annotations."""
+        if self.document_id:
+            return self.document
+        # Structural annotations have document=NULL; resolve via structural_set
+        if self.structural_set_id:
+            structural_set = self.structural_set
+            if structural_set is not None:
+                # Use prefetched documents if available (evaluates prefetch cache)
+                prefetched = list(structural_set.documents.all())
+                if prefetched:
+                    return prefetched[0]
+            # Fallback to DB query if not prefetched (avoids circular import
+            # with documents.models at module level)
+            from opencontractserver.documents.models import Document
+
+            return Document.objects.filter(
+                structural_annotation_set_id=self.structural_set_id
+            ).first()
+        return None
+
     def resolve_annotation_type(self, info):
         """Return annotation_type as a plain string to tolerate invalid DB values."""
         return self.annotation_type or ""

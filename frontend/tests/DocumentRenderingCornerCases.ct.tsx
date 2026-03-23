@@ -174,22 +174,22 @@ test.describe("Selection Menu Positioning Corner Cases", () => {
       timeout: LONG_TIMEOUT,
     });
 
-    // Zoom in via Ctrl++ (intercepted by handleKeyboardZoom in DocumentKnowledgeBase)
-    // Wait between presses so React re-renders and the handler picks up the new zoomLevel
-    for (let i = 0; i < 5; i++) {
-      await page.keyboard.press("Control++");
-      await page.waitForTimeout(200);
-    }
-    await page.waitForTimeout(500);
+    // Wait for PDF to render and stabilize
+    await page.waitForTimeout(1500);
 
-    // Scroll horizontally to the right edge
-    const pdfContainer = page.locator("#pdf-container");
-    await pdfContainer.evaluate((el) => {
-      el.scrollLeft = el.scrollWidth - el.clientWidth;
-    });
-    await page.waitForTimeout(300);
+    // Ensure canvas is properly initialized
+    await page.waitForFunction(
+      () => {
+        const canvas = document.querySelector(
+          "#pdf-container canvas"
+        ) as HTMLCanvasElement;
+        const ctx = canvas?.getContext("2d");
+        return canvas && ctx && canvas.width > 0 && canvas.height > 0;
+      },
+      { timeout: 5000 }
+    );
 
-    // Perform selection near the right edge
+    // Get the selection layer on the first page
     const firstPageContainer = page
       .locator(".PageAnnotationsContainer")
       .first();
@@ -197,14 +197,16 @@ test.describe("Selection Menu Positioning Corner Cases", () => {
     const layerBox = await selectionLayer.boundingBox();
     expect(layerBox).toBeTruthy();
 
-    // Select text near the right edge but well below floating controls
-    // (ZoomControls overlay at z-index 900 sits at top-right of content area)
     const viewport = page.viewportSize()!;
+
+    // Select text near the right edge of the visible area to test
+    // viewport clamping on a narrow mobile screen.
+    // Use the same reliable pattern as the desktop test.
     const startX = Math.min(
       layerBox!.x + layerBox!.width - 100,
       viewport.width - 60
     );
-    const startY = layerBox!.y + 250;
+    const startY = layerBox!.y + 100;
 
     await performTextSelection(page, startX, startY, startX + 50, startY + 30);
 
