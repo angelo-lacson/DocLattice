@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Index tab in document sidebar**: Added a new "Index" tab (BookOpen icon) to the document viewer sidebar, positioned first before Chat, Feed, and Discussions. The Index tab reuses the `DocumentAnnotationIndex` component to display the document's OC_SECTION-based table of contents directly in the sidebar (`frontend/src/components/knowledge_base/document/document_kb/RightPanelContent.tsx`, `frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx`).
+- **OpenAI Embedder pipeline component** (`opencontractserver/pipeline/embedders/openai_embedder.py`): New `OpenAIEmbedder` class supporting `text-embedding-3-small` (default), `text-embedding-3-large`, and `text-embedding-ada-002` models. Features configurable output dimensions, custom API base URL for Azure/proxy support, and graceful error handling. Dynamic `vector_size` property reflects runtime model/dimension configuration to prevent pgvector column size mismatches.
+- **OpenAI embedding constants** (`opencontractserver/constants/embeddings.py`): Centralized model dimension mappings and defaults for the OpenAI embedder.
 
 ### Changed
 
