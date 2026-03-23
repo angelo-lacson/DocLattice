@@ -1,5 +1,12 @@
 import React, { Dispatch, SetStateAction } from "react";
-import { Database, BarChart3 } from "lucide-react";
+import { useReactiveVar } from "@apollo/client";
+import {
+  Database,
+  BarChart3,
+  BookOpen,
+  ChevronsUpDown,
+  ChevronsDownUp,
+} from "lucide-react";
 import {
   AnalysisType,
   ColumnType,
@@ -7,6 +14,7 @@ import {
   ExtractType,
   NoteType,
 } from "../../../../types/graphql-api";
+import { tocExpandAll } from "../../../../graphql/cache";
 
 import {
   FlexColumnPanel,
@@ -111,6 +119,8 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
   setShowLoad,
   pendingChatMessage,
 }) => {
+  const isIndexExpanded = useReactiveVar(tocExpandAll);
+
   if (!showRightPanel) return null;
 
   // Control bar for switching between chat and feed modes
@@ -130,6 +140,40 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
   if (sidebarViewMode === "index") {
     return (
       <FlexColumnPanel>
+        <SidebarHeader>
+          <BookOpen size={20} style={{ color: OS_LEGAL_COLORS.primaryBlue }} />
+          <SidebarHeaderContent>
+            <SidebarHeaderTitle>Document Index</SidebarHeaderTitle>
+            <SidebarHeaderSubtitle>
+              Table of contents by section
+            </SidebarHeaderSubtitle>
+          </SidebarHeaderContent>
+          <button
+            onClick={() => tocExpandAll(!isIndexExpanded)}
+            title={isIndexExpanded ? "Collapse All" : "Expand All"}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              padding: "4px 10px",
+              border: `1px solid ${OS_LEGAL_COLORS.border}`,
+              borderRadius: "6px",
+              background: OS_LEGAL_COLORS.surface,
+              color: OS_LEGAL_COLORS.textSecondary,
+              fontSize: "0.75rem",
+              fontWeight: 500,
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            {isIndexExpanded ? (
+              <ChevronsDownUp size={14} />
+            ) : (
+              <ChevronsUpDown size={14} />
+            )}
+            {isIndexExpanded ? "Collapse" : "Expand"}
+          </button>
+        </SidebarHeader>
         <ScrollableFillPanel>
           <DocumentAnnotationIndex
             documentId={documentId}
