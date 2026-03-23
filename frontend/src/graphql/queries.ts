@@ -3172,9 +3172,13 @@ export const GET_DOCUMENT_ANNOTATIONS_ONLY = gql`
  * rather than included in the initial document load (for performance).
  * Structural annotations are analysis-independent and only need to be
  * fetched once per document.
+ *
+ * Supports optional `annotationIds` filter to fetch only specific
+ * structural annotations (used for deep-link navigation).
  */
 export interface GetDocumentStructuralAnnotationsInput {
   documentId: string;
+  annotationIds?: string[];
 }
 
 export interface GetDocumentStructuralAnnotationsOutput {
@@ -3185,10 +3189,13 @@ export interface GetDocumentStructuralAnnotationsOutput {
 }
 
 export const GET_DOCUMENT_STRUCTURAL_ANNOTATIONS = gql`
-  query GetDocumentStructuralAnnotations($documentId: ID!) {
+  query GetDocumentStructuralAnnotations(
+    $documentId: ID!
+    $annotationIds: [ID]
+  ) {
     document(id: $documentId) {
       id
-      allStructuralAnnotations {
+      allStructuralAnnotations(annotationIds: $annotationIds) {
         id
         page
         parent {
@@ -3224,6 +3231,7 @@ export interface GetDocumentWithStructureInput {
 
 export interface GetDocumentWithStructureOutput {
   document: RawDocumentType & {
+    allRelationships?: RelationshipType[];
     allNotesWithoutCorpus?: Array<{
       id: string;
       title: string;
@@ -3264,6 +3272,32 @@ export const GET_DOCUMENT_WITH_STRUCTURE = gql`
       myPermissions
       # Structural annotations loaded lazily via GET_DOCUMENT_STRUCTURAL_ANNOTATIONS
       # for performance (can be thousands for large documents)
+      # Structural relationships (few in number, safe to load eagerly)
+      allRelationships {
+        id
+        structural
+        relationshipLabel {
+          id
+          text
+          color
+          icon
+          description
+        }
+        sourceAnnotations {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+        targetAnnotations {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+      }
       # Document-level notes (no corpus required)
       allNotes {
         id

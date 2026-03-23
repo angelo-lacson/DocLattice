@@ -145,6 +145,7 @@ import { ZoomControls } from "./ZoomControls";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import workerSrc from "pdfjs-dist/build/pdf.worker.mjs?url";
 import {
+  selectedAnnotationIds,
   selectedThreadId,
   showStructuralAnnotations,
 } from "../../../graphql/cache";
@@ -594,23 +595,37 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   // --- Lazy loading for structural annotations ---
   // Structural annotations (headers, sections, paragraphs) can number in the
   // thousands for large documents but are hidden by default. We defer fetching
-  // them until the user toggles structural visibility on, or until a deep-link
-  // explicitly requests structural annotation display.
-  const [
-    fetchStructuralAnnotations,
-    { loading: structuralLoading, called: structuralCalled },
-  ] = useLazyQuery<
+  // them until the user toggles structural visibility on.
+  // Deep-links fetch ONLY the specific referenced annotations (lightweight).
+  const deepLinkedAnnotationIds = useReactiveVar(selectedAnnotationIds);
+
+  // Tracks whether the current fetch is a full load (toggle) vs targeted (deep-link)
+  const isFullStructuralFetchRef = useRef(false);
+
+  const [fetchStructuralAnnotations] = useLazyQuery<
     GetDocumentStructuralAnnotationsOutput,
     GetDocumentStructuralAnnotationsInput
   >(GET_DOCUMENT_STRUCTURAL_ANNOTATIONS, {
-    fetchPolicy: "network-only",
+    fetchPolicy: "cache-and-network",
     onCompleted: (data) => {
       if (data?.document?.allStructuralAnnotations) {
         const structuralAnns = data.document.allStructuralAnnotations.map(
           (ann) => convertToServerAnnotation(ann)
         );
-        setStructuralAnnotations(structuralAnns);
-        setStructuralAnnotationsLoaded(true);
+        if (isFullStructuralFetchRef.current) {
+          // Full fetch (toggle): replace all structural annotations
+          setStructuralAnnotations(structuralAnns);
+          setStructuralAnnotationsLoaded(true);
+        } else {
+          // Targeted fetch (deep-link): merge with existing
+          setStructuralAnnotations((prev) => {
+            const existingIds = new Set(prev.map((a) => a.id));
+            const newAnns = structuralAnns.filter(
+              (a) => !existingIds.has(a.id)
+            );
+            return newAnns.length > 0 ? [...prev, ...newAnns] : prev;
+          });
+        }
       }
     },
   });
@@ -621,9 +636,10 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     setStructuralAnnotations([]);
   }, [documentId, setStructuralAnnotationsLoaded, setStructuralAnnotations]);
 
-  // Lazy-load structural annotations when showStructural is toggled on
+  // Fetch ALL structural annotations when the user toggles structural visibility
   useEffect(() => {
     if (showStructural && !structuralAnnotationsLoaded && documentId) {
+      isFullStructuralFetchRef.current = true;
       fetchStructuralAnnotations({ variables: { documentId } });
     }
   }, [
@@ -632,6 +648,16 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     documentId,
     fetchStructuralAnnotations,
   ]);
+
+  // Fetch ONLY the deep-linked structural annotations (lightweight)
+  useEffect(() => {
+    if (deepLinkedAnnotationIds.length > 0 && documentId) {
+      isFullStructuralFetchRef.current = false;
+      fetchStructuralAnnotations({
+        variables: { documentId, annotationIds: deepLinkedAnnotationIds },
+      });
+    }
+  }, [deepLinkedAnnotationIds, documentId, fetchStructuralAnnotations]);
 
   /**
    * processAnnotationsData
@@ -1271,9 +1297,27 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
         // Structural annotations are loaded lazily (see useLazyQuery above).
         // In the no-corpus path, there are no regular annotations to process.
-        // Clear annotation state so we start fresh.
+        // Relationships are loaded eagerly since they're few in number.
+        const processedRelationships =
+          data.document.allRelationships?.map(
+            (rel) =>
+              new RelationGroup(
+                rel.sourceAnnotations.edges
+                  .map((edge) => edge?.node?.id)
+                  .filter((id): id is string => id !== undefined),
+                rel.targetAnnotations.edges
+                  .map((edge) => edge?.node?.id)
+                  .filter((id): id is string => id !== undefined),
+                rel.relationshipLabel,
+                rel.id,
+                rel.structural
+              )
+          ) ?? [];
+
         unstable_batchedUpdates(() => {
-          setPdfAnnotations(new PdfAnnotations([], [], [], true));
+          setPdfAnnotations(
+            new PdfAnnotations([], processedRelationships, [], true)
+          );
         });
       },
       onError: (error) => {
