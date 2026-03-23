@@ -1472,3 +1472,245 @@ class TestSidecarImportTask(TestCase):
         doc = Document.objects.get(pk=doc_id)
         self.assertEqual(doc.custom_meta, test_meta)
         self.assertTrue(doc.is_public)
+
+
+class TestValidateLabelsData(TestCase):
+    """Unit tests for validate_labels_data schema validation."""
+
+    def _validate(self, data):
+        from opencontractserver.utils.importing import validate_labels_data
+
+        return validate_labels_data(data)
+
+    # --- Top-level structure ---
+
+    def test_valid_labels_data(self):
+        """Well-formed labels.json produces no errors."""
+        data = _build_labels_json(
+            text_labels={"Heading": _make_label_data("Heading")},
+            doc_labels={"Contract": _make_label_data("Contract", "DOC_TYPE_LABEL")},
+        )
+        self.assertEqual(self._validate(data), [])
+
+    def test_empty_sections_valid(self):
+        """Empty text_labels and doc_labels dicts are valid."""
+        self.assertEqual(self._validate({"text_labels": {}, "doc_labels": {}}), [])
+
+    def test_missing_sections_valid(self):
+        """Omitting both sections entirely is valid (no labels to import)."""
+        self.assertEqual(self._validate({}), [])
+
+    def test_top_level_not_dict(self):
+        """Non-dict top-level value is rejected."""
+        errors = self._validate(["not", "a", "dict"])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("must be a JSON object", errors[0])
+
+    def test_top_level_string(self):
+        """String top-level value is rejected."""
+        errors = self._validate("just a string")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("must be a JSON object", errors[0])
+
+    # --- Section-level structure ---
+
+    def test_text_labels_as_list(self):
+        """text_labels as a list instead of dict is rejected."""
+        errors = self._validate({"text_labels": [{"text": "Heading"}]})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("text_labels", errors[0])
+        self.assertIn("must be a JSON object", errors[0])
+
+    def test_doc_labels_as_list(self):
+        """doc_labels as a list instead of dict is rejected."""
+        errors = self._validate({"doc_labels": ["Contract"]})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("doc_labels", errors[0])
+
+    def test_both_sections_as_lists(self):
+        """Both sections as lists produce two errors."""
+        errors = self._validate({"text_labels": [], "doc_labels": []})
+        self.assertEqual(len(errors), 2)
+
+    # --- Label entry structure ---
+
+    def test_label_entry_not_dict(self):
+        """A label entry that is a string instead of dict is rejected."""
+        errors = self._validate({"text_labels": {"Heading": "not a dict"}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("must be a JSON object", errors[0])
+
+    def test_missing_text_field(self):
+        """A label entry missing the 'text' field is rejected."""
+        errors = self._validate(
+            {"text_labels": {"Heading": {"label_type": "TOKEN_LABEL", "color": "#FFF"}}}
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("missing required field 'text'", errors[0])
+
+    def test_empty_text_field(self):
+        """A label entry with empty string 'text' is rejected."""
+        errors = self._validate(
+            {"text_labels": {"Heading": {"text": "  ", "label_type": "TOKEN_LABEL"}}}
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("non-empty string", errors[0])
+
+    def test_text_field_wrong_type(self):
+        """A label entry with non-string 'text' is rejected."""
+        errors = self._validate({"text_labels": {"Heading": {"text": 123}}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("non-empty string", errors[0])
+
+    # --- Optional field type checks ---
+
+    def test_color_as_integer(self):
+        """color as integer instead of string is rejected."""
+        label = _make_label_data("Heading")
+        label["color"] = 0xFF0000
+        errors = self._validate({"text_labels": {"Heading": label}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("'color' must be a string", errors[0])
+
+    def test_icon_as_integer(self):
+        """icon as integer instead of string is rejected."""
+        label = _make_label_data("Heading")
+        label["icon"] = 42
+        errors = self._validate({"text_labels": {"Heading": label}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("'icon' must be a string", errors[0])
+
+    def test_description_as_integer(self):
+        """description as integer instead of string is rejected."""
+        label = _make_label_data("Heading")
+        label["description"] = 99
+        errors = self._validate({"text_labels": {"Heading": label}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("'description' must be a string", errors[0])
+
+    def test_invalid_label_type(self):
+        """Unrecognised label_type string is rejected."""
+        label = _make_label_data("Heading")
+        label["label_type"] = "INVALID_TYPE"
+        errors = self._validate({"text_labels": {"Heading": label}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("invalid label_type", errors[0])
+
+    def test_label_type_wrong_type(self):
+        """label_type as integer is rejected."""
+        label = _make_label_data("Heading")
+        label["label_type"] = 1
+        errors = self._validate({"text_labels": {"Heading": label}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("'label_type' must be a string", errors[0])
+
+    # --- Multiple errors ---
+
+    def test_multiple_bad_labels(self):
+        """Multiple malformed labels in the same section produce multiple errors."""
+        errors = self._validate(
+            {
+                "text_labels": {
+                    "A": {"label_type": "TOKEN_LABEL"},  # missing text
+                    "B": "just a string",  # not a dict
+                    "C": {"text": "", "color": 123},  # empty text + bad color
+                }
+            }
+        )
+        self.assertGreaterEqual(len(errors), 3)
+
+
+class TestMalformedLabelsImport(TestCase):
+    """
+    Integration tests verifying that malformed labels.json is rejected
+    gracefully during import_zip_with_folder_structure.
+    """
+
+    def setUp(self):
+        with transaction.atomic():
+            self.user = User.objects.create_user(
+                username="labels_validation_user", password="testpass"
+            )
+
+        with transaction.atomic():
+            self.corpus = Corpus.objects.create(
+                title="Labels Validation Corpus",
+                description="Corpus for testing labels validation",
+                creator=self.user,
+            )
+            set_permissions_for_obj_to_user(
+                self.user, self.corpus, [PermissionTypes.ALL]
+            )
+
+        self.pdf_bytes = SAMPLE_PDF_FILE_ONE_PATH.read_bytes()
+
+    def _create_test_zip(self, files: dict[str, bytes]) -> io.BytesIO:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for name, content in files.items():
+                zf.writestr(name, content)
+        buffer.seek(0)
+        return buffer
+
+    def _create_temp_file_handle(self, zip_buffer: io.BytesIO) -> TemporaryFileHandle:
+        zip_content = ContentFile(zip_buffer.read(), name="test_labels_validation.zip")
+        return TemporaryFileHandle.objects.create(file=zip_content)
+
+    def _run_import(self, labels_data) -> dict:
+        from opencontractserver.tasks.import_tasks import (
+            import_zip_with_folder_structure,
+        )
+
+        sidecar = _build_sidecar_json(
+            annotations=[
+                _make_annotation(1, "Exhibit", "Heading", page=0),
+            ],
+        )
+        files = {
+            "doc.pdf": self.pdf_bytes,
+            "doc.json": json.dumps(sidecar).encode("utf-8"),
+            "labels.json": json.dumps(labels_data).encode("utf-8"),
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        return import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-labels-validation",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+    def test_text_labels_as_list_rejected(self):
+        """Import fails gracefully when text_labels is a list."""
+        result = self._run_import({"text_labels": [{"text": "Heading"}]})
+        self.assertFalse(result["labels_loaded"])
+        error_text = " ".join(result["errors"])
+        self.assertIn("text_labels", error_text)
+
+    def test_label_missing_text_field_rejected(self):
+        """Import fails gracefully when a label entry lacks 'text'."""
+        result = self._run_import(
+            {"text_labels": {"Heading": {"label_type": "TOKEN_LABEL", "color": "#F00"}}}
+        )
+        self.assertFalse(result["labels_loaded"])
+        error_text = " ".join(result["errors"])
+        self.assertIn("missing required field 'text'", error_text)
+
+    def test_color_as_integer_rejected(self):
+        """Import fails gracefully when color is an integer."""
+        label = _make_label_data("Heading")
+        label["color"] = 0xFF0000
+        result = self._run_import({"text_labels": {"Heading": label}})
+        self.assertFalse(result["labels_loaded"])
+        error_text = " ".join(result["errors"])
+        self.assertIn("'color' must be a string", error_text)
+
+    def test_top_level_not_dict_rejected(self):
+        """Import fails gracefully when labels.json is not a dict."""
+        result = self._run_import(["not", "a", "dict"])
+        self.assertFalse(result["labels_loaded"])
+        error_text = " ".join(result["errors"])
+        self.assertIn("must be a JSON object", error_text)

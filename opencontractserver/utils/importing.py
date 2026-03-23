@@ -242,6 +242,96 @@ def import_relationships(
     return old_id_to_new_relationship
 
 
+VALID_LABEL_TYPES_FOR_IMPORT = {"TOKEN_LABEL", "DOC_TYPE_LABEL", "RELATIONSHIP_LABEL"}
+
+
+def validate_labels_data(labels_data: object) -> list[str]:
+    """
+    Validate the schema of parsed labels.json data before processing.
+
+    Checks:
+    - Top-level value is a dict
+    - ``text_labels`` and ``doc_labels``, if present, are dicts (not lists)
+    - Each label entry is a dict containing a non-empty ``text`` field (str)
+    - ``label_type``, ``color``, ``icon``, and ``description`` have correct types
+      when present
+    - ``label_type`` is one of the recognised values when present
+
+    Returns a list of human-readable error strings (empty == valid).
+    """
+    errors: list[str] = []
+
+    if not isinstance(labels_data, dict):
+        errors.append(
+            f"labels.json must be a JSON object, got {type(labels_data).__name__}"
+        )
+        return errors
+
+    for section in ("text_labels", "doc_labels"):
+        value = labels_data.get(section)
+        if value is None:
+            continue
+        if not isinstance(value, dict):
+            errors.append(
+                f"labels.json '{section}' must be a JSON object (dict), "
+                f"got {type(value).__name__}"
+            )
+            continue
+
+        for label_key, label_entry in value.items():
+            prefix = f"labels.json {section}[{label_key!r}]"
+
+            if not isinstance(label_entry, dict):
+                errors.append(
+                    f"{prefix}: each label must be a JSON object, "
+                    f"got {type(label_entry).__name__}"
+                )
+                continue
+
+            # Required field: text (non-empty string)
+            text_val = label_entry.get("text")
+            if text_val is None:
+                errors.append(f"{prefix}: missing required field 'text'")
+            elif not isinstance(text_val, str) or not text_val.strip():
+                errors.append(f"{prefix}: 'text' must be a non-empty string")
+
+            # Optional typed fields
+            label_type = label_entry.get("label_type")
+            if label_type is not None:
+                if not isinstance(label_type, str):
+                    errors.append(
+                        f"{prefix}: 'label_type' must be a string, "
+                        f"got {type(label_type).__name__}"
+                    )
+                elif label_type not in VALID_LABEL_TYPES_FOR_IMPORT:
+                    errors.append(
+                        f"{prefix}: invalid label_type {label_type!r} "
+                        f"(expected one of {sorted(VALID_LABEL_TYPES_FOR_IMPORT)})"
+                    )
+
+            color = label_entry.get("color")
+            if color is not None and not isinstance(color, str):
+                errors.append(
+                    f"{prefix}: 'color' must be a string, "
+                    f"got {type(color).__name__}"
+                )
+
+            icon = label_entry.get("icon")
+            if icon is not None and not isinstance(icon, str):
+                errors.append(
+                    f"{prefix}: 'icon' must be a string, " f"got {type(icon).__name__}"
+                )
+
+            description = label_entry.get("description")
+            if description is not None and not isinstance(description, str):
+                errors.append(
+                    f"{prefix}: 'description' must be a string, "
+                    f"got {type(description).__name__}"
+                )
+
+    return errors
+
+
 def prepare_import_labels(
     data_json: dict,
     user_id: int,

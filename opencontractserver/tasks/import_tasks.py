@@ -39,6 +39,7 @@ from opencontractserver.utils.importing import (
     import_relationships,
     load_or_create_labels,
     prepare_import_labels,
+    validate_labels_data,
 )
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
@@ -935,6 +936,20 @@ def import_zip_with_folder_structure(
                 try:
                     with import_zip.open(manifest.labels_file) as labels_handle:
                         labels_data = json.loads(labels_handle.read().decode("UTF-8"))
+
+                    # Validate labels.json schema before processing
+                    validation_errors = validate_labels_data(labels_data)
+                    if validation_errors:
+                        for err in validation_errors:
+                            logger.warning(
+                                f"import_zip_with_folder_structure() - "
+                                f"Labels validation error: {err}"
+                            )
+                            results["errors"].append(f"Labels file error: {err}")
+                        raise ValueError(
+                            f"labels.json failed schema validation "
+                            f"with {len(validation_errors)} error(s)"
+                        )
 
                     # Ensure corpus has a label set
                     if not corpus_obj.label_set:
