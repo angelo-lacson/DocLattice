@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-03-23
 
+### Added
+
+- **OpenAI Embedder pipeline component** (`opencontractserver/pipeline/embedders/openai_embedder.py`): New `OpenAIEmbedder` class supporting `text-embedding-3-small` (default), `text-embedding-3-large`, and `text-embedding-ada-002` models. Features configurable output dimensions, custom API base URL for Azure/proxy support, and graceful error handling. Dynamic `vector_size` property reflects runtime model/dimension configuration to prevent pgvector column size mismatches.
+- **OpenAI embedding constants** (`opencontractserver/constants/embeddings.py`): Centralized model dimension mappings and defaults for the OpenAI embedder.
+
 ### Changed
 
 - **Softened PDF annotation bounding boxes to diffuse highlighter-pen aesthetic**: Replaced hard-edged borders on annotation boundaries, tokens, and label pills with multi-layer box-shadow glows. Boundaries use a three-layer shadow (outer, mid, inset) that feathers into the page. Tokens use a single-layer soft blur. Approved/rejected states pulse with matching diffuse glows instead of solid borders. Extracted shared `computeAnnotationBoxShadow` utility (`frontend/src/utils/colorUtils.ts`) to eliminate duplicated shadow logic between `SelectionBoundary` and `ResultBoundary`. Added named constants for all shadow radii, opacity levels, border-radius tiers, and status colors (`frontend/src/assets/configurations/constants.ts`). Removed dead code: `getBorderWidthFromBounds`, unused `$border` prop, unused `$isSelected` prop. Fixed `pulseMaroon` animation color mismatch (was `rgba(180, 40, 40)`, now matches static rejected state).

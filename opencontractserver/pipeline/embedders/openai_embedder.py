@@ -4,6 +4,11 @@ from typing import Optional
 
 import openai
 
+from opencontractserver.constants.embeddings import (
+    DEFAULT_OPENAI_EMBEDDING_DIMENSIONS,
+    DEFAULT_OPENAI_EMBEDDING_MODEL,
+    OPENAI_MODEL_DIMENSIONS,
+)
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.settings_schema import (
@@ -12,18 +17,6 @@ from opencontractserver.pipeline.base.settings_schema import (
 )
 
 logger = logging.getLogger(__name__)
-
-# OpenAI embedding model dimensions
-OPENAI_MODEL_DIMENSIONS = {
-    "text-embedding-3-small": 1536,
-    "text-embedding-3-large": 3072,
-    "text-embedding-ada-002": 1536,
-}
-
-DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
-DEFAULT_OPENAI_EMBEDDING_DIMENSIONS = OPENAI_MODEL_DIMENSIONS[
-    DEFAULT_OPENAI_EMBEDDING_MODEL
-]
 
 
 class OpenAIEmbedder(BaseEmbedder):
@@ -43,12 +36,21 @@ class OpenAIEmbedder(BaseEmbedder):
     description = "Generates text embeddings using the OpenAI Embeddings API."
     author = "OpenContracts Team"
     dependencies = ["openai"]
-    vector_size = DEFAULT_OPENAI_EMBEDDING_DIMENSIONS
     supported_file_types = [
         FileTypeEnum.PDF,
         FileTypeEnum.TXT,
         FileTypeEnum.DOCX,
     ]
+
+    @property
+    def vector_size(self) -> int:
+        """Derive vector size from effective settings so it reflects runtime config."""
+        s = self._effective_settings
+        model = s.openai_embedding_model
+        # If custom dimensions are set and the model supports them, use those
+        if model.startswith("text-embedding-3"):
+            return int(s.openai_embedding_dimensions)
+        return OPENAI_MODEL_DIMENSIONS.get(model, DEFAULT_OPENAI_EMBEDDING_DIMENSIONS)
 
     @dataclass
     class Settings:

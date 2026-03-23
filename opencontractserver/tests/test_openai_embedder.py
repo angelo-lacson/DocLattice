@@ -8,16 +8,16 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
+from opencontractserver.constants.embeddings import (
+    DEFAULT_OPENAI_EMBEDDING_DIMENSIONS,
+    DEFAULT_OPENAI_EMBEDDING_MODEL,
+)
 from opencontractserver.pipeline.base.settings_schema import (
     get_required_settings,
     get_secret_settings,
     get_settings_schema,
 )
-from opencontractserver.pipeline.embedders.openai_embedder import (
-    DEFAULT_OPENAI_EMBEDDING_DIMENSIONS,
-    DEFAULT_OPENAI_EMBEDDING_MODEL,
-    OpenAIEmbedder,
-)
+from opencontractserver.pipeline.embedders.openai_embedder import OpenAIEmbedder
 from opencontractserver.types.enums import ContentModality
 
 
@@ -40,6 +40,39 @@ class TestOpenAIEmbedderProperties(TestCase):
     def test_supported_file_types(self):
         embedder = OpenAIEmbedder()
         self.assertEqual(len(embedder.supported_file_types), 3)
+
+
+class TestOpenAIEmbedderVectorSize(TestCase):
+    """Tests for dynamic vector_size property."""
+
+    def test_default_vector_size(self):
+        embedder = OpenAIEmbedder()
+        self.assertEqual(embedder.vector_size, DEFAULT_OPENAI_EMBEDDING_DIMENSIONS)
+
+    def test_vector_size_reflects_large_model(self):
+        embedder = OpenAIEmbedder()
+        embedder._settings = OpenAIEmbedder.Settings(
+            openai_embedding_model="text-embedding-3-large",
+            openai_embedding_dimensions=3072,
+        )
+        self.assertEqual(embedder.vector_size, 3072)
+
+    def test_vector_size_reflects_custom_dimensions(self):
+        embedder = OpenAIEmbedder()
+        embedder._settings = OpenAIEmbedder.Settings(
+            openai_embedding_model="text-embedding-3-small",
+            openai_embedding_dimensions=512,
+        )
+        self.assertEqual(embedder.vector_size, 512)
+
+    def test_vector_size_ada_ignores_custom_dimensions(self):
+        embedder = OpenAIEmbedder()
+        embedder._settings = OpenAIEmbedder.Settings(
+            openai_embedding_model="text-embedding-ada-002",
+            openai_embedding_dimensions=768,
+        )
+        # ada-002 doesn't support custom dims, so vector_size comes from the model map
+        self.assertEqual(embedder.vector_size, 1536)
 
 
 class TestOpenAIEmbedderSettings(TestCase):
@@ -222,6 +255,34 @@ class TestOpenAIEmbedderEmbedText(TestCase):
         embedder.embed_text("Hello", openai_api_key="test-key")
 
         mock_openai_cls.assert_called_with(api_key="test-key", base_url=None)
+
+    @patch("opencontractserver.pipeline.embedders.openai_embedder.openai.OpenAI")
+    def test_embed_text_bad_request_returns_none(self, mock_openai_cls):
+        import openai as openai_module
+
+        mock_client = MagicMock()
+        mock_client.embeddings.create.side_effect = openai_module.BadRequestError(
+            message="Invalid input",
+            response=MagicMock(status_code=400),
+            body=None,
+        )
+        mock_openai_cls.return_value = mock_client
+
+        embedder = OpenAIEmbedder()
+        result = embedder.embed_text("Hello", openai_api_key="test-key")
+
+        self.assertIsNone(result)
+
+    @patch("opencontractserver.pipeline.embedders.openai_embedder.openai.OpenAI")
+    def test_embed_text_generic_exception_returns_none(self, mock_openai_cls):
+        mock_client = MagicMock()
+        mock_client.embeddings.create.side_effect = RuntimeError("unexpected failure")
+        mock_openai_cls.return_value = mock_client
+
+        embedder = OpenAIEmbedder()
+        result = embedder.embed_text("Hello", openai_api_key="test-key")
+
+        self.assertIsNone(result)
 
     def test_embed_image_not_supported(self):
         embedder = OpenAIEmbedder()
