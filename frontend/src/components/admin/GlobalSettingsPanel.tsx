@@ -8,7 +8,12 @@ import {
   OS_LEGAL_TYPOGRAPHY,
   OS_LEGAL_SPACING,
   OS_LEGAL_SHADOWS,
+  OS_LEGAL_FONT_SIZES,
 } from "../../assets/configurations/osLegalStyles";
+import {
+  MOBILE_VIEW_BREAKPOINT,
+  TABLET_BREAKPOINT,
+} from "../../assets/configurations/constants";
 
 const PageContainer = styled.div`
   height: 100%;
@@ -19,24 +24,25 @@ const PageContainer = styled.div`
 `;
 
 const ContentContainer = styled.main`
-  max-width: 900px;
+  max-width: ${OS_LEGAL_SPACING.pageMaxWidth};
   margin: 0 auto;
-  padding: 48px 24px 80px;
+  padding: ${OS_LEGAL_SPACING.pagePaddingDesktop};
 
-  @media (max-width: 768px) {
-    padding: 32px 16px 60px;
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    padding: ${OS_LEGAL_SPACING.pagePaddingTablet};
   }
 
-  @media (max-width: 480px) {
-    padding: 24px 12px 48px;
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    padding: ${OS_LEGAL_SPACING.pagePaddingMobile};
   }
 `;
 
 const HeroSection = styled.section`
-  margin-bottom: 48px;
+  margin-bottom: ${OS_LEGAL_SPACING.sectionGapDesktop};
 
-  @media (max-width: 768px) {
-    margin-bottom: 32px;
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    margin-bottom: ${OS_LEGAL_SPACING.sectionGapMobile};
+    text-align: center;
   }
 `;
 
@@ -45,44 +51,46 @@ const HeroTitle = styled.h1`
   align-items: center;
   gap: 0.5rem;
   font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySerif};
-  font-size: 42px;
+  font-size: ${OS_LEGAL_FONT_SIZES.heroDesktop};
   font-weight: 400;
   line-height: 1.2;
   color: ${OS_LEGAL_COLORS.textPrimary};
-  margin: 0 0 16px;
+  margin: 0 0 ${OS_LEGAL_SPACING.headingBottomGap};
 
-  @media (max-width: 768px) {
-    font-size: 32px;
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    font-size: ${OS_LEGAL_FONT_SIZES.heroTablet};
+    justify-content: center;
   }
 
-  @media (max-width: 480px) {
-    font-size: 26px;
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
+    font-size: ${OS_LEGAL_FONT_SIZES.heroMobile};
   }
 `;
 
 const HeroSubtitle = styled.p`
-  font-size: 17px;
+  font-size: ${OS_LEGAL_FONT_SIZES.subtitleDesktop};
   line-height: 1.6;
   color: ${OS_LEGAL_COLORS.textSecondary};
   margin: 0;
-  max-width: 600px;
+  max-width: ${OS_LEGAL_SPACING.subtitleMaxWidth};
 
-  @media (max-width: 768px) {
-    font-size: 15px;
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    font-size: ${OS_LEGAL_FONT_SIZES.subtitleMobile};
+    margin: 0 auto;
   }
 `;
 
 const SettingsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(17.5rem, 1fr));
   gap: 1.5rem;
 
-  @media (max-width: 768px) {
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
     gap: 1rem;
   }
 
-  @media (max-width: 480px) {
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     grid-template-columns: 1fr;
     gap: 0.75rem;
   }
@@ -121,18 +129,18 @@ const SettingsCard = styled.div<{ $disabled?: boolean }>`
     }
   `}
 
-  @media (max-width: 768px) {
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
     padding: 1.25rem;
   }
 
-  @media (max-width: 480px) {
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     padding: 1rem;
   }
 `;
 
 const CardIconWrapper = styled.div<{ $gradient: string }>`
-  width: 48px;
-  height: 48px;
+  width: 3rem;
+  height: 3rem;
   border-radius: ${OS_LEGAL_SPACING.borderRadiusCard};
   background: ${({ $gradient }) => $gradient};
   display: flex;
@@ -140,16 +148,16 @@ const CardIconWrapper = styled.div<{ $gradient: string }>`
   justify-content: center;
   margin-bottom: 1rem;
 
-  @media (max-width: 768px) {
-    width: 44px;
-    height: 44px;
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    width: 2.75rem;
+    height: 2.75rem;
     margin-bottom: 0.75rem;
   }
 `;
 
 const CardTitle = styled.h3`
   font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
-  font-size: 1.125rem;
+  font-size: ${OS_LEGAL_FONT_SIZES.cardTitle};
   font-weight: 600;
   color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 0.5rem 0;
@@ -157,35 +165,35 @@ const CardTitle = styled.h3`
   align-items: center;
   flex-wrap: wrap;
 
-  @media (max-width: 768px) {
-    font-size: 1rem;
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    font-size: ${OS_LEGAL_FONT_SIZES.cardTitleMobile};
   }
 `;
 
 const CardDescription = styled.p`
   font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
-  font-size: 0.875rem;
+  font-size: ${OS_LEGAL_FONT_SIZES.cardDescription};
   color: ${OS_LEGAL_COLORS.textSecondary};
   margin: 0;
   line-height: 1.5;
 
-  @media (max-width: 768px) {
-    font-size: 0.8rem;
+  @media (max-width: ${TABLET_BREAKPOINT}px) {
+    font-size: ${OS_LEGAL_FONT_SIZES.cardDescriptionMobile};
   }
 `;
 
 const ComingSoonBadge = styled.span`
   display: inline-block;
   font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
-  font-size: 0.75rem;
+  font-size: ${OS_LEGAL_FONT_SIZES.badge};
   font-weight: 500;
-  color: #8b5cf6;
+  color: ${OS_LEGAL_COLORS.chartPurple};
   background: #f3e8ff;
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   margin-left: 0.5rem;
 
-  @media (max-width: 480px) {
+  @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     display: block;
     margin-left: 0;
     margin-top: 0.5rem;
