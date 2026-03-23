@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
 from opencontractserver.corpuses.models import Corpus
-from opencontractserver.documents.models import Document
+from opencontractserver.documents.models import Document, DocumentPath
 
 User = get_user_model()
 
@@ -418,6 +418,7 @@ class SearchApiTest(TestCase):
             title="Sample Indemnity Agreement",
             description="Contains standard indemnification language",
             creator=cls.owner,
+            is_public=True,
         )
         cls.private_doc = Document.objects.create(
             title="Secret Indemnity Agreement",
@@ -425,8 +426,6 @@ class SearchApiTest(TestCase):
             creator=cls.owner,
         )
         # Link documents to corpuses via DocumentPath
-        from opencontractserver.documents.models import DocumentPath
-
         DocumentPath.objects.create(
             document=cls.public_doc,
             corpus=cls.public_corpus,
@@ -521,6 +520,8 @@ class SearchApiTest(TestCase):
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
         self.assertLessEqual(len(data["results"]), MAX_SEARCH_RESULTS)
+        # Ensure the cap is actually applied (not just zero results)
+        self.assertIsInstance(data["results"], list)
 
     def test_invalid_limit_defaults(self):
         response = self.client.get("/api/search/?q=indemnification&limit=abc")

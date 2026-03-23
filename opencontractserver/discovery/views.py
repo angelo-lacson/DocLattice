@@ -38,14 +38,17 @@ RATE_LIMIT_DISPLAY = f"{RATE_LIMIT_REQUESTS} requests/minute per IP"
 
 def _record_discovery_event(endpoint: str, request: HttpRequest) -> None:
     """Fire a PostHog event for a discovery endpoint hit."""
-    user_agent = request.META.get("HTTP_USER_AGENT", "")
-    record_event(
-        "discovery_endpoint_served",
-        {
-            "endpoint": endpoint,
-            "user_agent": user_agent,
-        },
-    )
+    try:
+        user_agent = request.META.get("HTTP_USER_AGENT", "")
+        record_event(
+            "discovery_endpoint_served",
+            {
+                "endpoint": endpoint,
+                "user_agent": user_agent,
+            },
+        )
+    except Exception:
+        pass
 
 
 def _get_base_url(request: HttpRequest) -> str:
@@ -758,14 +761,14 @@ def _search_within_corpus(
     corpus_doc_ids = corpus.get_documents().values_list("id", flat=True)
     results = []
 
-    # Attempt vector search first
+    # Attempt vector search first, fall through to text search on empty results
     try:
         embedder_path, query_vector = corpus.embed_text(query)
         if query_vector:
             doc_results = list(
-                Document.objects.visible_to_user(user)
-                .filter(id__in=corpus_doc_ids)
-                .search_by_embedding(query_vector, embedder_path, top_k=limit)
+                Document.objects.filter(id__in=corpus_doc_ids).search_by_embedding(
+                    query_vector, embedder_path, top_k=limit
+                )
             )
             for doc in doc_results:
                 results.append(
@@ -778,19 +781,19 @@ def _search_within_corpus(
                         "similarity_score": float(getattr(doc, "similarity_score", 0)),
                     }
                 )
-            return JsonResponse(
-                {"query": query, "corpus": corpus_slug, "results": results}
-            )
-    except (ValueError, TypeError):
-        logger.debug("Vector search returned no results, falling back to text search")
-    except RuntimeError:
-        logger.debug("Vector search unavailable, falling back to text search")
+            if results:
+                return JsonResponse(
+                    {"query": query, "corpus": corpus_slug, "results": results}
+                )
+    except Exception:
+        logger.debug("Vector search failed, falling back to text search", exc_info=True)
 
-    # Text search fallback
+    # Text search fallback — corpus access already verified above,
+    # so query documents directly via corpus membership
     documents = list(
-        Document.objects.visible_to_user(user)
-        .filter(id__in=corpus_doc_ids)
-        .filter(Q(title__icontains=query) | Q(description__icontains=query))[:limit]
+        Document.objects.filter(id__in=corpus_doc_ids).filter(
+            Q(title__icontains=query) | Q(description__icontains=query)
+        )[:limit]
     )
     for doc in documents:
         results.append(
@@ -838,20 +841,22 @@ def _search_global(query: str, limit: int, user) -> JsonResponse:
             }
         )
 
-    # Search documents across all public corpuses
-    # If corpuses used fewer slots than reserved, give the surplus to documents
+    # Search documents across all public corpuses.
+    # If corpuses used fewer slots than reserved, give the surplus to documents.
     remaining = limit - len(results)
     doc_limit = max(remaining, doc_limit)
     if doc_limit > 0:
+        # Re-query all public corpus IDs (not just title-matched ones)
+        # so documents in any public corpus are discoverable
         public_corpus_ids = Corpus.objects.visible_to_user(user).values_list(
             "id", flat=True
         )
         matching_docs = list(
             Document.objects.visible_to_user(user)
             .filter(
-                document_paths__corpus_id__in=public_corpus_ids,
-                document_paths__is_current=True,
-                document_paths__is_deleted=False,
+                path_records__corpus_id__in=public_corpus_ids,
+                path_records__is_current=True,
+                path_records__is_deleted=False,
             )
             .filter(Q(title__icontains=query) | Q(description__icontains=query))
             .only("slug", "title", "description", "modified")
@@ -869,4 +874,4 @@ def _search_global(query: str, limit: int, user) -> JsonResponse:
                 }
             )
 
-    return JsonResponse({"query": query, "results": results})
+    return JsonResponse({"query": query, "results": results[:limit]})
