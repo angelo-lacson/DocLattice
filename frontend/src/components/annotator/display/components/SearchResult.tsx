@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import styled from "styled-components";
 import _ from "lodash";
 import { VerticallyJustifiedEndDiv } from "../../sidebar/common";
@@ -10,6 +10,7 @@ import { SearchSelectionTokens } from "./SelectionTokens";
 import { LabelTagContainer } from "./Containers";
 import { PDFPageInfo } from "../../types/pdf";
 import { useAnnotationDisplay } from "../../context/UISettingsAtom";
+import { ANNOTATION_BOUNDARY_RADIUS } from "../../../../assets/configurations/constants";
 
 interface SearchResultProps {
   total_results: number;
@@ -54,15 +55,6 @@ export const SearchResult: React.FC<SearchResultProps> = ({
       : null;
   }, [match, pageIdx, pageInfo]);
 
-  useEffect(() => {
-    console.log("SearchResult: Hidden prop changed", {
-      matchId: match.id,
-      pageNumber: pageInfo.page.pageNumber,
-      hidden,
-      timestamp: new Date().toISOString(),
-    });
-  }, [hidden, match.id, pageInfo.page.pageNumber]);
-
   if (!scaledBounds) return null;
 
   return (
@@ -80,7 +72,6 @@ export const SearchResult: React.FC<SearchResultProps> = ({
         {showInfo && !hideLabels ? (
           <SelectionInfo
             bounds={scaledBounds}
-            border={0}
             color={color}
             showBoundingBox={showBoundingBox}
           >
@@ -127,7 +118,6 @@ export const SearchResult: React.FC<SearchResultProps> = ({
 // to sit on top of the bounds as a function of *its own* height,
 // not the height of its parent.
 interface SelectionInfoProps {
-  border: number;
   bounds: BoundingBox;
   color: string;
   showBoundingBox: boolean;
@@ -141,7 +131,7 @@ const SelectionInfo = styled.div.attrs<SelectionInfoProps>(
       right: "0px",
       transform: "translateY(-100%)",
       border: "none",
-      borderRadius: "4px 4px 0 0",
+      borderRadius: `${ANNOTATION_BOUNDARY_RADIUS} ${ANNOTATION_BOUNDARY_RADIUS} 0 0`,
       background: showBoundingBox ? color : "rgba(255, 255, 255, 0.0)",
       fontWeight: "bold",
       fontSize: "12px",
