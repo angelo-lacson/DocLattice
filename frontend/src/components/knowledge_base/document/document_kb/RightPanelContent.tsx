@@ -1,5 +1,12 @@
 import React, { Dispatch, SetStateAction } from "react";
-import { Database, BarChart3 } from "lucide-react";
+import { useReactiveVar } from "@apollo/client";
+import {
+  Database,
+  BarChart3,
+  BookOpen,
+  ChevronsUpDown,
+  ChevronsDownUp,
+} from "lucide-react";
 import {
   AnalysisType,
   ColumnType,
@@ -7,6 +14,7 @@ import {
   ExtractType,
   NoteType,
 } from "../../../../types/graphql-api";
+import { tocExpandAll } from "../../../../graphql/cache";
 
 import {
   FlexColumnPanel,
@@ -14,11 +22,13 @@ import {
   ExtractHeaderTitle,
   ExtractHeaderSubtitle,
   OverflowHiddenFill,
+  ScrollableFillPanel,
   SidebarHeader,
   SidebarHeaderContent,
   SidebarHeaderTitle,
   SidebarHeaderSubtitle,
   CompactAnnotationFeed,
+  ExpandCollapseButton,
 } from "./styles";
 
 import {
@@ -33,6 +43,7 @@ import { ChatTray } from "../right_tray/ChatTray";
 import { SafeMarkdown } from "../../markdown/SafeMarkdown";
 import { SingleDocumentExtractResults } from "../../../annotator/sidebar/SingleDocumentExtractResults";
 import { DocumentDiscussionsContent } from "../../../discussions/DocumentDiscussionsContent";
+import { DocumentAnnotationIndex } from "../../../corpuses/DocumentAnnotationIndex";
 
 export interface RightPanelContentProps {
   /** Whether the right panel is currently shown */
@@ -109,6 +120,8 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
   setShowLoad,
   pendingChatMessage,
 }) => {
+  const isIndexExpanded = useReactiveVar(tocExpandAll);
+
   if (!showRightPanel) return null;
 
   // Control bar for switching between chat and feed modes
@@ -123,6 +136,41 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
       hasActiveSearch={!!searchText}
     />
   );
+
+  // Handle index mode - show document annotation index (TOC)
+  if (sidebarViewMode === "index") {
+    return (
+      <FlexColumnPanel>
+        <SidebarHeader>
+          <BookOpen size={20} style={{ color: OS_LEGAL_COLORS.primaryBlue }} />
+          <SidebarHeaderContent>
+            <SidebarHeaderTitle>Document Index</SidebarHeaderTitle>
+            <SidebarHeaderSubtitle>
+              Table of contents by section
+            </SidebarHeaderSubtitle>
+          </SidebarHeaderContent>
+          <ExpandCollapseButton
+            onClick={() => tocExpandAll(!isIndexExpanded)}
+            title={isIndexExpanded ? "Collapse All" : "Expand All"}
+          >
+            {isIndexExpanded ? (
+              <ChevronsDownUp size={14} />
+            ) : (
+              <ChevronsUpDown size={14} />
+            )}
+            {isIndexExpanded ? "Collapse" : "Expand"}
+          </ExpandCollapseButton>
+        </SidebarHeader>
+        <ScrollableFillPanel>
+          <DocumentAnnotationIndex
+            documentId={documentId}
+            corpusId={corpusId}
+            embedded
+          />
+        </ScrollableFillPanel>
+      </FlexColumnPanel>
+    );
+  }
 
   // Handle extract mode - show extract results
   if (sidebarViewMode === "extract" && selectedExtract) {

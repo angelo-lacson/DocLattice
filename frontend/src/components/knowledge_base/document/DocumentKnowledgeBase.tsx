@@ -18,6 +18,7 @@ import {
   Layers,
   Database,
   BarChart3,
+  BookOpen,
 } from "lucide-react";
 import {
   GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS,
@@ -2163,6 +2164,20 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
               {!showRightPanel && (
                 <SidebarTabsContainer $panelOpen={false}>
                   <SidebarTab
+                    $isActive={sidebarViewMode === "index"}
+                    $panelOpen={false}
+                    onClick={() => {
+                      setSidebarViewMode("index");
+                      setShowRightPanel(true);
+                    }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    data-testid="view-mode-index"
+                  >
+                    <BookOpen />
+                    <span className="tab-label">Index</span>
+                  </SidebarTab>
+                  <SidebarTab
                     $isActive={sidebarViewMode === "chat"}
                     $panelOpen={false}
                     onClick={() => {
@@ -2274,6 +2289,20 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                     {/* Mobile Tab Bar - horizontal tabs at top for mobile */}
                     <MobileTabBar>
                       <MobileTab
+                        $active={sidebarViewMode === "index"}
+                        onClick={() => {
+                          if (sidebarViewMode === "index") {
+                            setShowRightPanel(false);
+                          } else {
+                            setSidebarViewMode("index");
+                          }
+                        }}
+                        data-testid="mobile-view-mode-index"
+                      >
+                        <BookOpen />
+                        <span>Index</span>
+                      </MobileTab>
+                      <MobileTab
                         $active={sidebarViewMode === "chat"}
                         onClick={() => {
                           if (sidebarViewMode === "chat") {
@@ -2356,6 +2385,23 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
                     {/* Tabs when panel is open - positioned on left edge of panel (desktop only) */}
                     <SidebarTabsContainer $panelOpen={true}>
+                      <SidebarTab
+                        $isActive={sidebarViewMode === "index"}
+                        $panelOpen={true}
+                        onClick={() => {
+                          if (sidebarViewMode === "index") {
+                            setShowRightPanel(false);
+                          } else {
+                            setSidebarViewMode("index");
+                          }
+                        }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        data-testid="view-mode-index"
+                      >
+                        <BookOpen />
+                        <span className="tab-label">Index</span>
+                      </SidebarTab>
                       <SidebarTab
                         $isActive={sidebarViewMode === "chat"}
                         $panelOpen={true}

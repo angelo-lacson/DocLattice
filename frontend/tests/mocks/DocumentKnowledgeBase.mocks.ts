@@ -8,6 +8,7 @@ import {
   GET_ANNOTATIONS_FOR_ANALYSIS,
   GET_DATACELLS_FOR_EXTRACT,
   GET_DOCUMENT_ANNOTATIONS_ONLY,
+  GET_DOCUMENT_ANNOTATION_INDEX,
 } from "../../src/graphql/queries";
 import { SMART_LABEL_SEARCH_OR_CREATE } from "../../src/graphql/mutations";
 
@@ -20,6 +21,10 @@ import type {
 } from "../../src/types/graphql-api";
 
 import { LabelType } from "../../src/components/annotator/types/enums";
+import {
+  DOCUMENT_ANNOTATION_INDEX_LIMIT,
+  OC_SECTION_LABEL,
+} from "../../src/assets/configurations/constants";
 
 export const PDF_DOC_ID = "pdf-doc-1";
 export const TXT_DOC_ID = "txt-doc-1";
@@ -1627,6 +1632,77 @@ export const CHAT_MESSAGES_PAYLOAD = {
     __typename: "ConversationTypeConnection",
   },
 };
+
+// ============================================================================
+// Index Tab Mocks (Document Annotation Index / TOC)
+// ============================================================================
+export const indexTabMocks = [
+  /* document annotation index (TOC) – TXT doc with sections ------------ */
+  ...Array.from({ length: 2 }).map(() => ({
+    request: {
+      query: GET_DOCUMENT_ANNOTATION_INDEX,
+      variables: {
+        documentId: TXT_DOC_ID,
+        corpusId: CORPUS_ID,
+        labelText: OC_SECTION_LABEL,
+        first: DOCUMENT_ANNOTATION_INDEX_LIMIT,
+      },
+    },
+    result: {
+      data: {
+        annotations: {
+          edges: [
+            {
+              node: {
+                id: "section-1",
+                rawText: "Introduction",
+                longDescription: null,
+                page: 0,
+                parent: null,
+                __typename: "AnnotationType",
+              },
+              __typename: "AnnotationTypeEdge",
+            },
+            {
+              node: {
+                id: "section-2",
+                rawText: "Terms and Conditions",
+                longDescription: null,
+                page: 0,
+                parent: null,
+                __typename: "AnnotationType",
+              },
+              __typename: "AnnotationTypeEdge",
+            },
+          ],
+          totalCount: 2,
+          __typename: "AnnotationTypeConnection",
+        },
+      },
+    },
+  })),
+  /* document annotation index for PDF doc (empty) ---------------------- */
+  ...Array.from({ length: 2 }).map(() => ({
+    request: {
+      query: GET_DOCUMENT_ANNOTATION_INDEX,
+      variables: {
+        documentId: PDF_DOC_ID,
+        corpusId: CORPUS_ID,
+        labelText: OC_SECTION_LABEL,
+        first: DOCUMENT_ANNOTATION_INDEX_LIMIT,
+      },
+    },
+    result: {
+      data: {
+        annotations: {
+          edges: [],
+          totalCount: 0,
+          __typename: "AnnotationTypeConnection",
+        },
+      },
+    },
+  })),
+];
 
 export const chatTrayMocks = [
   /* conversations list ------------------------------------------------- */
@@ -5577,4 +5653,5 @@ export const chatTrayMocks = [
     },
     result: { data: CHAT_MESSAGES_PAYLOAD },
   })),
+  ...indexTabMocks,
 ];
