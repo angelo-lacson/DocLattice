@@ -249,6 +249,12 @@ annotation_index = graphene.List(
 | 3a-b: Compact/deferred JSON | 3-5 days | Medium | High | P2 |
 | 5b: Annotation index resolver | 1-2 days | Low (supports P2) | Low | P2 |
 
+## Critical Insight: Structural Annotations Are Analysis-Independent
+
+`allStructuralAnnotations` does NOT accept `corpusId` or `analysisId` parameters. Structural annotations belong to the document's `StructuralAnnotationSet` and never change when switching analyses or extracts. Yet the current code re-fetches them in `GET_DOCUMENT_ANNOTATIONS_ONLY` on every analysis switch — the same 4,000-6,000 annotations re-transferred and re-processed each time for zero benefit.
+
+Even without the full Phase 1, simply removing `allStructuralAnnotations` from `GET_DOCUMENT_ANNOTATIONS_ONLY` is a quick win.
+
 ## Phase 1 Detailed Design (Recommended Starting Point)
 
 ### Changes Required
