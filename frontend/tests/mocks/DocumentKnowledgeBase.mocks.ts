@@ -1634,6 +1634,77 @@ export const CHAT_MESSAGES_PAYLOAD = {
   },
 };
 
+// ============================================================================
+// Index Tab Mocks (Document Annotation Index / TOC)
+// ============================================================================
+export const indexTabMocks = [
+  /* document annotation index (TOC) – TXT doc with sections ------------ */
+  ...Array.from({ length: 2 }).map(() => ({
+    request: {
+      query: GET_DOCUMENT_ANNOTATION_INDEX,
+      variables: {
+        documentId: TXT_DOC_ID,
+        corpusId: CORPUS_ID,
+        labelText: OC_SECTION_LABEL,
+        first: DOCUMENT_ANNOTATION_INDEX_LIMIT,
+      },
+    },
+    result: {
+      data: {
+        annotations: {
+          edges: [
+            {
+              node: {
+                id: "section-1",
+                rawText: "Introduction",
+                longDescription: null,
+                page: 0,
+                parent: null,
+                __typename: "AnnotationType",
+              },
+              __typename: "AnnotationTypeEdge",
+            },
+            {
+              node: {
+                id: "section-2",
+                rawText: "Terms and Conditions",
+                longDescription: null,
+                page: 0,
+                parent: null,
+                __typename: "AnnotationType",
+              },
+              __typename: "AnnotationTypeEdge",
+            },
+          ],
+          totalCount: 2,
+          __typename: "AnnotationTypeConnection",
+        },
+      },
+    },
+  })),
+  /* document annotation index for PDF doc (empty) ---------------------- */
+  ...Array.from({ length: 2 }).map(() => ({
+    request: {
+      query: GET_DOCUMENT_ANNOTATION_INDEX,
+      variables: {
+        documentId: PDF_DOC_ID,
+        corpusId: CORPUS_ID,
+        labelText: OC_SECTION_LABEL,
+        first: DOCUMENT_ANNOTATION_INDEX_LIMIT,
+      },
+    },
+    result: {
+      data: {
+        annotations: {
+          edges: [],
+          totalCount: 0,
+          __typename: "AnnotationTypeConnection",
+        },
+      },
+    },
+  })),
+];
+
 export const chatTrayMocks = [
   /* conversations list ------------------------------------------------- */
   {
@@ -5583,69 +5654,5 @@ export const chatTrayMocks = [
     },
     result: { data: CHAT_MESSAGES_PAYLOAD },
   })),
-  /* document annotation index (TOC) – for Index tab ------------------- */
-  ...Array.from({ length: 2 }).map(() => ({
-    request: {
-      query: GET_DOCUMENT_ANNOTATION_INDEX,
-      variables: {
-        documentId: TXT_DOC_ID,
-        corpusId: CORPUS_ID,
-        labelText: OC_SECTION_LABEL,
-        first: DOCUMENT_ANNOTATION_INDEX_LIMIT,
-      },
-    },
-    result: {
-      data: {
-        annotations: {
-          edges: [
-            {
-              node: {
-                id: "section-1",
-                rawText: "Introduction",
-                longDescription: null,
-                page: 0,
-                parent: null,
-                __typename: "AnnotationType",
-              },
-              __typename: "AnnotationTypeEdge",
-            },
-            {
-              node: {
-                id: "section-2",
-                rawText: "Terms and Conditions",
-                longDescription: null,
-                page: 0,
-                parent: null,
-                __typename: "AnnotationType",
-              },
-              __typename: "AnnotationTypeEdge",
-            },
-          ],
-          totalCount: 2,
-          __typename: "AnnotationTypeConnection",
-        },
-      },
-    },
-  })),
-  /* document annotation index for PDF doc ----------------------------- */
-  ...Array.from({ length: 2 }).map(() => ({
-    request: {
-      query: GET_DOCUMENT_ANNOTATION_INDEX,
-      variables: {
-        documentId: PDF_DOC_ID,
-        corpusId: CORPUS_ID,
-        labelText: OC_SECTION_LABEL,
-        first: DOCUMENT_ANNOTATION_INDEX_LIMIT,
-      },
-    },
-    result: {
-      data: {
-        annotations: {
-          edges: [],
-          totalCount: 0,
-          __typename: "AnnotationTypeConnection",
-        },
-      },
-    },
-  })),
+  ...indexTabMocks,
 ];

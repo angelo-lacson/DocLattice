@@ -28,6 +28,7 @@ import {
   SidebarHeaderTitle,
   SidebarHeaderSubtitle,
   CompactAnnotationFeed,
+  ExpandCollapseButton,
 } from "./styles";
 
 import {
@@ -148,23 +149,9 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
               Table of contents by section
             </SidebarHeaderSubtitle>
           </SidebarHeaderContent>
-          <button
+          <ExpandCollapseButton
             onClick={() => tocExpandAll(!isIndexExpanded)}
             title={isIndexExpanded ? "Collapse All" : "Expand All"}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-              padding: "4px 10px",
-              border: `1px solid ${OS_LEGAL_COLORS.border}`,
-              borderRadius: "6px",
-              background: OS_LEGAL_COLORS.surface,
-              color: OS_LEGAL_COLORS.textSecondary,
-              fontSize: "0.75rem",
-              fontWeight: 500,
-              cursor: "pointer",
-              flexShrink: 0,
-            }}
           >
             {isIndexExpanded ? (
               <ChevronsDownUp size={14} />
@@ -172,7 +159,7 @@ export const RightPanelContent: React.FC<RightPanelContentProps> = ({
               <ChevronsUpDown size={14} />
             )}
             {isIndexExpanded ? "Collapse" : "Expand"}
-          </button>
+          </ExpandCollapseButton>
         </SidebarHeader>
         <ScrollableFillPanel>
           <DocumentAnnotationIndex

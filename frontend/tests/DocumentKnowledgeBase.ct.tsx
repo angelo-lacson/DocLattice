@@ -27,6 +27,7 @@ import {
   CORPUS_ID,
   DOCX_DOC_ID,
   graphqlMocks,
+  indexTabMocks,
   MOCK_DOCX_URL,
   MOCK_PDF_URL,
   MOCK_PDF_URL_FOR_STRUCTURAL_TEST,
@@ -3582,7 +3583,11 @@ test("Chat sources hide regular annotations and search results, but show explici
 test("Index tab is visible in sidebar tabs", async ({ mount, page }) => {
   await mount(
     <DocumentKnowledgeBaseTestWrapper
-      mocks={[...graphqlMocks, ...createSummaryMocks(TXT_DOC_ID, CORPUS_ID)]}
+      mocks={[
+        ...graphqlMocks,
+        ...indexTabMocks,
+        ...createSummaryMocks(TXT_DOC_ID, CORPUS_ID),
+      ]}
       documentId={TXT_DOC_ID}
       corpusId={CORPUS_ID}
     />
@@ -3597,7 +3602,7 @@ test("Index tab is visible in sidebar tabs", async ({ mount, page }) => {
   const indexTab = page.getByTestId("view-mode-index");
   await expect(indexTab).toBeVisible({ timeout: LONG_TIMEOUT });
 
-  // Verify tab order: Index, Chat, Feed, Discussions
+  // Verify tabs are visible
   const chatTab = page.getByTestId("view-mode-chat");
   const feedTab = page.getByTestId("view-mode-feed");
   const discussionsTab = page.getByTestId("view-mode-discussions");
@@ -3613,6 +3618,14 @@ test("Index tab is visible in sidebar tabs", async ({ mount, page }) => {
   // Sidebar panel should open
   const slidingPanel = page.locator("#sliding-panel");
   await expect(slidingPanel).toBeVisible({ timeout: LONG_TIMEOUT });
+
+  // Verify rendered index content matches mock data
+  await expect(page.getByText("Introduction")).toBeVisible({
+    timeout: LONG_TIMEOUT,
+  });
+  await expect(page.getByText("Terms and Conditions")).toBeVisible({
+    timeout: LONG_TIMEOUT,
+  });
 
   await docScreenshot(page, "knowledge-base--index-tab--open");
 });
