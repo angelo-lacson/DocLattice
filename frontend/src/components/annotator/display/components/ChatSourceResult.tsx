@@ -3,7 +3,6 @@ import styled from "styled-components";
 import { VerticallyJustifiedEndDiv } from "../../sidebar/common";
 import { ResultBoundary } from "./ResultBoundary";
 import { ChatMessageSource } from "../../context/ChatSourceAtom";
-import { getBorderWidthFromBounds } from "../../../../utils/transform";
 import { ChatSourceTokens } from "./ChatSourceTokens";
 import { PDFPageInfo } from "../../types/pdf";
 import { useAnnotationDisplay } from "../../context/UISettingsAtom";
@@ -74,7 +73,6 @@ export const ChatSourceResult = ({
   if (!boundsData) return null;
 
   const bounds = pageInfo.getScaledBounds(boundsData);
-  const border = getBorderWidthFromBounds(bounds);
 
   return (
     <div ref={containerRef}>
@@ -90,7 +88,7 @@ export const ChatSourceResult = ({
       >
         {showInfo && !hideLabels ? (
           <SelectionInfo
-            border={border}
+            border={0}
             bounds={bounds}
             color={color}
             showBoundingBox={showBoundingBox}
@@ -139,19 +137,19 @@ interface SelectionInfoProps {
 
 // Styled component for the overlay info that appears above the boundary.
 const SelectionInfo = styled.div.attrs<SelectionInfoProps>(
-  ({ border, bounds, color, showBoundingBox }) => ({
+  ({ bounds, color, showBoundingBox }) => ({
     style: {
       position: "absolute",
       width: `${bounds.right - bounds.left}px`,
-      right: `-${border}px`,
+      right: "0px",
       transform: "translateY(-100%)",
-      border: showBoundingBox
-        ? `${border}px solid ${color}`
-        : `${border}px solid ${color} transparent`,
+      border: "none",
+      borderRadius: "4px 4px 0 0",
       background: showBoundingBox ? color : "rgba(255, 255, 255, 0.0)",
       fontWeight: "bold",
       fontSize: "12px",
       userSelect: "none",
+      transition: "all 0.3s ease",
     },
   })
 )`
