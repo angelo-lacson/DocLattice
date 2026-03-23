@@ -77,16 +77,16 @@ export const HeaderIcon = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: calc(var(--oc-spacing-lg) + var(--oc-spacing-xs));
-  height: calc(var(--oc-spacing-lg) + var(--oc-spacing-xs));
+  width: calc(var(--oc-spacing-lg) + var(--oc-spacing-xs)); /* 28px */
+  height: calc(var(--oc-spacing-lg) + var(--oc-spacing-xs)); /* 28px */
   border-radius: var(--oc-radius-md);
   background: var(--oc-accent);
   color: white;
   margin-right: var(--oc-spacing-xs);
 
   svg {
-    width: var(--oc-font-size-md);
-    height: var(--oc-font-size-md);
+    width: var(--oc-font-size-md); /* 15px */
+    height: var(--oc-font-size-md); /* 15px */
   }
 `;
 
@@ -172,8 +172,8 @@ export const AlertBox = styled.div<{ $variant: "warning" | "info" }>`
     flex-shrink: 0;
     width: 18px;
     height: 18px;
-    /* Optical alignment: nudge icon down to align with first line of text */
-    margin-top: calc(var(--oc-spacing-xs) / 4);
+    /* Optical alignment: nudge icon down 2px to align with first line of text */
+    margin-top: calc(var(--oc-spacing-xs) / 2);
   }
 
   ${({ $variant }) =>
@@ -231,7 +231,7 @@ export const DropZone = styled.div<{
   border-radius: var(--oc-radius-lg);
   background: ${({ $isDragActive }) =>
     $isDragActive ? accentAlpha(0.05) : "var(--oc-bg-subtle)"};
-  min-height: calc(var(--oc-spacing-xl) * 5);
+  min-height: 200px; /* Drop zone minimum height — no clean token multiple */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -243,7 +243,7 @@ export const DropZone = styled.div<{
   overflow: hidden;
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    min-height: calc(var(--oc-spacing-xl) * 4);
+    min-height: 160px; /* Mobile drop zone minimum height — no clean token multiple */
     padding: var(--oc-spacing-lg) var(--oc-spacing-md);
   }
 

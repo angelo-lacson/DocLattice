@@ -9,9 +9,14 @@ import { folderCorpusIdAtom } from "../../src/atoms/folderAtoms";
  * Create a minimal InMemoryCache for BulkImportModal tests.
  * Kept inside the factory function so each test gets a fresh instance,
  * avoiding cross-test cache pollution.
+ *
+ * addTypename must match the MockedProvider prop so the query keys
+ * used by MockLink (for mock matching) align with what the cache adds
+ * to outgoing operations.
  */
 const createTestCache = () =>
   new InMemoryCache({
+    addTypename: false,
     typePolicies: {
       Query: {
         fields: {
@@ -47,7 +52,11 @@ export const BulkImportTestWrapper: React.FC<{
 
   return (
     <JotaiProvider store={store}>
-      <MockedProvider mocks={mocks} addTypename={false} cache={createTestCache()}>
+      <MockedProvider
+        mocks={mocks}
+        addTypename={false}
+        cache={createTestCache()}
+      >
         {children}
       </MockedProvider>
     </JotaiProvider>

@@ -178,14 +178,20 @@ test.describe("BulkImportModal", () => {
     mount,
     page,
   }) => {
-    // Mock the mutation with a delayed response so the progress UI stays visible
+    // Compute the expected base64 deterministically from the same buffer used below.
+    // Apollo MockedProvider uses deep equality (not Jest matchers) to match variables,
+    // so we must provide the exact base64 string rather than expect.any(String).
+    // Note: variableMatcher cannot be used in Playwright CT tests because functions
+    // are not serializable across the Node.js ↔ browser boundary.
+    const zipBuffer = Buffer.from("PK\x03\x04dummy-zip-content");
+    const expectedBase64 = zipBuffer.toString("base64");
+
     const importMock = {
       request: {
         query: IMPORT_ZIP_TO_CORPUS,
         variables: {
-          base64FileString: expect.any(String),
+          base64FileString: expectedBase64,
           corpusId: "test-corpus-id",
-          targetFolderId: undefined,
           makePublic: false,
         },
       },
@@ -213,9 +219,8 @@ test.describe("BulkImportModal", () => {
       page.locator("text=Drag & drop a ZIP file here")
     ).toBeVisible();
 
-    // Select a file
+    // Select a file (reuses the same zipBuffer that computed expectedBase64 above)
     const fileInput = page.locator('input[type="file"][accept=".zip"]');
-    const zipBuffer = Buffer.from("PK\x03\x04dummy-zip-content");
     await fileInput.setInputFiles({
       name: "progress-test.zip",
       mimeType: "application/zip",
@@ -238,12 +243,8 @@ test.describe("BulkImportModal", () => {
     await expect(page.locator("text=%")).toBeVisible();
 
     // Close button should be hidden during progress
-    await expect(
-      page.locator('button:has-text("Cancel")')
-    ).not.toBeVisible();
-    await expect(
-      page.locator('button:has-text("Back")')
-    ).not.toBeVisible();
+    await expect(page.locator('button:has-text("Cancel")')).not.toBeVisible();
+    await expect(page.locator('button:has-text("Back")')).not.toBeVisible();
 
     await docScreenshot(page, "corpus--bulk-import-modal--progress-step");
 
