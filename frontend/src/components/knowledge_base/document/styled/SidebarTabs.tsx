@@ -125,8 +125,8 @@ export const SidebarTab = styled(motion.button)<{
         ? "4px 0 16px rgba(59, 130, 246, 0.25)"
         : "-4px 0 16px rgba(59, 130, 246, 0.25)"
       : props.$panelOpen
-        ? "2px 0 8px rgba(0, 0, 0, 0.05)"
-        : "-2px 0 8px rgba(0, 0, 0, 0.05)"};
+      ? "2px 0 8px rgba(0, 0, 0, 0.05)"
+      : "-2px 0 8px rgba(0, 0, 0, 0.05)"};
   position: relative;
   overflow: hidden;
 
@@ -184,8 +184,8 @@ export const SidebarTab = styled(motion.button)<{
           ? "6px 0 24px rgba(59, 130, 246, 0.35)"
           : "-6px 0 24px rgba(59, 130, 246, 0.35)"
         : props.$panelOpen
-          ? "4px 0 16px rgba(0, 0, 0, 0.08)"
-          : "-4px 0 16px rgba(0, 0, 0, 0.08)"};
+        ? "4px 0 16px rgba(0, 0, 0, 0.08)"
+        : "-4px 0 16px rgba(0, 0, 0, 0.08)"};
     background: ${(props) =>
       props.$isActive
         ? "linear-gradient(90deg, rgba(66, 153, 225, 1) 0%, rgba(59, 130, 246, 1) 100%)"
