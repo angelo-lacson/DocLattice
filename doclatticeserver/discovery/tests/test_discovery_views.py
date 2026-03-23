@@ -431,6 +431,7 @@ class SearchApiTest(TestCase):
             document=cls.public_doc,
             corpus=cls.public_corpus,
             creator=cls.owner,
+            version_number=1,
             is_current=True,
             is_deleted=False,
         )
@@ -438,6 +439,7 @@ class SearchApiTest(TestCase):
             document=cls.private_doc,
             corpus=cls.private_corpus,
             creator=cls.owner,
+            version_number=1,
             is_current=True,
             is_deleted=False,
         )
@@ -513,8 +515,12 @@ class SearchApiTest(TestCase):
 
     def test_limit_capped_at_max(self):
         """Verify limit is capped even if client requests more."""
+        from doclatticeserver.constants.discovery import MAX_SEARCH_RESULTS
+
         response = self.client.get("/api/search/?q=indemnification&limit=999")
         self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertLessEqual(len(data["results"]), MAX_SEARCH_RESULTS)
 
     def test_invalid_limit_defaults(self):
         response = self.client.get("/api/search/?q=indemnification&limit=abc")
@@ -529,6 +535,8 @@ class SearchApiTest(TestCase):
             self.assertIn("type", result)
             self.assertIn("slug", result)
             self.assertIn("title", result)
+            self.assertIn("description", result)
+            self.assertIn("similarity_score", result)
 
     def test_no_results_returns_empty_list(self):
         response = self.client.get("/api/search/?q=zzzznonexistentquery")
