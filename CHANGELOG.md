@@ -16,6 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenAI Embedder pipeline component** (`opencontractserver/pipeline/embedders/openai_embedder.py`): New `OpenAIEmbedder` class supporting `text-embedding-3-small` (default), `text-embedding-3-large`, and `text-embedding-ada-002` models. Features configurable output dimensions, custom API base URL for Azure/proxy support, and graceful error handling. Dynamic `vector_size` property reflects runtime model/dimension configuration to prevent pgvector column size mismatches.
 - **OpenAI embedding constants** (`opencontractserver/constants/embeddings.py`): Centralized model dimension mappings and defaults for the OpenAI embedder.
 
+### Fixed
+
+- **BulkImportModal AlertBox hardcoded colors** (Closes #1145): Replaced `OS_LEGAL_COLORS.warning*` / `OS_LEGAL_COLORS.info*` constants with CSS custom properties (`var(--oc-warning-*)`, `var(--oc-info-*)`). Added the six new tokens to `index.css :root` so they participate in theme switching (`frontend/src/index.css`, `frontend/src/components/widgets/modals/UploadModalStyles.ts`).
+- **CloudUpload icon inline magic numbers** (Closes #1145): Replaced `style={{ width: 16, height: 16, marginRight: 8 }}` on the Start Import button icon with a new `ButtonIcon` styled component that uses `var(--oc-font-size-md)` and `var(--oc-spacing-xs)` tokens (`frontend/src/components/widgets/modals/BulkImportModal.tsx`, `UploadModalStyles.ts`).
+- **Remaining pixel values in styled components** (Closes #1145): Replaced `HeaderIcon` 28px/15px with `calc()` expressions using spacing/font tokens, `DropZone` 200px/160px min-heights with `calc(var(--oc-spacing-xl) * N)`, and `AlertBox` SVG 2px margin-top with `calc(var(--oc-spacing-xs) / 4)` with a documenting comment (`UploadModalStyles.ts`).
+- **Missing InMemoryCache in BulkImportTestWrapper** (Closes #1145): Added `InMemoryCache` with relevant type policies and a `mocks` prop to match the `DocumentKnowledgeBaseTestWrapper` pattern (`frontend/tests/wrappers/BulkImportTestWrapper.tsx`).
+
+### Added
+
+- **Progress step test coverage for BulkImportModal** (Closes #1145): New test exercises the progress UI (spinner, progress bar, "Importing Documents..." heading) by mocking `IMPORT_ZIP_TO_CORPUS` with a long delay, verifying the loading state is rendered and footer buttons are hidden during import (`frontend/tests/bulk-import-modal.ct.tsx`).
+
 ### Changed
 
 - **Softened PDF annotation bounding boxes to diffuse highlighter-pen aesthetic**: Replaced hard-edged borders on annotation boundaries, tokens, and label pills with multi-layer box-shadow glows. Boundaries use a three-layer shadow (outer, mid, inset) that feathers into the page. Tokens use a single-layer soft blur. Approved/rejected states pulse with matching diffuse glows instead of solid borders. Extracted shared `computeAnnotationBoxShadow` utility (`frontend/src/utils/colorUtils.ts`) to eliminate duplicated shadow logic between `SelectionBoundary` and `ResultBoundary`. Added named constants for all shadow radii, opacity levels, border-radius tiers, and status colors (`frontend/src/assets/configurations/constants.ts`). Removed dead code: `getBorderWidthFromBounds`, unused `$border` prop, unused `$isSelected` prop. Fixed `pulseMaroon` animation color mismatch (was `rgba(180, 40, 40)`, now matches static rejected state).
