@@ -97,7 +97,6 @@ export const SidebarTab = styled(motion.button)<{
   $panelOpen: boolean;
 }>`
   width: ${(props) => (props.$panelOpen ? "44px" : "36px")};
-  height: ${(props) => (props.$panelOpen ? "88px" : "76px")};
   background: ${(props) =>
     props.$isActive
       ? "linear-gradient(90deg, rgba(66, 153, 225, 0.95) 0%, rgba(59, 130, 246, 0.95) 100%)"
