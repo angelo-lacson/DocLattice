@@ -219,7 +219,7 @@ if USE_AUTH0:
     # Claims: {namespace}is_staff and {namespace}is_superuser
     AUTH0_ADMIN_CLAIM_NAMESPACE = env(
         "AUTH0_ADMIN_CLAIM_NAMESPACE",
-        default="https://opencontracts.opensource.legal/",
+        default="https://contracts.opensource.legal/",
     )
 
     AUTHENTICATION_BACKENDS += [
@@ -557,6 +557,9 @@ if USE_AUTH0:
     SECURE_CSP_DIRECTIVES["connect-src"].append(f"https://{AUTH0_DOMAIN}")
     SECURE_CSP_DIRECTIVES["script-src"].append(f"https://{AUTH0_DOMAIN}")
     SECURE_CSP_DIRECTIVES["script-src"].append("https://cdn.jsdelivr.net")
+    # Auth0 SPA SDK uses a hidden iframe for silent authentication
+    # (prompt=none, response_mode=web_message) which requires frame-src.
+    SECURE_CSP_DIRECTIVES["frame-src"] = [f"https://{AUTH0_DOMAIN}"]
 
 # Permissions-Policy — opt out of browser features not needed by the app.
 SECURE_PERMISSIONS_POLICY = {
