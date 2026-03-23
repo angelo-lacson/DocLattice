@@ -96,7 +96,7 @@ First, in `doclatticeserver/contrib/sites/migrations`, you'll find a file called
 
 ```
 def update_site_forward(apps, schema_editor):
- """Set site domain and name.""" Site = apps.get_model("sites", "Site") Site.objects.update_or_create( id=settings.SITE_ID, defaults={ "domain": "doclattice.opensource.legal", "name": "DocLatticeServer", }, )
+ """Set site domain and name.""" Site = apps.get_model("sites", "Site") Site.objects.update_or_create( id=settings.SITE_ID, defaults={ "domain": "contracts.opensource.legal", "name": "DocLatticeServer", }, )
 ```
 
 and `update_site_backward`:
