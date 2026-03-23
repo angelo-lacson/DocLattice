@@ -25,6 +25,10 @@ from opencontractserver.annotations.models import (
 )
 from opencontractserver.corpuses.models import Corpus, CorpusFolder, TemporaryFileHandle
 from opencontractserver.documents.models import DocumentPath
+from opencontractserver.tasks.import_tasks import (
+    _validate_sidecar_schema,
+    import_zip_with_folder_structure,
+)
 from opencontractserver.tests.fixtures import (
     SAMPLE_PAWLS_FILE_ONE_PATH,
     SAMPLE_PDF_FILE_ONE_PATH,
@@ -1088,8 +1092,8 @@ class TestSidecarImportTask(TestCase):
             {
                 "id": 1,
                 "relationshipLabel": "NonExistentRelLabel",
-                "source_ids": [1],
-                "target_ids": [2],
+                "source_annotation_ids": [1],
+                "target_annotation_ids": [2],
                 "structural": False,
             },
         ]
@@ -1479,8 +1483,6 @@ class TestSidecarSchemaValidation(TestCase):
 
     def test_valid_sidecar_passes(self):
         """A well-formed sidecar passes validation with no errors."""
-        from opencontractserver.tasks.import_tasks import _validate_sidecar_schema
-
         data = _build_sidecar_json(
             annotations=[
                 _make_annotation(1, "hello", "Heading"),
@@ -1501,8 +1503,6 @@ class TestSidecarSchemaValidation(TestCase):
 
     def test_labelled_text_wrong_type(self):
         """labelled_text as a string triggers a validation error."""
-        from opencontractserver.tasks.import_tasks import _validate_sidecar_schema
-
         data = _build_sidecar_json()
         data["labelled_text"] = "not a list"
         errors = _validate_sidecar_schema(data, "doc.json")
@@ -1512,8 +1512,6 @@ class TestSidecarSchemaValidation(TestCase):
 
     def test_doc_labels_wrong_type(self):
         """doc_labels as a dict triggers a validation error."""
-        from opencontractserver.tasks.import_tasks import _validate_sidecar_schema
-
         data = _build_sidecar_json()
         data["doc_labels"] = {"label": "wrong"}
         errors = _validate_sidecar_schema(data, "doc.json")
@@ -1523,8 +1521,6 @@ class TestSidecarSchemaValidation(TestCase):
 
     def test_relationships_wrong_type(self):
         """relationships as a dict triggers a validation error."""
-        from opencontractserver.tasks.import_tasks import _validate_sidecar_schema
-
         data = _build_sidecar_json()
         data["relationships"] = {"rel": "wrong"}
         errors = _validate_sidecar_schema(data, "doc.json")
@@ -1534,8 +1530,6 @@ class TestSidecarSchemaValidation(TestCase):
 
     def test_annotation_missing_required_keys(self):
         """An annotation entry missing required keys reports them."""
-        from opencontractserver.tasks.import_tasks import _validate_sidecar_schema
-
         data = _build_sidecar_json(
             annotations=[
                 {"annotationLabel": "Heading"}
@@ -1548,8 +1542,6 @@ class TestSidecarSchemaValidation(TestCase):
 
     def test_annotation_entry_not_dict(self):
         """A non-dict annotation entry is caught."""
-        from opencontractserver.tasks.import_tasks import _validate_sidecar_schema
-
         data = _build_sidecar_json(annotations=["not a dict"])
         errors = _validate_sidecar_schema(data, "doc.json")
         self.assertEqual(len(errors), 1)
@@ -1557,8 +1549,6 @@ class TestSidecarSchemaValidation(TestCase):
 
     def test_relationship_missing_required_keys(self):
         """A relationship missing source/target IDs is caught."""
-        from opencontractserver.tasks.import_tasks import _validate_sidecar_schema
-
         data = _build_sidecar_json(
             relationships=[{"relationshipLabel": "Parent"}],
         )
@@ -1569,8 +1559,6 @@ class TestSidecarSchemaValidation(TestCase):
 
     def test_relationship_entry_not_dict(self):
         """A non-dict relationship entry is caught."""
-        from opencontractserver.tasks.import_tasks import _validate_sidecar_schema
-
         data = _build_sidecar_json(relationships=["not a dict"])
         errors = _validate_sidecar_schema(data, "doc.json")
         self.assertEqual(len(errors), 1)
@@ -1578,8 +1566,6 @@ class TestSidecarSchemaValidation(TestCase):
 
     def test_multiple_container_errors(self):
         """Multiple wrong container types are all reported."""
-        from opencontractserver.tasks.import_tasks import _validate_sidecar_schema
-
         data = _build_sidecar_json()
         data["labelled_text"] = "bad"
         data["doc_labels"] = 42
@@ -1589,24 +1575,18 @@ class TestSidecarSchemaValidation(TestCase):
 
     def test_empty_lists_pass(self):
         """Empty annotation/label/relationship lists are valid."""
-        from opencontractserver.tasks.import_tasks import _validate_sidecar_schema
-
         data = _build_sidecar_json(annotations=[], doc_labels=[], relationships=[])
         errors = _validate_sidecar_schema(data, "doc.json")
         self.assertEqual(errors, [])
 
-    def test_none_fields_pass(self):
-        """Absent fields (None) are valid — they're simply not present."""
-        from opencontractserver.tasks.import_tasks import _validate_sidecar_schema
-
+    def test_absent_fields_pass(self):
+        """Absent fields are valid — they're simply not present in the dict."""
         data = {"title": "Test"}
         errors = _validate_sidecar_schema(data, "doc.json")
         self.assertEqual(errors, [])
 
     def test_multiple_bad_annotations(self):
         """Multiple bad annotation entries each produce an error."""
-        from opencontractserver.tasks.import_tasks import _validate_sidecar_schema
-
         data = _build_sidecar_json(
             annotations=[
                 {"annotationLabel": "X"},  # missing rawText, annotation_json
@@ -1615,6 +1595,16 @@ class TestSidecarSchemaValidation(TestCase):
         )
         errors = _validate_sidecar_schema(data, "doc.json")
         self.assertEqual(len(errors), 2)
+
+    def test_doc_labels_non_string_entry(self):
+        """A non-string doc_labels entry is caught."""
+        data = _build_sidecar_json(doc_labels=["Valid", 42, {"bad": True}])
+        errors = _validate_sidecar_schema(data, "doc.json")
+        self.assertEqual(len(errors), 2)
+        self.assertIn("doc_labels[1]", errors[0])
+        self.assertIn("int", errors[0])
+        self.assertIn("doc_labels[2]", errors[1])
+        self.assertIn("dict", errors[1])
 
 
 class TestSidecarSchemaValidationIntegration(TestCase):
@@ -1653,10 +1643,6 @@ class TestSidecarSchemaValidationIntegration(TestCase):
 
     def test_bad_labelled_text_type_reports_error(self):
         """A sidecar with labelled_text as a string is rejected gracefully."""
-        from opencontractserver.tasks.import_tasks import (
-            import_zip_with_folder_structure,
-        )
-
         sidecar = _build_sidecar_json()
         sidecar["labelled_text"] = "not a list"
 
@@ -1692,10 +1678,6 @@ class TestSidecarSchemaValidationIntegration(TestCase):
 
     def test_bad_annotation_entry_reports_error(self):
         """A sidecar with an annotation missing required keys is rejected."""
-        from opencontractserver.tasks.import_tasks import (
-            import_zip_with_folder_structure,
-        )
-
         sidecar = _build_sidecar_json(
             annotations=[
                 {"annotationLabel": "Heading"}
@@ -1730,10 +1712,6 @@ class TestSidecarSchemaValidationIntegration(TestCase):
 
     def test_bad_relationship_entry_reports_error(self):
         """A sidecar with a relationship missing required keys is rejected."""
-        from opencontractserver.tasks.import_tasks import (
-            import_zip_with_folder_structure,
-        )
-
         sidecar = _build_sidecar_json(
             annotations=[
                 _make_annotation(1, "text", "Heading"),
@@ -1765,3 +1743,38 @@ class TestSidecarSchemaValidationIntegration(TestCase):
 
         self.assertTrue(result["completed"])
         self.assertEqual(result["annotation_sidecars_errored"], 1)
+
+    def test_bad_doc_labels_type_reports_error(self):
+        """A sidecar with doc_labels as a non-list is rejected gracefully."""
+        sidecar = _build_sidecar_json()
+        sidecar["doc_labels"] = {"label": "wrong"}
+
+        labels = _build_labels_json(
+            text_labels={"Heading": _make_label_data("Heading")},
+        )
+
+        zip_buffer = self._create_test_zip(
+            {
+                "doc.pdf": self.pdf_bytes,
+                "doc.json": json.dumps(sidecar).encode("utf-8"),
+                "labels.json": json.dumps(labels).encode("utf-8"),
+            }
+        )
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-bad-doc-labels-type",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["completed"])
+        self.assertEqual(result["annotation_sidecars_errored"], 1)
+        self.assertEqual(result["annotations_imported"], 0)
+        self.assertTrue(
+            any("doc_labels" in e for e in result["errors"]),
+            f"Expected doc_labels error in {result['errors']}",
+        )

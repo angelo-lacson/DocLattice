@@ -599,6 +599,13 @@ def _validate_sidecar_schema(
 
     Returns a list of human-readable error strings.  An empty list means the
     data passed validation.
+
+    .. note::
+        If any top-level container has the wrong type (e.g. ``labelled_text``
+        is a string instead of a list), the function returns those errors
+        immediately **without** running per-entry checks.  Callers may
+        therefore receive only the container-level errors on a first call and
+        discover per-entry errors only after the container types are fixed.
     """
     errors: list[str] = []
 
@@ -641,6 +648,14 @@ def _validate_sidecar_schema(
             errors.append(
                 f"Sidecar {sidecar_path}: labelled_text[{idx}] is missing "
                 f"required key(s): {sorted(missing)}"
+            )
+
+    # --- per-doc_label checks ----------------------------------------------
+    for idx, entry in enumerate(doc_labels or []):
+        if not isinstance(entry, str):
+            errors.append(
+                f"Sidecar {sidecar_path}: doc_labels[{idx}] must be a string, "
+                f"got {type(entry).__name__}"
             )
 
     # --- per-relationship checks -----------------------------------------
