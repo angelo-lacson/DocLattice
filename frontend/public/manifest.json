@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "DocLattice",
+  "name": "DocLattice - Document Analytics Platform",
   "icons": [
     {
       "src": "favicon.ico",
