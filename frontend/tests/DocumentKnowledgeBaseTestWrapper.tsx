@@ -4420,14 +4420,13 @@ export const DocumentKnowledgeBaseTestWrapper: React.FC<WrapperProps> = ({
     username: "testuser",
   });
 
-  // Set annotation display reactive vars before component mounts
-  showAnnotationBoundingBoxes(showBoundingBoxes);
-  showSelectedAnnotationOnly(showSelectedOnly);
-  showAnnotationLabels(showLabels);
-
   // Set reactive vars that CentralRouteManager would normally set
   // Component tests run in isolation, so we set these directly
   useEffect(() => {
+    // Set annotation display reactive vars
+    showAnnotationBoundingBoxes(showBoundingBoxes);
+    showSelectedAnnotationOnly(showSelectedOnly);
+    showAnnotationLabels(showLabels);
     authStatusVar("AUTHENTICATED");
     openedDocument({
       id: documentId,
@@ -4465,7 +4464,14 @@ export const DocumentKnowledgeBaseTestWrapper: React.FC<WrapperProps> = ({
       selectedAnalysesIds([]);
       selectedExtractIds([]);
     }
-  }, [documentId, corpusId, initialUrl]);
+  }, [
+    documentId,
+    corpusId,
+    initialUrl,
+    showBoundingBoxes,
+    showSelectedOnly,
+    showLabels,
+  ]);
   return (
     <MemoryRouter
       initialEntries={[

@@ -7,6 +7,7 @@ import { PDFPageInfo } from "../../types/pdf";
 import { TokenId } from "../../types/annotations";
 import {
   ANNOTATION_TOKEN_RADIUS,
+  TOKEN_EXPANSION_PX,
   TOKEN_OPACITY_HIGH,
   TOKEN_OPACITY_LOW,
   TOKEN_SHADOW_BLUR,
@@ -77,10 +78,10 @@ export const ChatSourceTokens: FC<ChatSourceTokensProps> = ({
         // Scale the token bounds using pageInfo to maintain consistency with SearchResult and Selection rescaling
         const b = pageInfo.getScaledTokenBounds(pageToken);
         const style = {
-          left: `${b.left - 1}px`,
-          top: `${b.top - 1}px`,
-          width: `${b.right - b.left + 2}px`,
-          height: `${b.bottom - b.top + 2}px`,
+          left: `${b.left - TOKEN_EXPANSION_PX}px`,
+          top: `${b.top - TOKEN_EXPANSION_PX}px`,
+          width: `${b.right - b.left + TOKEN_EXPANSION_PX * 2}px`,
+          height: `${b.bottom - b.top + TOKEN_EXPANSION_PX * 2}px`,
         };
 
         return (
