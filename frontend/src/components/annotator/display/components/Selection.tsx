@@ -286,7 +286,6 @@ export const Selection: React.FC<SelectionProps> = ({
             id="SelectionInfo"
             $bounds={bounds}
             className={`selection_${annotation.id}`}
-            $border={0}
             $color={color}
             $showBoundingBox={showBoundingBoxes}
             $approved={approved}

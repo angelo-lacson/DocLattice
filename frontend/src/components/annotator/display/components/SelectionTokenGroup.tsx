@@ -4,10 +4,16 @@ import uniqueId from "lodash/uniqueId";
 import styled from "styled-components";
 import { PDFPageInfo } from "../../types/pdf";
 import { TokenId } from "../../types/annotations";
+import {
+  ANNOTATION_TOKEN_RADIUS,
+  TOKEN_OPACITY_HIGH,
+  TOKEN_OPACITY_LOW,
+  TOKEN_SHADOW_BLUR,
+  TOKEN_SHADOW_SPREAD,
+} from "../../../../assets/configurations/constants";
 
 // Add interface for the custom props
 interface SelectionBoxProps {
-  $isSelected?: boolean;
   $highOpacity?: boolean;
   $color?: string;
   $left?: number;
@@ -30,16 +36,18 @@ const SelectionBox = styled.span.attrs<SelectionBoxProps>((props) => ({
       props.$bottom && props.$top ? props.$bottom - props.$top + 2 : 0
     }px`,
     backgroundColor: props.$color || "yellow",
-    opacity: props.$highOpacity ? 0.38 : 0.22,
+    opacity: props.$highOpacity ? TOKEN_OPACITY_HIGH : TOKEN_OPACITY_LOW,
     display: props.$hidden ? "none" : "block",
     boxShadow: props.$hidden
       ? "none"
-      : `0 0 4px 1px ${props.$color || "rgba(255,255,0,0.15)"}`,
+      : `0 0 ${TOKEN_SHADOW_BLUR}px ${TOKEN_SHADOW_SPREAD}px ${
+          props.$color || "rgba(255,255,0,0.15)"
+        }`,
   },
 }))<SelectionBoxProps>`
   position: absolute;
   pointer-events: none;
-  border-radius: 4px;
+  border-radius: ${ANNOTATION_TOKEN_RADIUS};
   transition: opacity 0.3s ease-in-out;
 `;
 
@@ -91,7 +99,6 @@ export const SelectionTokenGroup = ({
               $hidden={hidden}
               key={i}
               className={className}
-              $isSelected={true}
               $highOpacity={highOpacity}
               $color={color ? color : undefined}
               $left={b.left}

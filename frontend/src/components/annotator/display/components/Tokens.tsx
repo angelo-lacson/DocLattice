@@ -1,5 +1,12 @@
 import styled, { DefaultTheme } from "styled-components";
 import _ from "lodash";
+import {
+  ANNOTATION_TOKEN_RADIUS,
+  TOKEN_OPACITY_HIGH,
+  TOKEN_OPACITY_LOW,
+  TOKEN_SHADOW_BLUR,
+  TOKEN_SHADOW_SPREAD,
+} from "../../../../assets/configurations/constants";
 
 /**
  * Narrow theme interface containing only the colour tokens this
@@ -33,14 +40,20 @@ export const TokenSpan = styled.span.attrs<
   return {
     style: {
       background: bg,
-      opacity: props.hidden ? 0.0 : props.highOpacity ? 0.38 : 0.22,
+      opacity: props.hidden
+        ? 0.0
+        : props.highOpacity
+        ? TOKEN_OPACITY_HIGH
+        : TOKEN_OPACITY_LOW,
       boxShadow:
-        props.isSelected && !props.hidden ? `0 0 4px 1px ${bg}` : "none",
+        props.isSelected && !props.hidden
+          ? `0 0 ${TOKEN_SHADOW_BLUR}px ${TOKEN_SHADOW_SPREAD}px ${bg}`
+          : "none",
     },
   };
 })`
   position: absolute;
-  border-radius: 4px;
+  border-radius: ${ANNOTATION_TOKEN_RADIUS};
   transition: opacity 0.3s ease-in-out;
 `;
 
@@ -75,19 +88,25 @@ export const SelectionTokenSpan = styled.span.attrs<SelectionTokenSpanThemeProps
       id: props.id,
       style: {
         background: bg,
-        opacity: props.hidden ? 0.0 : props.highOpacity ? 0.38 : 0.22,
+        opacity: props.hidden
+          ? 0.0
+          : props.highOpacity
+          ? TOKEN_OPACITY_HIGH
+          : TOKEN_OPACITY_LOW,
         left: `${props.left - 1}px`,
         top: `${props.top - 1}px`,
         width: `${props.right - props.left + 2}px`,
         height: `${props.bottom - props.top + 2}px`,
         pointerEvents: props.pointerEvents,
         boxShadow:
-          props.isSelected && !props.hidden ? `0 0 4px 1px ${bg}` : "none",
+          props.isSelected && !props.hidden
+            ? `0 0 ${TOKEN_SHADOW_BLUR}px ${TOKEN_SHADOW_SPREAD}px ${bg}`
+            : "none",
       },
     };
   }
 )`
   position: absolute;
-  border-radius: 4px;
+  border-radius: ${ANNOTATION_TOKEN_RADIUS};
   transition: opacity 0.3s ease-in-out;
 `;

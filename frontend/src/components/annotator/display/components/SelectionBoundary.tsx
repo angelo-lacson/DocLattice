@@ -2,6 +2,13 @@ import React, { useEffect, useRef } from "react";
 import styled, { css } from "styled-components";
 import { BoundingBox } from "../../../types";
 import { hexToRgb } from "../../../../utils/transform";
+import { computeAnnotationBoxShadow } from "../../../../utils/colorUtils";
+import {
+  REJECTED_RGB,
+  ANNOTATION_BOUNDARY_RADIUS,
+  BOUNDARY_OPACITY_SELECTED,
+  BOUNDARY_OPACITY_UNSELECTED,
+} from "../../../../assets/configurations/constants";
 import { pulseGreen, pulseMaroon } from "../effects";
 import { useAnnotationRefs } from "../../hooks/useAnnotationRefs";
 import { useAtomValue } from "jotai";
@@ -53,7 +60,7 @@ const BoundarySpan = styled.span.attrs<{
       "background-color 0.4s ease, box-shadow 0.4s ease, opacity 0.4s ease",
   },
 }))`
-  border-radius: 6px;
+  border-radius: ${ANNOTATION_BOUNDARY_RADIUS};
 
   ${(props) =>
     props.$approved &&
@@ -66,8 +73,10 @@ const BoundarySpan = styled.span.attrs<{
   ${(props) =>
     props.$rejected &&
     css`
-      box-shadow: 0 0 12px 3px rgba(128, 0, 0, 0.18),
-        0 0 4px 1px rgba(128, 0, 0, 0.12) !important;
+      box-shadow: 0 0 12px 3px
+          rgba(${REJECTED_RGB.r}, ${REJECTED_RGB.g}, ${REJECTED_RGB.b}, 0.18),
+        0 0 4px 1px
+          rgba(${REJECTED_RGB.r}, ${REJECTED_RGB.g}, ${REJECTED_RGB.b}, 0.12) !important;
       animation: ${pulseMaroon} 2s infinite;
     `}
 `;
@@ -113,24 +122,17 @@ export const SelectionBoundary: React.FC<SelectionBoundaryProps> = ({
   const rotateY = width < 0 ? -180 : 0;
   const rotateX = height < 0 ? -180 : 0;
   const { r, g, b } = hexToRgb(color);
-  const opacity = !showBoundingBox || hidden ? 0 : selected ? 0.18 : 0.06;
+  const opacity =
+    !showBoundingBox || hidden
+      ? 0
+      : selected
+      ? BOUNDARY_OPACITY_SELECTED
+      : BOUNDARY_OPACITY_UNSELECTED;
   const backgroundColor = `rgba(${r}, ${g}, ${b}, ${opacity})`;
 
-  // Layered diffuse glow — no hard edges at all. The bounding box becomes
-  // a warm halo around the annotation region rather than a rectangle.
   const boxShadow =
     showBoundingBox && !hidden
-      ? selected
-        ? [
-            `0 0 14px 4px rgba(${r}, ${g}, ${b}, 0.13)`,
-            `0 0 5px 1px rgba(${r}, ${g}, ${b}, 0.10)`,
-            `inset 0 0 8px 2px rgba(${r}, ${g}, ${b}, 0.07)`,
-          ].join(", ")
-        : [
-            `0 0 10px 2px rgba(${r}, ${g}, ${b}, 0.07)`,
-            `0 0 3px 0px rgba(${r}, ${g}, ${b}, 0.05)`,
-            `inset 0 0 6px 1px rgba(${r}, ${g}, ${b}, 0.04)`,
-          ].join(", ")
+      ? computeAnnotationBoxShadow(r, g, b, selected)
       : "none";
 
   const handleClick = (e: React.MouseEvent) => {
