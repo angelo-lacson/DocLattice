@@ -1,6 +1,9 @@
 import styled, { css, keyframes } from "styled-components";
 import { MOBILE_VIEW_BREAKPOINT } from "../../../assets/configurations/constants";
-import { accentAlpha } from "../../../assets/configurations/osLegalStyles";
+import {
+  accentAlpha,
+  OS_LEGAL_COLORS,
+} from "../../../assets/configurations/osLegalStyles";
 import { modalFooterBorder, modalFooterMobile } from "./sharedModalStyles";
 
 // Animation keyframes
@@ -177,14 +180,14 @@ export const AlertBox = styled.div<{ $variant: "warning" | "info" }>`
   ${({ $variant }) =>
     $variant === "warning"
       ? css`
-          background: var(--oc-warning-bg, #fefce8);
-          color: var(--oc-warning-text, #854d0e);
-          border: 1px solid var(--oc-warning-border, #fde68a);
+          background: ${OS_LEGAL_COLORS.warningSurface};
+          color: ${OS_LEGAL_COLORS.warningText};
+          border: 1px solid ${OS_LEGAL_COLORS.warningBorder};
         `
       : css`
-          background: var(--oc-info-bg, #f0f9ff);
-          color: var(--oc-info-text, #0369a1);
-          border: 1px solid var(--oc-info-border, #bae6fd);
+          background: ${OS_LEGAL_COLORS.infoSurface};
+          color: ${OS_LEGAL_COLORS.infoText};
+          border: 1px solid ${OS_LEGAL_COLORS.infoBorder};
         `}
 
   &:last-child {
@@ -206,7 +209,7 @@ export const AlertBody = styled.div`
 
   ul {
     margin: calc(var(--oc-spacing-xs) / 2) 0 0 0;
-    padding-left: 1.25rem;
+    padding-left: var(--oc-spacing-md);
   }
 
   li {
@@ -311,12 +314,18 @@ export const DropZoneButton = styled.button`
   font-weight: 500;
   font-size: var(--oc-font-size-sm);
   transition: all 0.2s ease;
-  min-height: 40px;
+  min-height: 44px; /* WCAG 2.5.5 touch target minimum */
   border: none;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: var(--oc-spacing-xs);
+
+  svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
     width: 100%;
@@ -325,7 +334,7 @@ export const DropZoneButton = styled.button`
   }
 
   &:hover {
-    background: var(--oc-accent-hover, #0d6860);
+    background: var(--oc-accent-hover);
     box-shadow: 0 2px 8px ${accentAlpha(0.3)};
   }
 
@@ -387,6 +396,7 @@ export const ErrorMessage = styled.div`
       font-weight: 600;
       color: var(--oc-error);
       font-size: var(--oc-font-size-xs);
+      margin-bottom: calc(var(--oc-spacing-xs) / 2);
     }
 
     .message {
@@ -396,8 +406,8 @@ export const ErrorMessage = styled.div`
   }
 `;
 
-// Spin animation for loader
-export const spinKeyframes = keyframes`
+// Spin animation for loader (used internally by SpinnerIcon)
+const spinKeyframes = keyframes`
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 `;

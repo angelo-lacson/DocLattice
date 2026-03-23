@@ -106,4 +106,70 @@ test.describe("BulkImportModal", () => {
 
     await component.unmount();
   });
+
+  test("should have Start Import button disabled when no file is selected", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <BulkImportTestWrapper>
+        <BulkImportModal />
+      </BulkImportTestWrapper>
+    );
+
+    // Navigate to upload step
+    await page.locator('button:has-text("Continue")').click();
+    await expect(
+      page.locator("text=Drag & drop a ZIP file here")
+    ).toBeVisible();
+
+    // Start Import should be disabled when no file is selected
+    const startImportButton = page.locator('button:has-text("Start Import")');
+    await expect(startImportButton).toBeVisible();
+    await expect(startImportButton).toBeDisabled();
+
+    await component.unmount();
+  });
+
+  test("should enable Start Import after file selection and show file info", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <BulkImportTestWrapper>
+        <BulkImportModal />
+      </BulkImportTestWrapper>
+    );
+
+    // Navigate to upload step
+    await page.locator('button:has-text("Continue")').click();
+    await expect(
+      page.locator("text=Drag & drop a ZIP file here")
+    ).toBeVisible();
+
+    // Programmatically set a file via the hidden input to simulate selection
+    const fileInput = page.locator('input[type="file"][accept=".zip"]');
+    const zipBuffer = Buffer.from("PK\x03\x04dummy-zip-content");
+    await fileInput.setInputFiles({
+      name: "test-documents.zip",
+      mimeType: "application/zip",
+      buffer: zipBuffer,
+    });
+
+    // File should now be shown in the drop zone
+    await expect(page.locator("text=test-documents.zip")).toBeVisible();
+
+    // "Choose Different File" button should appear
+    await expect(
+      page.locator('button:has-text("Choose Different File")')
+    ).toBeVisible();
+
+    // Start Import should now be enabled
+    const startImportButton = page.locator('button:has-text("Start Import")');
+    await expect(startImportButton).toBeEnabled();
+
+    await docScreenshot(page, "corpus--bulk-import-modal--file-selected");
+
+    await component.unmount();
+  });
 });

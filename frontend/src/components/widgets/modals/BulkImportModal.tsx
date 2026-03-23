@@ -376,8 +376,7 @@ export const BulkImportModal: React.FC = () => {
               </div>
             </DropZoneText>
             <DropZoneButton onClick={handleBrowseClick}>
-              <RefreshCw style={{ width: 14, height: 14 }} /> Choose Different
-              File
+              <RefreshCw /> Choose Different File
             </DropZoneButton>
           </>
         ) : (
@@ -394,7 +393,7 @@ export const BulkImportModal: React.FC = () => {
               <div className="secondary-text">or click to browse</div>
             </DropZoneText>
             <DropZoneButton onClick={handleBrowseClick}>
-              <FolderOpen style={{ width: 14, height: 14 }} /> Browse Files
+              <FolderOpen /> Browse Files
             </DropZoneButton>
           </>
         )}
