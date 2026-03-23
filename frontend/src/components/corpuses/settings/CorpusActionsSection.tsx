@@ -52,6 +52,8 @@ import {
 import {
   TRIGGER_LABELS,
   Z_INDEX,
+  PICKER_DROPDOWN_WIDTH,
+  PICKER_DROPDOWN_VIEWPORT_PADDING,
 } from "../../../assets/configurations/constants";
 
 // ============================================================================
@@ -96,7 +98,7 @@ const PickerContainer = styled.div`
 
 const PickerDropdown = styled.div`
   position: fixed;
-  width: 380px;
+  width: ${PICKER_DROPDOWN_WIDTH}px;
   max-height: 320px;
   overflow-y: auto;
   background: ${OS_LEGAL_COLORS.surface};
@@ -120,9 +122,7 @@ const PickerItem = styled.button<{ disabled?: boolean }>`
   cursor: ${({ disabled }) => (disabled ? "not-allowed" : "pointer")};
   opacity: ${({ disabled }) => (disabled ? 0.5 : 1)};
   pointer-events: ${({ disabled }) => (disabled ? "none" : "auto")};
-  transition:
-    background 0.15s ease,
-    opacity 0.15s ease;
+  transition: background 0.15s ease, opacity 0.15s ease;
 
   &:hover {
     background: ${({ disabled }) =>
@@ -195,7 +195,10 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerContainerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+  const [dropdownPos, setDropdownPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
 
   // Compute dropdown position from the button's bounding rect
   const updateDropdownPosition = useCallback(() => {
@@ -203,7 +206,10 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
     const rect = pickerContainerRef.current.getBoundingClientRect();
     setDropdownPos({
       top: rect.bottom + 4,
-      left: rect.right - 380, // align right edge with button
+      left: Math.max(
+        PICKER_DROPDOWN_VIEWPORT_PADDING,
+        rect.right - PICKER_DROPDOWN_WIDTH
+      ),
     });
   }, []);
 
@@ -254,12 +260,10 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
 
   // Filter out templates already added to the corpus
   const addedTemplateIds = new Set(
-    actions
-      .filter((a) => a.sourceTemplate?.id)
-      .map((a) => a.sourceTemplate!.id),
+    actions.filter((a) => a.sourceTemplate?.id).map((a) => a.sourceTemplate!.id)
   );
   const availableTemplates = templates.filter(
-    (t) => !addedTemplateIds.has(t.id),
+    (t) => !addedTemplateIds.has(t.id)
   );
 
   const handleAddTemplate = async (templateId: string) => {
@@ -272,7 +276,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
         onUpdate?.();
       } else {
         toast.error(
-          data?.addTemplateToCorpus?.message || "Failed to add template",
+          data?.addTemplateToCorpus?.message || "Failed to add template"
         );
       }
     } catch (error: unknown) {
@@ -321,12 +325,18 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
           <PickerContainer ref={pickerContainerRef}>
             <Button
               size="sm"
-              onClick={() => setPickerOpen(!pickerOpen)}
+              onClick={() => {
+                if (!pickerOpen) {
+                  updateDropdownPosition();
+                }
+                setPickerOpen(!pickerOpen);
+              }}
               leftIcon={<Library size={14} />}
             >
               Add from Library
             </Button>
             {pickerOpen &&
+              dropdownPos &&
               createPortal(
                 <PickerDropdown
                   ref={dropdownRef}
@@ -365,7 +375,7 @@ export const CorpusActionsSection: React.FC<CorpusActionsSectionProps> = ({
                     ))
                   )}
                 </PickerDropdown>,
-                document.body,
+                document.body
               )}
           </PickerContainer>
           <Button
