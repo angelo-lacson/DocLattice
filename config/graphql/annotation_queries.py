@@ -135,14 +135,7 @@ class AnnotationQueryMixin:
         ).prefetch_related(
             Prefetch(
                 "structural_set__documents",
-                queryset=Document.objects.select_related("creator").only(
-                    "id",
-                    "title",
-                    "slug",
-                    "creator_id",
-                    "creator__id",
-                    "creator__slug",
-                ),
+                queryset=Document.objects.select_related("creator"),
             ),
         )
 
