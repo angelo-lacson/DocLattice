@@ -16,6 +16,7 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.views.decorators.cache import cache_page
 from django.views.decorators.http import require_GET
 
+from config.telemetry import record_event
 from opencontractserver.constants.discovery import (
     DISCOVERY_CACHE_SECONDS,
     MAX_PUBLIC_CORPUSES,
@@ -33,6 +34,18 @@ logger = logging.getLogger(__name__)
 
 # Standardized human-readable rate limit string for all discovery endpoints
 RATE_LIMIT_DISPLAY = f"{RATE_LIMIT_REQUESTS} requests/minute per IP"
+
+
+def _record_discovery_event(endpoint: str, request: HttpRequest) -> None:
+    """Fire a PostHog event for a discovery endpoint hit."""
+    user_agent = request.META.get("HTTP_USER_AGENT", "")
+    record_event(
+        "discovery_endpoint_served",
+        {
+            "endpoint": endpoint,
+            "user_agent": user_agent,
+        },
+    )
 
 
 def _get_base_url(request: HttpRequest) -> str:
@@ -130,6 +143,7 @@ def robots_txt(request: HttpRequest) -> HttpResponse:
         f"Sitemap: {base_url}/sitemap.xml",
         "",
     ]
+    _record_discovery_event("robots_txt", request)
     return HttpResponse("\n".join(lines), content_type="text/plain; charset=utf-8")
 
 
@@ -234,6 +248,7 @@ def llms_txt(request: HttpRequest) -> HttpResponse:
             "",
         ]
     )
+    _record_discovery_event("llms_txt", request)
     return HttpResponse("\n".join(lines), content_type="text/plain; charset=utf-8")
 
 
@@ -568,6 +583,7 @@ def llms_full_txt(request: HttpRequest) -> HttpResponse:
             "",
         ]
     )
+    _record_discovery_event("llms_full_txt", request)
     return HttpResponse("\n".join(lines), content_type="text/plain; charset=utf-8")
 
 
@@ -635,6 +651,7 @@ def sitemap_xml(request: HttpRequest) -> HttpResponse:
     xml_bytes = tostring(urlset, encoding="unicode", xml_declaration=False)
     xml_str = '<?xml version="1.0" encoding="UTF-8"?>\n' + xml_bytes
 
+    _record_discovery_event("sitemap_xml", request)
     return HttpResponse(xml_str, content_type="application/xml; charset=utf-8")
 
 
@@ -674,6 +691,7 @@ def well_known_mcp(request: HttpRequest) -> HttpResponse:
 
     data = {"mcpServers": servers}
 
+    _record_discovery_event("well_known_mcp", request)
     return HttpResponse(
         json.dumps(data, indent=2),
         content_type="application/json; charset=utf-8",
@@ -688,7 +706,8 @@ def search_api(request: HttpRequest) -> JsonResponse:
     """RESTful search endpoint for crawlers and lightweight integrations.
 
     Accepts GET requests with query parameters and returns JSON results.
-    Only searches public corpuses visible to anonymous users.
+    All requests are evaluated as anonymous regardless of authentication —
+    this is intentional public-only search.
 
     Query parameters:
         q (required): Search query text.
@@ -699,6 +718,10 @@ def search_api(request: HttpRequest) -> JsonResponse:
     search and falls back to text matching.  Without ``corpus`` it performs
     a text search across all public corpus titles/descriptions and document
     titles/descriptions.
+
+    Response JSON includes a ``similarity_score`` field per result which is
+    a float when vector search was used, or ``null`` when only text matching
+    was applied.
     """
     query = request.GET.get("q", "").strip()
     if not query:
@@ -714,6 +737,8 @@ def search_api(request: HttpRequest) -> JsonResponse:
         limit = 10
 
     anonymous = AnonymousUser()
+
+    _record_discovery_event("search_api", request)
 
     if corpus_slug:
         return _search_within_corpus(query, corpus_slug, limit, anonymous)
@@ -756,8 +781,8 @@ def _search_within_corpus(
             return JsonResponse(
                 {"query": query, "corpus": corpus_slug, "results": results}
             )
-    except (ValueError, TypeError, AttributeError):
-        pass
+    except (ValueError, TypeError):
+        logger.debug("Vector search returned no results, falling back to text search")
     except RuntimeError:
         logger.debug("Vector search unavailable, falling back to text search")
 
@@ -783,14 +808,24 @@ def _search_within_corpus(
 
 
 def _search_global(query: str, limit: int, user) -> JsonResponse:
-    """Search across all public corpuses and their documents."""
+    """Search across all public corpuses and their documents.
+
+    All requests are evaluated as anonymous regardless of authentication
+    (intentional public-only search).  Results are split evenly between
+    corpus and document matches so that one type cannot suppress the other.
+    """
     results: list[dict] = []
+
+    # Reserve at least half the slots for each type so corpuses can't
+    # suppress all document results (and vice-versa).
+    corpus_limit = max(limit // 2, 1)
+    doc_limit = max(limit - corpus_limit, 1)
 
     # Search corpuses by title/description
     matching_corpuses = list(
         Corpus.objects.visible_to_user(user)
         .filter(Q(title__icontains=query) | Q(description__icontains=query))
-        .order_by("-created")[:limit]
+        .order_by("-created")[:corpus_limit]
     )
     for corpus in matching_corpuses:
         results.append(
@@ -803,9 +838,11 @@ def _search_global(query: str, limit: int, user) -> JsonResponse:
             }
         )
 
-    # Search documents across all public corpuses (fill remaining slots)
+    # Search documents across all public corpuses
+    # If corpuses used fewer slots than reserved, give the surplus to documents
     remaining = limit - len(results)
-    if remaining > 0:
+    doc_limit = max(remaining, doc_limit)
+    if doc_limit > 0:
         public_corpus_ids = Corpus.objects.visible_to_user(user).values_list(
             "id", flat=True
         )
@@ -817,9 +854,9 @@ def _search_global(query: str, limit: int, user) -> JsonResponse:
                 document_paths__is_deleted=False,
             )
             .filter(Q(title__icontains=query) | Q(description__icontains=query))
-            .select_related()
+            .only("slug", "title", "description", "modified")
             .distinct()
-            .order_by("-modified")[:remaining]
+            .order_by("-modified")[:doc_limit]
         )
         for doc in matching_docs:
             results.append(
