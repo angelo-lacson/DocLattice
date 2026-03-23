@@ -192,6 +192,7 @@ export const DOCUMENT_ANNOTATION_INDEX_LIMIT = 500;
 export const DOCUMENT_ANNOTATION_INDEX_MAX_DEPTH = 6;
 // Built-in annotation label names (OC_ namespace)
 // Keep in sync with opencontractserver/constants/annotations.py
+export const STRUCTURAL_LABEL_PREFIX = "OC_";
 export const OC_SECTION_LABEL = "OC_SECTION";
 
 // Document search/picker limits
