@@ -75,7 +75,7 @@ test.describe("CorpusEngagementDashboard", () => {
     await mount(
       <MockedProvider mocks={[engagementMetricsMock]} addTypename={false}>
         <CorpusEngagementDashboard corpusId={corpusId} />
-      </MockedProvider>,
+      </MockedProvider>
     );
 
     // Wait for heading and section titles
@@ -98,7 +98,7 @@ test.describe("CorpusEngagementDashboard", () => {
     await mount(
       <MockedProvider mocks={[loadingMock]} addTypename={false}>
         <CorpusEngagementDashboard corpusId={corpusId} />
-      </MockedProvider>,
+      </MockedProvider>
     );
 
     await expect(page.getByText("Loading engagement metrics...")).toBeVisible();
@@ -110,7 +110,7 @@ test.describe("CorpusEngagementDashboard", () => {
     await mount(
       <MockedProvider mocks={[errorMock]} addTypename={false}>
         <CorpusEngagementDashboard corpusId={corpusId} />
-      </MockedProvider>,
+      </MockedProvider>
     );
 
     await expect(page.getByText("Error Loading Metrics")).toBeVisible();
@@ -122,7 +122,7 @@ test.describe("CorpusEngagementDashboard", () => {
     await mount(
       <MockedProvider mocks={[emptyMock]} addTypename={false}>
         <CorpusEngagementDashboard corpusId={corpusId} />
-      </MockedProvider>,
+      </MockedProvider>
     );
 
     await expect(page.getByText("No Engagement Data Available")).toBeVisible();

@@ -26,7 +26,7 @@ const sampleActions: DropdownActionProps[] = [
 test.describe("CreateAndSearchBar", () => {
   test("renders search input and action button", async ({ mount, page }) => {
     await mount(
-      <CreateAndSearchBar actions={sampleActions} placeholder="Search docs…" />,
+      <CreateAndSearchBar actions={sampleActions} placeholder="Search docs…" />
     );
 
     // Search input should be visible with the correct placeholder
@@ -42,7 +42,7 @@ test.describe("CreateAndSearchBar", () => {
 
   test("opens dropdown menu on add button click", async ({ mount, page }) => {
     await mount(
-      <CreateAndSearchBar actions={sampleActions} placeholder="Search docs…" />,
+      <CreateAndSearchBar actions={sampleActions} placeholder="Search docs…" />
     );
 
     // Click the add button
@@ -67,7 +67,7 @@ test.describe("CreateAndSearchBar", () => {
         actions={sampleActions}
         filters={filterContent}
         placeholder="Search…"
-      />,
+      />
     );
 
     // Filter button should be visible

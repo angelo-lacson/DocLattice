@@ -37,7 +37,7 @@ test.describe("CorpusDashboard", () => {
     await mount(
       <MockedProvider mocks={[statsMock]} addTypename={false}>
         <CorpusDashboard corpus={mockCorpus} />
-      </MockedProvider>,
+      </MockedProvider>
     );
 
     // Wait for the stats to load and animate
@@ -59,7 +59,7 @@ test.describe("CorpusDashboard", () => {
     await mount(
       <MockedProvider mocks={[slowMock]} addTypename={false}>
         <CorpusDashboard corpus={mockCorpus} />
-      </MockedProvider>,
+      </MockedProvider>
     );
 
     // The dashboard header should still be visible while loading
