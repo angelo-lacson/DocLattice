@@ -12,12 +12,16 @@ from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import requests
 
 from opencontractserver.constants.document_processing import (
     MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE,
 )
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
+from opencontractserver.pipeline.embedders.multimodal_microservice import (
+    EmbeddingServerError,
+)
 from opencontractserver.pipeline.embedders.sent_transformer_microservice import (
     MicroserviceEmbedder,
 )
@@ -306,6 +310,51 @@ class TestBatchEmbedTextAnnotations(unittest.TestCase):
         for error in result["errors"]:
             self.assertIn("vector count mismatch", error)
 
+    def test_transient_timeout_propagates(self):
+        """requests.Timeout from embed_texts_batch propagates for Celery retry."""
+
+        class TimeoutEmbedder(DummyEmbedder384):
+            def embed_texts_batch(self, texts, **kw):
+                raise requests.exceptions.Timeout("timed out")
+
+        annots = [_make_mock_annotation(1, "Hello")]
+        result = self._make_result()
+
+        with self.assertRaises(requests.exceptions.Timeout):
+            _batch_embed_text_annotations(
+                annots, TimeoutEmbedder(), "test.TimeoutEmbedder", 50, result
+            )
+
+    def test_transient_connection_error_propagates(self):
+        """requests.ConnectionError from embed_texts_batch propagates for retry."""
+
+        class ConnErrorEmbedder(DummyEmbedder384):
+            def embed_texts_batch(self, texts, **kw):
+                raise requests.exceptions.ConnectionError("refused")
+
+        annots = [_make_mock_annotation(1, "Hello")]
+        result = self._make_result()
+
+        with self.assertRaises(requests.exceptions.ConnectionError):
+            _batch_embed_text_annotations(
+                annots, ConnErrorEmbedder(), "test.ConnErrorEmbedder", 50, result
+            )
+
+    def test_transient_server_error_propagates(self):
+        """EmbeddingServerError from embed_texts_batch propagates for retry."""
+
+        class ServerErrorEmbedder(DummyEmbedder384):
+            def embed_texts_batch(self, texts, **kw):
+                raise EmbeddingServerError("503 Service Unavailable")
+
+        annots = [_make_mock_annotation(1, "Hello")]
+        result = self._make_result()
+
+        with self.assertRaises(EmbeddingServerError):
+            _batch_embed_text_annotations(
+                annots, ServerErrorEmbedder(), "test.ServerErrorEmbedder", 50, result
+            )
+
 
 class TestMicroserviceEmbedderBatch(unittest.TestCase):
     """Test MicroserviceEmbedder.embed_texts_batch with mocked HTTP calls."""
@@ -363,10 +412,21 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
     @patch(
         "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
     )
-    def test_server_error_returns_none(self, mock_post):
-        """5xx response returns None."""
+    def test_server_error_raises(self, mock_post):
+        """5xx response raises EmbeddingServerError for Celery retry."""
         embedder = self._make_embedder()
         mock_post.return_value = self._mock_response(500)
+
+        with self.assertRaises(EmbeddingServerError):
+            embedder.embed_texts_batch(["hello"])
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_non_retriable_exception_returns_none(self, mock_post):
+        """Non-retriable exception (e.g., builtin ConnectionError) returns None."""
+        embedder = self._make_embedder()
+        mock_post.side_effect = ConnectionError("Connection refused")
 
         result = embedder.embed_texts_batch(["hello"])
 
@@ -375,14 +435,24 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
     @patch(
         "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
     )
-    def test_exception_returns_none(self, mock_post):
-        """Network exception returns None."""
+    def test_timeout_raises_for_retry(self, mock_post):
+        """requests.Timeout re-raises for Celery retry."""
         embedder = self._make_embedder()
-        mock_post.side_effect = ConnectionError("Connection refused")
+        mock_post.side_effect = requests.exceptions.Timeout("timed out")
 
-        result = embedder.embed_texts_batch(["hello"])
+        with self.assertRaises(requests.exceptions.Timeout):
+            embedder.embed_texts_batch(["hello"])
 
-        self.assertIsNone(result)
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_connection_error_raises_for_retry(self, mock_post):
+        """requests.ConnectionError re-raises for Celery retry."""
+        embedder = self._make_embedder()
+        mock_post.side_effect = requests.exceptions.ConnectionError("refused")
+
+        with self.assertRaises(requests.exceptions.ConnectionError):
+            embedder.embed_texts_batch(["hello"])
 
     def test_exceeding_max_batch_size_raises(self):
         """Exceeding max batch size raises ValueError."""
@@ -737,7 +807,7 @@ class TestCalculateEmbeddingsForAnnotationBatch(unittest.TestCase):
         )
 
         self.assertEqual(result["total"], 3)
-        self.assertGreater(result["failed"], 0)
+        self.assertEqual(result["failed"], 3)
         self.assertTrue(
             any("Contract violation" in e for e in result["errors"]),
             f"Expected 'Contract violation' in errors: {result['errors']}",

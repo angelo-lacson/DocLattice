@@ -1,6 +1,7 @@
 import logging
 from typing import Callable, Optional, Union
 
+import requests
 from celery import shared_task
 from celery.utils.log import get_task_logger
 from django.contrib.auth import get_user_model
@@ -10,6 +11,9 @@ from opencontractserver.constants.document_processing import EMBEDDING_API_BATCH
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
+from opencontractserver.pipeline.embedders.multimodal_microservice import (
+    EmbeddingServerError,
+)
 from opencontractserver.pipeline.utils import (
     get_component_by_name,
     get_default_embedder,
@@ -445,6 +449,12 @@ def _batch_embed_text_annotations(
     Multimodal annotations should NOT be passed here — they require
     per-annotation handling via ``_create_embedding_for_annotation()``.
 
+    Exception handling:
+        - ``ValueError``: Re-raised immediately (programming/contract error).
+        - ``requests.exceptions.Timeout``, ``requests.exceptions.ConnectionError``,
+          ``EmbeddingServerError``: Re-raised so Celery task-level retry fires.
+        - All other exceptions: Recorded as permanent per-annotation failures.
+
     Args:
         annotations: Ordered list of text-only Annotation objects.
         embedder: The embedder instance (must support ``embed_texts_batch``).
@@ -483,7 +493,17 @@ def _batch_embed_text_annotations(
             # exceeds embedder maximum). Re-raise rather than silently recording
             # as an annotation failure so the programming error surfaces loudly.
             raise
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            EmbeddingServerError,
+        ):
+            # Transient HTTP errors: re-raise so the task-level Celery
+            # autoretry_for=(Exception,) decorator can fire a retry.
+            raise
         except Exception as e:
+            # Non-retriable errors (malformed response, unexpected data, etc.)
+            # are recorded as permanent per-annotation failures.
             logger.error(f"embed_texts_batch failed: {e}")
             for annot, _ in chunk:
                 result["failed"] += 1
@@ -566,15 +586,17 @@ def calculate_embeddings_for_annotation_batch(
     Without an explicit ``embedder_path``, the dual embedding strategy is
     applied per annotation (default + corpus-specific embedders).
 
-    Note on retry semantics: although the task is decorated with
-    ``autoretry_for=(Exception,)``, the batch path catches operational
-    exceptions internally and records them in ``result["errors"]`` without
-    re-raising.  This means partial embedding failures do NOT trigger a
-    Celery retry — the task completes with a summary of succeeded/failed
-    counts.  ``ValueError`` from contract violations (e.g., batch size
-    exceeds embedder maximum) is caught at the task level and returned
-    as an immediate failure without burning retries — it is a programming
-    error, not a transient condition.
+    Retry semantics:
+        - Transient HTTP errors (``requests.exceptions.Timeout``,
+          ``requests.exceptions.ConnectionError``, ``EmbeddingServerError``
+          from 5xx responses) propagate up and trigger the Celery
+          ``autoretry_for=(Exception,)`` decorator for automatic retry.
+        - Non-retriable operational errors (malformed response, NaN
+          values, count mismatch) are caught internally and recorded
+          in ``result["errors"]`` without re-raising.
+        - ``ValueError`` from contract violations (e.g., batch size
+          exceeds embedder maximum) is caught at the task level and
+          returned as an immediate failure without burning retries.
 
     Args:
         self: Celery task instance (passed automatically when bind=True)
@@ -649,6 +671,11 @@ def calculate_embeddings_for_annotation_batch(
                 f"Batch-embedding {len(text_only_annots)} text-only annotations "
                 f"with {embedder_path} (api_batch_size={EMBEDDING_API_BATCH_SIZE})"
             )
+            # Snapshot skipped count before batch embedding so we can compute
+            # how many were skipped *within* _batch_embed_text_annotations
+            # (e.g., empty-text annotations) vs skips from the partition loop
+            # above (missing annotations).
+            skipped_before_batch = result["skipped"]
             try:
                 _batch_embed_text_annotations(
                     text_only_annots,
@@ -662,8 +689,9 @@ def calculate_embeddings_for_annotation_batch(
                 # Fail fast without burning Celery retries.
                 logger.error(f"Contract violation in batch embedding: {e}")
                 result["errors"].append(f"Contract violation: {e}")
+                batch_skipped = result["skipped"] - skipped_before_batch
                 result["failed"] += len(text_only_annots) - (
-                    result["succeeded"] + result["skipped"]
+                    result["succeeded"] + batch_skipped
                 )
                 return result
 

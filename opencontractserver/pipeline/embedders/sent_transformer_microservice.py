@@ -16,6 +16,9 @@ from opencontractserver.pipeline.base.settings_schema import (
     PipelineSetting,
     SettingType,
 )
+from opencontractserver.pipeline.embedders.multimodal_microservice import (
+    EmbeddingServerError,
+)
 from opencontractserver.utils.cloud import maybe_add_cloud_run_auth
 
 logger = logging.getLogger(__name__)
@@ -242,6 +245,9 @@ class MicroserviceEmbedder(BaseEmbedder):
                     return None
                 embeddings_array = np.array(body["embeddings"])
                 if embeddings_array.ndim == 3:
+                    if embeddings_array.shape[1] != 1:
+                        logger.error(f"Unexpected 3D shape {embeddings_array.shape}")
+                        return None
                     embeddings_array = embeddings_array.squeeze(axis=1)
 
                 if len(embeddings_array) != len(texts):
@@ -264,18 +270,29 @@ class MicroserviceEmbedder(BaseEmbedder):
                         results.append(row.tolist())
                 return results
             elif 400 <= response.status_code < 500:
+                # Client errors (4xx) - not retriable, likely invalid input
                 logger.error(
                     f"Batch text embedding service returned client error "
                     f"{response.status_code}. Batch size: {len(texts)}"
                 )
                 return None
             else:
-                logger.error(
+                # Server errors (5xx) - retriable, re-raise for Celery retry
+                error_msg = (
                     f"Batch text embedding service returned status "
                     f"{response.status_code}. This may be a transient error."
                 )
-                return None
+                logger.error(error_msg)
+                raise EmbeddingServerError(error_msg)
 
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            EmbeddingServerError,
+        ):
+            # Transient HTTP errors: re-raise so Celery task retry can fire
+            raise
         except Exception as e:
+            # Non-retriable errors (malformed data, unexpected parsing, etc.)
             logger.error(f"Failed to generate batch text embeddings: {e}")
             return None
