@@ -478,6 +478,11 @@ def _batch_embed_text_annotations(
 
         try:
             vectors = embedder.embed_texts_batch(texts)
+        except ValueError:
+            # ValueError indicates a caller contract violation (e.g., batch size
+            # exceeds embedder maximum). Re-raise rather than silently recording
+            # as an annotation failure so the programming error surfaces loudly.
+            raise
         except Exception as e:
             logger.error(f"embed_texts_batch failed: {e}")
             for annot, _ in chunk:
@@ -560,6 +565,14 @@ def calculate_embeddings_for_annotation_batch(
 
     Without an explicit ``embedder_path``, the dual embedding strategy is
     applied per annotation (default + corpus-specific embedders).
+
+    Note on retry semantics: although the task is decorated with
+    ``autoretry_for=(Exception,)``, the batch path catches operational
+    exceptions internally and records them in ``result["errors"]`` without
+    re-raising.  This means partial embedding failures do NOT trigger a
+    Celery retry — the task completes with a summary of succeeded/failed
+    counts.  Only hard failures (e.g., embedder load error, ValueError
+    from a contract violation) propagate and trigger retries.
 
     Args:
         self: Celery task instance (passed automatically when bind=True)

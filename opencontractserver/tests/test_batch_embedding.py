@@ -311,7 +311,12 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
     """Test MicroserviceEmbedder.embed_texts_batch with mocked HTTP calls."""
 
     def _make_embedder(self):
-        """Create a MicroserviceEmbedder with settings populated."""
+        """Create a MicroserviceEmbedder with settings populated.
+
+        Directly sets ``_settings`` because PipelineComponentBase normally
+        loads settings from the database via ``get_component_settings()``,
+        which is unavailable in unit tests without Django.
+        """
         embedder = MicroserviceEmbedder()
         embedder._settings = MicroserviceEmbedder.Settings(
             embeddings_microservice_url="http://test-service:8080",

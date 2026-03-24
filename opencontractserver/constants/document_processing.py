@@ -22,7 +22,7 @@ EMBEDDING_BATCH_SIZE = 100
 # This is the sub-batch size used *within* a Celery task when calling
 # embedder.embed_texts_batch(). Kept separate from EMBEDDING_BATCH_SIZE
 # (task-level grouping) because API limits may differ from task sizing.
-# Microservice embedders typically support up to 100 texts per request.
+# Must be <= MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE (currently 100).
 EMBEDDING_API_BATCH_SIZE = 50
 
 # Maximum number of texts accepted by MicroserviceEmbedder.embed_texts_batch().
