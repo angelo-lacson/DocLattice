@@ -149,19 +149,26 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     resolve_pawls_parse_file = resolve_pawls_parse_file_optimized
     resolve_doc_annotations = resolve_doc_annotations_optimized
 
-    all_structural_annotations = graphene.List(AnnotationType)
+    all_structural_annotations = graphene.List(
+        AnnotationType,
+        annotation_ids=graphene.List(graphene.NonNull(graphene.ID)),
+    )
 
-    def resolve_all_structural_annotations(self, info):
+    def resolve_all_structural_annotations(self, info, annotation_ids=None):
         from opencontractserver.annotations.query_optimizer import (
             AnnotationQueryOptimizer,
         )
 
-        return AnnotationQueryOptimizer.get_document_annotations(
+        qs = AnnotationQueryOptimizer.get_document_annotations(
             document_id=self.id,
             user=getattr(info.context, "user", None),
             structural=True,
-            use_cache=True,
+            use_cache=annotation_ids is None,
         )
+        if annotation_ids:
+            django_pks = [from_global_id(gid)[1] for gid in annotation_ids]
+            qs = qs.filter(pk__in=django_pks)
+        return qs
 
     # Updated field and resolver for all annotations with enhanced filtering
     all_annotations = graphene.List(
