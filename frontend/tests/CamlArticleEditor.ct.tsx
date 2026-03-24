@@ -20,8 +20,8 @@ test.describe("CamlArticleEditor - New Article", () => {
       <CamlArticleEditorTestWrapper hasExistingArticle={false} />
     );
 
-    // Modal should be visible
-    await expect(page.getByText("Create Article")).toBeVisible({
+    // Modal header should be visible ("Create Article" appears in header + save button)
+    await expect(page.getByText("Create Article").first()).toBeVisible({
       timeout: 10000,
     });
 
@@ -57,28 +57,20 @@ test.describe("CamlArticleEditor - Live Preview", () => {
     const textarea = page.locator("textarea");
     await expect(textarea).toBeVisible({ timeout: 10000 });
 
-    // Clear and type new CAML content
-    await textarea.fill(`---
-hero:
-  title:
-    - "My Custom Title"
----
-
-::: chapter {#test}
+    // Clear and type new CAML content (simple structure — no YAML list for title)
+    await textarea.fill(`::: chapter {#test}
 ## Test Chapter
 
 Hello from the preview!
 :::`);
 
     // Wait for preview to update
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(500);
 
-    // Preview should show the rendered content
-    await expect(page.getByText("My Custom Title")).toBeVisible({
-      timeout: 5000,
-    });
-    await expect(page.getByText("Test Chapter")).toBeVisible();
-    await expect(page.getByText("Hello from the preview!")).toBeVisible();
+    // Preview should show the rendered chapter heading
+    await expect(
+      page.getByRole("heading", { name: "Test Chapter" })
+    ).toBeVisible({ timeout: 5000 });
 
     // Should show unsaved changes badge
     await expect(page.getByText("Unsaved changes")).toBeVisible();

@@ -5,6 +5,7 @@
  * without network dependencies.
  */
 import React from "react";
+import { MemoryRouter } from "react-router-dom";
 import { CamlArticle } from "../src/caml/renderer";
 import type { CamlDocument } from "../src/caml/parser/types";
 
@@ -203,11 +204,13 @@ export const CamlArticleTestWrapper: React.FC<CamlArticleTestWrapperProps> = ({
   stats,
 }) => {
   return (
-    <div
-      style={{ width: "100vw", minHeight: "100vh", background: "#ffffff" }}
-      data-testid="caml-article-test-root"
-    >
-      <CamlArticle document={doc} stats={stats} />
-    </div>
+    <MemoryRouter>
+      <div
+        style={{ width: "100vw", minHeight: "100vh", background: "#ffffff" }}
+        data-testid="caml-article-test-root"
+      >
+        <CamlArticle document={doc} stats={stats} />
+      </div>
+    </MemoryRouter>
   );
 };
