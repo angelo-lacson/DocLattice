@@ -528,7 +528,6 @@ export const createDocumentAnnotationsOnlyMock = (
     data: {
       document: {
         id: documentId,
-        allStructuralAnnotations: [],
         allAnnotations: analysisId
           ? [mockAnalysisAnnotation1, mockAnalysisAnnotation2]
           : [],
