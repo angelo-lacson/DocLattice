@@ -36,6 +36,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import transaction
 
+from doclatticeserver.constants.document_processing import TEXT_MIMETYPES
 from doclatticeserver.corpuses.models import Corpus, CorpusFolder
 from doclatticeserver.documents.models import Document, DocumentPath
 
@@ -52,9 +53,6 @@ MIME_TO_EXTENSION = {
     "text/plain": ".txt",
     "text/markdown": ".md",
 }
-
-# File types that are stored as txt_extract_file (plain text, no parsing needed)
-TEXT_MIMETYPES = {"text/plain", "text/markdown", "application/txt"}
 
 
 def _create_content_file(

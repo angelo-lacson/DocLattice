@@ -1,7 +1,28 @@
 /**
  * Styled components for the CAML article renderer.
+ *
+ * Color tokens are sourced from OS_LEGAL_COLORS where they match
+ * the design system, with CAML-specific tokens defined locally
+ * for article-specific color needs (e.g., dark backgrounds, prose text).
  */
 import styled, { css } from "styled-components";
+
+import {
+  OS_LEGAL_COLORS,
+  OS_LEGAL_TYPOGRAPHY,
+  accentAlpha,
+} from "../../assets/configurations/osLegalStyles";
+
+// ---------------------------------------------------------------------------
+// CAML-specific color tokens (supplement OS_LEGAL_COLORS for article styles)
+// ---------------------------------------------------------------------------
+
+/** Deep dark slate — article headings and dark-mode backgrounds. */
+const CAML_HEADING = "#0f172a";
+/** Prose body text — slightly lighter than textPrimary for readability. */
+const CAML_PROSE_TEXT = "#334155";
+/** Dark-mode prose text — light gray for readability on dark backgrounds. */
+const CAML_DARK_PROSE = "#cbd5e1";
 
 // ---------------------------------------------------------------------------
 // Article shell
@@ -10,9 +31,8 @@ import styled, { css } from "styled-components";
 export const ArticleContainer = styled.article`
   width: 100%;
   min-height: 100vh;
-  color: #1e293b;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  color: ${OS_LEGAL_COLORS.textPrimary};
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
   line-height: 1.7;
   font-size: 1.0625rem;
   overflow-x: hidden;
@@ -33,27 +53,27 @@ export const HeroKicker = styled.p`
   font-size: 0.8125rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   margin-bottom: 1.5rem;
   font-weight: 500;
 `;
 
 export const HeroTitle = styled.h1`
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySerif};
   font-size: clamp(2rem, 5vw, 3.5rem);
   font-weight: 700;
   line-height: 1.15;
   margin-bottom: 1.5rem;
-  color: #0f172a;
+  color: ${CAML_HEADING};
 `;
 
 export const HeroAccent = styled.span`
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
 `;
 
 export const HeroSubtitle = styled.p`
   font-size: 1.1875rem;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   max-width: 640px;
   margin: 0 auto 2rem;
   line-height: 1.6;
@@ -72,8 +92,8 @@ export const HeroStat = styled.span`
   border-radius: 9999px;
   font-size: 0.8125rem;
   font-weight: 500;
-  background: #f1f5f9;
-  color: #475569;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  color: ${OS_LEGAL_COLORS.textTertiary};
 `;
 
 // ---------------------------------------------------------------------------
@@ -98,8 +118,8 @@ export const ChapterSection = styled.section<{
   ${({ $theme }) =>
     $theme === "dark" &&
     css`
-      background: #0f172a;
-      color: #e2e8f0;
+      background: ${CAML_HEADING};
+      color: ${OS_LEGAL_COLORS.border};
       max-width: 100%;
       padding-left: calc((100% - 800px) / 2 + 1.5rem);
       padding-right: calc((100% - 800px) / 2 + 1.5rem);
@@ -108,8 +128,12 @@ export const ChapterSection = styled.section<{
   ${({ $gradient }) =>
     $gradient &&
     css`
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-      color: #e2e8f0;
+      background: linear-gradient(
+        135deg,
+        ${CAML_HEADING} 0%,
+        ${OS_LEGAL_COLORS.textPrimary} 100%
+      );
+      color: ${OS_LEGAL_COLORS.border};
       max-width: 100%;
       padding-left: calc((100% - 800px) / 2 + 1.5rem);
       padding-right: calc((100% - 800px) / 2 + 1.5rem);
@@ -120,18 +144,20 @@ export const ChapterKicker = styled.p<{ $dark?: boolean }>`
   font-size: 0.75rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: ${({ $dark }) => ($dark ? "#94a3b8" : "#64748b")};
+  color: ${({ $dark }) =>
+    $dark ? OS_LEGAL_COLORS.textMuted : OS_LEGAL_COLORS.textSecondary};
   margin-bottom: 0.75rem;
   font-weight: 600;
 `;
 
 export const ChapterTitle = styled.h2<{ $dark?: boolean }>`
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySerif};
   font-size: clamp(1.5rem, 4vw, 2.25rem);
   font-weight: 700;
   line-height: 1.2;
   margin-bottom: 1.5rem;
-  color: ${({ $dark }) => ($dark ? "#f1f5f9" : "#0f172a")};
+  color: ${({ $dark }) =>
+    $dark ? OS_LEGAL_COLORS.surfaceLight : CAML_HEADING};
 `;
 
 // ---------------------------------------------------------------------------
@@ -143,7 +169,7 @@ export const ProseContainer = styled.div<{ $dark?: boolean }>`
 
   p {
     margin-bottom: 1rem;
-    color: ${({ $dark }) => ($dark ? "#cbd5e1" : "#334155")};
+    color: ${({ $dark }) => ($dark ? CAML_DARK_PROSE : CAML_PROSE_TEXT)};
   }
 
   strong {
@@ -151,13 +177,14 @@ export const ProseContainer = styled.div<{ $dark?: boolean }>`
   }
 
   a {
-    color: #0f766e;
+    color: ${OS_LEGAL_COLORS.accent};
     text-decoration: underline;
     text-underline-offset: 2px;
   }
 
   code {
-    background: ${({ $dark }) => ($dark ? "#1e293b" : "#f1f5f9")};
+    background: ${({ $dark }) =>
+      $dark ? OS_LEGAL_COLORS.textPrimary : OS_LEGAL_COLORS.surfaceLight};
     padding: 0.125rem 0.375rem;
     border-radius: 4px;
     font-size: 0.9em;
@@ -165,14 +192,14 @@ export const ProseContainer = styled.div<{ $dark?: boolean }>`
 `;
 
 export const Pullquote = styled.blockquote`
-  border-left: 4px solid #0f766e;
+  border-left: 4px solid ${OS_LEGAL_COLORS.accent};
   padding: 1rem 1.5rem;
   margin: 2rem 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySerif};
   font-size: 1.1875rem;
   font-style: italic;
-  color: #1e293b;
-  background: rgba(15, 118, 110, 0.04);
+  color: ${OS_LEGAL_COLORS.textPrimary};
+  background: ${accentAlpha(0.04)};
   border-radius: 0 8px 8px 0;
 `;
 
@@ -192,11 +219,11 @@ export const CardsGrid = styled.div<{ $columns?: number }>`
 `;
 
 export const CardItem = styled.div<{ $accent?: string }>`
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 10px;
   padding: 1.25rem;
-  border-left: 4px solid ${({ $accent }) => $accent || "#e2e8f0"};
+  border-left: 4px solid ${({ $accent }) => $accent || OS_LEGAL_COLORS.border};
   transition: box-shadow 0.2s;
 
   &:hover {
@@ -214,30 +241,30 @@ export const CardHeader = styled.div`
 export const CardLabel = styled.h3`
   font-size: 0.9375rem;
   font-weight: 600;
-  color: #0f172a;
+  color: ${CAML_HEADING};
   margin: 0;
 `;
 
 export const CardMeta = styled.span`
   font-size: 0.75rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-family: "SF Mono", Monaco, monospace;
   white-space: nowrap;
 `;
 
 export const CardBody = styled.p`
   font-size: 0.875rem;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   margin: 0.5rem 0;
   line-height: 1.5;
 `;
 
 export const CardFooter = styled.div`
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   margin-top: 0.75rem;
   padding-top: 0.5rem;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
 `;
 
 // ---------------------------------------------------------------------------
@@ -255,8 +282,8 @@ export const PillCard = styled.div`
   display: flex;
   align-items: center;
   gap: 1rem;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surface};
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 10px;
   padding: 1rem 1.25rem;
   flex: 1 1 200px;
@@ -266,8 +293,8 @@ export const PillCard = styled.div`
 export const PillBigText = styled.span`
   font-size: 1.75rem;
   font-weight: 700;
-  color: #0f172a;
-  font-family: Georgia, "Times New Roman", serif;
+  color: ${CAML_HEADING};
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySerif};
   line-height: 1;
 `;
 
@@ -282,7 +309,7 @@ export const PillInfo = styled.div`
 export const PillLabel = styled.span`
   font-size: 0.875rem;
   font-weight: 600;
-  color: #0f172a;
+  color: ${CAML_HEADING};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -290,7 +317,7 @@ export const PillLabel = styled.span`
 
 export const PillDetail = styled.span`
   font-size: 0.75rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 export const PillStatus = styled.span<{ $color?: string }>`
@@ -299,7 +326,7 @@ export const PillStatus = styled.span<{ $color?: string }>`
   gap: 0.375rem;
   font-size: 0.6875rem;
   font-weight: 600;
-  color: ${({ $color }) => $color || "#64748b"};
+  color: ${({ $color }) => $color || OS_LEGAL_COLORS.textSecondary};
 
   &::before {
     content: "";
@@ -307,7 +334,7 @@ export const PillStatus = styled.span<{ $color?: string }>`
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: ${({ $color }) => $color || "#64748b"};
+    background: ${({ $color }) => $color || OS_LEGAL_COLORS.textSecondary};
   }
 `;
 
@@ -317,15 +344,15 @@ export const PillStatus = styled.span<{ $color?: string }>`
 
 export const TabsContainer = styled.div`
   margin: 2rem 0;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   overflow: hidden;
-  background: #ffffff;
+  background: ${OS_LEGAL_COLORS.surface};
 `;
 
 export const TabBar = styled.div`
   display: flex;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 
@@ -337,20 +364,22 @@ export const TabBar = styled.div`
 export const TabButton = styled.button<{ $active?: boolean; $color?: string }>`
   padding: 0.75rem 1.25rem;
   border: none;
-  background: ${({ $active }) => ($active ? "#ffffff" : "#f8fafc")};
+  background: ${({ $active }) =>
+    $active ? OS_LEGAL_COLORS.surface : OS_LEGAL_COLORS.surfaceHover};
   font-size: 0.8125rem;
   font-weight: 600;
   color: ${({ $active, $color }) =>
-    $active ? $color || "#0f766e" : "#64748b"};
+    $active ? $color || OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.textSecondary};
   cursor: pointer;
   white-space: nowrap;
   border-bottom: 2px solid
-    ${({ $active, $color }) => ($active ? $color || "#0f766e" : "transparent")};
+    ${({ $active, $color }) =>
+      $active ? $color || OS_LEGAL_COLORS.accent : "transparent"};
   transition: all 0.15s;
 
   &:hover {
-    background: #ffffff;
-    color: ${({ $color }) => $color || "#0f766e"};
+    background: ${OS_LEGAL_COLORS.surface};
+    color: ${({ $color }) => $color || OS_LEGAL_COLORS.accent};
   }
 `;
 
@@ -360,8 +389,9 @@ export const TabStatus = styled.span<{ $color?: string }>`
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
   margin-left: 0.5rem;
-  background: ${({ $color }) => ($color ? `${$color}15` : "#f1f5f9")};
-  color: ${({ $color }) => $color || "#64748b"};
+  background: ${({ $color }) =>
+    $color ? `${$color}15` : OS_LEGAL_COLORS.surfaceLight};
+  color: ${({ $color }) => $color || OS_LEGAL_COLORS.textSecondary};
   font-weight: 500;
 `;
 
@@ -380,15 +410,17 @@ export const TabSectionHeading = styled.h4<{
   margin-bottom: 0.75rem;
   margin-top: 1.25rem;
   color: ${({ $highlight, $color }) =>
-    $highlight ? $color || "#0f766e" : "#475569"};
+    $highlight
+      ? $color || OS_LEGAL_COLORS.accent
+      : OS_LEGAL_COLORS.textTertiary};
 
   ${({ $highlight, $color }) =>
     $highlight &&
     css`
-      background: ${$color ? `${$color}08` : "rgba(15, 118, 110, 0.04)"};
+      background: ${$color ? `${$color}08` : accentAlpha(0.04)};
       padding: 0.75rem 1rem;
       border-radius: 8px;
-      border-left: 3px solid ${$color || "#0f766e"};
+      border-left: 3px solid ${$color || OS_LEGAL_COLORS.accent};
       margin-left: -1rem;
       margin-right: -1rem;
     `}
@@ -400,7 +432,7 @@ export const TabSectionHeading = styled.h4<{
 
 export const TabSectionContent = styled.div`
   font-size: 0.9375rem;
-  color: #334155;
+  color: ${CAML_PROSE_TEXT};
   line-height: 1.65;
   margin-bottom: 0.75rem;
 `;
@@ -411,7 +443,7 @@ export const TabSources = styled.div`
   gap: 0.375rem;
   margin-top: 1rem;
   padding-top: 0.75rem;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid ${OS_LEGAL_COLORS.surfaceLight};
 `;
 
 export const TabSourceChip = styled.span`
@@ -420,8 +452,8 @@ export const TabSourceChip = styled.span`
   border-radius: 6px;
   font-size: 0.6875rem;
   font-weight: 500;
-  background: #f1f5f9;
-  color: #475569;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  color: ${OS_LEGAL_COLORS.textTertiary};
   white-space: nowrap;
 `;
 
@@ -441,7 +473,7 @@ export const TimelineContainer = styled.div`
     top: 0;
     bottom: 0;
     width: 2px;
-    background: #e2e8f0;
+    background: ${OS_LEGAL_COLORS.border};
   }
 `;
 
@@ -459,7 +491,7 @@ export const TimelineLegendItem = styled.span<{ $color: string }>`
   gap: 0.375rem;
   font-size: 0.75rem;
   font-weight: 500;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 
   &::before {
     content: "";
@@ -484,22 +516,23 @@ export const TimelineDot = styled.span<{ $color?: string }>`
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: ${({ $color }) => $color || "#94a3b8"};
-  border: 2px solid #ffffff;
-  box-shadow: 0 0 0 2px ${({ $color }) => ($color ? `${$color}30` : "#e2e8f0")};
+  background: ${({ $color }) => $color || OS_LEGAL_COLORS.textMuted};
+  border: 2px solid ${OS_LEGAL_COLORS.surface};
+  box-shadow: 0 0 0 2px
+    ${({ $color }) => ($color ? `${$color}30` : OS_LEGAL_COLORS.border)};
 `;
 
 export const TimelineDate = styled.span`
   font-size: 0.75rem;
   font-weight: 600;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   text-transform: uppercase;
   letter-spacing: 0.025em;
 `;
 
 export const TimelineLabel = styled.p`
   font-size: 0.9375rem;
-  color: #1e293b;
+  color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0.125rem 0 0;
 `;
 
@@ -529,24 +562,24 @@ export const CtaButton = styled.a<{ $primary?: boolean }>`
   ${({ $primary }) =>
     $primary
       ? css`
-          background: #0f766e;
-          color: #ffffff;
-          border: 2px solid #0f766e;
+          background: ${OS_LEGAL_COLORS.accent};
+          color: ${OS_LEGAL_COLORS.surface};
+          border: 2px solid ${OS_LEGAL_COLORS.accent};
 
           &:hover {
-            background: #0d6860;
-            border-color: #0d6860;
+            background: ${OS_LEGAL_COLORS.accentHover};
+            border-color: ${OS_LEGAL_COLORS.accentHover};
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(15, 118, 110, 0.3);
+            box-shadow: 0 4px 12px ${accentAlpha(0.3)};
           }
         `
       : css`
           background: transparent;
-          color: #0f766e;
-          border: 2px solid #0f766e;
+          color: ${OS_LEGAL_COLORS.accent};
+          border: 2px solid ${OS_LEGAL_COLORS.accent};
 
           &:hover {
-            background: rgba(15, 118, 110, 0.05);
+            background: ${accentAlpha(0.05)};
             transform: translateY(-1px);
           }
         `}
@@ -560,22 +593,22 @@ export const SignupBox = styled.div`
   text-align: center;
   padding: 2.5rem 1.5rem;
   margin: 2rem 0;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
 `;
 
 export const SignupTitle = styled.h3`
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySerif};
   font-size: 1.25rem;
   font-weight: 700;
-  color: #0f172a;
+  color: ${CAML_HEADING};
   margin-bottom: 0.75rem;
 `;
 
 export const SignupBody = styled.p`
   font-size: 0.9375rem;
-  color: #475569;
+  color: ${OS_LEGAL_COLORS.textTertiary};
   max-width: 480px;
   margin: 0 auto 1.5rem;
 `;
@@ -583,8 +616,8 @@ export const SignupBody = styled.p`
 export const SignupButton = styled.button`
   padding: 0.625rem 1.5rem;
   border-radius: 8px;
-  background: #0f766e;
-  color: #ffffff;
+  background: ${OS_LEGAL_COLORS.accent};
+  color: ${OS_LEGAL_COLORS.surface};
   border: none;
   font-size: 0.875rem;
   font-weight: 600;
@@ -592,7 +625,7 @@ export const SignupButton = styled.button`
   transition: all 0.2s;
 
   &:hover {
-    background: #0d6860;
+    background: ${OS_LEGAL_COLORS.accentHover};
   }
 `;
 
@@ -602,7 +635,7 @@ export const SignupButton = styled.button`
 
 export const FooterSection = styled.footer`
   padding: 3rem 1.5rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
   text-align: center;
   max-width: 800px;
   margin: 0 auto;
@@ -617,7 +650,7 @@ export const FooterNav = styled.nav`
 
 export const FooterLink = styled.a`
   font-size: 0.875rem;
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
   text-decoration: none;
   font-weight: 500;
 
@@ -628,7 +661,7 @@ export const FooterLink = styled.a`
 
 export const FooterNotice = styled.p`
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 `;
 
 // ---------------------------------------------------------------------------
@@ -645,22 +678,22 @@ export const StatsGrid = styled.div`
 export const StatCard = styled.div`
   text-align: center;
   padding: 1rem;
-  background: #f8fafc;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
 `;
 
 export const StatValue = styled.div`
   font-size: 1.75rem;
   font-weight: 700;
-  color: #0f766e;
-  font-family: Georgia, "Times New Roman", serif;
+  color: ${OS_LEGAL_COLORS.accent};
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySerif};
 `;
 
 export const StatLabel = styled.div`
   font-size: 0.75rem;
   font-weight: 500;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-top: 0.25rem;

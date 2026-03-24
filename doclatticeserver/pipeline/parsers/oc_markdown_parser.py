@@ -41,7 +41,10 @@ class MarkdownParser(BaseParser):
 
         txt_path = document.txt_extract_file.name
         with default_storage.open(txt_path, mode="r") as txt_file:
-            text_content = txt_file.read()
+            # Storage backends may not support encoding= kwarg, so decode
+            # the bytes explicitly to handle non-ASCII content safely.
+            raw = txt_file.read()
+            text_content = raw.decode("utf-8") if isinstance(raw, bytes) else raw
 
         return {
             "title": document.title,

@@ -17,6 +17,7 @@ import type {
   CamlCorpusStats,
   CamlProse,
 } from "../parser/types";
+import { isSafeHref } from "./safeHref";
 import { MarkdownMessageRenderer } from "../../components/threads/MarkdownMessageRenderer";
 import {
   ProseContainer,
@@ -312,17 +313,22 @@ function TimelineBlock({ block }: { block: CamlTimeline }) {
 function CtaBlock({ block }: { block: CamlCta }) {
   return (
     <CtaRow>
-      {block.items.map((item, i) => (
-        <CtaButton
-          key={i}
-          href={item.href}
-          $primary={item.primary}
-          target={item.href.startsWith("http") ? "_blank" : undefined}
-          rel={item.href.startsWith("http") ? "noopener noreferrer" : undefined}
-        >
-          {item.label}
-        </CtaButton>
-      ))}
+      {block.items.map((item, i) => {
+        if (!isSafeHref(item.href)) return null;
+        return (
+          <CtaButton
+            key={i}
+            href={item.href}
+            $primary={item.primary}
+            target={item.href.startsWith("http") ? "_blank" : undefined}
+            rel={
+              item.href.startsWith("http") ? "noopener noreferrer" : undefined
+            }
+          >
+            {item.label}
+          </CtaButton>
+        );
+      })}
     </CtaRow>
   );
 }
