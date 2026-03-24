@@ -12,6 +12,7 @@ import { BookOpen, Check, Eye, Edit, Save } from "lucide-react";
 import styled from "styled-components";
 
 import { Modal } from "@os-legal/ui";
+import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { CAML_ARTICLE_FILENAME } from "../../assets/configurations/constants";
 import {
@@ -247,6 +248,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
   const [currentContent, setCurrentContent] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
   const [isNew, setIsNew] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   // Query for existing Readme.CAML
   const articleVars = useMemo<GetCorpusArticleInput>(
@@ -354,13 +356,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
 
   const handleClose = () => {
     if (hasChanges) {
-      if (
-        window.confirm(
-          "You have unsaved changes. Are you sure you want to close?"
-        )
-      ) {
-        onClose();
-      }
+      setShowCloseConfirm(true);
     } else {
       onClose();
     }
@@ -412,6 +408,17 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
           </ActionButton>
         </ActionBar>
       </Modal>
+
+      <ConfirmModal
+        message="You have unsaved changes. Are you sure you want to close?"
+        visible={showCloseConfirm}
+        yesAction={onClose}
+        noAction={() => {}}
+        toggleModal={() => setShowCloseConfirm(false)}
+        confirmVariant="danger"
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+      />
     </StyledModalWrapper>
   );
 };

@@ -342,7 +342,7 @@ function SignupBlock({ block }: { block: CamlSignup }) {
     <SignupBox>
       {block.title && <SignupTitle>{block.title}</SignupTitle>}
       {block.body && <SignupBody>{block.body}</SignupBody>}
-      {block.button && <SignupButton>{block.button}</SignupButton>}
+      {block.button && <SignupButton disabled>{block.button}</SignupButton>}
     </SignupBox>
   );
 }

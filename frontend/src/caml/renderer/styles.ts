@@ -624,8 +624,13 @@ export const SignupButton = styled.button`
   cursor: pointer;
   transition: all 0.2s;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: ${OS_LEGAL_COLORS.accentHover};
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 `;
 
