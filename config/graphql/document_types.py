@@ -120,15 +120,24 @@ class DocumentRelationshipType(AnnotatePermissionsForReadMixin, DjangoObjectType
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        # DocumentRelationship uses inherited permissions (not PermissionManager)
-        # Permission filtering is done by DocumentRelationshipQueryOptimizer
-        # in the resolver, so just pass through the queryset here
-        if issubclass(type(queryset), QuerySet):
-            return queryset
-        elif "RelatedManager" in str(type(queryset)):
-            return queryset.all()
-        else:
-            return queryset
+        # Check if permissions were already handled by the query optimizer.
+        # The optimizer adds _can_read, _can_create, etc. annotations.
+        if hasattr(queryset, "query") and queryset.query.annotations:
+            if any(key.startswith("_can_") for key in queryset.query.annotations):
+                return queryset
+
+        # Fall back to optimizer-based permission filtering.
+        # DocumentRelationship uses inherited permissions (not PermissionManager),
+        # so we delegate to DocumentRelationshipQueryOptimizer which checks
+        # visibility on source_document + target_document + corpus.
+        from opencontractserver.documents.query_optimizer import (
+            DocumentRelationshipQueryOptimizer,
+        )
+
+        user = info.context.user
+        return DocumentRelationshipQueryOptimizer.get_visible_relationships(
+            user, context=info.context
+        )
 
 
 class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
