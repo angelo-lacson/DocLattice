@@ -343,9 +343,6 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                 if (!isPopupOpen) {
                   setOpenedViaKeyboard(true);
                 }
-              } else if (e.key === "Escape" && isPopupOpen) {
-                e.preventDefault();
-                setIsPopupOpen(false);
               }
             }}
           />
@@ -365,6 +362,30 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                 border: `1px solid ${OS_LEGAL_COLORS.border}`,
               }}
               onMouseLeave={() => setTimeout(() => setIsPopupOpen(false), 300)}
+              onKeyDown={(e) => {
+                if (
+                  e.key === "ArrowRight" ||
+                  e.key === "ArrowLeft" ||
+                  e.key === "ArrowDown" ||
+                  e.key === "ArrowUp"
+                ) {
+                  e.preventDefault();
+                  const items = popupRef.current?.querySelectorAll(
+                    '[role="menuitem"]:not(:disabled)'
+                  );
+                  if (!items || items.length === 0) return;
+                  const itemsArr = Array.from(items) as HTMLElement[];
+                  const currentIndex = itemsArr.indexOf(
+                    document.activeElement as HTMLElement
+                  );
+                  const forward =
+                    e.key === "ArrowRight" || e.key === "ArrowDown";
+                  const nextIndex = forward
+                    ? (currentIndex + 1) % itemsArr.length
+                    : (currentIndex - 1 + itemsArr.length) % itemsArr.length;
+                  itemsArr[nextIndex].focus();
+                }
+              }}
             >
               <ButtonContainer>
                 <div className="buttons">
