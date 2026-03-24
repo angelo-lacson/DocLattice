@@ -75,11 +75,11 @@ export const SelectDocumentsModal = ({
   onAddDocumentIds,
 }: SelectDocumentsModalProps) => {
   const [filtered_to_labelset_id, filterToLabelsetId] = useState<string | null>(
-    null,
+    null
   );
   const [filtered_to_label_id, filterToLabelId] = useState<string | null>(null);
   const [filtered_to_corpus, filterToCorpus] = useState<CorpusType | null>(
-    null,
+    null
   );
   const selected_document_ids = useReactiveVar(selectedDocumentIds);
   const [document_search_term, documentSearchTerm] = useState<string>("");
@@ -117,7 +117,7 @@ export const SelectDocumentsModal = ({
       variables: document_variables,
       nextFetchPolicy: "network-only",
       notifyOnNetworkStatusChange: true, // required to get loading signal on fetchMore
-    },
+    }
   );
 
   const document_nodes = documents_data?.documents?.edges
@@ -158,7 +158,7 @@ export const SelectDocumentsModal = ({
   const debouncedSearch = useRef(
     _.debounce((searchTerm) => {
       documentSearchTerm(searchTerm);
-    }, 1000),
+    }, 1000)
   );
 
   const handleSearchChange = (value: string) => {
@@ -198,7 +198,7 @@ export const SelectDocumentsModal = ({
           title: file.name,
           description: `Content summary for ${file.name}`,
         },
-      }),
+      })
     );
     showUploadNewDocumentsModal(true);
     uploadModalPreloadedFiles(filePackages);
@@ -241,8 +241,8 @@ export const SelectDocumentsModal = ({
                           filtered_to_labelset_id
                             ? filtered_to_labelset_id
                             : filtered_to_corpus?.labelSet?.id
-                              ? filtered_to_corpus.labelSet.id
-                              : undefined
+                            ? filtered_to_corpus.labelSet.id
+                            : undefined
                         }
                       />
                     ) : (
