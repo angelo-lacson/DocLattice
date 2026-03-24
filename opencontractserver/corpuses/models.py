@@ -800,9 +800,6 @@ class Corpus(TreeNode):
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }
 
-    # File types that are stored as-is without parsing
-    TEXT_MIMETYPES = {"text/plain", "text/markdown", "application/txt"}
-
     def import_content(
         self,
         content: bytes,

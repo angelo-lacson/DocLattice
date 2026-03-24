@@ -152,10 +152,10 @@ function parseYamlValue(raw: string): string | number | boolean {
   ) {
     return raw.slice(1, -1);
   }
-  if (raw === "true") return true as unknown as string;
-  if (raw === "false") return false as unknown as string;
-  if (/^\d+$/.test(raw)) return parseInt(raw, 10) as unknown as string;
-  if (/^\d+\.\d+$/.test(raw)) return parseFloat(raw) as unknown as string;
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  if (/^\d+$/.test(raw)) return parseInt(raw, 10);
+  if (/^\d+\.\d+$/.test(raw)) return parseFloat(raw);
   return raw;
 }
 
@@ -269,6 +269,12 @@ function tokenizeFences(
     }
   }
 
+  // Flush unclosed fence as prose to prevent silent data loss
+  if (currentFence) {
+    const recoveredText = fenceBody.join("\n").trim();
+    if (recoveredText) tokens.push(recoveredText);
+  }
+
   // Flush remaining prose
   flushProse();
 
@@ -279,11 +285,11 @@ function tokenizeFences(
 // Chapter parsing
 // ---------------------------------------------------------------------------
 
-function parseChapter(token: FenceToken): CamlChapter {
+function parseChapter(token: FenceToken, index: number): CamlChapter {
   const { attrs, body } = token;
 
   const chapter: CamlChapter = {
-    id: attrs.id || `chapter-${Math.random().toString(36).slice(2, 8)}`,
+    id: attrs.id || `chapter-${index}`,
     theme: (attrs.theme as "light" | "dark") || undefined,
     gradient: attrs.gradient === "true" || undefined,
     centered: attrs.centered === "true" || undefined,
@@ -362,6 +368,7 @@ export function parseCaml(source: string): CamlDocument {
   // Pass 1b: Tokenize body into chapters
   const topTokens = tokenizeFences(body, 3);
   const chapters: CamlChapter[] = [];
+  let chapterIndex = 0;
 
   for (const token of topTokens) {
     if (typeof token === "string") {
@@ -369,22 +376,25 @@ export function parseCaml(source: string): CamlDocument {
       const trimmed = token.trim();
       if (trimmed) {
         const implicitChapter: CamlChapter = {
-          id: `intro-${Math.random().toString(36).slice(2, 8)}`,
+          id: `intro-${chapterIndex}`,
           blocks: [{ type: "prose", content: trimmed }],
         };
         chapters.push(implicitChapter);
+        chapterIndex++;
       }
     } else if (token.type === "chapter") {
-      chapters.push(parseChapter(token));
+      chapters.push(parseChapter(token, chapterIndex));
+      chapterIndex++;
     } else {
       // Top-level non-chapter block — wrap in implicit chapter
       const block = parseBlock(token.type, token.attrs, token.body);
       if (block) {
         const implicitChapter: CamlChapter = {
-          id: `block-${Math.random().toString(36).slice(2, 8)}`,
+          id: `block-${chapterIndex}`,
           blocks: [block],
         };
         chapters.push(implicitChapter);
+        chapterIndex++;
       }
     }
   }

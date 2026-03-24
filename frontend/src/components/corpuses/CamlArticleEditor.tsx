@@ -315,7 +315,10 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
 
     try {
       // Encode content as base64 for the upload mutation
-      const base64Content = btoa(unescape(encodeURIComponent(content)));
+      const bytes = new TextEncoder().encode(content);
+      const base64Content = btoa(
+        Array.from(bytes, (b) => String.fromCharCode(b)).join("")
+      );
 
       const result = await uploadDocument({
         variables: {
