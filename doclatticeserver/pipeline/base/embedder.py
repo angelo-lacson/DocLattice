@@ -221,6 +221,9 @@ class BaseEmbedder(PipelineComponentBase, ABC):
             )
             return None
 
+        if not texts:
+            return []
+
         results: list[Optional[list[float]]] = []
         for text in texts:
             try:
