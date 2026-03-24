@@ -30,6 +30,7 @@ import {
   ServerAnnotationType,
   LabelDisplayBehavior,
 } from "../../../types/graphql-api";
+import { Z_INDEX } from "../../../assets/configurations/constants";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   getDocumentUrl,
@@ -58,7 +59,7 @@ const StatusDot = styled.div<{ statusColor: string }>`
       case OS_LEGAL_COLORS.dangerBorderHover:
         return "0 0 0 3px rgba(248, 113, 113, 0.15)";
       case OS_LEGAL_COLORS.folderIcon:
-        return "0 0 0 3px rgba(245, 158, 11, 0.15)";
+        return `0 0 0 3px ${folderIconAlpha(0.15)}`;
       default:
         return "0 0 0 3px rgba(148, 163, 184, 0.15)";
     }
@@ -73,7 +74,7 @@ const StatusDot = styled.div<{ statusColor: string }>`
         case OS_LEGAL_COLORS.dangerBorderHover:
           return "0 0 0 4px rgba(248, 113, 113, 0.25)";
         case OS_LEGAL_COLORS.folderIcon:
-          return "0 0 0 4px rgba(245, 158, 11, 0.25)";
+          return `0 0 0 4px ${folderIconAlpha(0.25)}`;
         default:
           return "0 0 0 4px rgba(148, 163, 184, 0.25)";
       }
@@ -171,7 +172,7 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
   >(null);
 
   const only_display_these_annotations = useReactiveVar(
-    onlyDisplayTheseAnnotations
+    onlyDisplayTheseAnnotations,
   );
 
   const cellRef = useRef<HTMLDivElement>(null);
@@ -312,15 +313,28 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
           <StatusDot
             statusColor={statusColor()}
             onClick={() => setIsPopupOpen(!isPopupOpen)}
+            role="button"
+            aria-haspopup="menu"
+            aria-expanded={isPopupOpen}
+            aria-label="Cell status actions"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setIsPopupOpen(!isPopupOpen);
+              }
+            }}
           />
           {isPopupOpen && (
             <div
               ref={popupRef}
+              role="menu"
+              aria-label="Cell actions"
               style={{
                 position: "absolute",
                 top: "-4px",
                 right: "24px",
-                zIndex: 100,
+                zIndex: Z_INDEX.DROPDOWN,
                 background: "white",
                 borderRadius: "8px",
                 boxShadow: "0 4px 16px rgba(0, 0, 0, 0.12)",
@@ -381,7 +395,7 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                       ) {
                         selectedExtract(extract);
                         setViewSourceAnnotations(
-                          cell.fullSourceList as ServerAnnotationType[]
+                          cell.fullSourceList as ServerAnnotationType[],
                         );
                       }
                       setIsPopupOpen(false);
