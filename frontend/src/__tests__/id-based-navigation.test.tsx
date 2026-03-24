@@ -492,7 +492,6 @@ describe("Component Close Navigation", () => {
           data: {
             document: {
               id: "7890",
-              allStructuralAnnotations: [],
               allAnnotations: [],
               allRelationships: [],
             },
@@ -568,7 +567,6 @@ describe("Component Close Navigation", () => {
           data: {
             document: {
               id: "7890",
-              allStructuralAnnotations: [],
               allAnnotations: [],
               allRelationships: [],
             },

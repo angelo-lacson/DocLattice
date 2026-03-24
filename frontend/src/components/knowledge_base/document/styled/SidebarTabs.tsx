@@ -83,7 +83,7 @@ export const SidebarTabsContainer = styled.div<{ $panelOpen: boolean }>`
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: ${(props) => (props.$panelOpen ? "0" : "8px")};
+  gap: ${(props) => (props.$panelOpen ? "0" : "4px")};
   z-index: ${(props) => (props.$panelOpen ? "100002" : "1999")};
 
   @media (max-width: 768px) {
@@ -96,8 +96,7 @@ export const SidebarTab = styled(motion.button)<{
   $isActive: boolean;
   $panelOpen: boolean;
 }>`
-  width: ${(props) => (props.$panelOpen ? "48px" : "40px")};
-  height: ${(props) => (props.$panelOpen ? "120px" : "100px")};
+  width: ${(props) => (props.$panelOpen ? "44px" : "36px")};
   background: ${(props) =>
     props.$isActive
       ? "linear-gradient(90deg, rgba(66, 153, 225, 0.95) 0%, rgba(59, 130, 246, 0.95) 100%)"
@@ -116,8 +115,8 @@ export const SidebarTab = styled(motion.button)<{
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 0.5rem;
+  gap: 0.375rem;
+  padding: 0.5rem 0.375rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: ${(props) =>
     props.$isActive
@@ -144,8 +143,8 @@ export const SidebarTab = styled(motion.button)<{
   }
 
   svg {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     color: ${(props) =>
       props.$isActive ? "white" : OS_LEGAL_COLORS.textSecondary};
     transition: all 0.3s ease;
@@ -157,7 +156,7 @@ export const SidebarTab = styled(motion.button)<{
   .tab-label {
     writing-mode: vertical-rl;
     text-orientation: mixed;
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     font-weight: 600;
     letter-spacing: 0.05em;
     color: ${(props) =>
@@ -226,16 +225,6 @@ export const SidebarTab = styled(motion.button)<{
     background: white;
     border-radius: 2px 0 0 2px;
     transition: height 0.3s ease;
-  }
-
-  /* First tab (top) */
-  &:first-child {
-    margin-bottom: 4px;
-  }
-
-  /* Second tab (bottom) */
-  &:last-child {
-    margin-top: 0;
   }
 
   /* Mobile: Icon-only tabs when panel is closed */
