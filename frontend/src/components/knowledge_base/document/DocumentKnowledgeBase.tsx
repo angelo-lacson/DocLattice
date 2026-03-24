@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useQuery, useReactiveVar } from "@apollo/client";
+import { useQuery, useLazyQuery, useReactiveVar } from "@apollo/client";
 import { unstable_batchedUpdates } from "react-dom";
 import { Button, Modal, ModalBody, ModalFooter, Spinner } from "@os-legal/ui";
 import {
@@ -30,6 +30,9 @@ import {
   GET_DOCUMENT_ANNOTATIONS_ONLY,
   GetDocumentAnnotationsOnlyInput,
   GetDocumentAnnotationsOnlyOutput,
+  GET_DOCUMENT_STRUCTURAL_ANNOTATIONS,
+  GetDocumentStructuralAnnotationsInput,
+  GetDocumentStructuralAnnotationsOutput,
   GET_CONVERSATIONS,
   GetConversationsInputs,
   GetConversationsOutputs,
@@ -79,6 +82,7 @@ import {
 import {
   pdfAnnotationsAtom,
   structuralAnnotationsAtom,
+  structuralAnnotationsLoadedAtom,
 } from "../../annotator/context/AnnotationAtoms";
 import {
   CorpusState,
@@ -141,7 +145,11 @@ import { ZoomControls } from "./ZoomControls";
 
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import workerSrc from "pdfjs-dist/build/pdf.worker.mjs?url";
-import { selectedThreadId } from "../../../graphql/cache";
+import {
+  selectedAnnotationIds,
+  selectedThreadId,
+  showStructuralAnnotations,
+} from "../../../graphql/cache";
 import { useAuthReady } from "../../../hooks/useAuthReady";
 import { useCorpusMdDescription } from "../../../hooks/useCorpusMdDescription";
 
@@ -437,6 +445,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   const [pdfAnnotations, setPdfAnnotations] = useAtom(pdfAnnotationsAtom);
   const [, setStructuralAnnotations] = useAtom(structuralAnnotationsAtom);
+  const [structuralAnnotationsLoaded, setStructuralAnnotationsLoaded] = useAtom(
+    structuralAnnotationsLoadedAtom
+  );
+
+  // Track showStructural reactive var for lazy loading structural annotations
+  const showStructural = useReactiveVar(showStructuralAnnotations);
 
   const {
     setCorpus,
@@ -579,6 +593,92 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
     }
   }, [selectedAnalysis]);
 
+  // --- Lazy loading for structural annotations ---
+  // Structural annotations (headers, sections, paragraphs) can number in the
+  // thousands for large documents but are hidden by default. We defer fetching
+  // them until the user toggles structural visibility on.
+  // Deep-links fetch ONLY the specific referenced annotations (lightweight).
+  // Two separate lazy queries avoid a shared-ref race condition between the
+  // full-load (toggle) and targeted (deep-link) paths.
+  const deepLinkedAnnotationIds = useReactiveVar(selectedAnnotationIds);
+
+  const [fetchAllStructural] = useLazyQuery<
+    GetDocumentStructuralAnnotationsOutput,
+    GetDocumentStructuralAnnotationsInput
+  >(GET_DOCUMENT_STRUCTURAL_ANNOTATIONS, {
+    fetchPolicy: "cache-and-network",
+    onCompleted: (data) => {
+      if (data?.document?.allStructuralAnnotations) {
+        const structuralAnns = data.document.allStructuralAnnotations.map(
+          (ann) => convertToServerAnnotation(ann)
+        );
+        setStructuralAnnotations(structuralAnns);
+        setStructuralAnnotationsLoaded(true);
+      }
+    },
+  });
+
+  const [fetchTargetedStructural] = useLazyQuery<
+    GetDocumentStructuralAnnotationsOutput,
+    GetDocumentStructuralAnnotationsInput
+  >(GET_DOCUMENT_STRUCTURAL_ANNOTATIONS, {
+    fetchPolicy: "cache-and-network",
+    onCompleted: (data) => {
+      if (data?.document?.allStructuralAnnotations) {
+        const structuralAnns = data.document.allStructuralAnnotations.map(
+          (ann) => convertToServerAnnotation(ann)
+        );
+        // Merge with existing (don't replace — this is a targeted fetch)
+        setStructuralAnnotations((prev) => {
+          const existingIds = new Set(prev.map((a) => a.id));
+          const newAnns = structuralAnns.filter((a) => !existingIds.has(a.id));
+          return newAnns.length > 0 ? [...prev, ...newAnns] : prev;
+        });
+      }
+    },
+  });
+
+  // Reset structural annotations loaded flag when document changes
+  useEffect(() => {
+    setStructuralAnnotationsLoaded(false);
+    setStructuralAnnotations([]);
+  }, [documentId, setStructuralAnnotationsLoaded, setStructuralAnnotations]);
+
+  // Fetch ALL structural annotations when the user toggles structural visibility
+  useEffect(() => {
+    if (showStructural && !structuralAnnotationsLoaded && documentId) {
+      fetchAllStructural({ variables: { documentId } });
+    }
+  }, [
+    showStructural,
+    structuralAnnotationsLoaded,
+    documentId,
+    fetchAllStructural,
+  ]);
+
+  // Fetch ONLY the deep-linked annotations when navigating via URL.
+  // Skip if all structural annotations are already loaded (superset).
+  // Note: selectedAnnotationIds may contain non-structural IDs (e.g. corpus
+  // annotations from URL deep-links). In that case the backend returns an empty
+  // list, which is harmless — accepted trade-off to avoid needing annotation
+  // type metadata before the fetch.
+  useEffect(() => {
+    if (
+      deepLinkedAnnotationIds.length > 0 &&
+      documentId &&
+      !structuralAnnotationsLoaded
+    ) {
+      fetchTargetedStructural({
+        variables: { documentId, annotationIds: deepLinkedAnnotationIds },
+      });
+    }
+  }, [
+    deepLinkedAnnotationIds,
+    documentId,
+    structuralAnnotationsLoaded,
+    fetchTargetedStructural,
+  ]);
+
   /**
    * processAnnotationsData
    *
@@ -599,11 +699,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           convertToServerAnnotation(annotation)
         ) ?? [];
 
-      const structuralAnnotations =
-        data.document.allStructuralAnnotations?.map((annotation) =>
-          convertToServerAnnotation(annotation)
-        ) ?? [];
-
       const processedDocTypeAnnotations = convertToDocTypeAnnotations(
         data.document.allAnnotations?.filter(
           (ann) => ann.annotationLabel.labelType === LabelType.DocTypeLabel
@@ -611,11 +706,12 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       );
 
       // Update pdfAnnotations atom with ONLY non-structural annotations
-      // Structural annotations are handled separately via structuralAnnotationsAtom
+      // Structural annotations are loaded lazily via GET_DOCUMENT_STRUCTURAL_ANNOTATIONS
+      // when the user toggles structural visibility on (see useLazyQuery above)
       setPdfAnnotations(
         (prev) =>
           new PdfAnnotations(
-            processedAnnotations, // Don't include structural here
+            processedAnnotations,
             prev.relations,
             processedDocTypeAnnotations,
             true
@@ -624,14 +720,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
       // **Store the initial annotations**
       setInitialAnnotations(processedAnnotations);
-
-      // Process structural annotations
-      if (data.document.allStructuralAnnotations) {
-        const structuralAnns = data.document.allStructuralAnnotations.map(
-          (ann) => convertToServerAnnotation(ann)
-        );
-        setStructuralAnnotations(structuralAnns);
-      }
 
       // Process relationships - backend now filters out analysis relationships
       const processedRelationships = data.document.allRelationships?.map(
@@ -1080,8 +1168,6 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           {
             documentId,
             hasDocument: !!data?.document,
-            hasStructuralAnnotations:
-              data?.document?.allStructuralAnnotations?.length ?? 0,
           }
         );
         if (!data?.document) {
@@ -1229,23 +1315,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
         // Note: openedDocument is managed by CentralRouteManager, not set here
 
-        // Batch structural annotation updates (document-only)
-        routingLogger.debug(
-          "[onCompleted] 🔄 Batching structural annotation updates (document-only)"
-        );
-        unstable_batchedUpdates(() => {
-          // Process structural annotations even without corpus
-          if (data.document.allStructuralAnnotations) {
-            const structuralAnns = data.document.allStructuralAnnotations.map(
-              (ann) => convertToServerAnnotation(ann)
-            );
-            setStructuralAnnotations(structuralAnns);
-          } else {
-            setStructuralAnnotations([]);
-          }
-
-          // Process structural relationships even without corpus
-          const processedRelationships = data.document.allRelationships?.map(
+        // Structural annotations are loaded lazily (see useLazyQuery above).
+        // In the no-corpus path, there are no regular annotations to process.
+        // Relationships are loaded eagerly since they're few in number.
+        const processedRelationships =
+          data.document.allRelationships?.map(
             (rel) =>
               new RelationGroup(
                 rel.sourceAnnotations.edges
@@ -1258,11 +1332,11 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
                 rel.id,
                 rel.structural
               )
-          );
+          ) ?? [];
 
-          // Set annotations with structural relationships (no regular annotations without corpus)
+        unstable_batchedUpdates(() => {
           setPdfAnnotations(
-            new PdfAnnotations([], processedRelationships || [], [], true)
+            new PdfAnnotations([], processedRelationships, [], true)
           );
         });
       },
@@ -1322,30 +1396,18 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
           convertToServerAnnotation(annotation)
         ) ?? [];
 
-      const structuralAnnotations =
-        data.document.allStructuralAnnotations?.map((annotation) =>
-          convertToServerAnnotation(annotation)
-        ) ?? [];
-
       // Update pdfAnnotations atom with ONLY non-structural annotations
-      // Structural annotations are handled separately via structuralAnnotationsAtom
+      // Structural annotations are loaded lazily and are analysis-independent,
+      // so they don't need to be re-fetched when switching analyses/extracts
       setPdfAnnotations(
         (prev) =>
           new PdfAnnotations(
-            processedAnnotations, // Don't include structural here
+            processedAnnotations,
             prev.relations, // Keep existing relations initially
             prev.docTypes, // Keep existing doc types
             true
           )
       );
-
-      // Process structural annotations
-      if (data.document.allStructuralAnnotations) {
-        const structuralAnns = data.document.allStructuralAnnotations.map(
-          (ann) => convertToServerAnnotation(ann)
-        );
-        setStructuralAnnotations(structuralAnns);
-      }
 
       // Process relationships
       const processedRelationships = data.document.allRelationships?.map(
