@@ -29,6 +29,11 @@ EMBEDDING_API_BATCH_SIZE = 50
 # Exceeding this raises ValueError rather than silently truncating.
 MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE = 100
 
+# Import-time validation is intentional here: these constants are compile-time
+# configuration, not runtime state.  A misconfiguration (e.g., API batch size
+# exceeding the microservice limit) is a deployment error that should surface
+# immediately at process startup rather than silently producing truncated
+# batches hours later when the first embedding task runs.
 if EMBEDDING_API_BATCH_SIZE > MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE:
     raise ValueError(
         f"EMBEDDING_API_BATCH_SIZE ({EMBEDDING_API_BATCH_SIZE}) must not exceed "

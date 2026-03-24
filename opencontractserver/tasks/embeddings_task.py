@@ -534,7 +534,10 @@ def _batch_embed_text_annotations(
                 )
             continue
 
-        # Store each vector
+        # Store each vector.
+        # add_embedding() is idempotent (upserts via store_embedding), so
+        # Celery retries of the whole task won't create duplicate records for
+        # annotations that already succeeded in a previous attempt.
         for (annot, _), vector in zip(chunk, vectors):
             if vector is None:
                 result["failed"] += 1
@@ -671,11 +674,13 @@ def calculate_embeddings_for_annotation_batch(
                 f"Batch-embedding {len(text_only_annots)} text-only annotations "
                 f"with {embedder_path} (api_batch_size={EMBEDDING_API_BATCH_SIZE})"
             )
-            # Snapshot skipped count before batch embedding so we can compute
-            # how many were skipped *within* _batch_embed_text_annotations
-            # (e.g., empty-text annotations) vs skips from the partition loop
-            # above (missing annotations).
+            # Snapshot counts before batch embedding so we can correctly compute
+            # how many annotations remain unprocessed if a ValueError occurs.
+            # _batch_embed_text_annotations mutates result in-place, so we need
+            # these baselines to avoid double-counting already-recorded outcomes.
             skipped_before_batch = result["skipped"]
+            failed_before_batch = result["failed"]
+            succeeded_before_batch = result["succeeded"]
             try:
                 _batch_embed_text_annotations(
                     text_only_annots,
@@ -689,10 +694,15 @@ def calculate_embeddings_for_annotation_batch(
                 # Fail fast without burning Celery retries.
                 logger.error(f"Contract violation in batch embedding: {e}")
                 result["errors"].append(f"Contract violation: {e}")
+                # Count how many text-only annotations were already accounted for
+                # by _batch_embed_text_annotations before it raised.
                 batch_skipped = result["skipped"] - skipped_before_batch
-                result["failed"] += len(text_only_annots) - (
-                    result["succeeded"] + batch_skipped
-                )
+                batch_failed = result["failed"] - failed_before_batch
+                batch_succeeded = result["succeeded"] - succeeded_before_batch
+                already_accounted = batch_skipped + batch_failed + batch_succeeded
+                result["failed"] += len(text_only_annots) - already_accounted
+                # Multimodal annotations were never processed; count as failed.
+                result["failed"] += len(multimodal_annots)
                 return result
 
         # Process multimodal annotations individually (need image extraction)

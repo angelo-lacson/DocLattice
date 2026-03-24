@@ -49,7 +49,14 @@ class DummyEmbedder384(BaseEmbedder):
 
 
 class FailingBatchEmbedder(BaseEmbedder):
-    """Embedder whose batch method raises an exception."""
+    """Embedder whose batch method raises a built-in ``ConnectionError``.
+
+    Uses the built-in ``ConnectionError`` (not ``requests.exceptions.ConnectionError``)
+    to simulate a generic non-retriable exception.  In the batch embedding task,
+    this falls through to the catch-all ``except Exception`` handler and is
+    recorded as a permanent per-annotation failure rather than triggering a
+    Celery retry.
+    """
 
     title = "Failing Batch"
     description = "Test embedder that fails on batch"

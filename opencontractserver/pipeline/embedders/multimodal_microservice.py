@@ -119,6 +119,17 @@ class BaseMultimodalMicroserviceEmbedder(BaseEmbedder):
         """
         Generate text embeddings via POST /embeddings.
 
+        Note on error handling asymmetry with batch methods:
+            This method returns None on ALL errors (including 5xx), because single
+            annotations are typically processed within Celery tasks that already
+            have their own retry logic. Raising here would abort processing of
+            remaining annotations in the task.
+
+            In contrast, ``embed_texts_batch()`` and ``embed_images_batch()`` raise
+            ``EmbeddingServerError`` on 5xx so the Celery task-level retry decorator
+            can fire, since a batch failure affects the entire sub-batch and there
+            is no remaining work to preserve.
+
         Args:
             text: The text content to embed.
             **all_kwargs: All keyword arguments including PIPELINE_SETTINGS
