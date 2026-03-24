@@ -77,7 +77,7 @@ class DocumentQueryMixin:
         max_limit=DOCUMENT_RELATIONSHIP_QUERY_MAX_LIMIT,
     )
 
-    @login_required
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_document_relationships(self, info, **kwargs):
         """
         Resolve document relationships with proper permission filtering.
@@ -116,7 +116,7 @@ class DocumentQueryMixin:
 
     document_relationship = relay.Node.Field(DocumentRelationshipType)
 
-    @login_required
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_document_relationship(self, info, **kwargs):
         """
         Resolve a single document relationship by ID.
@@ -139,7 +139,7 @@ class DocumentQueryMixin:
         relationship_type=graphene.String(required=False),
     )
 
-    @login_required
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_bulk_doc_relationships(self, info, document_id, **kwargs):
         """
         Bulk resolver for document relationships involving a specific document.
