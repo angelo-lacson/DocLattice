@@ -1,9 +1,6 @@
 import styled, { css, keyframes } from "styled-components";
 import { MOBILE_VIEW_BREAKPOINT } from "../../../assets/configurations/constants";
-import {
-  accentAlpha,
-  OS_LEGAL_COLORS,
-} from "../../../assets/configurations/osLegalStyles";
+import { accentAlpha } from "../../../assets/configurations/osLegalStyles";
 import { modalFooterBorder, modalFooterMobile } from "./sharedModalStyles";
 
 // Animation keyframes
@@ -75,20 +72,21 @@ export const StyledModalWrapper = styled.div`
 `;
 
 // Header icon wrapper
+// Uses calc() with spacing tokens to derive icon container and inner SVG sizes
 export const HeaderIcon = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: calc(var(--oc-spacing-lg) + var(--oc-spacing-xs)); /* 28px */
+  height: calc(var(--oc-spacing-lg) + var(--oc-spacing-xs)); /* 28px */
   border-radius: var(--oc-radius-md);
   background: var(--oc-accent);
   color: white;
   margin-right: var(--oc-spacing-xs);
 
   svg {
-    width: 15px;
-    height: 15px;
+    width: var(--oc-font-size-md); /* 15px */
+    height: var(--oc-font-size-md); /* 15px */
   }
 `;
 
@@ -174,20 +172,21 @@ export const AlertBox = styled.div<{ $variant: "warning" | "info" }>`
     flex-shrink: 0;
     width: 18px;
     height: 18px;
-    margin-top: 2px;
+    /* Optical alignment: nudge icon down 2px to align with first line of text */
+    margin-top: calc(var(--oc-spacing-xs) / 2);
   }
 
   ${({ $variant }) =>
     $variant === "warning"
       ? css`
-          background: ${OS_LEGAL_COLORS.warningSurface};
-          color: ${OS_LEGAL_COLORS.warningText};
-          border: 1px solid ${OS_LEGAL_COLORS.warningBorder};
+          background: var(--oc-warning-surface);
+          color: var(--oc-warning-text);
+          border: 1px solid var(--oc-warning-border);
         `
       : css`
-          background: ${OS_LEGAL_COLORS.infoSurface};
-          color: ${OS_LEGAL_COLORS.infoText};
-          border: 1px solid ${OS_LEGAL_COLORS.infoBorder};
+          background: var(--oc-info-surface);
+          color: var(--oc-info-text);
+          border: 1px solid var(--oc-info-border);
         `}
 
   &:last-child {
@@ -232,7 +231,7 @@ export const DropZone = styled.div<{
   border-radius: var(--oc-radius-lg);
   background: ${({ $isDragActive }) =>
     $isDragActive ? accentAlpha(0.05) : "var(--oc-bg-subtle)"};
-  min-height: 200px;
+  min-height: 200px; /* Drop zone minimum height — no clean token multiple */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -244,7 +243,7 @@ export const DropZone = styled.div<{
   overflow: hidden;
 
   @media (max-width: ${MOBILE_VIEW_BREAKPOINT}px) {
-    min-height: 160px;
+    min-height: 160px; /* Mobile drop zone minimum height — no clean token multiple */
     padding: var(--oc-spacing-lg) var(--oc-spacing-md);
   }
 
@@ -340,6 +339,18 @@ export const DropZoneButton = styled.button`
 
   &:active {
     transform: translateY(0);
+  }
+`;
+
+// Inline icon wrapper for footer buttons (e.g. "Start Import")
+export const ButtonIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  margin-right: var(--oc-spacing-xs);
+
+  svg {
+    width: var(--oc-font-size-md);
+    height: var(--oc-font-size-md);
   }
 `;
 

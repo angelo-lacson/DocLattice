@@ -6,7 +6,7 @@ import logging
 import re
 
 import graphene
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from graphene import relay
 from graphene_django.fields import DjangoConnectionField
 from graphene_django.filter import DjangoFilterConnectionField
@@ -126,10 +126,17 @@ class AnnotationQueryMixin:
             "annotation_label",
             "creator",
             "document",
+            "document__creator",
             "corpus",
             "analysis",
             "analysis__analyzer",
             "corpus_action",
+            "structural_set",
+        ).prefetch_related(
+            Prefetch(
+                "structural_set__documents",
+                queryset=Document.objects.select_related("creator"),
+            ),
         )
 
         # Filter by uses_label_from_labelset_id

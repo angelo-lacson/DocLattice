@@ -62,6 +62,7 @@ import {
   AlertBody,
   SpinnerIcon,
   ProgressContent,
+  ButtonIcon,
 } from "./UploadModalStyles";
 
 type UploadStep = "confirm" | "upload" | "progress";
@@ -479,9 +480,9 @@ export const BulkImportModal: React.FC = () => {
                   onClick={handleImport}
                   disabled={!selectedFile || !base64File || loading}
                 >
-                  <CloudUpload
-                    style={{ width: 16, height: 16, marginRight: 8 }}
-                  />
+                  <ButtonIcon>
+                    <CloudUpload />
+                  </ButtonIcon>
                   Start Import
                 </Button>
               </>

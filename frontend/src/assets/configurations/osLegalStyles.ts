@@ -137,6 +137,8 @@ export const OS_LEGAL_COLORS = {
   successText: "#166534",
 
   // Info colors - blue theme for informational messages
+  // Authoritative values also defined as CSS custom properties in index.css
+  // (--oc-info-surface, --oc-info-border, --oc-info-text). Keep in sync.
   /** Info surface background - very light blue. */
   infoSurface: "#f0f9ff",
   /** Info border color - light blue. */
@@ -145,6 +147,8 @@ export const OS_LEGAL_COLORS = {
   infoText: "#0369a1",
 
   // Warning colors - amber theme for caution messages
+  // Authoritative values also defined as CSS custom properties in index.css
+  // (--oc-warning-surface, --oc-warning-border, --oc-warning-text). Keep in sync.
   /** Warning surface background - very light amber. */
   warningSurface: "#fefce8",
   /** Warning border color - amber. */

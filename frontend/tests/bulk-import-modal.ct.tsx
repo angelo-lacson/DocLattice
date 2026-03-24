@@ -7,6 +7,7 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import { BulkImportModal } from "../src/components/widgets/modals/BulkImportModal";
 import { BulkImportTestWrapper } from "./wrappers/BulkImportTestWrapper";
 import { docScreenshot } from "./utils/docScreenshot";
+import { IMPORT_ZIP_TO_CORPUS } from "../src/graphql/mutations";
 
 test.describe("BulkImportModal", () => {
   test("should render confirm step with warning and info alerts", async ({
@@ -169,6 +170,83 @@ test.describe("BulkImportModal", () => {
     await expect(startImportButton).toBeEnabled();
 
     await docScreenshot(page, "corpus--bulk-import-modal--file-selected");
+
+    await component.unmount();
+  });
+
+  test("should show progress step with spinner and progress bar during import", async ({
+    mount,
+    page,
+  }) => {
+    // Compute the expected base64 deterministically from the same buffer used below.
+    // Apollo MockedProvider uses deep equality (not Jest matchers) to match variables,
+    // so we must provide the exact base64 string rather than expect.any(String).
+    // Note: variableMatcher cannot be used in Playwright CT tests because functions
+    // are not serializable across the Node.js ↔ browser boundary.
+    const zipBuffer = Buffer.from("PK\x03\x04dummy-zip-content");
+    const expectedBase64 = zipBuffer.toString("base64");
+
+    const importMock = {
+      request: {
+        query: IMPORT_ZIP_TO_CORPUS,
+        variables: {
+          base64FileString: expectedBase64,
+          corpusId: "test-corpus-id",
+          makePublic: false,
+        },
+      },
+      delay: 30000,
+      result: {
+        data: {
+          importZipToCorpus: {
+            ok: true,
+            message: "Import started",
+            jobId: "test-job-123",
+          },
+        },
+      },
+    };
+
+    const component = await mount(
+      <BulkImportTestWrapper mocks={[importMock]}>
+        <BulkImportModal />
+      </BulkImportTestWrapper>
+    );
+
+    // Navigate to upload step
+    await page.locator('button:has-text("Continue")').click();
+    await expect(
+      page.locator("text=Drag & drop a ZIP file here")
+    ).toBeVisible();
+
+    // Select a file (reuses the same zipBuffer that computed expectedBase64 above)
+    const fileInput = page.locator('input[type="file"][accept=".zip"]');
+    await fileInput.setInputFiles({
+      name: "progress-test.zip",
+      mimeType: "application/zip",
+      buffer: zipBuffer,
+    });
+    await expect(page.locator("text=progress-test.zip")).toBeVisible();
+
+    // Click Start Import to trigger the progress step
+    await page.locator('button:has-text("Start Import")').click();
+
+    // Progress step should show spinner, heading, and progress bar
+    await expect(page.locator("text=Importing Documents...")).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(
+      page.locator("text=This may take a few moments")
+    ).toBeVisible();
+
+    // Progress percentage should be visible
+    await expect(page.locator("text=%")).toBeVisible();
+
+    // Close button should be hidden during progress
+    await expect(page.locator('button:has-text("Cancel")')).not.toBeVisible();
+    await expect(page.locator('button:has-text("Back")')).not.toBeVisible();
+
+    await docScreenshot(page, "corpus--bulk-import-modal--progress-step");
 
     await component.unmount();
   });
