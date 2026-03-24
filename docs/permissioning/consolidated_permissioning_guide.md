@@ -395,6 +395,8 @@ DELETE Check:
 - NO individual guardian permissions - inherits from source_doc + target_doc + corpus
 - Types: `RELATIONSHIP` (labeled semantic link) or `NOTES` (free-form notes between docs)
 - Permission model matches annotation Relationship for consistency
+- **Anonymous users**: Read-only access if source doc, target doc, AND corpus are all `is_public=True`
+- **No `@login_required`**: Query resolvers do NOT require authentication; permission filtering via `visible_to_user()` handles anonymous access to public resources
 
 **Query Optimizer**: Use `DocumentRelationshipQueryOptimizer` for:
 - IDOR-safe fetches with `get_relationship_by_id(user, id)`
@@ -559,6 +561,7 @@ assert thread_msg in visible_to_alice  # Moderator access
 | Document | ✅ | `is_public=True` |
 | Annotation | ✅ | Document AND Corpus both public |
 | Relationship | ✅ | Document AND Corpus both public |
+| DocumentRelationship | ✅ | Source doc, target doc, AND corpus all public |
 | Analysis | ✅ | Analysis public AND Corpus public |
 | Extract | ❌ | Never (always filtered out) |
 | Conversation | ✅ | `is_public=True` |

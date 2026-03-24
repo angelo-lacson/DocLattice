@@ -25,6 +25,10 @@ from opencontractserver.annotations.models import (
 )
 from opencontractserver.corpuses.models import Corpus, CorpusFolder, TemporaryFileHandle
 from opencontractserver.documents.models import DocumentPath
+from opencontractserver.tasks.import_tasks import (
+    _validate_sidecar_schema,
+    import_zip_with_folder_structure,
+)
 from opencontractserver.tests.fixtures import (
     SAMPLE_PAWLS_FILE_ONE_PATH,
     SAMPLE_PDF_FILE_ONE_PATH,
@@ -32,6 +36,7 @@ from opencontractserver.tests.fixtures import (
     SAMPLE_TXT_FILE_ONE_PATH,
 )
 from opencontractserver.types.enums import PermissionTypes
+from opencontractserver.utils.importing import validate_labels_data
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()
@@ -1088,8 +1093,8 @@ class TestSidecarImportTask(TestCase):
             {
                 "id": 1,
                 "relationshipLabel": "NonExistentRelLabel",
-                "source_ids": [1],
-                "target_ids": [2],
+                "source_annotation_ids": [1],
+                "target_annotation_ids": [2],
                 "structural": False,
             },
         ]
@@ -1472,3 +1477,541 @@ class TestSidecarImportTask(TestCase):
         doc = Document.objects.get(pk=doc_id)
         self.assertEqual(doc.custom_meta, test_meta)
         self.assertTrue(doc.is_public)
+
+
+class TestValidateLabelsData(TestCase):
+    """Unit tests for validate_labels_data schema validation."""
+
+    def _validate(self, data):
+        return validate_labels_data(data)
+
+    # --- Top-level structure ---
+
+    def test_valid_labels_data(self):
+        """Well-formed labels.json produces no errors."""
+        data = _build_labels_json(
+            text_labels={"Heading": _make_label_data("Heading")},
+            doc_labels={"Contract": _make_label_data("Contract", "DOC_TYPE_LABEL")},
+        )
+        self.assertEqual(self._validate(data), [])
+
+    def test_empty_sections_valid(self):
+        """Empty text_labels and doc_labels dicts are valid."""
+        self.assertEqual(self._validate({"text_labels": {}, "doc_labels": {}}), [])
+
+    def test_missing_sections_valid(self):
+        """Omitting both sections entirely is valid (no labels to import)."""
+        self.assertEqual(self._validate({}), [])
+
+    def test_top_level_not_dict(self):
+        """Non-dict top-level value is rejected."""
+        errors = self._validate(["not", "a", "dict"])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("must be a JSON object", errors[0])
+
+    def test_top_level_string(self):
+        """String top-level value is rejected."""
+        errors = self._validate("just a string")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("must be a JSON object", errors[0])
+
+    # --- Section-level structure ---
+
+    def test_text_labels_as_list(self):
+        """text_labels as a list instead of dict is rejected."""
+        errors = self._validate({"text_labels": [{"text": "Heading"}]})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("text_labels", errors[0])
+        self.assertIn("must be a JSON object", errors[0])
+
+    def test_doc_labels_as_list(self):
+        """doc_labels as a list instead of dict is rejected."""
+        errors = self._validate({"doc_labels": ["Contract"]})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("doc_labels", errors[0])
+
+    def test_both_sections_as_lists(self):
+        """Both sections as lists produce two errors."""
+        errors = self._validate({"text_labels": [], "doc_labels": []})
+        self.assertEqual(len(errors), 2)
+
+    # --- Label entry structure ---
+
+    def test_label_entry_not_dict(self):
+        """A label entry that is a string instead of dict is rejected."""
+        errors = self._validate({"text_labels": {"Heading": "not a dict"}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("must be a JSON object", errors[0])
+
+    def test_missing_text_field(self):
+        """A label entry missing the 'text' field is rejected."""
+        errors = self._validate(
+            {"text_labels": {"Heading": {"label_type": "TOKEN_LABEL", "color": "#FFF"}}}
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("missing required field 'text'", errors[0])
+
+    def test_empty_text_field(self):
+        """A label entry with empty string 'text' is rejected."""
+        errors = self._validate(
+            {"text_labels": {"Heading": {"text": "  ", "label_type": "TOKEN_LABEL"}}}
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("non-empty string", errors[0])
+
+    def test_text_field_wrong_type(self):
+        """A label entry with non-string 'text' is rejected."""
+        errors = self._validate({"text_labels": {"Heading": {"text": 123}}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("non-empty string", errors[0])
+
+    # --- Optional field type checks ---
+
+    def test_color_as_integer(self):
+        """color as integer instead of string is rejected."""
+        label = _make_label_data("Heading")
+        label["color"] = 0xFF0000
+        errors = self._validate({"text_labels": {"Heading": label}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("'color' must be a string", errors[0])
+
+    def test_icon_as_integer(self):
+        """icon as integer instead of string is rejected."""
+        label = _make_label_data("Heading")
+        label["icon"] = 42
+        errors = self._validate({"text_labels": {"Heading": label}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("'icon' must be a string", errors[0])
+
+    def test_description_as_integer(self):
+        """description as integer instead of string is rejected."""
+        label = _make_label_data("Heading")
+        label["description"] = 99
+        errors = self._validate({"text_labels": {"Heading": label}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("'description' must be a string", errors[0])
+
+    def test_invalid_label_type(self):
+        """Unrecognised label_type string is rejected."""
+        label = _make_label_data("Heading")
+        label["label_type"] = "INVALID_TYPE"
+        errors = self._validate({"text_labels": {"Heading": label}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("invalid label_type", errors[0])
+
+    def test_label_type_wrong_type(self):
+        """label_type as integer is rejected."""
+        label = _make_label_data("Heading")
+        label["label_type"] = 1
+        errors = self._validate({"text_labels": {"Heading": label}})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("'label_type' must be a string", errors[0])
+
+    # --- Multiple errors ---
+
+    def test_multiple_bad_labels(self):
+        """Multiple malformed labels in the same section produce multiple errors."""
+        errors = self._validate(
+            {
+                "text_labels": {
+                    "A": {"label_type": "TOKEN_LABEL"},  # missing text
+                    "B": "just a string",  # not a dict
+                    "C": {"text": "", "color": 123},  # empty text + bad color
+                }
+            }
+        )
+        self.assertGreaterEqual(len(errors), 3)
+
+
+class TestMalformedLabelsImport(TestCase):
+    """
+    Integration tests verifying that malformed labels.json is rejected
+    gracefully during import_zip_with_folder_structure.
+    """
+
+    def setUp(self):
+        with transaction.atomic():
+            self.user = User.objects.create_user(
+                username="labels_validation_user", password="testpass"
+            )
+
+        with transaction.atomic():
+            self.corpus = Corpus.objects.create(
+                title="Labels Validation Corpus",
+                description="Corpus for testing labels validation",
+                creator=self.user,
+            )
+            set_permissions_for_obj_to_user(
+                self.user, self.corpus, [PermissionTypes.ALL]
+            )
+
+        self.pdf_bytes = SAMPLE_PDF_FILE_ONE_PATH.read_bytes()
+
+    def _create_test_zip(self, files: dict[str, bytes]) -> io.BytesIO:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for name, content in files.items():
+                zf.writestr(name, content)
+        buffer.seek(0)
+        return buffer
+
+    def _create_temp_file_handle(self, zip_buffer: io.BytesIO) -> TemporaryFileHandle:
+        zip_content = ContentFile(zip_buffer.read(), name="test_labels_validation.zip")
+        return TemporaryFileHandle.objects.create(file=zip_content)
+
+    def _run_import(self, labels_data) -> dict:
+        sidecar = _build_sidecar_json(
+            annotations=[
+                _make_annotation(1, "Exhibit", "Heading", page=0),
+            ],
+        )
+        files = {
+            "doc.pdf": self.pdf_bytes,
+            "doc.json": json.dumps(sidecar).encode("utf-8"),
+            "labels.json": json.dumps(labels_data).encode("utf-8"),
+        }
+        zip_buffer = self._create_test_zip(files)
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        return import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-labels-validation",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+    def test_text_labels_as_list_rejected(self):
+        """Import fails gracefully when text_labels is a list."""
+        result = self._run_import({"text_labels": [{"text": "Heading"}]})
+        self.assertFalse(result["labels_loaded"])
+        error_text = " ".join(result["errors"])
+        self.assertIn("text_labels", error_text)
+
+    def test_label_missing_text_field_rejected(self):
+        """Import fails gracefully when a label entry lacks 'text'."""
+        result = self._run_import(
+            {"text_labels": {"Heading": {"label_type": "TOKEN_LABEL", "color": "#F00"}}}
+        )
+        self.assertFalse(result["labels_loaded"])
+        error_text = " ".join(result["errors"])
+        self.assertIn("missing required field 'text'", error_text)
+
+    def test_color_as_integer_rejected(self):
+        """Import fails gracefully when color is an integer."""
+        label = _make_label_data("Heading")
+        label["color"] = 0xFF0000
+        result = self._run_import({"text_labels": {"Heading": label}})
+        self.assertFalse(result["labels_loaded"])
+        error_text = " ".join(result["errors"])
+        self.assertIn("'color' must be a string", error_text)
+
+    def test_top_level_not_dict_rejected(self):
+        """Import fails gracefully when labels.json is not a dict."""
+        result = self._run_import(["not", "a", "dict"])
+        self.assertFalse(result["labels_loaded"])
+        error_text = " ".join(result["errors"])
+        self.assertIn("must be a JSON object", error_text)
+
+
+class TestSidecarSchemaValidation(TestCase):
+    """Unit tests for _validate_sidecar_schema."""
+
+    def test_valid_sidecar_passes(self):
+        """A well-formed sidecar passes validation with no errors."""
+        data = _build_sidecar_json(
+            annotations=[
+                _make_annotation(1, "hello", "Heading"),
+            ],
+            doc_labels=["Important"],
+            relationships=[
+                {
+                    "id": 1,
+                    "relationshipLabel": "Parent",
+                    "source_annotation_ids": [1],
+                    "target_annotation_ids": [2],
+                    "structural": False,
+                }
+            ],
+        )
+        errors = _validate_sidecar_schema(data, "doc.json")
+        self.assertEqual(errors, [])
+
+    def test_labelled_text_wrong_type(self):
+        """labelled_text as a string triggers a validation error."""
+        data = _build_sidecar_json()
+        data["labelled_text"] = "not a list"
+        errors = _validate_sidecar_schema(data, "doc.json")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("labelled_text", errors[0])
+        self.assertIn("str", errors[0])
+
+    def test_doc_labels_wrong_type(self):
+        """doc_labels as a dict triggers a validation error."""
+        data = _build_sidecar_json()
+        data["doc_labels"] = {"label": "wrong"}
+        errors = _validate_sidecar_schema(data, "doc.json")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("doc_labels", errors[0])
+        self.assertIn("dict", errors[0])
+
+    def test_relationships_wrong_type(self):
+        """relationships as a dict triggers a validation error."""
+        data = _build_sidecar_json()
+        data["relationships"] = {"rel": "wrong"}
+        errors = _validate_sidecar_schema(data, "doc.json")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("relationships", errors[0])
+        self.assertIn("dict", errors[0])
+
+    def test_annotation_missing_required_keys(self):
+        """An annotation entry missing required keys reports them."""
+        data = _build_sidecar_json(
+            annotations=[
+                {"annotationLabel": "Heading"}
+            ],  # missing rawText, annotation_json
+        )
+        errors = _validate_sidecar_schema(data, "doc.json")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("annotation_json", errors[0])
+        self.assertIn("rawText", errors[0])
+
+    def test_annotation_entry_not_dict(self):
+        """A non-dict annotation entry is caught."""
+        data = _build_sidecar_json(annotations=["not a dict"])
+        errors = _validate_sidecar_schema(data, "doc.json")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("labelled_text[0]", errors[0])
+
+    def test_relationship_missing_required_keys(self):
+        """A relationship missing source/target IDs is caught."""
+        data = _build_sidecar_json(
+            relationships=[{"relationshipLabel": "Parent"}],
+        )
+        errors = _validate_sidecar_schema(data, "doc.json")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("source_annotation_ids", errors[0])
+        self.assertIn("target_annotation_ids", errors[0])
+
+    def test_relationship_entry_not_dict(self):
+        """A non-dict relationship entry is caught."""
+        data = _build_sidecar_json(relationships=["not a dict"])
+        errors = _validate_sidecar_schema(data, "doc.json")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("relationships[0]", errors[0])
+
+    def test_multiple_container_errors(self):
+        """Multiple wrong container types are all reported."""
+        data = _build_sidecar_json()
+        data["labelled_text"] = "bad"
+        data["doc_labels"] = 42
+        data["relationships"] = True
+        errors = _validate_sidecar_schema(data, "doc.json")
+        self.assertEqual(len(errors), 3)
+
+    def test_empty_lists_pass(self):
+        """Empty annotation/label/relationship lists are valid."""
+        data = _build_sidecar_json(annotations=[], doc_labels=[], relationships=[])
+        errors = _validate_sidecar_schema(data, "doc.json")
+        self.assertEqual(errors, [])
+
+    def test_absent_fields_pass(self):
+        """Absent fields are valid --- they're simply not present in the dict."""
+        data = {"title": "Test"}
+        errors = _validate_sidecar_schema(data, "doc.json")
+        self.assertEqual(errors, [])
+
+    def test_multiple_bad_annotations(self):
+        """Multiple bad annotation entries each produce an error."""
+        data = _build_sidecar_json(
+            annotations=[
+                {"annotationLabel": "X"},  # missing rawText, annotation_json
+                {"rawText": "text"},  # missing annotationLabel, annotation_json
+            ],
+        )
+        errors = _validate_sidecar_schema(data, "doc.json")
+        self.assertEqual(len(errors), 2)
+
+    def test_doc_labels_non_string_entry(self):
+        """A non-string doc_labels entry is caught."""
+        data = _build_sidecar_json(doc_labels=["Valid", 42, {"bad": True}])
+        errors = _validate_sidecar_schema(data, "doc.json")
+        self.assertEqual(len(errors), 2)
+        self.assertIn("doc_labels[1]", errors[0])
+        self.assertIn("int", errors[0])
+        self.assertIn("doc_labels[2]", errors[1])
+        self.assertIn("dict", errors[1])
+
+
+class TestSidecarSchemaValidationIntegration(TestCase):
+    """
+    Integration tests verifying that invalid sidecar schemas are rejected
+    gracefully by the full import_zip_with_folder_structure task.
+    """
+
+    def setUp(self):
+        with transaction.atomic():
+            self.user = User.objects.create_user(
+                username="schema_val_user", password="testpass"
+            )
+        with transaction.atomic():
+            self.corpus = Corpus.objects.create(
+                title="Schema Validation Corpus",
+                description="Corpus for testing schema validation",
+                creator=self.user,
+            )
+            set_permissions_for_obj_to_user(
+                self.user, self.corpus, [PermissionTypes.ALL]
+            )
+        self.pdf_bytes = SAMPLE_PDF_FILE_ONE_PATH.read_bytes()
+
+    def _create_test_zip(self, files: dict[str, bytes]) -> io.BytesIO:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for name, content in files.items():
+                zf.writestr(name, content)
+        buffer.seek(0)
+        return buffer
+
+    def _create_temp_file_handle(self, zip_buffer: io.BytesIO) -> TemporaryFileHandle:
+        zip_content = ContentFile(zip_buffer.read(), name="test_schema_val.zip")
+        return TemporaryFileHandle.objects.create(file=zip_content)
+
+    def test_bad_labelled_text_type_reports_error(self):
+        """A sidecar with labelled_text as a string is rejected gracefully."""
+        sidecar = _build_sidecar_json()
+        sidecar["labelled_text"] = "not a list"
+
+        labels = _build_labels_json(
+            text_labels={"Heading": _make_label_data("Heading")},
+        )
+
+        zip_buffer = self._create_test_zip(
+            {
+                "doc.pdf": self.pdf_bytes,
+                "doc.json": json.dumps(sidecar).encode("utf-8"),
+                "labels.json": json.dumps(labels).encode("utf-8"),
+            }
+        )
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-bad-labelled-text",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["completed"])
+        self.assertEqual(result["annotation_sidecars_errored"], 1)
+        self.assertEqual(result["annotations_imported"], 0)
+        self.assertTrue(
+            any("labelled_text" in e for e in result["errors"]),
+            f"Expected labelled_text error in {result['errors']}",
+        )
+
+    def test_bad_annotation_entry_reports_error(self):
+        """A sidecar with an annotation missing required keys is rejected."""
+        sidecar = _build_sidecar_json(
+            annotations=[
+                {"annotationLabel": "Heading"}
+            ],  # missing rawText, annotation_json
+        )
+
+        labels = _build_labels_json(
+            text_labels={"Heading": _make_label_data("Heading")},
+        )
+
+        zip_buffer = self._create_test_zip(
+            {
+                "doc.pdf": self.pdf_bytes,
+                "doc.json": json.dumps(sidecar).encode("utf-8"),
+                "labels.json": json.dumps(labels).encode("utf-8"),
+            }
+        )
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-bad-annotation-entry",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["completed"])
+        self.assertEqual(result["annotation_sidecars_errored"], 1)
+        self.assertEqual(result["annotations_imported"], 0)
+
+    def test_bad_relationship_entry_reports_error(self):
+        """A sidecar with a relationship missing required keys is rejected."""
+        sidecar = _build_sidecar_json(
+            annotations=[
+                _make_annotation(1, "text", "Heading"),
+            ],
+            relationships=[{"relationshipLabel": "Parent"}],  # missing source/target
+        )
+
+        labels = _build_labels_json(
+            text_labels={"Heading": _make_label_data("Heading")},
+        )
+
+        zip_buffer = self._create_test_zip(
+            {
+                "doc.pdf": self.pdf_bytes,
+                "doc.json": json.dumps(sidecar).encode("utf-8"),
+                "labels.json": json.dumps(labels).encode("utf-8"),
+            }
+        )
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-bad-relationship-entry",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["completed"])
+        self.assertEqual(result["annotation_sidecars_errored"], 1)
+
+    def test_bad_doc_labels_type_reports_error(self):
+        """A sidecar with doc_labels as a non-list is rejected gracefully."""
+        sidecar = _build_sidecar_json()
+        sidecar["doc_labels"] = {"label": "wrong"}
+
+        labels = _build_labels_json(
+            text_labels={"Heading": _make_label_data("Heading")},
+        )
+
+        zip_buffer = self._create_test_zip(
+            {
+                "doc.pdf": self.pdf_bytes,
+                "doc.json": json.dumps(sidecar).encode("utf-8"),
+                "labels.json": json.dumps(labels).encode("utf-8"),
+            }
+        )
+        handle = self._create_temp_file_handle(zip_buffer)
+
+        result = import_zip_with_folder_structure.apply(
+            kwargs={
+                "temporary_file_handle_id": handle.id,
+                "user_id": self.user.id,
+                "job_id": "test-bad-doc-labels-type",
+                "corpus_id": self.corpus.id,
+            }
+        ).get()
+
+        self.assertTrue(result["completed"])
+        self.assertEqual(result["annotation_sidecars_errored"], 1)
+        self.assertEqual(result["annotations_imported"], 0)
+        self.assertTrue(
+            any("doc_labels" in e for e in result["errors"]),
+            f"Expected doc_labels error in {result['errors']}",
+        )

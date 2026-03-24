@@ -26,7 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sidecar JSON schema validation before annotation import** (Closes #1127): Added `_validate_sidecar_schema()` in `opencontractserver/tasks/import_tasks.py` that validates container types (`labelled_text`, `doc_labels`, `relationships` must be lists) and required keys per entry (`annotationLabel`/`rawText`/`annotation_json` for annotations; `relationshipLabel`/`source_annotation_ids`/`target_annotation_ids` for relationships) before any database work. Invalid sidecars now increment `annotation_sidecars_errored` and log clear error messages instead of crashing or silently skipping data. Comprehensive unit and integration tests added in `opencontractserver/tests/test_sidecar_import.py`.
 - **Progress step test coverage for BulkImportModal** (Closes #1145): New test exercises the progress UI (spinner, progress bar, "Importing Documents..." heading) by mocking `IMPORT_ZIP_TO_CORPUS` with a long delay, verifying the loading state is rendered and footer buttons are hidden during import (`frontend/tests/bulk-import-modal.ct.tsx`).
+
+### Added
+
+- **Schema validation for `labels.json` before processing annotation labels** (Closes #1128): Added `validate_labels_data()` in `opencontractserver/utils/importing.py` that validates the structure of `labels.json` before `prepare_import_labels()` is called. Checks that `text_labels`/`doc_labels` are dicts (not lists), each label entry is a dict with a required non-empty `text` field, and optional fields (`label_type`, `color`, `icon`, `description`) have correct types. Validation errors are logged and appended to `results["errors"]` with `labels_loaded` set to `False`. Added unit tests (`TestValidateLabelsData`) and integration tests (`TestMalformedLabelsImport`) in `opencontractserver/tests/test_sidecar_import.py`.
 
 ### Changed
 
