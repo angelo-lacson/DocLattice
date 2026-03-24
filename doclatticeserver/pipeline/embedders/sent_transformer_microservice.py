@@ -11,13 +11,11 @@ from doclatticeserver.constants.document_processing import (
     MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE,
 )
 from doclatticeserver.pipeline.base.embedder import BaseEmbedder
+from doclatticeserver.pipeline.base.exceptions import EmbeddingServerError
 from doclatticeserver.pipeline.base.file_types import FileTypeEnum
 from doclatticeserver.pipeline.base.settings_schema import (
     PipelineSetting,
     SettingType,
-)
-from doclatticeserver.pipeline.embedders.multimodal_microservice import (
-    EmbeddingServerError,
 )
 from doclatticeserver.utils.cloud import maybe_add_cloud_run_auth
 

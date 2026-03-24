@@ -22,6 +22,7 @@ import numpy as np
 import requests
 
 from doclatticeserver.pipeline.base.embedder import BaseEmbedder
+from doclatticeserver.pipeline.base.exceptions import EmbeddingServerError
 from doclatticeserver.pipeline.base.file_types import FileTypeEnum
 from doclatticeserver.pipeline.base.settings_schema import (
     PipelineSetting,
@@ -32,28 +33,6 @@ from doclatticeserver.utils.cloud import maybe_add_cloud_run_auth
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-
-class EmbeddingClientError(Exception):
-    """
-    Raised for 4xx client errors from the embedding service.
-
-    These errors indicate invalid input (malformed request, bad data) and
-    should NOT be retried by Celery tasks.
-    """
-
-    pass
-
-
-class EmbeddingServerError(Exception):
-    """
-    Raised for 5xx server errors from the embedding service.
-
-    These errors indicate transient service issues and SHOULD be retried
-    by Celery tasks with exponential backoff.
-    """
-
-    pass
 
 
 class BaseMultimodalMicroserviceEmbedder(BaseEmbedder):
@@ -118,6 +97,17 @@ class BaseMultimodalMicroserviceEmbedder(BaseEmbedder):
     def _embed_text_impl(self, text: str, **all_kwargs) -> Optional[list[float]]:
         """
         Generate text embeddings via POST /embeddings.
+
+        Note on error handling asymmetry with batch methods:
+            This method returns None on ALL errors (including 5xx), because single
+            annotations are typically processed within Celery tasks that already
+            have their own retry logic. Raising here would abort processing of
+            remaining annotations in the task.
+
+            In contrast, ``embed_texts_batch()`` and ``embed_images_batch()`` raise
+            ``EmbeddingServerError`` on 5xx so the Celery task-level retry decorator
+            can fire, since a batch failure affects the entire sub-batch and there
+            is no remaining work to preserve.
 
         Args:
             text: The text content to embed.
