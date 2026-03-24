@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sidecar JSON schema validation before annotation import** (Closes #1127): Added `_validate_sidecar_schema()` in `opencontractserver/tasks/import_tasks.py` that validates container types (`labelled_text`, `doc_labels`, `relationships` must be lists) and required keys per entry (`annotationLabel`/`rawText`/`annotation_json` for annotations; `relationshipLabel`/`source_annotation_ids`/`target_annotation_ids` for relationships) before any database work. Invalid sidecars now increment `annotation_sidecars_errored` and log clear error messages instead of crashing or silently skipping data. Comprehensive unit and integration tests added in `opencontractserver/tests/test_sidecar_import.py`.
 - **Progress step test coverage for BulkImportModal** (Closes #1145): New test exercises the progress UI (spinner, progress bar, "Importing Documents..." heading) by mocking `IMPORT_ZIP_TO_CORPUS` with a long delay, verifying the loading state is rendered and footer buttons are hidden during import (`frontend/tests/bulk-import-modal.ct.tsx`).
 
 ### Changed
