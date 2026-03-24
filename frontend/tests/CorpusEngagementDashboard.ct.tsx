@@ -81,7 +81,9 @@ test.describe("CorpusEngagementDashboard", () => {
     // Wait for heading and section titles
     await expect(page.getByText("Engagement Analytics")).toBeVisible();
     await expect(page.getByText("Thread Metrics")).toBeVisible();
-    await expect(page.getByText("Message Activity")).toBeVisible();
+    await expect(
+      page.getByText("Message Activity", { exact: true })
+    ).toBeVisible();
     await expect(page.getByText("Community Engagement")).toBeVisible();
 
     // Verify stat labels are present
