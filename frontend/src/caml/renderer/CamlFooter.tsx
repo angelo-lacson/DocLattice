@@ -1,7 +1,7 @@
 import React from "react";
 
 import type { CamlFooter } from "../parser/types";
-import { isSafeHref } from "./safeHref";
+import { isSafeHref, isExternalHref } from "./safeHref";
 import { FooterSection, FooterNav, FooterLink, FooterNotice } from "./styles";
 
 export interface CamlFooterRendererProps {
@@ -21,11 +21,9 @@ export const CamlFooterRenderer: React.FC<CamlFooterRendererProps> = ({
               <FooterLink
                 key={i}
                 href={item.href}
-                target={item.href.startsWith("http") ? "_blank" : undefined}
+                target={isExternalHref(item.href) ? "_blank" : undefined}
                 rel={
-                  item.href.startsWith("http")
-                    ? "noopener noreferrer"
-                    : undefined
+                  isExternalHref(item.href) ? "noopener noreferrer" : undefined
                 }
               >
                 {item.label}

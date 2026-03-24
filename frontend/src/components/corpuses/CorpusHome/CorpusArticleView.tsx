@@ -10,6 +10,8 @@ import { useQuery } from "@apollo/client";
 import { ArrowLeft, FileText, Edit } from "lucide-react";
 import styled from "styled-components";
 
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
+
 import {
   GET_CORPUS_ARTICLE,
   GetCorpusArticleInput,
@@ -27,7 +29,7 @@ import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants"
 const ArticleViewContainer = styled.div`
   width: 100%;
   min-height: 100vh;
-  background: #ffffff;
+  background: ${OS_LEGAL_COLORS.surface};
 `;
 
 const ArticleToolbar = styled.div`
@@ -40,7 +42,7 @@ const ArticleToolbar = styled.div`
   padding: 0.75rem 1.5rem;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(8px);
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
 `;
 
 const BackButton = styled.button`
@@ -48,24 +50,24 @@ const BackButton = styled.button`
   align-items: center;
   gap: 0.375rem;
   padding: 0.375rem 0.75rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 6px;
-  background: #ffffff;
-  color: #475569;
+  background: ${OS_LEGAL_COLORS.surface};
+  color: ${OS_LEGAL_COLORS.textTertiary};
   font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
 
   &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    border-color: ${OS_LEGAL_COLORS.borderHover};
   }
 `;
 
 const ToolbarTitle = styled.span`
   font-size: 0.8125rem;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   font-weight: 500;
 `;
 
@@ -76,7 +78,7 @@ const LoadingContainer = styled.div`
   justify-content: center;
   min-height: 60vh;
   gap: 1rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const EmptyState = styled.div`
@@ -86,7 +88,7 @@ const EmptyState = styled.div`
   justify-content: center;
   min-height: 60vh;
   gap: 1rem;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-align: center;
   padding: 2rem;
 `;
@@ -95,11 +97,11 @@ const EmptyIcon = styled.div`
   width: 64px;
   height: 64px;
   border-radius: 16px;
-  background: #f1f5f9;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
 `;
 
 // ---------------------------------------------------------------------------
@@ -181,20 +183,6 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
     }
   }, [camlContent]);
 
-  // Map corpus stats to the format CamlArticle expects
-  const articleStats = useMemo(
-    () =>
-      stats
-        ? {
-            annotations: stats.annotations,
-            documents: stats.documents,
-            contributors: stats.contributors,
-            threads: stats.threads,
-          }
-        : undefined,
-    [stats]
-  );
-
   if (loading) {
     return (
       <ArticleViewContainer data-testid={testId}>
@@ -225,7 +213,9 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
             <FileText size={28} />
           </EmptyIcon>
           <p>No article found for this corpus.</p>
-          <p style={{ fontSize: "0.8125rem", color: "#94a3b8" }}>
+          <p
+            style={{ fontSize: "0.8125rem", color: OS_LEGAL_COLORS.textMuted }}
+          >
             Upload a <code>Readme.CAML</code> document to create one.
           </p>
         </EmptyState>
@@ -265,7 +255,7 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
         )}
       </ArticleToolbar>
 
-      <CamlArticle document={parsedDocument} stats={articleStats} />
+      <CamlArticle document={parsedDocument} stats={stats} />
     </ArticleViewContainer>
   );
 };
