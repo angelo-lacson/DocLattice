@@ -408,6 +408,10 @@ class DocumentRelationshipQueryOptimizer:
     @classmethod
     def _check_corpus_permission(cls, user, corpus) -> bool:
         """Check if user can read the corpus."""
+        # Anonymous users can only access public corpuses
+        if user is None or (hasattr(user, "is_anonymous") and user.is_anonymous):
+            return corpus.is_public
+
         if user.is_superuser:
             return True
         if corpus.is_public:
@@ -491,6 +495,9 @@ class DocumentRelationshipQueryOptimizer:
                 _can_publish=Value(True, output_field=BooleanField()),
             )
         else:
+            # For anonymous users, user.id is None so this becomes
+            # Q(creator_id=None). This is safe because every relationship
+            # has a non-null creator, so the condition simply won't match.
             is_creator = Q(creator_id=user.id)
             queryset = queryset.annotate(
                 _can_read=Value(True, output_field=BooleanField()),
