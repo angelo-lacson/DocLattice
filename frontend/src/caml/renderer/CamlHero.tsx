@@ -38,13 +38,17 @@ export const CamlHeroRenderer: React.FC<CamlHeroRendererProps> = ({ hero }) => {
     <HeroSection>
       {hero.kicker && <HeroKicker>{hero.kicker}</HeroKicker>}
 
-      <HeroTitle>
-        {hero.title.map((line, i) => renderTitleLine(line, i))}
-      </HeroTitle>
+      {hero.title && (
+        <HeroTitle>
+          {(Array.isArray(hero.title) ? hero.title : [hero.title]).map(
+            (line, i) => renderTitleLine(String(line), i)
+          )}
+        </HeroTitle>
+      )}
 
       {hero.subtitle && <HeroSubtitle>{hero.subtitle}</HeroSubtitle>}
 
-      {hero.stats && hero.stats.length > 0 && (
+      {hero.stats && Array.isArray(hero.stats) && hero.stats.length > 0 && (
         <HeroStats>
           {hero.stats.map((stat, i) => (
             <HeroStat key={i}>{stat}</HeroStat>
