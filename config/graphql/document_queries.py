@@ -116,6 +116,7 @@ class DocumentQueryMixin:
 
     document_relationship = relay.Node.Field(DocumentRelationshipType)
 
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_document_relationship(self, info, **kwargs):
         """
         Resolve a single document relationship by ID.
