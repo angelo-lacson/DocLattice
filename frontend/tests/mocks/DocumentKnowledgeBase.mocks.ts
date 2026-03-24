@@ -599,7 +599,7 @@ export const mockAnnotationStructural1: RawServerAnnotationType = {
     id: "QW5ub3RhdGlvbkxhYmVsVHlwZTo0MQ==", // Example ID
     text: "page_header",
     color: "grey",
-    icon: "expand" as any, // Cast to any if 'expand' is not a valid SemanticICON
+    icon: "expand",
     description: "Parser Structural Label",
     labelType: LabelType.TokenLabel, // Assuming "TOKEN_LABEL" maps to this // Example
   },
@@ -644,7 +644,7 @@ export const mockAnnotationNonStructural1: RawServerAnnotationType = {
     id: "QW5ub3RhdGlvbkxhYmVsVHlwZTo0MQ==", // Example ID
     text: "page_header",
     color: "grey",
-    icon: "expand" as any, // Cast to any if 'expand' is not a valid SemanticICON
+    icon: "expand",
     description: "Parser Structural Label",
     labelType: LabelType.TokenLabel, // Assuming "TOKEN_LABEL" maps to this // Example
   },
