@@ -149,8 +149,6 @@ export const POPOVER_Z_INDEX = 100002;
 export const Z_INDEX = {
   /** In-page loading overlays (position: absolute within a relative parent) */
   OVERLAY: 10,
-  /** Sticky/fixed headers that sit above content but below dropdowns */
-  HEADER: 50,
   /** Standard dropdown overlays (pickers, menus) */
   DROPDOWN: 100,
   /** Modal-level overlays (dialogs, full-screen) */

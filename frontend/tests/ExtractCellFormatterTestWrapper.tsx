@@ -3,12 +3,14 @@ import { MemoryRouter } from "react-router-dom";
 import { MockedProvider } from "@apollo/client/testing";
 import { ExtractCellFormatter } from "../src/components/extracts/datagrid/ExtractCellFormatter";
 import { CellStatus } from "../src/types/extract-grid";
+import { DatacellType } from "../src/types/graphql-api";
 
 interface WrapperProps {
   value: any;
   cellStatus: CellStatus | null;
   isExtractComplete: boolean;
   readOnly?: boolean;
+  cell?: DatacellType;
 }
 
 export const ExtractCellFormatterTestWrapper: React.FC<WrapperProps> = ({
@@ -16,6 +18,7 @@ export const ExtractCellFormatterTestWrapper: React.FC<WrapperProps> = ({
   cellStatus,
   isExtractComplete,
   readOnly = false,
+  cell,
 }) => (
   <MockedProvider mocks={[]} addTypename={false}>
     <MemoryRouter>
@@ -33,6 +36,7 @@ export const ExtractCellFormatterTestWrapper: React.FC<WrapperProps> = ({
           extractIsList={false}
           row={{ col1: value }}
           column={{ key: "col1", name: "Column 1" }}
+          cell={cell}
         />
       </div>
     </MemoryRouter>

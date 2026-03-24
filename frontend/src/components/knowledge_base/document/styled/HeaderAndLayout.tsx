@@ -1,6 +1,5 @@
 import styled from "styled-components";
 import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
-import { Z_INDEX } from "../../../../assets/configurations/constants";
 
 export const HeaderContainer = styled.div`
   margin: 0;
@@ -11,10 +10,6 @@ export const HeaderContainer = styled.div`
   border-bottom: 1px solid rgba(231, 234, 237, 0.7);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
   position: relative;
-  /* Z_INDEX.HEADER (50) is sufficient here because HeaderContainer and the sidebar
-     (TabsColumn, z-index 90) are in a flex column layout and don't visually overlap.
-     The z-index ensures content-area children (e.g. tooltips) don't render above it. */
-  z-index: ${Z_INDEX.HEADER};
   display: flex;
   align-items: center;
   justify-content: space-between;

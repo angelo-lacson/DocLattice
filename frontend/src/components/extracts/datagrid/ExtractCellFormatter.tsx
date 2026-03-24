@@ -179,6 +179,9 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
   const popupRef = useRef<HTMLDivElement>(null);
   const firstMenuItemRef = useRef<HTMLButtonElement>(null);
   const statusDotRef = useRef<HTMLDivElement>(null);
+  const mouseLeaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const [openedViaKeyboard, setOpenedViaKeyboard] = useState(false);
   const [cellWidth, setCellWidth] = useState<number>(0);
 
@@ -197,7 +200,14 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
 
   // Close popup on outside click or Escape key
   useEffect(() => {
-    if (!isPopupOpen) return;
+    if (!isPopupOpen) {
+      // Clear any pending mouse-leave timeout when popup closes
+      if (mouseLeaveTimeoutRef.current) {
+        clearTimeout(mouseLeaveTimeoutRef.current);
+        mouseLeaveTimeoutRef.current = null;
+      }
+      return;
+    }
 
     const handleClickOutside = (e: MouseEvent) => {
       if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
@@ -216,6 +226,10 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
+      if (mouseLeaveTimeoutRef.current) {
+        clearTimeout(mouseLeaveTimeoutRef.current);
+        mouseLeaveTimeoutRef.current = null;
+      }
     };
   }, [isPopupOpen]);
 
@@ -343,9 +357,6 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                 if (!isPopupOpen) {
                   setOpenedViaKeyboard(true);
                 }
-              } else if (e.key === "Escape" && isPopupOpen) {
-                e.preventDefault();
-                setIsPopupOpen(false);
               }
             }}
           />
@@ -364,7 +375,42 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                 boxShadow: "0 4px 16px rgba(0, 0, 0, 0.12)",
                 border: `1px solid ${OS_LEGAL_COLORS.border}`,
               }}
-              onMouseLeave={() => setTimeout(() => setIsPopupOpen(false), 300)}
+              onMouseEnter={() => {
+                if (mouseLeaveTimeoutRef.current) {
+                  clearTimeout(mouseLeaveTimeoutRef.current);
+                  mouseLeaveTimeoutRef.current = null;
+                }
+              }}
+              onMouseLeave={() => {
+                mouseLeaveTimeoutRef.current = setTimeout(
+                  () => setIsPopupOpen(false),
+                  300
+                );
+              }}
+              onKeyDown={(e) => {
+                if (
+                  e.key === "ArrowRight" ||
+                  e.key === "ArrowLeft" ||
+                  e.key === "ArrowDown" ||
+                  e.key === "ArrowUp"
+                ) {
+                  e.preventDefault();
+                  const items = popupRef.current?.querySelectorAll(
+                    '[role="menuitem"]:not(:disabled)'
+                  );
+                  if (!items || items.length === 0) return;
+                  const itemsArr = Array.from(items) as HTMLElement[];
+                  const currentIndex = itemsArr.indexOf(
+                    document.activeElement as HTMLElement
+                  );
+                  const forward =
+                    e.key === "ArrowRight" || e.key === "ArrowDown";
+                  const nextIndex = forward
+                    ? (currentIndex + 1) % itemsArr.length
+                    : (currentIndex - 1 + itemsArr.length) % itemsArr.length;
+                  itemsArr[nextIndex].focus();
+                }
+              }}
             >
               <ButtonContainer>
                 <div className="buttons">
