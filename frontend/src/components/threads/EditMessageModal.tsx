@@ -63,9 +63,7 @@ interface EditMessageModalProps {
 const StyledModalInner = styled.div`
   width: 90vw;
   max-width: 700px;
-  border-radius: ${CORPUS_RADII.xl};
   overflow: hidden;
-  box-shadow: ${CORPUS_SHADOWS.xl};
   background: white;
   display: flex;
   flex-direction: column;
@@ -76,7 +74,6 @@ const StyledModalInner = styled.div`
     height: 100vh;
     max-height: 100vh;
     margin: 0;
-    border-radius: 0;
   }
 `;
 
@@ -201,8 +198,8 @@ const ActionButton = styled.button<{ $variant?: "primary" | "secondary" }>`
 
     &:hover:not(:disabled) {
       background: linear-gradient(135deg, ${CORPUS_COLORS.teal[500]} 0%, ${
-      CORPUS_COLORS.teal[600]
-    } 100%);
+        CORPUS_COLORS.teal[600]
+      } 100%);
       transform: translateY(-1px);
       box-shadow: 0 6px 16px ${accentAlpha(0.45)};
     }
@@ -429,7 +426,7 @@ export const EditMessageModal: React.FC<EditMessageModalProps> = ({
         onClose();
       } else {
         setError(
-          result.data?.updateMessage.message || "Failed to update message"
+          result.data?.updateMessage.message || "Failed to update message",
         );
       }
     } catch (err) {

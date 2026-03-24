@@ -290,7 +290,7 @@ export const SUPPORTED_MIME_TYPES = [
  * Used for matching component supportedFileTypes which use short forms.
  */
 export const MIME_TO_SHORT_LABEL: Record<string, string> = Object.fromEntries(
-  SUPPORTED_MIME_TYPES.map((m) => [m.value, m.shortLabel])
+  SUPPORTED_MIME_TYPES.map((m) => [m.value, m.shortLabel]),
 );
 
 // Message count badge color constants (used by chatUtils.ts getMessageCountColor)
@@ -470,6 +470,10 @@ export const PICKER_DROPDOWN_WIDTH = 380;
 
 // Minimum left offset (px) to prevent dropdown from going off-screen
 export const PICKER_DROPDOWN_VIEWPORT_PADDING = 8;
+
+// Modal content layout constants
+/** Maximum height for scrollable modal body content (e.g. document picker) */
+export const MODAL_BODY_MAX_HEIGHT = "70vh";
 
 // Corpus action trigger display labels
 // Maps backend trigger enum values (lowercase) to user-facing short labels
