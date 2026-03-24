@@ -149,6 +149,8 @@ export const POPOVER_Z_INDEX = 100002;
 export const Z_INDEX = {
   /** In-page loading overlays (position: absolute within a relative parent) */
   OVERLAY: 10,
+  /** Sticky/fixed headers that sit above content but below dropdowns */
+  HEADER: 50,
   /** Standard dropdown overlays (pickers, menus) */
   DROPDOWN: 100,
   /** Modal-level overlays (dialogs, full-screen) */
@@ -290,7 +292,7 @@ export const SUPPORTED_MIME_TYPES = [
  * Used for matching component supportedFileTypes which use short forms.
  */
 export const MIME_TO_SHORT_LABEL: Record<string, string> = Object.fromEntries(
-  SUPPORTED_MIME_TYPES.map((m) => [m.value, m.shortLabel]),
+  SUPPORTED_MIME_TYPES.map((m) => [m.value, m.shortLabel])
 );
 
 // Message count badge color constants (used by chatUtils.ts getMessageCountColor)

@@ -172,11 +172,14 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
   >(null);
 
   const only_display_these_annotations = useReactiveVar(
-    onlyDisplayTheseAnnotations,
+    onlyDisplayTheseAnnotations
   );
 
   const cellRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+  const firstMenuItemRef = useRef<HTMLButtonElement>(null);
+  const statusDotRef = useRef<HTMLDivElement>(null);
+  const [openedViaKeyboard, setOpenedViaKeyboard] = useState(false);
   const [cellWidth, setCellWidth] = useState<number>(0);
 
   const navigate = useNavigate();
@@ -202,7 +205,10 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
       }
     };
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsPopupOpen(false);
+      if (e.key === "Escape") {
+        setIsPopupOpen(false);
+        statusDotRef.current?.focus();
+      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -212,6 +218,17 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
       document.removeEventListener("keydown", handleEscape);
     };
   }, [isPopupOpen]);
+
+  // Focus the first menu item when popup opens via keyboard
+  useEffect(() => {
+    if (isPopupOpen && openedViaKeyboard) {
+      // Use requestAnimationFrame to ensure the DOM has rendered
+      requestAnimationFrame(() => {
+        firstMenuItemRef.current?.focus();
+      });
+      setOpenedViaKeyboard(false);
+    }
+  }, [isPopupOpen, openedViaKeyboard]);
 
   const statusColor = () => {
     if (cellStatus?.isApproved) return OS_LEGAL_COLORS.greenMedium; // Modern green
@@ -311,6 +328,7 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
       {!cellStatus?.isLoading && isExtractComplete && (
         <>
           <StatusDot
+            ref={statusDotRef}
             statusColor={statusColor()}
             onClick={() => setIsPopupOpen(!isPopupOpen)}
             role="button"
@@ -322,6 +340,12 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 setIsPopupOpen(!isPopupOpen);
+                if (!isPopupOpen) {
+                  setOpenedViaKeyboard(true);
+                }
+              } else if (e.key === "Escape" && isPopupOpen) {
+                e.preventDefault();
+                setIsPopupOpen(false);
               }
             }}
           />
@@ -345,6 +369,9 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
               <ButtonContainer>
                 <div className="buttons">
                   <IconButton
+                    ref={firstMenuItemRef}
+                    role="menuitem"
+                    tabIndex={-1}
                     aria-label="Approve"
                     title="Approve"
                     size="sm"
@@ -364,6 +391,8 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                     <Check size={14} />
                   </IconButton>
                   <IconButton
+                    role="menuitem"
+                    tabIndex={-1}
                     aria-label="Edit"
                     title="Edit"
                     size="sm"
@@ -384,6 +413,8 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                     <Edit2 size={14} />
                   </IconButton>
                   <IconButton
+                    role="menuitem"
+                    tabIndex={-1}
                     aria-label="View Sources"
                     title="View Sources"
                     size="sm"
@@ -395,7 +426,7 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                       ) {
                         selectedExtract(extract);
                         setViewSourceAnnotations(
-                          cell.fullSourceList as ServerAnnotationType[],
+                          cell.fullSourceList as ServerAnnotationType[]
                         );
                       }
                       setIsPopupOpen(false);
@@ -407,6 +438,8 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                     <Eye size={14} />
                   </IconButton>
                   <IconButton
+                    role="menuitem"
+                    tabIndex={-1}
                     aria-label="Reject"
                     title="Reject"
                     size="sm"
