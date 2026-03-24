@@ -89,6 +89,12 @@ export const SettingsCardHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   background: ${OS_LEGAL_COLORS.surfaceHover};
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusCard}
+    ${OS_LEGAL_SPACING.borderRadiusCard} 0 0;
+
+  @media (max-width: 768px) {
+    border-radius: 10px 10px 0 0;
+  }
 `;
 
 /** Section title with teal accent bar */

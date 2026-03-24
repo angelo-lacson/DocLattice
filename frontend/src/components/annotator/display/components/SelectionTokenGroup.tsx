@@ -6,6 +6,7 @@ import { PDFPageInfo } from "../../types/pdf";
 import { TokenId } from "../../types/annotations";
 import {
   ANNOTATION_TOKEN_RADIUS,
+  TOKEN_EXPANSION_PX,
   TOKEN_OPACITY_HIGH,
   TOKEN_OPACITY_LOW,
   TOKEN_SHADOW_BLUR,
@@ -27,13 +28,17 @@ interface SelectionBoxProps {
 // same-colour blur that feathers the edges into the page.
 const SelectionBox = styled.span.attrs<SelectionBoxProps>((props) => ({
   style: {
-    left: `${(props.$left ?? 0) - 1}px`,
-    top: `${(props.$top ?? 0) - 1}px`,
+    left: `${(props.$left ?? 0) - TOKEN_EXPANSION_PX}px`,
+    top: `${(props.$top ?? 0) - TOKEN_EXPANSION_PX}px`,
     width: `${
-      props.$right && props.$left ? props.$right - props.$left + 2 : 0
+      props.$right && props.$left
+        ? props.$right - props.$left + TOKEN_EXPANSION_PX * 2
+        : 0
     }px`,
     height: `${
-      props.$bottom && props.$top ? props.$bottom - props.$top + 2 : 0
+      props.$bottom && props.$top
+        ? props.$bottom - props.$top + TOKEN_EXPANSION_PX * 2
+        : 0
     }px`,
     backgroundColor: props.$color || "yellow",
     opacity: props.$highOpacity ? TOKEN_OPACITY_HIGH : TOKEN_OPACITY_LOW,
@@ -77,7 +82,6 @@ export const SelectionTokenGroup = ({
   useEffect(() => {
     if (scrollTo) {
       if (containerRef.current !== undefined && containerRef.current !== null) {
-        console.log("Scroll to", scrollTo);
         containerRef.current.scrollIntoView({
           behavior: "smooth",
           block: "center",

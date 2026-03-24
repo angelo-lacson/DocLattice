@@ -3001,28 +3001,7 @@ export const GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS = gql`
         created
       }
 
-      # Annotation fields
-      allStructuralAnnotations {
-        id
-        page
-        parent {
-          id
-        }
-        annotationLabel {
-          id
-          text
-          color
-          icon
-          description
-          labelType
-        }
-        annotationType
-        rawText
-        json
-        myPermissions
-        structural
-        contentModalities
-      }
+      # Annotation fields (structural annotations loaded lazily for performance)
       allAnnotations(corpusId: $corpusId, analysisId: $analysisId) {
         id
         page
@@ -3114,7 +3093,6 @@ export interface GetDocumentAnnotationsOnlyInput {
 export interface GetDocumentAnnotationsOnlyOutput {
   document: {
     id: string;
-    allStructuralAnnotations: ServerAnnotationType[];
     allAnnotations: ServerAnnotationType[];
     allRelationships: RelationshipType[];
   };
@@ -3128,27 +3106,6 @@ export const GET_DOCUMENT_ANNOTATIONS_ONLY = gql`
   ) {
     document(id: $documentId) {
       id
-      allStructuralAnnotations {
-        id
-        page
-        parent {
-          id
-        }
-        annotationLabel {
-          id
-          text
-          color
-          icon
-          description
-          labelType
-        }
-        annotationType
-        rawText
-        json
-        myPermissions
-        structural
-        contentModalities
-      }
       allAnnotations(corpusId: $corpusId, analysisId: $analysisId) {
         id
         page
@@ -3210,6 +3167,60 @@ export const GET_DOCUMENT_ANNOTATIONS_ONLY = gql`
 `;
 
 /**
+ * Standalone query to fetch structural annotations for a document.
+ * Loaded lazily when the user toggles structural annotation visibility,
+ * rather than included in the initial document load (for performance).
+ * Structural annotations are analysis-independent and only need to be
+ * fetched once per document.
+ *
+ * Supports optional `annotationIds` filter to fetch only specific
+ * structural annotations (used for deep-link navigation).
+ */
+export interface GetDocumentStructuralAnnotationsInput {
+  documentId: string;
+  annotationIds?: string[];
+}
+
+export interface GetDocumentStructuralAnnotationsOutput {
+  document: {
+    id: string;
+    allStructuralAnnotations: ServerAnnotationType[];
+  };
+}
+
+export const GET_DOCUMENT_STRUCTURAL_ANNOTATIONS = gql`
+  query GetDocumentStructuralAnnotations(
+    $documentId: ID!
+    $annotationIds: [ID!]
+  ) {
+    document(id: $documentId) {
+      id
+      allStructuralAnnotations(annotationIds: $annotationIds) {
+        id
+        page
+        parent {
+          id
+        }
+        annotationLabel {
+          id
+          text
+          color
+          icon
+          description
+          labelType
+        }
+        annotationType
+        rawText
+        json
+        myPermissions
+        structural
+        contentModalities
+      }
+    }
+  }
+`;
+
+/**
  * Query to get document data with structural annotations but without corpus context
  * Used when viewing documents that haven't been assigned to a corpus
  * Includes structural annotations which are inherent to the document (headers, sections, etc.)
@@ -3220,7 +3231,7 @@ export interface GetDocumentWithStructureInput {
 
 export interface GetDocumentWithStructureOutput {
   document: RawDocumentType & {
-    allStructuralAnnotations?: ServerAnnotationType[];
+    allRelationships?: RelationshipType[];
     allNotesWithoutCorpus?: Array<{
       id: string;
       title: string;
@@ -3259,29 +3270,9 @@ export const GET_DOCUMENT_WITH_STRUCTURE = gql`
       txtExtractFile
       pawlsParseFile
       myPermissions
-      # Structural annotations (headers, sections, etc.) - no corpus required
-      allStructuralAnnotations {
-        id
-        page
-        parent {
-          id
-        }
-        annotationLabel {
-          id
-          text
-          color
-          icon
-          description
-          labelType
-        }
-        annotationType
-        rawText
-        json
-        myPermissions
-        structural
-        contentModalities
-      }
-      # Structural relationships (no corpus required)
+      # Structural annotations loaded lazily via GET_DOCUMENT_STRUCTURAL_ANNOTATIONS
+      # for performance (can be thousands for large documents)
+      # Structural relationships (few in number, safe to load eagerly)
       allRelationships {
         id
         structural

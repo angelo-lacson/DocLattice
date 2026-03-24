@@ -20,6 +20,13 @@ export const pdfAnnotationsAtom = atom<PdfAnnotations>(
 export const structuralAnnotationsAtom = atom<ServerTokenAnnotation[]>([]);
 
 /**
+ * Tracks whether structural annotations have been fetched for the current document.
+ * Reset to false when navigating to a new document. Prevents redundant re-fetching
+ * when the user toggles structural visibility multiple times.
+ */
+export const structuralAnnotationsLoadedAtom = atom<boolean>(false);
+
+/**
  * Atom to manage all annotation objects.
  */
 export const annotationObjsAtom = atom<

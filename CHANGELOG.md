@@ -5,7 +5,29 @@ All notable changes to OpenContracts will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-23
+## [Unreleased]
+
+### Fixed
+
+- **Annotation rendering cleanup** (Closes #1144): Replaced hardcoded `"4px 4px 0 0"` border-radius with `ANNOTATION_BOUNDARY_RADIUS` constant in `SearchResult.tsx` and `ChatSourceResult.tsx`. Removed dead `border` prop from `SelectionInfo` interface and call sites. Used `APPROVED_RGB` constant for approved-state box-shadow in `SelectionBoundary.tsx` (matching `REJECTED_RGB` pattern). Added `TOKEN_EXPANSION_PX` constant and replaced magic `-1`/`+2` token expansion values across `SelectionTokenGroup.tsx`, `Tokens.tsx`, and `ChatSourceTokens.tsx`. Consolidated `[Previous Unreleased]` CHANGELOG section into single `[Unreleased]` block. Removed debug `console.log` statements from `DocumentKnowledgeBase.ct.tsx`, `SearchResult.tsx`, and `SelectionTokenGroup.tsx`. Moved annotation display reactive var initialization into `useEffect` in `DocumentKnowledgeBaseTestWrapper.tsx`.
+
+### Added
+
+- **Index tab in document sidebar**: Added a new "Index" tab (BookOpen icon) to the document viewer sidebar, positioned first before Chat, Feed, and Discussions. The Index tab reuses the `DocumentAnnotationIndex` component to display the document's OC_SECTION-based table of contents directly in the sidebar (`frontend/src/components/knowledge_base/document/document_kb/RightPanelContent.tsx`, `frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx`).
+- **OpenAI Embedder pipeline component** (`opencontractserver/pipeline/embedders/openai_embedder.py`): New `OpenAIEmbedder` class supporting `text-embedding-3-small` (default), `text-embedding-3-large`, and `text-embedding-ada-002` models. Features configurable output dimensions, custom API base URL for Azure/proxy support, and graceful error handling. Dynamic `vector_size` property reflects runtime model/dimension configuration to prevent pgvector column size mismatches.
+- **OpenAI embedding constants** (`opencontractserver/constants/embeddings.py`): Centralized model dimension mappings and defaults for the OpenAI embedder.
+
+### Fixed
+
+- **BulkImportModal AlertBox hardcoded colors** (Closes #1145): Replaced `OS_LEGAL_COLORS.warning*` / `OS_LEGAL_COLORS.info*` constants with CSS custom properties (`var(--oc-warning-*)`, `var(--oc-info-*)`). Added the six new tokens to `index.css :root` so they participate in theme switching (`frontend/src/index.css`, `frontend/src/components/widgets/modals/UploadModalStyles.ts`).
+- **CloudUpload icon inline magic numbers** (Closes #1145): Replaced `style={{ width: 16, height: 16, marginRight: 8 }}` on the Start Import button icon with a new `ButtonIcon` styled component that uses `var(--oc-font-size-md)` and `var(--oc-spacing-xs)` tokens (`frontend/src/components/widgets/modals/BulkImportModal.tsx`, `UploadModalStyles.ts`).
+- **Remaining pixel values in styled components** (Closes #1145): Replaced `HeaderIcon` 28px/15px with `calc()` expressions using spacing/font tokens, `DropZone` 200px/160px min-heights with `calc(var(--oc-spacing-xl) * N)`, and `AlertBox` SVG 2px margin-top with `calc(var(--oc-spacing-xs) / 4)` with a documenting comment (`UploadModalStyles.ts`).
+- **Missing InMemoryCache in BulkImportTestWrapper** (Closes #1145): Added `InMemoryCache` with relevant type policies and a `mocks` prop to match the `DocumentKnowledgeBaseTestWrapper` pattern (`frontend/tests/wrappers/BulkImportTestWrapper.tsx`).
+
+### Added
+
+- **Sidecar JSON schema validation before annotation import** (Closes #1127): Added `_validate_sidecar_schema()` in `opencontractserver/tasks/import_tasks.py` that validates container types (`labelled_text`, `doc_labels`, `relationships` must be lists) and required keys per entry (`annotationLabel`/`rawText`/`annotation_json` for annotations; `relationshipLabel`/`source_annotation_ids`/`target_annotation_ids` for relationships) before any database work. Invalid sidecars now increment `annotation_sidecars_errored` and log clear error messages instead of crashing or silently skipping data. Comprehensive unit and integration tests added in `opencontractserver/tests/test_sidecar_import.py`.
+- **Progress step test coverage for BulkImportModal** (Closes #1145): New test exercises the progress UI (spinner, progress bar, "Importing Documents..." heading) by mocking `IMPORT_ZIP_TO_CORPUS` with a long delay, verifying the loading state is rendered and footer buttons are hidden during import (`frontend/tests/bulk-import-modal.ct.tsx`).
 
 ### Added
 
@@ -13,9 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Deferred structural annotation loading for PDF performance**: Structural annotations (headers, sections, paragraphs — often 4,000-6,000 for large documents) are no longer fetched in the initial GraphQL queries. They are loaded lazily via `GET_DOCUMENT_STRUCTURAL_ANNOTATIONS` only when the user toggles structural visibility on. Also removed redundant structural annotation re-fetching during analysis/extract switching (structural annotations are analysis-independent). For a 200-page document, this eliminates ~5-20MB of JSON from the initial payload (`frontend/src/graphql/queries.ts`, `frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx`, `frontend/src/components/annotator/context/AnnotationAtoms.tsx`).
+- **OC_* annotations filtered from Feed**: Platform-generated annotations with labels prefixed `OC_` (e.g., `OC_SECTION`) are now always hidden from the UnifiedContentFeed, preventing structural index entries from cluttering the annotation feed (`frontend/src/components/knowledge_base/document/unified_feed/UnifiedContentFeed.tsx`).
+- **Improved sidebar tab spacing**: Reduced tab dimensions (76px/88px height, 36px/44px width), gap (4px), padding, icon size, and font size to prevent overlap when additional tabs are present (`frontend/src/components/knowledge_base/document/styled/SidebarTabs.tsx`).
 - **Softened PDF annotation bounding boxes to diffuse highlighter-pen aesthetic**: Replaced hard-edged borders on annotation boundaries, tokens, and label pills with multi-layer box-shadow glows. Boundaries use a three-layer shadow (outer, mid, inset) that feathers into the page. Tokens use a single-layer soft blur. Approved/rejected states pulse with matching diffuse glows instead of solid borders. Extracted shared `computeAnnotationBoxShadow` utility (`frontend/src/utils/colorUtils.ts`) to eliminate duplicated shadow logic between `SelectionBoundary` and `ResultBoundary`. Added named constants for all shadow radii, opacity levels, border-radius tiers, and status colors (`frontend/src/assets/configurations/constants.ts`). Removed dead code: `getBorderWidthFromBounds`, unused `$border` prop, unused `$isSelected` prop. Fixed `pulseMaroon` animation color mismatch (was `rgba(180, 40, 40)`, now matches static rejected state).
-
-## [Previous Unreleased] - 2026-03-21
+- **Reorganized upload documentation into dedicated `docs/upload_methods/` section**: Consolidated scattered upload-related docs into 8 user-facing reference pages covering single upload, bulk ZIP import, corpus export/import, annotated document import, worker uploads, supported formats, and annotation side effects. Simplified `docs/walkthrough/step-1-add-documents.md` and `docs/walkthrough/advanced/export-import-corpuses.md` to reference the new guides. Trimmed `docs/architecture/bulk-import.md` to focus on internal implementation. Removed obsolete `docs/features/zip_import_with_folders_design.md` design doc (feature is fully implemented).
 
 ### Fixed
 
@@ -27,10 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test for `skip_pipeline=True` with no `labels.json`** (Closes #1131): New test `test_skip_pipeline_without_labels_json` verifies that pipeline-skipped documents are created successfully even when no labels file is present, and that annotation import errors are recorded properly (`opencontractserver/tests/test_sidecar_import.py`).
 - **Test for `skip_pipeline=True` with `meta.csv` metadata** (Closes #1131): New test `test_skip_pipeline_applies_metadata_from_csv` verifies that pipeline-skipped documents correctly receive title and description overrides from `meta.csv`.
 - **Per-sidecar JSON size limit** (Closes #1131): Added `ZIP_MAX_SIDECAR_SIZE_BYTES` constant (10 MB default) in `opencontractserver/constants/zip_import.py`. Sidecars exceeding this limit are skipped with an error, preventing oversized JSON from consuming excessive memory during import (`opencontractserver/tasks/import_tasks.py`).
-
-### Changed
-
-- **Reorganized upload documentation into dedicated `docs/upload_methods/` section**: Consolidated scattered upload-related docs into 8 user-facing reference pages covering single upload, bulk ZIP import, corpus export/import, annotated document import, worker uploads, supported formats, and annotation side effects. Simplified `docs/walkthrough/step-1-add-documents.md` and `docs/walkthrough/advanced/export-import-corpuses.md` to reference the new guides. Trimmed `docs/architecture/bulk-import.md` to focus on internal implementation. Removed obsolete `docs/features/zip_import_with_folders_design.md` design doc (feature is fully implemented).
 
 ## [Unreleased] - 2026-03-18
 

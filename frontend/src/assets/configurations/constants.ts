@@ -192,6 +192,7 @@ export const DOCUMENT_ANNOTATION_INDEX_LIMIT = 500;
 export const DOCUMENT_ANNOTATION_INDEX_MAX_DEPTH = 6;
 // Built-in annotation label names (OC_ namespace)
 // Keep in sync with opencontractserver/constants/annotations.py
+export const STRUCTURAL_LABEL_PREFIX = "OC_";
 export const OC_SECTION_LABEL = "OC_SECTION";
 
 // Document search/picker limits
@@ -443,6 +444,9 @@ export const TOKEN_OPACITY_LOW = 0.22;
 export const TOKEN_SHADOW_BLUR = 4;
 export const TOKEN_SHADOW_SPREAD = 1;
 
+// Token expansion (px added around each token to close inter-token gaps)
+export const TOKEN_EXPANSION_PX = 1;
+
 // PAWLs coordinate normalization
 /** Half a PDF point tolerance for comparing PAWLs vs PDF.js page dimensions */
 export const PAWLS_COORDINATE_EPSILON = 0.5;
@@ -460,6 +464,12 @@ export const PAGE_SPANNING_TOKEN_THRESHOLD = 0.9;
 export const COMPACT_JSON_MAX_RANGE_SPAN = 10_000;
 /** Maximum total tokens across all pages (safety guard). */
 export const COMPACT_JSON_MAX_TOTAL_TOKENS = 50_000;
+
+// Corpus action template picker dropdown width (px)
+export const PICKER_DROPDOWN_WIDTH = 380;
+
+// Minimum left offset (px) to prevent dropdown from going off-screen
+export const PICKER_DROPDOWN_VIEWPORT_PADDING = 8;
 
 // Corpus action trigger display labels
 // Maps backend trigger enum values (lowercase) to user-facing short labels
