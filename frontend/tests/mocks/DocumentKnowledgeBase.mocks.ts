@@ -37,18 +37,18 @@ export const MOCK_PDF_URL_FOR_STRUCTURAL_TEST = `/mock-pdf/${PDF_DOC_ID_FOR_STRU
 
 export const TEST_PDF_PATH = path.resolve(
   __dirname,
-  "../../../frontend/test-assets/test.pdf"
+  "../../../frontend/test-assets/test.pdf",
 );
 export const TEST_PAWLS_PATH = path.resolve(
   __dirname,
-  "../../../frontend/test-assets/test.pawls"
+  "../../../frontend/test-assets/test.pawls",
 );
 
 export const createPageInfo = (
   hasNext = false,
   hasPrev = false,
   start = "",
-  end = ""
+  end = "",
 ) => ({
   __typename: "PageInfo",
   hasNextPage: hasNext,
@@ -437,7 +437,7 @@ export const mockDatacell2 = {
  */
 export const createAnnotationsForAnalysisMock = (
   analysisId: string,
-  documentId: string
+  documentId: string,
 ) => ({
   request: {
     query: GET_ANNOTATIONS_FOR_ANALYSIS,
@@ -485,7 +485,7 @@ export const createAnnotationsForAnalysisMock = (
 export const createDocumentKnowledgeMockWithAnalysisAnnotations = (
   documentId: string,
   corpusId: string,
-  analysisId?: string
+  analysisId?: string,
 ) => ({
   request: {
     query: GET_DOCUMENT_KNOWLEDGE_AND_ANNOTATIONS,
@@ -514,7 +514,7 @@ export const createDocumentKnowledgeMockWithAnalysisAnnotations = (
 export const createDocumentAnnotationsOnlyMock = (
   documentId: string,
   corpusId: string,
-  analysisId: string | null | undefined
+  analysisId: string | null | undefined,
 ) => ({
   request: {
     query: GET_DOCUMENT_ANNOTATIONS_ONLY,
@@ -599,7 +599,7 @@ export const mockAnnotationStructural1: RawServerAnnotationType = {
     id: "QW5ub3RhdGlvbkxhYmVsVHlwZTo0MQ==", // Example ID
     text: "page_header",
     color: "grey",
-    icon: "expand" as any, // Cast to any if 'expand' is not a valid SemanticICON
+    icon: "expand",
     description: "Parser Structural Label",
     labelType: LabelType.TokenLabel, // Assuming "TOKEN_LABEL" maps to this // Example
   },
@@ -644,7 +644,7 @@ export const mockAnnotationNonStructural1: RawServerAnnotationType = {
     id: "QW5ub3RhdGlvbkxhYmVsVHlwZTo0MQ==", // Example ID
     text: "page_header",
     color: "grey",
-    icon: "expand" as any, // Cast to any if 'expand' is not a valid SemanticICON
+    icon: "expand",
     description: "Parser Structural Label",
     labelType: LabelType.TokenLabel, // Assuming "TOKEN_LABEL" maps to this // Example
   },
