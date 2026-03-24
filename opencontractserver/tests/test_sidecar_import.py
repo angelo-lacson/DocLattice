@@ -36,6 +36,7 @@ from opencontractserver.tests.fixtures import (
     SAMPLE_TXT_FILE_ONE_PATH,
 )
 from opencontractserver.types.enums import PermissionTypes
+from opencontractserver.utils.importing import validate_labels_data
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()
@@ -1482,8 +1483,6 @@ class TestValidateLabelsData(TestCase):
     """Unit tests for validate_labels_data schema validation."""
 
     def _validate(self, data):
-        from opencontractserver.utils.importing import validate_labels_data
-
         return validate_labels_data(data)
 
     # --- Top-level structure ---

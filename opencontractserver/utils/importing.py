@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 from config.graphql.annotation_serializers import AnnotationLabelSerializer
 from opencontractserver.annotations.models import (
     DOC_TYPE_LABEL,
+    RELATIONSHIP_LABEL,
     TOKEN_LABEL,
     Annotation,
     AnnotationLabel,
@@ -242,7 +243,7 @@ def import_relationships(
     return old_id_to_new_relationship
 
 
-VALID_LABEL_TYPES_FOR_IMPORT = {"TOKEN_LABEL", "DOC_TYPE_LABEL", "RELATIONSHIP_LABEL"}
+VALID_LABEL_TYPES_FOR_IMPORT = {TOKEN_LABEL, DOC_TYPE_LABEL, RELATIONSHIP_LABEL}
 
 
 def validate_labels_data(labels_data: object) -> list[str]:

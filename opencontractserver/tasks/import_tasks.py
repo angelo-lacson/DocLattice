@@ -1053,34 +1053,30 @@ def import_zip_with_folder_structure(
                                 f"Labels validation error: {err}"
                             )
                             results["errors"].append(f"Labels file error: {err}")
-                        raise ValueError(
-                            f"labels.json failed schema validation "
-                            f"with {len(validation_errors)} error(s)"
-                        )
-
-                    # Ensure corpus has a label set
-                    if not corpus_obj.label_set:
-                        labelset_obj = LabelSet.objects.create(
-                            title=f"Labels for {corpus_obj.title}",
-                            description="Auto-created during annotated import",
-                            creator=user_obj,
-                        )
-                        set_permissions_for_obj_to_user(
-                            user_obj, labelset_obj, [PermissionTypes.ALL]
-                        )
-                        corpus_obj.label_set = labelset_obj
-                        corpus_obj.save(update_fields=["label_set"])
                     else:
-                        labelset_obj = corpus_obj.label_set
+                        # Ensure corpus has a label set
+                        if not corpus_obj.label_set:
+                            labelset_obj = LabelSet.objects.create(
+                                title=f"Labels for {corpus_obj.title}",
+                                description="Auto-created during annotated import",
+                                creator=user_obj,
+                            )
+                            set_permissions_for_obj_to_user(
+                                user_obj, labelset_obj, [PermissionTypes.ALL]
+                            )
+                            corpus_obj.label_set = labelset_obj
+                            corpus_obj.save(update_fields=["label_set"])
+                        else:
+                            labelset_obj = corpus_obj.label_set
 
-                    label_lookup, doc_label_lookup = prepare_import_labels(
-                        labels_data, user_obj.id, labelset_obj
-                    )
-                    results["labels_loaded"] = True
-                    logger.info(
-                        f"import_zip_with_folder_structure() - Loaded "
-                        f"{len(label_lookup)} labels from {manifest.labels_file}"
-                    )
+                        label_lookup, doc_label_lookup = prepare_import_labels(
+                            labels_data, user_obj.id, labelset_obj
+                        )
+                        results["labels_loaded"] = True
+                        logger.info(
+                            f"import_zip_with_folder_structure() - Loaded "
+                            f"{len(label_lookup)} labels from {manifest.labels_file}"
+                        )
                 except Exception as e:
                     logger.error(
                         f"import_zip_with_folder_structure() - "
