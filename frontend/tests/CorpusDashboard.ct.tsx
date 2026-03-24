@@ -3,13 +3,14 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import { MockedProvider } from "@apollo/client/testing";
 import { CorpusDashboard } from "../src/components/corpuses/CorpusDashboard";
 import { GET_CORPUS_STATS } from "../src/graphql/queries";
+import { CorpusType } from "../src/types/graphql-api";
 import { docScreenshot } from "./utils/docScreenshot";
 
-const mockCorpus = {
+const mockCorpus: Pick<CorpusType, "id" | "title" | "__typename"> = {
   id: "Q29ycHVzVHlwZTox",
   title: "Test Corpus",
   __typename: "CorpusType",
-} as any;
+};
 
 const statsMock = {
   request: {
@@ -32,11 +33,13 @@ const statsMock = {
   },
 };
 
+test.use({ viewport: { width: 1280, height: 800 } });
+
 test.describe("CorpusDashboard", () => {
   test("renders dashboard with corpus statistics", async ({ mount, page }) => {
     await mount(
       <MockedProvider mocks={[statsMock]} addTypename={false}>
-        <CorpusDashboard corpus={mockCorpus} />
+        <CorpusDashboard corpus={mockCorpus as CorpusType} />
       </MockedProvider>
     );
 
@@ -53,12 +56,12 @@ test.describe("CorpusDashboard", () => {
   test("renders loading state before data arrives", async ({ mount, page }) => {
     const slowMock = {
       ...statsMock,
-      delay: 5000,
+      delay: 500,
     };
 
     await mount(
       <MockedProvider mocks={[slowMock]} addTypename={false}>
-        <CorpusDashboard corpus={mockCorpus} />
+        <CorpusDashboard corpus={mockCorpus as CorpusType} />
       </MockedProvider>
     );
 

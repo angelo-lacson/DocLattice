@@ -39,7 +39,7 @@ const loadingMock = {
     query: GET_CORPUS_ENGAGEMENT_METRICS,
     variables: { corpusId },
   },
-  delay: 10000,
+  delay: 500,
   result: engagementMetricsMock.result,
 };
 
