@@ -45,7 +45,7 @@ export interface QueryParams {
   messageId?: string | null;
   homeView?: "about" | "toc" | null; // corpus home view selection
   tocExpanded?: boolean; // true to expand all TOC nodes
-  view?: "landing" | "details" | "discussions" | null; // corpus detail view selection
+  view?: "landing" | "details" | "discussions" | "article" | null; // corpus detail view selection
   mode?: "power" | null; // corpus power user mode
   version?: number | null; // Document version number (null = current version)
   showStructural?: boolean;
@@ -946,13 +946,13 @@ export function updateTocExpandedParam(
  * Pushes a new history entry so browser back/forward navigates between views.
  * @param location - React Router location object
  * @param navigate - React Router navigate function
- * @param view - View identifier ("landing", "details", or "discussions")
+ * @param view - View identifier ("landing", "details", "discussions", or "article")
  *               Pass "landing" or null to clear and use default (landing)
  */
 export function updateDetailViewParam(
   location: LocationLike,
   navigate: NavigateFn,
-  view: "landing" | "details" | "discussions" | null
+  view: "landing" | "details" | "discussions" | "article" | null
 ) {
   const searchParams = new URLSearchParams(location.search);
   if (view && view !== "landing") {

@@ -11,6 +11,7 @@ import {
   Plus,
   Menu,
   Zap,
+  BookOpen,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -18,7 +19,11 @@ import {
   GET_CORPUS_WITH_HISTORY,
   GetCorpusWithHistoryQuery,
   GetCorpusWithHistoryQueryVariables,
+  GET_CORPUS_ARTICLE,
+  GetCorpusArticleInput,
+  GetCorpusArticleOutput,
 } from "../../../graphql/queries";
+import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants";
 import { CorpusType } from "../../../types/graphql-api";
 import { PermissionTypes } from "../../types";
 import { getPermissions } from "../../../utils/transform";
@@ -69,6 +74,8 @@ export interface CorpusLandingViewProps {
   onOpenMobileMenu?: () => void;
   /** Callback when "View All Discussions" is clicked */
   onViewDiscussions?: () => void;
+  /** Callback when "Read Article" is clicked */
+  onViewArticle?: () => void;
   /** Callback when a specific thread is clicked from the feed */
   onThreadClick?: (threadId: string) => void;
   /** Callback when mode toggle is clicked (only shown when present) */
@@ -106,6 +113,7 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
   onViewChatHistory,
   onOpenMobileMenu,
   onViewDiscussions,
+  onViewArticle,
   onThreadClick,
   onModeToggle,
   isPowerUserMode = false,
@@ -123,6 +131,18 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
   >(GET_CORPUS_WITH_HISTORY, {
     variables: historyVariables,
   });
+
+  // Check if a Readme.CAML article exists in this corpus
+  const articleVars = useMemo<GetCorpusArticleInput>(
+    () => ({ corpusId: corpus.id, title: CAML_ARTICLE_FILENAME }),
+    [corpus.id]
+  );
+  const { data: articleData } = useQuery<
+    GetCorpusArticleOutput,
+    GetCorpusArticleInput
+  >(GET_CORPUS_ARTICLE, { variables: articleVars });
+
+  const hasArticle = (articleData?.documents?.edges?.length ?? 0) > 0;
 
   // Fetch markdown content from URL
   useEffect(() => {
@@ -331,6 +351,18 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
             testId={`${testId}-chat`}
           />
         </ChatSection>
+
+        {/* Read article — shown when Readme.CAML exists */}
+        {hasArticle && onViewArticle && (
+          <ViewDetailsButton
+            onClick={onViewArticle}
+            data-testid={`${testId}-view-article-btn`}
+          >
+            <BookOpen size={16} />
+            Read the article
+            <ArrowRight />
+          </ViewDetailsButton>
+        )}
 
         {/* Browse documents — subtle text link */}
         <ViewDetailsButton

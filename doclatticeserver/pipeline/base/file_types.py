@@ -5,6 +5,7 @@ from enum import Enum
 MIME_TO_FILE_TYPE: dict[str, str] = {
     "application/pdf": "pdf",
     "text/plain": "txt",
+    "text/markdown": "md",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
 }
 
@@ -15,6 +16,7 @@ FILE_TYPE_TO_MIME: dict[str, str] = {v: k for k, v in MIME_TO_FILE_TYPE.items()}
 FILE_TYPE_LABELS: dict[str, str] = {
     "pdf": "PDF",
     "txt": "Plain Text",
+    "md": "Markdown",
     "docx": "Word Document",
 }
 
@@ -33,9 +35,8 @@ if len(FILE_TYPE_TO_MIME) != len(MIME_TO_FILE_TYPE):
 class FileTypeEnum(str, Enum):
     PDF = "pdf"
     TXT = "txt"
+    MD = "md"
     DOCX = "docx"
-    # HTML = "html"  # Removed as we don't support it
-    # Add more as needed
 
     @classmethod
     def from_mimetype(cls, mimetype: str) -> "FileTypeEnum | None":

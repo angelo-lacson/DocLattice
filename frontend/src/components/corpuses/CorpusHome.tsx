@@ -11,10 +11,12 @@ import { CorpusType } from "../../types/graphql-api";
 import { CorpusLandingView } from "./CorpusHome/CorpusLandingView";
 import { CorpusDetailsView } from "./CorpusHome/CorpusDetailsView";
 import { CorpusDiscussionsInlineView } from "./CorpusHome/CorpusDiscussionsInlineView";
+import { CorpusArticleView } from "./CorpusHome/CorpusArticleView";
 
 export interface CorpusHomeProps {
   corpus: CorpusType;
   onEditDescription: () => void;
+  onEditArticle?: () => void;
   onNavigate?: (tabIndex: number) => void;
   onBack?: () => void;
   canUpdate?: boolean;
@@ -50,10 +52,12 @@ export interface CorpusHomeProps {
  * - /c/user/corpus → Landing view (default)
  * - /c/user/corpus?view=details → Details view
  * - /c/user/corpus?view=discussions → Discussions view
+ * - /c/user/corpus?view=article → Article view (Readme.CAML)
  */
 export const CorpusHome: React.FC<CorpusHomeProps> = ({
   corpus,
   onEditDescription,
+  onEditArticle,
   chatQuery = "",
   onChatQueryChange,
   onChatSubmit,
@@ -89,6 +93,11 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
     updateDetailViewParam(location, navigate, "discussions");
   };
 
+  // Handle switching to article view
+  const handleViewArticle = () => {
+    updateDetailViewParam(location, navigate, "article");
+  };
+
   // Handle clicking a specific thread from the landing page feed
   const handleThreadClick = (threadId: string) => {
     navigateToDiscussionThread(location, navigate, threadId);
@@ -117,6 +126,17 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
     );
   }
 
+  if (currentView === "article") {
+    return (
+      <CorpusArticleView
+        corpus={corpus}
+        onBack={handleBackToLanding}
+        onEditArticle={onEditArticle}
+        testId="corpus-home-article"
+      />
+    );
+  }
+
   return (
     <CorpusLandingView
       corpus={corpus}
@@ -131,6 +151,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
       onModeToggle={onModeToggle}
       isPowerUserMode={isPowerUserMode}
       onViewDiscussions={handleViewDiscussions}
+      onViewArticle={handleViewArticle}
       onThreadClick={handleThreadClick}
       testId="corpus-home-landing"
     />
