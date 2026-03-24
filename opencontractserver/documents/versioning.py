@@ -50,10 +50,11 @@ MIME_TO_EXTENSION = {
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
     "text/plain": ".txt",
+    "text/markdown": ".md",
 }
 
 # File types that are stored as txt_extract_file (plain text, no parsing needed)
-TEXT_MIMETYPES = {"text/plain", "application/txt"}
+TEXT_MIMETYPES = {"text/plain", "text/markdown", "application/txt"}
 
 
 def _create_content_file(

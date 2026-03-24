@@ -466,6 +466,7 @@ class DocumentFilter(django_filters.FilterSet):
         fields = {
             "description": ["exact", "contains"],
             "id": ["exact"],
+            "title": ["exact", "contains"],
         }
 
 

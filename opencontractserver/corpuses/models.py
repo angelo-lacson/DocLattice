@@ -801,7 +801,7 @@ class Corpus(TreeNode):
     }
 
     # File types that are stored as-is without parsing
-    TEXT_MIMETYPES = {"text/plain", "application/txt"}
+    TEXT_MIMETYPES = {"text/plain", "text/markdown", "application/txt"}
 
     def import_content(
         self,

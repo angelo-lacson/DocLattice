@@ -882,12 +882,14 @@ export function CentralRouteManager() {
         ? homeViewParam
         : null;
 
-    // Parse detailView param (valid values: "details", "discussions"; defaults to "landing")
+    // Parse detailView param (valid values: "details", "discussions", "article"; defaults to "landing")
     const newDetailView: CorpusDetailViewType =
       detailViewParam === "details"
         ? "details"
         : detailViewParam === "discussions"
         ? "discussions"
+        : detailViewParam === "article"
+        ? "article"
         : "landing";
 
     // Collect all reactive var updates into a batch
