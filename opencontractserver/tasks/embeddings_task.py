@@ -571,8 +571,10 @@ def calculate_embeddings_for_annotation_batch(
     exceptions internally and records them in ``result["errors"]`` without
     re-raising.  This means partial embedding failures do NOT trigger a
     Celery retry — the task completes with a summary of succeeded/failed
-    counts.  Only hard failures (e.g., embedder load error, ValueError
-    from a contract violation) propagate and trigger retries.
+    counts.  ``ValueError`` from contract violations (e.g., batch size
+    exceeds embedder maximum) is caught at the task level and returned
+    as an immediate failure without burning retries — it is a programming
+    error, not a transient condition.
 
     Args:
         self: Celery task instance (passed automatically when bind=True)
@@ -647,13 +649,23 @@ def calculate_embeddings_for_annotation_batch(
                 f"Batch-embedding {len(text_only_annots)} text-only annotations "
                 f"with {embedder_path} (api_batch_size={EMBEDDING_API_BATCH_SIZE})"
             )
-            _batch_embed_text_annotations(
-                text_only_annots,
-                embedder,
-                embedder_path,
-                EMBEDDING_API_BATCH_SIZE,
-                result,
-            )
+            try:
+                _batch_embed_text_annotations(
+                    text_only_annots,
+                    embedder,
+                    embedder_path,
+                    EMBEDDING_API_BATCH_SIZE,
+                    result,
+                )
+            except ValueError as e:
+                # Programming error (e.g., batch size misconfiguration).
+                # Fail fast without burning Celery retries.
+                logger.error(f"Contract violation in batch embedding: {e}")
+                result["errors"].append(f"Contract violation: {e}")
+                result["failed"] += len(text_only_annots) - (
+                    result["succeeded"] + result["skipped"]
+                )
+                return result
 
         # Process multimodal annotations individually (need image extraction)
         for annot in multimodal_annots:

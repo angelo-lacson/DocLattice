@@ -86,6 +86,11 @@ class MicroserviceEmbedder(BaseEmbedder):
         """
         Get service URL and headers for the microservice.
 
+        Callers are responsible for pre-merging component settings into
+        ``all_kwargs`` before calling this method.  In ``_embed_text_impl``
+        the base class ``embed_text()`` does the merge; in ``embed_texts_batch``
+        the merge is explicit since it overrides the base class directly.
+
         Args:
             all_kwargs: Keyword arguments that may override settings.
 
@@ -137,7 +142,14 @@ class MicroserviceEmbedder(BaseEmbedder):
             )
 
             if response.status_code == 200:
-                embeddings_array = np.array(response.json()["embeddings"])
+                body = response.json()
+                if "embeddings" not in body:
+                    logger.error(
+                        f"Malformed 200 response: missing 'embeddings' key. "
+                        f"Keys received: {list(body.keys())}"
+                    )
+                    return None
+                embeddings_array = np.array(body["embeddings"])
                 if np.isnan(embeddings_array).any():
                     logger.error("Embedding contains NaN values")
                     return None
@@ -221,7 +233,14 @@ class MicroserviceEmbedder(BaseEmbedder):
             )
 
             if response.status_code == 200:
-                embeddings_array = np.array(response.json()["embeddings"])
+                body = response.json()
+                if "embeddings" not in body:
+                    logger.error(
+                        f"Malformed 200 response: missing 'embeddings' key. "
+                        f"Keys received: {list(body.keys())}"
+                    )
+                    return None
+                embeddings_array = np.array(body["embeddings"])
                 if embeddings_array.ndim == 3:
                     embeddings_array = embeddings_array.squeeze(axis=1)
 

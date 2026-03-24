@@ -399,6 +399,31 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         result = embedder.embed_texts_batch([])
         self.assertEqual(result, [])
 
+    def test_no_service_url_returns_none(self):
+        """Missing service URL returns None."""
+        embedder = MicroserviceEmbedder()
+        embedder._settings = MicroserviceEmbedder.Settings(
+            embeddings_microservice_url="",
+        )
+        result = embedder.embed_texts_batch(["hello"])
+        self.assertIsNone(result)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_3d_response_squeezed(self, mock_post):
+        """3D response array is squeezed to 2D."""
+        embedder = self._make_embedder()
+        # Some services return 3D: [[[0.1, 0.2, ...]], [[0.3, 0.4, ...]]]
+        vectors_3d = [[[0.1] * 384], [[0.2] * 384]]
+        mock_post.return_value = self._mock_response(200, vectors_3d)
+
+        result = embedder.embed_texts_batch(["a", "b"])
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(len(result[0]), 384)
+
     @patch(
         "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
     )
@@ -410,6 +435,21 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         mock_post.return_value = self._mock_response(200, vectors)
 
         result = embedder.embed_texts_batch(["a", "b", "c"])
+
+        self.assertIsNone(result)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_malformed_200_missing_embeddings_key(self, mock_post):
+        """200 response missing 'embeddings' key returns None."""
+        embedder = self._make_embedder()
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"vectors": [[0.1] * 384]}  # wrong key
+        mock_post.return_value = resp
+
+        result = embedder.embed_texts_batch(["hello"])
 
         self.assertIsNone(result)
 
@@ -433,8 +473,156 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         self.assertIsNotNone(result[2])
 
 
+class TestMicroserviceEmbedderSingleText(unittest.TestCase):
+    """Test MicroserviceEmbedder._embed_text_impl and _get_service_config."""
+
+    def _make_embedder(self, api_key="", use_cloud_run=False):
+        embedder = MicroserviceEmbedder()
+        embedder._settings = MicroserviceEmbedder.Settings(
+            embeddings_microservice_url="http://test-service:8080",
+            vector_embedder_api_key=api_key,
+            use_cloud_run_iam_auth=use_cloud_run,
+        )
+        return embedder
+
+    def _mock_response(self, status_code, embeddings=None, body=None):
+        resp = MagicMock()
+        resp.status_code = status_code
+        if body is not None:
+            resp.json.return_value = body
+        elif embeddings is not None:
+            resp.json.return_value = {"embeddings": embeddings}
+        return resp
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_embed_text_success_1d(self, mock_post):
+        """Successful single-text embedding with 1D response."""
+        embedder = self._make_embedder()
+        vector = [0.1] * 384
+        mock_post.return_value = self._mock_response(200, vector)
+
+        result = embedder.embed_text("hello")
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result), 384)
+        mock_post.assert_called_once()
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_embed_text_success_2d(self, mock_post):
+        """Successful single-text embedding with 2D response."""
+        embedder = self._make_embedder()
+        vector = [[0.1] * 384]
+        mock_post.return_value = self._mock_response(200, vector)
+
+        result = embedder.embed_text("hello")
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result), 384)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_embed_text_malformed_200(self, mock_post):
+        """200 response missing 'embeddings' key returns None."""
+        embedder = self._make_embedder()
+        mock_post.return_value = self._mock_response(200, body={"result": "ok"})
+
+        result = embedder.embed_text("hello")
+
+        self.assertIsNone(result)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_embed_text_nan_returns_none(self, mock_post):
+        """NaN in single-text response returns None."""
+        embedder = self._make_embedder()
+        mock_post.return_value = self._mock_response(200, [float("nan")] * 384)
+
+        result = embedder.embed_text("hello")
+
+        self.assertIsNone(result)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_embed_text_client_error(self, mock_post):
+        """4xx response returns None."""
+        embedder = self._make_embedder()
+        mock_post.return_value = self._mock_response(422)
+
+        result = embedder.embed_text("hello")
+
+        self.assertIsNone(result)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_embed_text_server_error(self, mock_post):
+        """5xx response returns None."""
+        embedder = self._make_embedder()
+        mock_post.return_value = self._mock_response(503)
+
+        result = embedder.embed_text("hello")
+
+        self.assertIsNone(result)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+    )
+    def test_embed_text_exception(self, mock_post):
+        """Network exception returns None."""
+        embedder = self._make_embedder()
+        mock_post.side_effect = ConnectionError("timeout")
+
+        result = embedder.embed_text("hello")
+
+        self.assertIsNone(result)
+
+    def test_get_service_config_with_api_key(self):
+        """API key is included in headers when provided."""
+        embedder = self._make_embedder(api_key="test-key-123")
+        url, headers = embedder._get_service_config(
+            {"embeddings_microservice_url": "http://test:8080"}
+        )
+        self.assertEqual(headers["X-API-Key"], "test-key-123")
+
+    def test_get_service_config_without_api_key(self):
+        """No API key header when key is empty."""
+        embedder = self._make_embedder()
+        url, headers = embedder._get_service_config(
+            {"embeddings_microservice_url": "http://test:8080"}
+        )
+        self.assertNotIn("X-API-Key", headers)
+        self.assertEqual(url, "http://test:8080")
+
+    def test_get_service_config_kwargs_override(self):
+        """Kwargs override settings values."""
+        embedder = self._make_embedder()
+        url, headers = embedder._get_service_config(
+            {"embeddings_microservice_url": "http://override:9090"}
+        )
+        self.assertEqual(url, "http://override:9090")
+
+    def test_get_service_config_fallback_to_settings(self):
+        """Falls back to settings when kwargs don't provide overrides."""
+        embedder = self._make_embedder()
+        url, headers = embedder._get_service_config({})
+        self.assertEqual(url, "http://test-service:8080")
+
+
 class TestCalculateEmbeddingsForAnnotationBatch(unittest.TestCase):
-    """Integration tests for the calculate_embeddings_for_annotation_batch task."""
+    """Integration tests for the calculate_embeddings_for_annotation_batch task.
+
+    Note: These tests call the task function directly (not via Celery) so
+    ``self`` (the bound task instance) is not injected.  Paths that use
+    ``self.retry()`` or ``self.update_state()`` are therefore untested here;
+    the current batch path does not use those APIs.
+    """
 
     def _mock_objects(self, annotations):
         """Build a mock manager whose select_related().filter() yields annotations."""
@@ -529,6 +717,31 @@ class TestCalculateEmbeddingsForAnnotationBatch(unittest.TestCase):
         self.assertEqual(result["total"], 3)
         self.assertEqual(result["failed"], 3)
         self.assertEqual(result["succeeded"], 0)
+
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_batch_path_valueerror_fails_fast(self, mock_ann_cls, mock_get_component):
+        """ValueError from contract violation fails immediately without retry."""
+
+        class RaisingEmbedder(DummyEmbedder384):
+            def embed_texts_batch(self, texts, **kw):
+                raise ValueError("Batch size exceeds maximum")
+
+        annots = [_make_mock_annotation(i, f"Text {i}") for i in range(3)]
+        mock_ann_cls.objects = self._mock_objects(annots)
+        mock_get_component.return_value = RaisingEmbedder
+
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[0, 1, 2],
+            embedder_path="test.RaisingEmbedder",
+        )
+
+        self.assertEqual(result["total"], 3)
+        self.assertGreater(result["failed"], 0)
+        self.assertTrue(
+            any("Contract violation" in e for e in result["errors"]),
+            f"Expected 'Contract violation' in errors: {result['errors']}",
+        )
 
     @patch("opencontractserver.tasks.embeddings_task._apply_dual_embedding_strategy")
     @patch("opencontractserver.tasks.embeddings_task.Annotation")
