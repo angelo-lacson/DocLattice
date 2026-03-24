@@ -599,9 +599,11 @@ class DocumentRelationshipQueryOptimizer:
         Returns:
             DocumentRelationship object or None if not found/not accessible
         """
+        from django.core.exceptions import ObjectDoesNotExist
+
         try:
             return cls.get_visible_relationships(user).get(id=relationship_id)
-        except Exception:
+        except ObjectDoesNotExist:
             return None
 
     @classmethod

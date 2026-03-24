@@ -19,7 +19,10 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.files.base import ContentFile
 from django.test import TestCase
+from graphene.test import Client
+from graphql_relay import to_global_id
 
+from config.graphql.schema import schema
 from opencontractserver.annotations.models import AnnotationLabel
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import (
@@ -631,3 +634,218 @@ class DocumentRelationshipAnonymousAccessTestCase(TestCase):
         self.assertFalse(getattr(rel, "_can_create", True))
         self.assertFalse(getattr(rel, "_can_update", True))
         self.assertFalse(getattr(rel, "_can_delete", True))
+
+
+class TestContext:
+    """Minimal GraphQL context stub for test client."""
+
+    def __init__(self, user):
+        self.user = user
+
+
+class DocumentRelationshipGraphQLNodeTestCase(TestCase):
+    """Test that the relay.Node.Field resolver for DocumentRelationshipType
+    applies permission filtering via get_queryset.
+
+    This validates that an anonymous user cannot fetch a private
+    DocumentRelationship by its Relay global ID through the GraphQL layer.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="test")
+        self.anonymous_user = AnonymousUser()
+
+        pdf_file = ContentFile(
+            SAMPLE_PDF_FILE_TWO_PATH.open("rb").read(), name="test.pdf"
+        )
+
+        # --- Private corpus with private documents ---
+        self.private_corpus = Corpus.objects.create(
+            title="PrivateCorpus",
+            creator=self.owner,
+            is_public=False,
+        )
+        self.private_source_doc = Document.objects.create(
+            creator=self.owner,
+            title="Private Source",
+            pdf_file=pdf_file,
+            backend_lock=True,
+            is_public=False,
+        )
+        self.private_target_doc = Document.objects.create(
+            creator=self.owner,
+            title="Private Target",
+            pdf_file=pdf_file,
+            backend_lock=True,
+            is_public=False,
+        )
+        DocumentPath.objects.create(
+            document=self.private_source_doc,
+            corpus=self.private_corpus,
+            creator=self.owner,
+            path="/priv_source",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        DocumentPath.objects.create(
+            document=self.private_target_doc,
+            corpus=self.private_corpus,
+            creator=self.owner,
+            path="/priv_target",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        self.private_relationship = DocumentRelationship.objects.create(
+            source_document=self.private_source_doc,
+            target_document=self.private_target_doc,
+            relationship_type="NOTES",
+            data={"note": "Private note"},
+            creator=self.owner,
+            corpus=self.private_corpus,
+        )
+
+        # --- Public corpus with public documents ---
+        self.public_corpus = Corpus.objects.create(
+            title="PublicCorpus",
+            creator=self.owner,
+            is_public=True,
+        )
+        self.public_source_doc = Document.objects.create(
+            creator=self.owner,
+            title="Public Source",
+            pdf_file=pdf_file,
+            backend_lock=True,
+            is_public=True,
+        )
+        self.public_target_doc = Document.objects.create(
+            creator=self.owner,
+            title="Public Target",
+            pdf_file=pdf_file,
+            backend_lock=True,
+            is_public=True,
+        )
+        DocumentPath.objects.create(
+            document=self.public_source_doc,
+            corpus=self.public_corpus,
+            creator=self.owner,
+            path="/pub_source",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        DocumentPath.objects.create(
+            document=self.public_target_doc,
+            corpus=self.public_corpus,
+            creator=self.owner,
+            path="/pub_target",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        self.public_relationship = DocumentRelationship.objects.create(
+            source_document=self.public_source_doc,
+            target_document=self.public_target_doc,
+            relationship_type="RELATIONSHIP",
+            annotation_label=AnnotationLabel.objects.create(
+                text="Public Label",
+                label_type="RELATIONSHIP_LABEL",
+                creator=self.owner,
+            ),
+            creator=self.owner,
+            corpus=self.public_corpus,
+        )
+
+        # Owner permissions for private resources
+        set_permissions_for_obj_to_user(
+            self.owner, self.private_source_doc, [PermissionTypes.CRUD]
+        )
+        set_permissions_for_obj_to_user(
+            self.owner, self.private_target_doc, [PermissionTypes.CRUD]
+        )
+        set_permissions_for_obj_to_user(
+            self.owner, self.private_corpus, [PermissionTypes.CRUD]
+        )
+
+    def test_anonymous_cannot_fetch_private_relationship_via_graphql_node(self):
+        """An anonymous user must NOT be able to fetch a private
+        DocumentRelationship by its Relay global ID through the GraphQL layer.
+        This exercises the get_queryset permission filter on DocumentRelationshipType.
+        """
+        client = Client(schema, context_value=TestContext(self.anonymous_user))
+        global_id = to_global_id(
+            "DocumentRelationshipType", self.private_relationship.id
+        )
+        query = """
+            query {
+                documentRelationship(id: "%s") {
+                    id
+                    relationshipType
+                }
+            }
+        """ % global_id
+
+        result = client.execute(query)
+
+        # The query should error (DoesNotExist) or return null data
+        errors = result.get("errors")
+        data = result.get("data", {})
+        relationship_data = data.get("documentRelationship") if data else None
+
+        self.assertTrue(
+            errors is not None or relationship_data is None,
+            "Anonymous user should not be able to fetch a private "
+            "DocumentRelationship via its Relay global ID.",
+        )
+
+    def test_anonymous_can_fetch_public_relationship_via_graphql_node(self):
+        """An anonymous user CAN fetch a public DocumentRelationship
+        (public docs + public corpus) via the GraphQL layer.
+        """
+        client = Client(schema, context_value=TestContext(self.anonymous_user))
+        global_id = to_global_id(
+            "DocumentRelationshipType", self.public_relationship.id
+        )
+        query = """
+            query {
+                documentRelationship(id: "%s") {
+                    id
+                    relationshipType
+                }
+            }
+        """ % global_id
+
+        result = client.execute(query)
+
+        self.assertIsNone(
+            result.get("errors"), f"Unexpected errors: {result.get('errors')}"
+        )
+        data = result["data"]["documentRelationship"]
+        self.assertIsNotNone(data)
+        self.assertEqual(data["id"], global_id)
+        self.assertEqual(data["relationshipType"], "RELATIONSHIP")
+
+    def test_owner_can_fetch_private_relationship_via_graphql_node(self):
+        """The owner CAN fetch their own private DocumentRelationship."""
+        client = Client(schema, context_value=TestContext(self.owner))
+        global_id = to_global_id(
+            "DocumentRelationshipType", self.private_relationship.id
+        )
+        query = """
+            query {
+                documentRelationship(id: "%s") {
+                    id
+                    relationshipType
+                }
+            }
+        """ % global_id
+
+        result = client.execute(query)
+
+        self.assertIsNone(
+            result.get("errors"), f"Unexpected errors: {result.get('errors')}"
+        )
+        data = result["data"]["documentRelationship"]
+        self.assertIsNotNone(data)
+        self.assertEqual(data["id"], global_id)
