@@ -658,6 +658,10 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
 
   // Fetch ONLY the deep-linked annotations when navigating via URL.
   // Skip if all structural annotations are already loaded (superset).
+  // Note: selectedAnnotationIds may contain non-structural IDs (e.g. corpus
+  // annotations from URL deep-links). In that case the backend returns an empty
+  // list, which is harmless — accepted trade-off to avoid needing annotation
+  // type metadata before the fetch.
   useEffect(() => {
     if (
       deepLinkedAnnotationIds.length > 0 &&
