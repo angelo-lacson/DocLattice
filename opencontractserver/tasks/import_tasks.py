@@ -578,6 +578,104 @@ def _read_sidecar(
         return json.loads(raw.decode("UTF-8"))
 
 
+# Required keys for each text annotation entry in ``labelled_text``.
+_ANNOTATION_REQUIRED_KEYS = {"annotationLabel", "rawText", "annotation_json"}
+
+# Required keys for each relationship entry in ``relationships``.
+_RELATIONSHIP_REQUIRED_KEYS = {
+    "relationshipLabel",
+    "source_annotation_ids",
+    "target_annotation_ids",
+}
+
+
+def _validate_sidecar_schema(
+    doc_data: dict,
+    sidecar_path: str,
+) -> list[str]:
+    """
+    Validate the top-level structure and required fields of a sidecar JSON
+    document **before** any database work is attempted.
+
+    Returns a list of human-readable error strings.  An empty list means the
+    data passed validation.
+
+    .. note::
+        If any top-level container has the wrong type (e.g. ``labelled_text``
+        is a string instead of a list), the function returns those errors
+        immediately **without** running per-entry checks.  Callers may
+        therefore receive only the container-level errors on a first call and
+        discover per-entry errors only after the container types are fixed.
+    """
+    errors: list[str] = []
+
+    # --- container type checks -------------------------------------------
+    labelled_text = doc_data.get("labelled_text")
+    if labelled_text is not None and not isinstance(labelled_text, list):
+        errors.append(
+            f"Sidecar {sidecar_path}: 'labelled_text' must be a list, "
+            f"got {type(labelled_text).__name__}"
+        )
+
+    doc_labels = doc_data.get("doc_labels")
+    if doc_labels is not None and not isinstance(doc_labels, list):
+        errors.append(
+            f"Sidecar {sidecar_path}: 'doc_labels' must be a list, "
+            f"got {type(doc_labels).__name__}"
+        )
+
+    relationships = doc_data.get("relationships")
+    if relationships is not None and not isinstance(relationships, list):
+        errors.append(
+            f"Sidecar {sidecar_path}: 'relationships' must be a list, "
+            f"got {type(relationships).__name__}"
+        )
+
+    # If any container type is wrong, skip per-entry checks to avoid noise.
+    if errors:
+        return errors
+
+    # --- per-annotation checks -------------------------------------------
+    for idx, entry in enumerate(labelled_text or []):
+        if not isinstance(entry, dict):
+            errors.append(
+                f"Sidecar {sidecar_path}: labelled_text[{idx}] must be a dict, "
+                f"got {type(entry).__name__}"
+            )
+            continue
+        missing = _ANNOTATION_REQUIRED_KEYS - entry.keys()
+        if missing:
+            errors.append(
+                f"Sidecar {sidecar_path}: labelled_text[{idx}] is missing "
+                f"required key(s): {sorted(missing)}"
+            )
+
+    # --- per-doc_label checks ----------------------------------------------
+    for idx, entry in enumerate(doc_labels or []):
+        if not isinstance(entry, str):
+            errors.append(
+                f"Sidecar {sidecar_path}: doc_labels[{idx}] must be a string, "
+                f"got {type(entry).__name__}"
+            )
+
+    # --- per-relationship checks -----------------------------------------
+    for idx, entry in enumerate(relationships or []):
+        if not isinstance(entry, dict):
+            errors.append(
+                f"Sidecar {sidecar_path}: relationships[{idx}] must be a dict, "
+                f"got {type(entry).__name__}"
+            )
+            continue
+        missing = _RELATIONSHIP_REQUIRED_KEYS - entry.keys()
+        if missing:
+            errors.append(
+                f"Sidecar {sidecar_path}: relationships[{idx}] is missing "
+                f"required key(s): {sorted(missing)}"
+            )
+
+    return errors
+
+
 def _apply_sidecar_annotations(
     doc_data: dict,
     sidecar_path: str,
@@ -602,6 +700,15 @@ def _apply_sidecar_annotations(
         results: Mutable results dict to update counters.
     """
     try:
+        # Validate sidecar schema before any database work.
+        schema_errors = _validate_sidecar_schema(doc_data, sidecar_path)
+        if schema_errors:
+            for err in schema_errors:
+                logger.warning(f"import_zip_with_folder_structure() - {err}")
+                results["errors"].append(err)
+            results["annotation_sidecars_errored"] += 1
+            return
+
         has_annotations = bool(
             doc_data.get("labelled_text") or doc_data.get("doc_labels")
         )
