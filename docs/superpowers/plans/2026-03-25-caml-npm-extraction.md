@@ -45,12 +45,12 @@ os-legal-caml/
 │       │   ├── CamlThemeProvider.tsx  # NEW: Theme context + styled-components ThemeProvider wrapper
 │       │   ├── CamlMarkdown.tsx      # NEW: Default markdown renderer
 │       │   ├── CamlArticle.tsx       # Lifted + modified: adds renderMarkdown/renderAnnotationEmbed props
-│       │   ├── CamlHero.tsx          # Lifted as-is (no OC deps)
+│       │   ├── CamlHero.tsx          # Lifted + modified: import path fix
 │       │   ├── CamlChapter.tsx       # Lifted + modified: threads renderMarkdown/renderAnnotationEmbed
 │       │   ├── CamlBlocks.tsx        # Lifted + modified: replaces MarkdownMessageRenderer, threads props
-│       │   ├── CamlFooter.tsx        # Lifted as-is (no OC deps)
+│       │   ├── CamlFooter.tsx        # Lifted + modified: import path fix
 │       │   ├── safeHref.ts           # Lifted as-is
-│       │   ├── styles.ts             # Lifted + modified: OS_LEGAL_* → theme.caml.* (~80 replacements)
+│       │   ├── styles.ts             # Lifted + modified: OS_LEGAL_* → theme.caml.* (~100 replacements)
 │       │   └── index.ts              # Public API barrel
 │       └── __tests__/
 │           └── safeHref.test.ts      # Lifted from frontend/src/caml/renderer/__tests__/
@@ -575,7 +575,7 @@ export const defaultCamlTheme: CamlTheme = {
 // ---------------------------------------------------------------------------
 
 /** Recursively make all properties optional (functions pass through as-is). */
-type DeepPartial<T> = {
+export type DeepPartial<T> = {
   [P in keyof T]?: T[P] extends (...args: any[]) => any
     ? T[P]
     : T[P] extends object
@@ -764,7 +764,7 @@ Apply these find-and-replace patterns across the entire file:
 | `${CAML_PROSE_TEXT}` | `${({ theme }) => theme.caml.colors.proseText}` |
 | `${CAML_DARK_PROSE}` | `${({ theme }) => theme.caml.colors.darkProse}` |
 
-**WARNING:** The table above only works for standalone usages. There are ~20+ cases where tokens appear inside existing interpolation functions that already destructure props (e.g., `$color`, `$dark`, `$primary`, `$active`). For those, add `theme` to the existing destructuring instead of wrapping in a new function. This applies to `accentAlpha` calls too — 2 of the 4 `accentAlpha` usages are inside existing interpolation functions. Examples:
+**WARNING:** The table above only works for standalone usages. There are ~20+ cases where tokens appear inside existing interpolation functions that already destructure props (e.g., `$color`, `$dark`, `$primary`, `$active`). For those, add `theme` to the existing destructuring instead of wrapping in a new function. This applies to `accentAlpha` calls too — 3 of the 4 `accentAlpha` usages are inside existing interpolation functions. Examples:
 
 ```typescript
 // Before:
