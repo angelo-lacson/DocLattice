@@ -17,7 +17,7 @@ import type {
   CamlCorpusStats,
   CamlProse,
 } from "../parser/types";
-import { isSafeHref } from "./safeHref";
+import { isSafeHref, isExternalHref } from "./safeHref";
 import { MarkdownMessageRenderer } from "../../components/threads/MarkdownMessageRenderer";
 import {
   ProseContainer,
@@ -320,10 +320,8 @@ function CtaBlock({ block }: { block: CamlCta }) {
             key={i}
             href={item.href}
             $primary={item.primary}
-            target={item.href.startsWith("http") ? "_blank" : undefined}
-            rel={
-              item.href.startsWith("http") ? "noopener noreferrer" : undefined
-            }
+            target={isExternalHref(item.href) ? "_blank" : undefined}
+            rel={isExternalHref(item.href) ? "noopener noreferrer" : undefined}
           >
             {item.label}
           </CtaButton>

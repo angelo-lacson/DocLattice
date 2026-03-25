@@ -64,8 +64,8 @@ const ModalHeader = styled.div`
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: #fafbfc;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.background};
 
   h2 {
     font-size: 1rem;
@@ -95,7 +95,7 @@ const EditorPane = styled.div`
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid ${OS_LEGAL_COLORS.border};
 `;
 
 const PaneHeader = styled.div`
@@ -103,11 +103,11 @@ const PaneHeader = styled.div`
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   font-size: 0.75rem;
   font-weight: 600;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
 `;
@@ -122,18 +122,18 @@ const EditorTextarea = styled.textarea`
   font-size: 0.875rem;
   line-height: 1.6;
   color: ${OS_LEGAL_COLORS.textPrimary};
-  background: #ffffff;
+  background: ${OS_LEGAL_COLORS.surface};
   outline: none;
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
 `;
 
 const PreviewPane = styled.div`
   flex: 1;
   overflow-y: auto;
-  background: #ffffff;
+  background: ${OS_LEGAL_COLORS.surface};
   min-width: 0;
 `;
 
@@ -143,8 +143,8 @@ const ActionBar = styled.div`
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 0.75rem 1.5rem;
-  border-top: 1px solid #e2e8f0;
-  background: #fafbfc;
+  border-top: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.background};
 `;
 
 const ActionButton = styled.button<{ $primary?: boolean }>`
@@ -158,15 +158,16 @@ const ActionButton = styled.button<{ $primary?: boolean }>`
   cursor: pointer;
   transition: all 0.15s;
   border: 1px solid
-    ${({ $primary }) => ($primary ? OS_LEGAL_COLORS.accent : "#e2e8f0")};
+    ${({ $primary }) =>
+      $primary ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.border};
   background: ${({ $primary }) =>
-    $primary ? OS_LEGAL_COLORS.accent : "#ffffff"};
+    $primary ? OS_LEGAL_COLORS.accent : OS_LEGAL_COLORS.surface};
   color: ${({ $primary }) =>
-    $primary ? "#ffffff" : OS_LEGAL_COLORS.textPrimary};
+    $primary ? OS_LEGAL_COLORS.surface : OS_LEGAL_COLORS.textPrimary};
 
   &:hover {
     background: ${({ $primary }) =>
-      $primary ? OS_LEGAL_COLORS.accentHover : "#f8fafc"};
+      $primary ? OS_LEGAL_COLORS.accentHover : OS_LEGAL_COLORS.surfaceHover};
   }
 
   &:disabled {
@@ -183,8 +184,8 @@ const UnsavedBadge = styled.span`
   border-radius: 9999px;
   font-size: 0.6875rem;
   font-weight: 600;
-  background: #fef3c7;
-  color: #92400e;
+  background: ${OS_LEGAL_COLORS.warningSurface};
+  color: ${OS_LEGAL_COLORS.warningText};
 `;
 
 const CAML_TEMPLATE = `---

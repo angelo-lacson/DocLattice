@@ -101,6 +101,11 @@ export interface CamlTimelineLegendItem {
 export interface CamlTimelineItem {
   date: string;
   label: string;
+  /**
+   * Legend category for this timeline entry.
+   * Must match a legend label (case-insensitive) to receive that legend item's color.
+   * The parser lowercases this value; legend labels are also lowercased for lookup.
+   */
   side: string;
 }
 

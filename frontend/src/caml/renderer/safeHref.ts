@@ -11,3 +11,11 @@ export function isSafeHref(href: string): boolean {
   if (!href) return false;
   return SAFE_URL_PATTERN.test(href.trim());
 }
+
+/**
+ * Check whether an href points to an external (http/https) URL.
+ * Used to set target="_blank" and rel="noopener noreferrer" on external links.
+ */
+export function isExternalHref(href: string): boolean {
+  return href.startsWith("http");
+}

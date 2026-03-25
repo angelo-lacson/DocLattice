@@ -53,7 +53,7 @@ function parseYamlFrontmatter(yaml: string): CamlFrontmatter {
     }
 
     const indent = line.search(/\S/);
-    const content = trimmed;
+    const content = trimmed.trimStart();
 
     // Pop stack to find parent at correct indent level
     while (stack.length > 1 && stack[stack.length - 1].indent >= indent) {
