@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Batch embedding aggregation**: `_batch_embed_text_annotations()` helper in `opencontractserver/tasks/embeddings_task.py` aggregates text-only annotations into sub-batches and calls `embed_texts_batch()`, reducing HTTP requests from N to ceil(N/50). `EMBEDDING_API_BATCH_SIZE` constant (50) in `opencontractserver/constants/document_processing.py` controls API-level sub-batch size. `BaseEmbedder.embed_texts_batch()` in `opencontractserver/pipeline/base/embedder.py` provides sequential fallback for embedders without native batch support. `MicroserviceEmbedder.embed_texts_batch()` in `opencontractserver/pipeline/embedders/sent_transformer_microservice.py` calls `/embeddings/batch` endpoint.
+
+### Changed
+
+- **Batch embedding task partitioning**: `calculate_embeddings_for_annotation_batch` in `opencontractserver/tasks/embeddings_task.py` now partitions annotations into text-only (batch path via `_batch_embed_text_annotations`) and multimodal (individual path) when `embedder_path` is provided. No changes to callers (`ensure_embeddings_for_corpus`, `reembed_corpus`).
+
 ### Fixed
 
 - **Semantic UI removal cleanup** (Closes #1123): Fixed `folderIconAlpha` color mismatch in `ExtractCellFormatter.tsx` StatusDot box-shadows — replaced hardcoded `rgba(245, 158, 11, ...)` with `folderIconAlpha()` to match `getCellBackground()`. Changed Revoke button in `WorkerTokensSection.tsx` from `variant="secondary"` with inline danger color to `variant="danger"` for proper destructive-action styling. Removed conflicting `box-shadow` and `border-radius` from `StyledModalInner` in `EditMessageModal.tsx` to prevent doubled styling with `OsModal` wrapper. Added `role="menu"`, `aria-label`, `aria-haspopup`, keyboard support, and arrow key navigation (roving tabindex) to custom popup in `ExtractCellFormatter.tsx`. Removed redundant Escape key handler from `StatusDot` `onKeyDown` (already handled by global listener). Extracted inline `maxHeight: "70vh"` in `SelectDocumentsModal.tsx` to `MODAL_BODY_MAX_HEIGHT` constant in `constants.ts`.

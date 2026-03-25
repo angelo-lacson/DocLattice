@@ -5,6 +5,7 @@ Tests that _batch_embed_text_annotations() and the refactored
 calculate_embeddings_for_annotation_batch task correctly aggregate
 annotations and call embed_texts_batch() in sub-batches.
 """
+
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -22,9 +23,7 @@ from opencontractserver.types.enums import ContentModality
 
 User = get_user_model()
 
-TEST_EMBEDDER_PATH = (
-    "opencontractserver.pipeline.embedders.test_embedder.TestEmbedder"
-)
+TEST_EMBEDDER_PATH = "opencontractserver.pipeline.embedders.test_embedder.TestEmbedder"
 
 
 class TestBatchEmbedTextAnnotationsHelper(TestCase):
@@ -164,9 +163,7 @@ class TestBatchEmbedTextAnnotationsHelper(TestCase):
 
         self.assertEqual(result["succeeded"], 0)
         self.assertEqual(result["failed"], 3)
-        self.assertTrue(
-            all("batch returned None" in e for e in result["errors"])
-        )
+        self.assertTrue(all("batch returned None" in e for e in result["errors"]))
 
     def test_batch_embed_exception_in_batch_call(self):
         """When embed_texts_batch raises, all annotations in chunk fail."""
@@ -184,9 +181,7 @@ class TestBatchEmbedTextAnnotationsHelper(TestCase):
 
         self.assertEqual(result["succeeded"], 0)
         self.assertEqual(result["failed"], 3)
-        self.assertTrue(
-            all("batch call failed" in e for e in result["errors"])
-        )
+        self.assertTrue(all("batch call failed" in e for e in result["errors"]))
 
 
 class TestBatchTaskIntegration(TestCase):
@@ -205,12 +200,14 @@ class TestBatchTaskIntegration(TestCase):
         )
 
     def _make_annotation(self, text="Some test text", modalities=None):
-        return Annotation.objects.create(
-            raw_text=text,
-            document=self.document,
-            creator=self.user,
-            content_modalities=modalities,
-        )
+        kwargs = {
+            "raw_text": text,
+            "document": self.document,
+            "creator": self.user,
+        }
+        if modalities is not None:
+            kwargs["content_modalities"] = modalities
+        return Annotation.objects.create(**kwargs)
 
     def test_batch_task_uses_batch_path(self):
         """Task with embedder_path creates embeddings via batch path."""
@@ -231,12 +228,8 @@ class TestBatchTaskIntegration(TestCase):
                 ).exists()
             )
 
-    @patch(
-        "opencontractserver.tasks.embeddings_task._apply_dual_embedding_strategy"
-    )
-    def test_batch_task_without_embedder_path_uses_dual_strategy(
-        self, mock_dual
-    ):
+    @patch("opencontractserver.tasks.embeddings_task._apply_dual_embedding_strategy")
+    def test_batch_task_without_embedder_path_uses_dual_strategy(self, mock_dual):
         """Task without embedder_path uses dual embedding (regression guard)."""
         ann = self._make_annotation("Test text")
 
@@ -256,7 +249,9 @@ class TestBatchTaskIntegration(TestCase):
             modalities=[ContentModality.TEXT.value, ContentModality.IMAGE.value],
         )
 
-        multimodal_path = "opencontractserver.pipeline.embedders.test_embedder.TestMultimodalEmbedder"
+        multimodal_path = (
+            "opencontractserver.pipeline.embedders.test_embedder.TestMultimodalEmbedder"
+        )
 
         with patch(
             "opencontractserver.tasks.embeddings_task._create_embedding_for_annotation"
@@ -266,7 +261,7 @@ class TestBatchTaskIntegration(TestCase):
             with patch(
                 "opencontractserver.tasks.embeddings_task._batch_embed_text_annotations"
             ) as mock_batch:
-                result = calculate_embeddings_for_annotation_batch(
+                calculate_embeddings_for_annotation_batch(
                     annotation_ids=[text_ann.pk, image_ann.pk],
                     embedder_path=multimodal_path,
                 )

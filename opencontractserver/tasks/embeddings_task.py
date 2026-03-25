@@ -461,9 +461,7 @@ def _batch_embed_text_annotations(
         try:
             vectors = embedder.embed_texts_batch(texts)
         except Exception as e:
-            logger.error(
-                f"embed_texts_batch raised for chunk of {len(chunk)}: {e}"
-            )
+            logger.error(f"embed_texts_batch raised for chunk of {len(chunk)}: {e}")
             for annot, _ in chunk:
                 result["failed"] += 1
                 result["errors"].append(
@@ -472,14 +470,10 @@ def _batch_embed_text_annotations(
             continue
 
         if vectors is None:
-            logger.error(
-                f"embed_texts_batch returned None for chunk of {len(chunk)}"
-            )
+            logger.error(f"embed_texts_batch returned None for chunk of {len(chunk)}")
             for annot, _ in chunk:
                 result["failed"] += 1
-                result["errors"].append(
-                    f"Annotation {annot.id}: batch returned None"
-                )
+                result["errors"].append(f"Annotation {annot.id}: batch returned None")
             continue
 
         # 3. Store each vector
@@ -500,9 +494,7 @@ def _batch_embed_text_annotations(
                         f"Annotation {annot.id}: add_embedding returned None"
                     )
             except Exception as e:
-                logger.error(
-                    f"add_embedding failed for annotation {annot.id}: {e}"
-                )
+                logger.error(f"add_embedding failed for annotation {annot.id}: {e}")
                 result["failed"] += 1
                 result["errors"].append(
                     f"Annotation {annot.id}: add_embedding error: {e}"
@@ -587,9 +579,7 @@ def calculate_embeddings_for_annotation_batch(
         multimodal: list[Annotation] = []
 
         for annotation in found_annotations:
-            modalities = annotation.content_modalities or [
-                ContentModality.TEXT.value
-            ]
+            modalities = annotation.content_modalities or [ContentModality.TEXT.value]
             has_images = ContentModality.IMAGE.value in modalities
             if can_embed_images and has_images:
                 multimodal.append(annotation)
@@ -622,9 +612,7 @@ def calculate_embeddings_for_annotation_batch(
             except Exception as e:
                 logger.error(f"Failed to embed annotation {annotation.id}: {e}")
                 result["failed"] += 1
-                result["errors"].append(
-                    f"Annotation {annotation.id}: {str(e)}"
-                )
+                result["errors"].append(f"Annotation {annotation.id}: {str(e)}")
     else:
         # Dual embedding path: process individually (unchanged)
         for annotation in found_annotations:
@@ -642,9 +630,7 @@ def calculate_embeddings_for_annotation_batch(
             except Exception as e:
                 logger.error(f"Failed to embed annotation {annotation.id}: {e}")
                 result["failed"] += 1
-                result["errors"].append(
-                    f"Annotation {annotation.id}: {str(e)}"
-                )
+                result["errors"].append(f"Annotation {annotation.id}: {str(e)}")
 
     logger.info(
         f"Batch embedding complete: {result['succeeded']} succeeded, "
