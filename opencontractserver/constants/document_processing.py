@@ -24,6 +24,11 @@ EMBEDDING_BATCH_SIZE = 100
 # the re-embed will pick up where it left off (idempotent via existing-embedding check).
 MAX_REEMBED_TASKS_PER_RUN = 500
 
+# Number of texts to send per HTTP request to the embedder's /embeddings/batch endpoint.
+# This is the API-level batch size, separate from EMBEDDING_BATCH_SIZE (task-level).
+# The embedder's 100-text truncation guard is a safety net; this is the operative control.
+EMBEDDING_API_BATCH_SIZE = 50
+
 # Maximum length for filename/title truncation when generating document paths
 MAX_FILENAME_LENGTH = 100
 
