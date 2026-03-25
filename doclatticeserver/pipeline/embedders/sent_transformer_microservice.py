@@ -153,3 +153,85 @@ class MicroserviceEmbedder(BaseEmbedder):
                 f"MicroserviceEmbedder - failed to generate embeddings due to error: {e}"
             )
             return None
+
+    def embed_texts_batch(
+        self, texts: list[str], **direct_kwargs
+    ) -> Optional[list[list[float]]]:
+        """
+        Generate embeddings for multiple texts in one request via /embeddings/batch.
+
+        Args:
+            texts: List of text strings to embed (max 100).
+            **direct_kwargs: Additional kwargs that can override settings.
+
+        Returns:
+            List of embedding vectors, or None on error (entire batch fails).
+        """
+        if len(texts) > 100:
+            logger.warning(
+                f"Batch size {len(texts)} exceeds max 100. Truncating."
+            )
+            texts = texts[:100]
+
+        try:
+            s = self.settings if self.settings is not None else self.Settings()
+
+            merged_kwargs = {**self.get_component_settings(), **direct_kwargs}
+            service_url = merged_kwargs.get(
+                "embeddings_microservice_url", s.embeddings_microservice_url
+            )
+            api_key = merged_kwargs.get(
+                "vector_embedder_api_key", s.vector_embedder_api_key
+            )
+            use_cloud_run_iam_auth = bool(
+                merged_kwargs.get(
+                    "use_cloud_run_iam_auth", s.use_cloud_run_iam_auth
+                )
+            )
+
+            headers: dict[str, str] = {"Content-Type": "application/json"}
+            if api_key:
+                headers["X-API-Key"] = api_key
+
+            headers = maybe_add_cloud_run_auth(
+                service_url, headers, force=use_cloud_run_iam_auth
+            )
+
+            response = requests.post(
+                f"{service_url}/embeddings/batch",
+                json={"texts": texts},
+                headers=headers,
+                timeout=60,
+            )
+
+            if response.status_code == 200:
+                embeddings_array = np.array(response.json()["embeddings"])
+                if embeddings_array.ndim == 3:
+                    embeddings_array = embeddings_array.squeeze(axis=1)
+                if np.isnan(embeddings_array).any():
+                    nan_indices = np.where(
+                        np.isnan(embeddings_array).any(axis=1)
+                    )[0]
+                    logger.error(
+                        f"Batch embeddings contain NaN at indices: "
+                        f"{nan_indices.tolist()}. Batch size: {len(texts)}"
+                    )
+                    return None
+                return embeddings_array.tolist()
+            elif 400 <= response.status_code < 500:
+                logger.error(
+                    f"Batch embedding service returned client error "
+                    f"{response.status_code}. Batch size: {len(texts)}"
+                )
+                return None
+            else:
+                logger.error(
+                    f"Batch embedding service returned status "
+                    f"{response.status_code}. May be transient."
+                )
+                return None
+        except Exception as e:
+            logger.error(
+                f"MicroserviceEmbedder batch embedding failed: {e}"
+            )
+            return None
