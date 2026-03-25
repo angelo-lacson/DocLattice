@@ -168,9 +168,7 @@ class MicroserviceEmbedder(BaseEmbedder):
             List of embedding vectors, or None on error (entire batch fails).
         """
         if len(texts) > 100:
-            logger.warning(
-                f"Batch size {len(texts)} exceeds max 100. Truncating."
-            )
+            logger.warning(f"Batch size {len(texts)} exceeds max 100. Truncating.")
             texts = texts[:100]
 
         try:
@@ -184,9 +182,7 @@ class MicroserviceEmbedder(BaseEmbedder):
                 "vector_embedder_api_key", s.vector_embedder_api_key
             )
             use_cloud_run_iam_auth = bool(
-                merged_kwargs.get(
-                    "use_cloud_run_iam_auth", s.use_cloud_run_iam_auth
-                )
+                merged_kwargs.get("use_cloud_run_iam_auth", s.use_cloud_run_iam_auth)
             )
 
             headers: dict[str, str] = {"Content-Type": "application/json"}
@@ -209,9 +205,7 @@ class MicroserviceEmbedder(BaseEmbedder):
                 if embeddings_array.ndim == 3:
                     embeddings_array = embeddings_array.squeeze(axis=1)
                 if np.isnan(embeddings_array).any():
-                    nan_indices = np.where(
-                        np.isnan(embeddings_array).any(axis=1)
-                    )[0]
+                    nan_indices = np.where(np.isnan(embeddings_array).any(axis=1))[0]
                     logger.error(
                         f"Batch embeddings contain NaN at indices: "
                         f"{nan_indices.tolist()}. Batch size: {len(texts)}"
@@ -231,7 +225,5 @@ class MicroserviceEmbedder(BaseEmbedder):
                 )
                 return None
         except Exception as e:
-            logger.error(
-                f"MicroserviceEmbedder batch embedding failed: {e}"
-            )
+            logger.error(f"MicroserviceEmbedder batch embedding failed: {e}")
             return None
