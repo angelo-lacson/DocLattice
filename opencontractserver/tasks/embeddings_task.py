@@ -420,6 +420,95 @@ def calculate_embedding_for_annotation_text(
     )
 
 
+def _batch_embed_text_annotations(
+    annotations: list[Annotation],
+    embedder: BaseEmbedder,
+    embedder_path: str,
+    api_batch_size: int,
+    result: dict,
+) -> None:
+    """
+    Batch-embed text-only annotations via embedder.embed_texts_batch().
+
+    Partitions annotations into sub-batches of api_batch_size, calls the
+    embedder's batch method, and stores each resulting vector. Mutates
+    result dict in-place. Never raises — all errors are caught and recorded.
+
+    Args:
+        annotations: List of Annotation objects to embed (text-only).
+        embedder: The embedder instance (must have embed_texts_batch).
+        embedder_path: Path identifier for storing embeddings.
+        api_batch_size: Max texts per embed_texts_batch() call.
+        result: Mutable dict with succeeded/failed/skipped/errors counts.
+    """
+    # 1. Filter: collect (annotation, text) pairs, skip empty
+    items: list[tuple[Annotation, str]] = []
+    for annot in annotations:
+        text = annot.raw_text or ""
+        if not text.strip():
+            result["skipped"] += 1
+            continue
+        items.append((annot, text))
+
+    if not items:
+        return
+
+    # 2. Sub-batch and call embedder
+    for chunk_start in range(0, len(items), api_batch_size):
+        chunk = items[chunk_start : chunk_start + api_batch_size]
+        texts = [text for _, text in chunk]
+
+        try:
+            vectors = embedder.embed_texts_batch(texts)
+        except Exception as e:
+            logger.error(
+                f"embed_texts_batch raised for chunk of {len(chunk)}: {e}"
+            )
+            for annot, _ in chunk:
+                result["failed"] += 1
+                result["errors"].append(
+                    f"Annotation {annot.id}: batch call failed: {e}"
+                )
+            continue
+
+        if vectors is None:
+            logger.error(
+                f"embed_texts_batch returned None for chunk of {len(chunk)}"
+            )
+            for annot, _ in chunk:
+                result["failed"] += 1
+                result["errors"].append(
+                    f"Annotation {annot.id}: batch returned None"
+                )
+            continue
+
+        # 3. Store each vector
+        for (annot, _), vector in zip(chunk, vectors):
+            if vector is None:
+                result["failed"] += 1
+                result["errors"].append(
+                    f"Annotation {annot.id}: individual vector was None"
+                )
+                continue
+            try:
+                embedding = annot.add_embedding(embedder_path, vector)
+                if embedding:
+                    result["succeeded"] += 1
+                else:
+                    result["failed"] += 1
+                    result["errors"].append(
+                        f"Annotation {annot.id}: add_embedding returned None"
+                    )
+            except Exception as e:
+                logger.error(
+                    f"add_embedding failed for annotation {annot.id}: {e}"
+                )
+                result["failed"] += 1
+                result["errors"].append(
+                    f"Annotation {annot.id}: add_embedding error: {e}"
+                )
+
+
 @shared_task(
     bind=True,
     autoretry_for=(Exception,),
