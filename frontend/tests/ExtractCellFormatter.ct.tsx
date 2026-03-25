@@ -241,6 +241,13 @@ test.describe("ExtractCellFormatter", () => {
   });
 
   test("arrow keys navigate between menu items", async ({ mount, page }) => {
+    // Provide cell with fullSourceList so View Sources button is enabled
+    // and arrow key navigation can reach all four menu items
+    const mockCell = {
+      id: "test-cell-1",
+      fullSourceList: [{ id: "ann-1" }],
+    } as any;
+
     const component = await mount(
       <ExtractCellFormatterTestWrapper
         value="Arrow nav test"
@@ -253,6 +260,7 @@ test.describe("ExtractCellFormatter", () => {
           originalData: "Arrow nav test",
         }}
         isExtractComplete={true}
+        cell={mockCell}
       />
     );
 
