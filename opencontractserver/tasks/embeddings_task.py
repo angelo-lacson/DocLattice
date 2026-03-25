@@ -570,17 +570,45 @@ def calculate_embeddings_for_annotation_batch(
 
     annotation_map = {a.pk: a for a in annotations}
 
+    # Count annotations not found in DB
+    found_annotations = []
     for annotation_id in annotation_ids:
         annotation = annotation_map.get(annotation_id)
-
         if not annotation:
             logger.warning(f"Annotation {annotation_id} not found, skipping")
             result["skipped"] += 1
-            continue
+        else:
+            found_annotations.append(annotation)
 
-        try:
-            if embedder_path and embedder:
-                # Use explicit embedder (bypass dual embedding)
+    if embedder_path and embedder:
+        # Batch path: partition into text-only vs multimodal
+        can_embed_images = embedder.is_multimodal and embedder.supports_images
+        text_only: list[Annotation] = []
+        multimodal: list[Annotation] = []
+
+        for annotation in found_annotations:
+            modalities = annotation.content_modalities or [
+                ContentModality.TEXT.value
+            ]
+            has_images = ContentModality.IMAGE.value in modalities
+            if can_embed_images and has_images:
+                multimodal.append(annotation)
+            else:
+                text_only.append(annotation)
+
+        # Batch-embed text-only annotations
+        if text_only:
+            from opencontractserver.constants.document_processing import (
+                EMBEDDING_API_BATCH_SIZE,
+            )
+
+            _batch_embed_text_annotations(
+                text_only, embedder, embedder_path, EMBEDDING_API_BATCH_SIZE, result
+            )
+
+        # Process multimodal annotations individually
+        for annotation in multimodal:
+            try:
                 succeeded = _create_embedding_for_annotation(
                     annotation, embedder, embedder_path
                 )
@@ -589,10 +617,18 @@ def calculate_embeddings_for_annotation_batch(
                 else:
                     result["failed"] += 1
                     result["errors"].append(
-                        f"Annotation {annotation_id}: embedding generation returned False"
+                        f"Annotation {annotation.id}: embedding generation returned False"
                     )
-            else:
-                # Use dual embedding strategy
+            except Exception as e:
+                logger.error(f"Failed to embed annotation {annotation.id}: {e}")
+                result["failed"] += 1
+                result["errors"].append(
+                    f"Annotation {annotation.id}: {str(e)}"
+                )
+    else:
+        # Dual embedding path: process individually (unchanged)
+        for annotation in found_annotations:
+            try:
                 effective_corpus_id = corpus_id or annotation.corpus_id
                 _apply_dual_embedding_strategy(
                     obj=annotation,
@@ -603,11 +639,12 @@ def calculate_embeddings_for_annotation_batch(
                     embed_func=_create_embedding_for_annotation,
                 )
                 result["succeeded"] += 1
-
-        except Exception as e:
-            logger.error(f"Failed to embed annotation {annotation_id}: {e}")
-            result["failed"] += 1
-            result["errors"].append(f"Annotation {annotation_id}: {str(e)}")
+            except Exception as e:
+                logger.error(f"Failed to embed annotation {annotation.id}: {e}")
+                result["failed"] += 1
+                result["errors"].append(
+                    f"Annotation {annotation.id}: {str(e)}"
+                )
 
     logger.info(
         f"Batch embedding complete: {result['succeeded']} succeeded, "
