@@ -15,7 +15,7 @@ CAML is a human-readable markdown superset for rendering legal articles and know
 | Package | Purpose | Dependencies |
 |---------|---------|--------------|
 | `@os-legal/caml` | Parser, types, IR definition | Zero |
-| `@os-legal/caml-react` | React renderer, theme system, default markdown | Peer: `react`, `styled-components`. Optional peer: `react-markdown`, `remark-gfm`, `rehype-sanitize` |
+| `@os-legal/caml-react` | React renderer, theme system, default markdown | Peer: `react`, `react-dom`, `styled-components`. Optional peer: `react-markdown`, `remark-gfm`, `rehype-sanitize` |
 
 `@os-legal/caml-react` depends on `@os-legal/caml` as a runtime dependency.
 
@@ -45,17 +45,18 @@ os-legal-caml/
 │       │   ├── CamlFooter.tsx         # Footer section
 │       │   ├── CamlMarkdown.tsx       # NEW: default markdown renderer
 │       │   ├── CamlThemeProvider.tsx   # NEW: theme context + provider
-│       │   ├── theme.ts               # NEW: CamlTheme interface + defaultCamlTheme
+│       │   ├── theme.ts               # NEW: CamlTheme interface + defaultCamlTheme + DeepPartial + deepMerge
 │       │   ├── styles.ts              # Styled components (refactored to read from theme)
 │       │   ├── safeHref.ts            # URL safety guard
 │       │   └── index.ts               # Public API
 │       ├── __tests__/
-│       │   └── safeHref.test.ts
+│       │   └── safeHref.test.ts       # URL safety tests (lifted as-is)
 │       ├── package.json
 │       └── tsconfig.json
 ├── package.json                       # Workspaces root
 ├── tsconfig.base.json                 # Shared compiler options
 ├── vitest.config.ts                   # Shared test config
+├── LICENSE                            # MIT license
 └── .changeset/                        # Changeset versioning config
 ```
 
@@ -71,6 +72,7 @@ os-legal-caml/
 {
   "name": "@os-legal/caml",
   "version": "0.1.0",
+  "type": "module",
   "exports": {
     ".": {
       "import": "./dist/index.mjs",
@@ -88,12 +90,15 @@ os-legal-caml/
 }
 ```
 
+tsup config: `format: ["esm", "cjs"]` to produce `.mjs` and `.cjs` outputs.
+
 ### `@os-legal/caml-react` package.json (key fields)
 
 ```json
 {
   "name": "@os-legal/caml-react",
   "version": "0.1.0",
+  "type": "module",
   "exports": {
     ".": {
       "import": "./dist/index.mjs",
@@ -107,6 +112,7 @@ os-legal-caml/
   },
   "peerDependencies": {
     "react": ">=17",
+    "react-dom": ">=17",
     "styled-components": ">=5",
     "react-markdown": ">=8",
     "remark-gfm": ">=3",
@@ -126,14 +132,28 @@ Markdown peer deps are optional — only needed if the consumer does not provide
 
 ### Public API
 
+Export all types defined in `types.ts`, including leaf sub-types needed by custom renderer implementations:
+
 ```typescript
 export { parseCaml } from "./tokenizer";
 export type {
-  CamlDocument, CamlFrontmatter, CamlHero, CamlFooter,
-  CamlChapter, CamlBlock, CamlProse, CamlCards, CamlCardItem,
-  CamlPills, CamlPillItem, CamlTabs, CamlTab, CamlTabSection,
-  CamlTimeline, CamlCta, CamlCtaButton, CamlSignup,
-  CamlCorpusStats, CamlAnnotationEmbed,
+  // Top-level document
+  CamlDocument, CamlFrontmatter, CamlChapter,
+
+  // Hero & Footer
+  CamlHero, CamlFooter, CamlFooterNav,
+
+  // Block union + individual block types
+  CamlBlock,
+  CamlProse,
+  CamlCards, CamlCardItem,
+  CamlPills, CamlPillItem,
+  CamlTabs, CamlTab, CamlTabSection, CamlTabSource,
+  CamlTimeline, CamlTimelineLegendItem, CamlTimelineItem,
+  CamlCta, CamlCtaButton,
+  CamlSignup,
+  CamlCorpusStats, CamlCorpusStatItem,
+  CamlAnnotationEmbed,
 };
 ```
 
@@ -148,7 +168,11 @@ content: string; // Raw markdown (rendered by MarkdownMessageRenderer)
 content: string; // Raw markdown
 ```
 
-Tests (409 lines of `parseCaml.test.ts`) move as-is and pass unchanged.
+### Test Migration
+
+Both test suites transfer as-is with no changes:
+- `parseCaml.test.ts` (409 lines) → `packages/caml/__tests__/parseCaml.test.ts`
+- `safeHref.test.ts` (60 lines) → `packages/caml-react/__tests__/safeHref.test.ts`
 
 ## `@os-legal/caml-react` — Theme System
 
@@ -182,38 +206,72 @@ export interface CamlTheme {
 }
 ```
 
+### `CamlStats` Type
+
+Shared stats shape used by `CamlArticle`, `CamlChapter`, and `CorpusStatsBlock`:
+
+```typescript
+export interface CamlStats {
+  annotations?: number;
+  documents?: number;
+  contributors?: number;
+  threads?: number;
+}
+```
+
 ### Default Theme
 
-Ships the current OS Legal look out of the box:
+Ships the current OS Legal look out of the box. Values sourced directly from `OS_LEGAL_COLORS` in `osLegalStyles.ts`:
 
 ```typescript
 export const defaultCamlTheme: CamlTheme = {
   colors: {
-    accent: "#0d9488",
-    accentHover: "#0f766e",
+    accent: "#0f766e",
+    accentHover: "#0d6860",
     textPrimary: "#1e293b",
-    textSecondary: "#475569",
-    textTertiary: "#64748b",
+    textSecondary: "#64748b",
+    textTertiary: "#475569",
     textMuted: "#94a3b8",
-    surface: "#ffffff",
-    surfaceLight: "#f8fafc",
-    surfaceHover: "#f1f5f9",
+    surface: "white",
+    surfaceLight: "#f1f5f9",
+    surfaceHover: "#f8fafc",
     border: "#e2e8f0",
     heading: "#0f172a",
     proseText: "#334155",
     darkProse: "#cbd5e1",
   },
   typography: {
-    fontFamilySans: "'Inter', system-ui, sans-serif",
-    fontFamilySerif: "'Lora', 'Georgia', serif",
+    fontFamilySans: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
+    fontFamilySerif: '"Georgia", "Times New Roman", serif',
   },
   accentAlpha: (opacity) => `rgba(15, 118, 110, ${opacity})`,
 };
 ```
 
+### Utilities
+
+`theme.ts` also provides `DeepPartial` and `deepMerge` — kept internal (not exported from the public API):
+
+```typescript
+/** Recursively make all properties optional. */
+type DeepPartial<T> = {
+  [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
+};
+
+/** Shallow-merge nested objects (2 levels deep — sufficient for CamlTheme). */
+function deepMerge(base: CamlTheme, overrides?: DeepPartial<CamlTheme>): CamlTheme {
+  if (!overrides) return base;
+  return {
+    colors: { ...base.colors, ...overrides.colors },
+    typography: { ...base.typography, ...overrides.typography },
+    accentAlpha: overrides.accentAlpha ?? base.accentAlpha,
+  };
+}
+```
+
 ### `CamlThemeProvider`
 
-Wraps styled-components' `ThemeProvider` with CAML tokens namespaced under `theme.caml` to avoid collisions with consumer themes:
+Wraps styled-components' `ThemeProvider` with CAML tokens namespaced under `theme.caml`. Uses the function form of `ThemeProvider` to preserve any existing consumer theme keys:
 
 ```typescript
 import { createContext, useContext } from "react";
@@ -232,7 +290,7 @@ export function CamlThemeProvider({
   const merged = deepMerge(defaultCamlTheme, overrides);
   return (
     <CamlThemeContext.Provider value={merged}>
-      <ThemeProvider theme={{ caml: merged }}>
+      <ThemeProvider theme={(outerTheme) => ({ ...outerTheme, caml: merged })}>
         {children}
       </ThemeProvider>
     </CamlThemeContext.Provider>
@@ -260,32 +318,66 @@ This is a mechanical find-and-replace across ~80 sites in `styles.ts`. No logic 
 
 ### Render Slot Pattern
 
-`CamlArticle` accepts an optional render function:
+`CamlArticle` accepts optional render functions for markdown and annotation embeds:
 
 ```typescript
 interface CamlArticleProps {
   document: CamlDocument;
-  stats?: {
-    annotations?: number;
-    documents?: number;
-    contributors?: number;
-    threads?: number;
-  };
+  stats?: CamlStats;
   renderMarkdown?: (content: string) => ReactNode;
+  renderAnnotationEmbed?: (ref: string) => ReactNode;
 }
 ```
 
-`renderMarkdown` is threaded through `CamlArticle` → `CamlChapter` → `CamlBlockRenderer`. The two call sites in `CamlBlocks.tsx` become:
+### Prop Threading
+
+`renderMarkdown` is threaded through the full component hierarchy:
+
+1. `CamlArticle` passes `renderMarkdown` to each `CamlChapterRenderer`
+2. `CamlChapterRenderer` passes it to `CamlBlockRenderer`
+3. `CamlBlockRenderer` passes it to individual block components that render markdown
+
+The block components that consume `renderMarkdown`:
+- `ProseBlock` — renders markdown content segments (line 126 in current code)
+- `TabsBlock` — renders markdown in tab section content (line 258 in current code)
+
+Internal shared props interface:
 
 ```typescript
-// Before:
-<MarkdownMessageRenderer content={section.content} />
-
-// After:
-{renderMarkdown
-  ? renderMarkdown(section.content)
-  : <CamlMarkdown content={section.content} />}
+interface BlockRendererProps {
+  block: CamlBlock;
+  dark?: boolean;
+  stats?: CamlStats;
+  renderMarkdown?: (content: string) => ReactNode;
+  renderAnnotationEmbed?: (ref: string) => ReactNode;
+}
 ```
+
+Each sub-block component (`ProseBlock`, `TabsBlock`, etc.) receives `renderMarkdown` and falls back to `<CamlMarkdown>`:
+
+```typescript
+function ProseBlock({ block, dark, renderMarkdown }: ProseBlockProps) {
+  // ...
+  const renderMd = (content: string) =>
+    renderMarkdown ? renderMarkdown(content) : <CamlMarkdown content={content} />;
+  // ...
+}
+```
+
+### Annotation Embed Placeholder
+
+The current `annotation-embed` block renders a placeholder (`"Annotation embed (coming soon)"`). In the library, this becomes a second optional render slot:
+
+```typescript
+interface CamlArticleProps {
+  document: CamlDocument;
+  stats?: CamlStats;
+  renderMarkdown?: (content: string) => ReactNode;
+  renderAnnotationEmbed?: (ref: string) => ReactNode;
+}
+```
+
+If not provided, the existing "coming soon" placeholder renders. OC (or any consumer) can provide a real implementation when annotation embedding is built.
 
 ### Default `CamlMarkdown` Component
 
@@ -305,7 +397,7 @@ export function CamlMarkdown({ content }: { content: string }) {
 }
 ```
 
-When `renderMarkdown` is not provided, the component falls back to `CamlMarkdown`. If the optional peer deps (`react-markdown`, `remark-gfm`, `rehype-sanitize`) are not installed, the import fails at build time with a clear error.
+When `renderMarkdown` is not provided, block components fall back to `CamlMarkdown`. If the optional peer deps (`react-markdown`, `remark-gfm`, `rehype-sanitize`) are not installed, the import fails at build time with a clear error.
 
 ### `@os-legal/caml-react` Public API
 
@@ -314,10 +406,11 @@ When `renderMarkdown` is not provided, the component falls back to `CamlMarkdown
 export { CamlArticle } from "./CamlArticle";
 export type { CamlArticleProps } from "./CamlArticle";
 export { CamlThemeProvider } from "./CamlThemeProvider";
+export { CamlMarkdown } from "./CamlMarkdown";
 
 // Theme
 export { defaultCamlTheme } from "./theme";
-export type { CamlTheme } from "./theme";
+export type { CamlTheme, CamlStats } from "./theme";
 
 // Types re-exported from @os-legal/caml for convenience
 export type { CamlDocument } from "@os-legal/caml";
@@ -338,14 +431,10 @@ import { CamlArticle } from "../../caml";
 import { parseCaml } from "@os-legal/caml";
 import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
 import { MarkdownMessageRenderer } from "../threads/MarkdownMessageRenderer";
-import { OS_LEGAL_COLORS, OS_LEGAL_TYPOGRAPHY, accentAlpha } from "../../assets/configurations/osLegalStyles";
 
-// In the render:
-<CamlThemeProvider theme={{
-  colors: { ...OS_LEGAL_COLORS, heading: "#0f172a", proseText: "#334155", darkProse: "#cbd5e1" },
-  typography: OS_LEGAL_TYPOGRAPHY,
-  accentAlpha,
-}}>
+// In the render — no theme override needed since the default theme
+// matches the OS Legal design system values exactly:
+<CamlThemeProvider>
   <CamlArticle
     document={doc}
     stats={stats}
@@ -353,6 +442,8 @@ import { OS_LEGAL_COLORS, OS_LEGAL_TYPOGRAPHY, accentAlpha } from "../../assets/
   />
 </CamlThemeProvider>
 ```
+
+Since `defaultCamlTheme` is sourced directly from `OS_LEGAL_COLORS` values, OC does not need to pass a custom theme unless the design system tokens diverge in the future.
 
 ### `CorpusArticleView.tsx`
 
@@ -370,6 +461,12 @@ Same pattern — update imports, wrap in `CamlThemeProvider`, pass `renderMarkdo
 ### Net OC Diff
 
 ~20 lines changed across 2 files, ~2,000 lines deleted.
+
+## Limitations / Non-goals (v0.1)
+
+- **SSR**: No server-side rendering support. styled-components requires additional setup (babel/SWC plugin) for SSR environments like Next.js/Remix. Out of scope for v0.1.
+- **Dark mode toggle**: The theme system supports dark chapter sections within articles, but a full page-level dark mode is not included.
+- **CAML v2 features**: `corpus-stats` live data binding, AI citation (`{{cite-me}}`), and annotation embedding are not implemented in the library. The `renderAnnotationEmbed` slot provides the extension point.
 
 ## Development Workflow
 
