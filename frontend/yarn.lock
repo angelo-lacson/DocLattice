@@ -1282,6 +1282,18 @@
     "@nodelib/fs.scandir" "2.1.5"
     fastq "^1.6.0"
 
+"@os-legal/caml-react@link:../../os-legal-caml/packages/caml-react":
+  version "0.0.0"
+  uid ""
+
+"@os-legal/caml@link:../../os-legal-caml/packages/caml":
+  version "0.0.0"
+  uid ""
+
+"@os-legal/caml@workspace:*":
+  version "0.0.0"
+  uid ""
+
 "@os-legal/ui@0.1.16":
   version "0.1.16"
   resolved "https://registry.yarnpkg.com/@os-legal/ui/-/ui-0.1.16.tgz#e417df07eb08a7ed793987e4a62d08167d95bc68"

@@ -18,8 +18,10 @@ import {
   GetCorpusArticleOutput,
 } from "../../../graphql/queries";
 import { CorpusType } from "../../../types/graphql-api";
-import { parseCaml, CamlArticle } from "../../../caml";
-import type { CamlDocument } from "../../../caml";
+import { parseCaml } from "@os-legal/caml";
+import type { CamlDocument } from "@os-legal/caml";
+import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
+import { MarkdownMessageRenderer } from "../../threads/MarkdownMessageRenderer";
 import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants";
 
 // ---------------------------------------------------------------------------
@@ -255,7 +257,13 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
         )}
       </ArticleToolbar>
 
-      <CamlArticle document={parsedDocument} stats={stats} />
+      <CamlThemeProvider>
+        <CamlArticle
+          document={parsedDocument}
+          stats={stats}
+          renderMarkdown={(md) => <MarkdownMessageRenderer content={md} />}
+        />
+      </CamlThemeProvider>
     </ArticleViewContainer>
   );
 };

@@ -25,7 +25,9 @@ import {
   UploadDocumentInputProps,
   UploadDocumentOutputProps,
 } from "../../graphql/mutations";
-import { parseCaml, CamlArticle } from "../../caml";
+import { parseCaml } from "@os-legal/caml";
+import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
+import { MarkdownMessageRenderer } from "../threads/MarkdownMessageRenderer";
 
 // ---------------------------------------------------------------------------
 // Styled components
@@ -393,7 +395,16 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
               <Eye size={12} />
               Preview
             </PaneHeader>
-            {parsedDocument && <CamlArticle document={parsedDocument} />}
+            {parsedDocument && (
+              <CamlThemeProvider>
+                <CamlArticle
+                  document={parsedDocument}
+                  renderMarkdown={(md) => (
+                    <MarkdownMessageRenderer content={md} />
+                  )}
+                />
+              </CamlThemeProvider>
+            )}
           </PreviewPane>
         </ContentWrapper>
 
