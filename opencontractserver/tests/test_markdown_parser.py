@@ -61,7 +61,7 @@ class TestMarkdownParser(TestCase):
         doc = self._make_document("Unicode content: \u00e9\u00e0\u00fc")
 
         # Mock storage to return raw bytes instead of str
-        raw_bytes = "Unicode content: \u00e9\u00e0\u00fc".encode("utf-8")
+        raw_bytes = "Unicode content: \u00e9\u00e0\u00fc".encode()
         with patch(
             "opencontractserver.pipeline.parsers.oc_markdown_parser.default_storage"
         ) as mock_storage:
