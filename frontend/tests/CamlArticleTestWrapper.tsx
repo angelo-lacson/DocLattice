@@ -191,6 +191,68 @@ export const SAMPLE_CAML_DOCUMENT: CamlDocument = {
         },
       ],
     },
+    {
+      id: "jurisdiction",
+      kicker: "Chapter 4",
+      title: "Jurisdiction Map",
+      blocks: [
+        {
+          type: "map",
+          mapType: "us",
+          mode: "categorical",
+          legend: [
+            { label: "Compliant", color: "#0f766e" },
+            { label: "Pending", color: "#f59e0b" },
+            { label: "Non-compliant", color: "#dc2626" },
+          ],
+          states: [
+            { code: "CA", status: "Compliant" },
+            { code: "NY", status: "Compliant", count: 247 },
+            { code: "TX", status: "Pending", count: 56 },
+            { code: "FL", status: "Non-compliant" },
+            { code: "IL", status: "Compliant" },
+            { code: "OH", status: "Pending" },
+          ],
+        },
+      ],
+    },
+    {
+      id: "case-tracker",
+      kicker: "Chapter 5",
+      title: "Case Tracker",
+      blocks: [
+        {
+          type: "case-history",
+          title: "SEC v. Meridian Capital Partners LLC",
+          docket: "No. 22-cv-04817 (S.D.N.Y.)",
+          status: "Affirmed",
+          entries: [
+            {
+              courtLevel: "District Court",
+              courtName: "S.D.N.Y.",
+              date: "2022-06-10",
+              action: "Motion for TRO",
+              outcome: "Granted",
+              detail: "Court issued TRO freezing defendant assets.",
+            },
+            {
+              courtLevel: "Court of Appeals",
+              courtName: "2nd Circuit",
+              date: "2023-11-08",
+              action: "Appeal",
+              outcome: "Affirmed",
+            },
+            {
+              courtLevel: "Supreme Court",
+              courtName: "SCOTUS",
+              date: "2024-03-25",
+              action: "Certiorari",
+              outcome: "Cert Denied",
+            },
+          ],
+        },
+      ],
+    },
   ],
 };
 

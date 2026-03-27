@@ -343,3 +343,65 @@ test.describe("CamlArticle - Corpus Stats Block", () => {
     await component.unmount();
   });
 });
+
+test.describe("CamlArticle - Map Block", () => {
+  test("should render US map with categorical legend and state tiles", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(<CamlArticleTestWrapper />);
+
+    // Scroll to map chapter
+    await page.getByText("Jurisdiction Map").scrollIntoViewIfNeeded();
+
+    // Legend should render
+    await expect(page.getByText("Compliant").first()).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(page.getByText("Pending").first()).toBeVisible();
+    await expect(page.getByText("Non-compliant")).toBeVisible();
+
+    // State tiles should render (check for state codes in tiles)
+    await expect(page.getByText("CA").first()).toBeVisible();
+    await expect(page.getByText("NY").first()).toBeVisible();
+    await expect(page.getByText("TX").first()).toBeVisible();
+
+    await docScreenshot(page, "caml--map--categorical");
+
+    await component.unmount();
+  });
+});
+
+test.describe("CamlArticle - Case History Block", () => {
+  test("should render case history with entries and outcome badges", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(<CamlArticleTestWrapper />);
+
+    // Scroll to case history chapter
+    await page.getByText("Case Tracker").scrollIntoViewIfNeeded();
+
+    // Case title and docket
+    await expect(
+      page.getByText("SEC v. Meridian Capital Partners LLC")
+    ).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("No. 22-cv-04817 (S.D.N.Y.)")).toBeVisible();
+
+    // Status badge
+    await expect(page.getByText("Affirmed").first()).toBeVisible();
+
+    // Court entries
+    await expect(page.getByText("District Court").first()).toBeVisible();
+    await expect(page.getByText("Motion for TRO")).toBeVisible();
+    await expect(page.getByText("Granted").first()).toBeVisible();
+
+    // Later entries
+    await expect(page.getByText("Court of Appeals").first()).toBeVisible();
+    await expect(page.getByText("Cert Denied")).toBeVisible();
+
+    await docScreenshot(page, "caml--case-history--with-entries");
+
+    await component.unmount();
+  });
+});
