@@ -18,7 +18,7 @@ import {
   CamlArticleTestWrapper,
   SAMPLE_CAML_DOCUMENT,
 } from "./CamlArticleTestWrapper";
-import type { CamlDocument } from "../src/caml/parser/types";
+import type { CamlDocument } from "@os-legal/caml";
 
 test.describe("CamlArticle - Full Rendering", () => {
   test("should render a complete article with hero, chapters, and footer", async ({

@@ -6,8 +6,8 @@
  */
 import React from "react";
 import { MemoryRouter } from "react-router-dom";
-import { CamlArticle } from "../src/caml/renderer";
-import type { CamlDocument } from "../src/caml/parser/types";
+import type { CamlDocument } from "@os-legal/caml";
+import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
 
 /**
  * Sample parsed CAML document for test fixtures.
@@ -209,7 +209,9 @@ export const CamlArticleTestWrapper: React.FC<CamlArticleTestWrapperProps> = ({
         style={{ width: "100vw", minHeight: "100vh", background: "#ffffff" }}
         data-testid="caml-article-test-root"
       >
-        <CamlArticle document={doc} stats={stats} />
+        <CamlThemeProvider>
+          <CamlArticle document={doc} stats={stats} />
+        </CamlThemeProvider>
       </div>
     </MemoryRouter>
   );
