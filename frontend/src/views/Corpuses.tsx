@@ -397,6 +397,7 @@ const CorpusQueryView = ({
     totalAnnotations: number;
     totalAnalyses: number;
     totalExtracts: number;
+    totalThreads: number;
   };
   statsLoading: boolean;
   onOpenMobileMenu?: () => void;

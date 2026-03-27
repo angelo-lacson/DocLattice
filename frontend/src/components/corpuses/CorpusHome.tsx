@@ -25,6 +25,7 @@ export interface CorpusHomeProps {
     totalAnnotations: number;
     totalAnalyses: number;
     totalExtracts: number;
+    totalThreads: number;
   };
   statsLoading: boolean;
   // Chat integration props
@@ -58,6 +59,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
   corpus,
   onEditDescription,
   onEditArticle,
+  stats,
   chatQuery = "",
   onChatQueryChange,
   onChatSubmit,
@@ -132,6 +134,11 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
         corpus={corpus}
         onBack={handleBackToLanding}
         onEditArticle={onEditArticle}
+        stats={{
+          documents: stats.totalDocs,
+          annotations: stats.totalAnnotations,
+          threads: stats.totalThreads,
+        }}
         testId="corpus-home-article"
       />
     );
