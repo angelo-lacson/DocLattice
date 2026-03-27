@@ -215,7 +215,7 @@ You can use **bold**, *italic*, and [links](https://example.com).
 
 >>> "Use triple blockquotes for pullquotes that stand out."
 
-::: cards {columns: 2}
+:::: cards {columns: 2}
 
 - **Key Finding 1** | #0f766e
   Describe the first key finding here.
@@ -225,7 +225,46 @@ You can use **bold**, *italic*, and [links](https://example.com).
   Describe the second key finding here.
   ~ Source: Document B
 
+::::
+
 :::
+
+::: chapter {#case-tracker}
+>! Chapter 2
+## Case History
+
+:::: case-history
+title: Example Case v. Sample Corp
+docket: No. 24-cv-01234 (S.D.N.Y.)
+status: Pending
+
+- District Court | S.D.N.Y. | 2024-03-15 | Motion to Dismiss | Denied
+  Court found sufficient facts to proceed.
+
+- Court of Appeals | 2nd Circuit | 2025-01-20 | Appeal | Pending
+  Oral arguments scheduled.
+
+::::
+
+:::
+
+::: chapter {#jurisdiction}
+>! Chapter 3
+## Jurisdiction Map
+
+:::: map {type: us}
+legend:
+- Compliant | #0f766e
+- Pending | #f59e0b
+- Non-compliant | #dc2626
+
+- CA | Compliant
+- NY | Compliant
+- TX | Pending
+- FL | Non-compliant
+- IL | Compliant
+
+::::
 
 :::
 `;

@@ -94,3 +94,37 @@ test.describe("CamlArticleEditor - Close Behavior", () => {
     await component.unmount();
   });
 });
+
+test.describe("CamlArticleEditor - New Block Types in Template", () => {
+  test("should render map and case-history blocks in preview from template", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <CamlArticleEditorTestWrapper hasExistingArticle={false} />
+    );
+
+    // Wait for editor to load
+    await expect(page.getByText("Create Article").first()).toBeVisible({
+      timeout: 10000,
+    });
+
+    // The textarea should contain the new block types
+    const textarea = page.locator("textarea");
+    const value = await textarea.inputValue();
+    expect(value).toContain("case-history");
+    expect(value).toContain("map {type: us}");
+
+    // Preview pane should render these blocks
+    // Case history title - use testId to avoid matching the raw textarea content
+    await expect(page.getByTestId("case-history-title")).toBeVisible({
+      timeout: 5000,
+    });
+
+    await docScreenshot(page, "caml--editor--full-template", {
+      fullPage: true,
+    });
+
+    await component.unmount();
+  });
+});
