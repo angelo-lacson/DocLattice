@@ -1,5 +1,6 @@
 import React, { useLayoutEffect, useMemo, useState } from "react";
 import { ThemeProvider as SCThemeProvider } from "styled-components";
+import { defaultCamlTheme } from "@os-legal/caml-react";
 
 import { Theme } from "./theme";
 import type { DefaultTheme } from "styled-components";
@@ -27,7 +28,7 @@ export const ThemeProvider = ({ theme, children }: Props): JSX.Element => {
 
   /* 3 ▸ Merge run-time + design tokens once per change */
   const mergedTheme: DefaultTheme = useMemo(
-    () => ({ ...baseTheme, width: viewportWidth }),
+    () => ({ ...baseTheme, width: viewportWidth, caml: defaultCamlTheme }),
     [baseTheme, viewportWidth]
   );
 
