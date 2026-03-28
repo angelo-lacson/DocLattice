@@ -190,6 +190,8 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
         corpus={corpus}
         onBack={handleBackToLanding}
         onEditArticle={isPowerUserMode ? onEditArticle : undefined}
+        onViewDetails={!isPowerUserMode ? handleViewDetails : undefined}
+        onViewDocuments={!isPowerUserMode ? handleViewDetails : undefined}
         stats={{
           documents: stats.totalDocs,
           annotations: stats.totalAnnotations,
@@ -217,6 +219,8 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
           corpus={corpus}
           onBack={onNavigateToCorpuses || handleBackToLanding}
           onEditArticle={isPowerUserMode ? onEditArticle : undefined}
+          onViewDetails={!isPowerUserMode ? handleViewDetails : undefined}
+          onViewDocuments={!isPowerUserMode ? handleViewDetails : undefined}
           stats={{
             documents: stats.totalDocs,
             annotations: stats.totalAnnotations,
