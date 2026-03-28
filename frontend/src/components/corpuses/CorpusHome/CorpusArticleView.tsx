@@ -7,7 +7,7 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@apollo/client";
-import { ArrowLeft, FileText, Edit } from "lucide-react";
+import { ArrowLeft, FileText, Edit, Info } from "lucide-react";
 import styled from "styled-components";
 
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
@@ -98,6 +98,13 @@ const ToolbarTitle = styled.span`
   letter-spacing: 0.01em;
 `;
 
+const ToolbarNav = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+`;
+
 const LoadingContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -139,6 +146,8 @@ export interface CorpusArticleViewProps {
   corpus: CorpusType;
   onBack: () => void;
   onEditArticle?: () => void;
+  onViewDetails?: () => void;
+  onViewDocuments?: () => void;
   stats?: {
     annotations?: number;
     documents?: number;
@@ -152,6 +161,8 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
   corpus,
   onBack,
   onEditArticle,
+  onViewDetails,
+  onViewDocuments,
   stats,
   testId = "corpus-article",
 }) => {
@@ -274,15 +285,26 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
           Back
         </BackButtonStyled>
         <ToolbarTitle>{corpus.title}</ToolbarTitle>
-        {onEditArticle && (
-          <EditButtonStyled
-            onClick={onEditArticle}
-            style={{ marginLeft: "auto" }}
-          >
-            <Edit size={14} />
-            Edit
-          </EditButtonStyled>
-        )}
+        <ToolbarNav>
+          {onViewDocuments && (
+            <ToolbarButton onClick={onViewDocuments}>
+              <FileText size={14} />
+              Documents
+            </ToolbarButton>
+          )}
+          {onViewDetails && (
+            <ToolbarButton onClick={onViewDetails}>
+              <Info size={14} />
+              About
+            </ToolbarButton>
+          )}
+          {onEditArticle && (
+            <EditButtonStyled onClick={onEditArticle}>
+              <Edit size={14} />
+              Edit
+            </EditButtonStyled>
+          )}
+        </ToolbarNav>
       </ArticleToolbar>
 
       <CamlThemeProvider>
