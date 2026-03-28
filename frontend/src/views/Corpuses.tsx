@@ -2424,6 +2424,8 @@ export const Corpuses = () => {
                   <CorpusDocumentCards
                     opened_corpus_id={opened_corpus_id}
                     viewMode={documentsViewMode}
+                    onCreateArticle={() => setShowArticleEditor(true)}
+                    canUpdate={canUpdateCorpus}
                   />
                 </FolderDocumentBrowser>
               )}
