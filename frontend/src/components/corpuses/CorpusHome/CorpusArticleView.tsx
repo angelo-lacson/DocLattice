@@ -7,7 +7,7 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@apollo/client";
-import { ArrowLeft, FileText, Edit, Info } from "lucide-react";
+import { ArrowLeft, FileText, Edit } from "lucide-react";
 import styled from "styled-components";
 
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
@@ -23,6 +23,7 @@ import type { CamlDocument } from "@os-legal/caml";
 import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
 import { MarkdownMessageRenderer } from "../../threads/MarkdownMessageRenderer";
 import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants";
+import { ArticleDocumentsDrawer } from "./ArticleDocumentsDrawer";
 
 // ---------------------------------------------------------------------------
 // Styled components
@@ -146,8 +147,7 @@ export interface CorpusArticleViewProps {
   corpus: CorpusType;
   onBack: () => void;
   onEditArticle?: () => void;
-  onViewDetails?: () => void;
-  onViewDocuments?: () => void;
+  showDocumentsButton?: boolean;
   stats?: {
     annotations?: number;
     documents?: number;
@@ -161,11 +161,11 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
   corpus,
   onBack,
   onEditArticle,
-  onViewDetails,
-  onViewDocuments,
+  showDocumentsButton,
   stats,
   testId = "corpus-article",
 }) => {
+  const [docsDrawerOpen, setDocsDrawerOpen] = useState(false);
   const [camlContent, setCamlContent] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -286,16 +286,10 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
         </BackButtonStyled>
         <ToolbarTitle>{corpus.title}</ToolbarTitle>
         <ToolbarNav>
-          {onViewDocuments && (
-            <ToolbarButton onClick={onViewDocuments}>
+          {showDocumentsButton && (
+            <ToolbarButton onClick={() => setDocsDrawerOpen(true)}>
               <FileText size={14} />
               Documents
-            </ToolbarButton>
-          )}
-          {onViewDetails && (
-            <ToolbarButton onClick={onViewDetails}>
-              <Info size={14} />
-              About
             </ToolbarButton>
           )}
           {onEditArticle && (
@@ -306,6 +300,13 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
           )}
         </ToolbarNav>
       </ArticleToolbar>
+      {showDocumentsButton && (
+        <ArticleDocumentsDrawer
+          corpusId={corpus.id}
+          open={docsDrawerOpen}
+          onClose={() => setDocsDrawerOpen(false)}
+        />
+      )}
 
       <CamlThemeProvider>
         <CamlArticle

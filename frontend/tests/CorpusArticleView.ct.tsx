@@ -4,7 +4,7 @@
  * Tests cover:
  * 1. Empty state when no Readme.CAML exists
  * 2. Toolbar with back button and edit button
- * 3. Loading state
+ * 3. Documents drawer slide-out
  */
 import { test, expect } from "@playwright/experimental-ct-react";
 import { docScreenshot } from "./utils/docScreenshot";
@@ -51,6 +51,55 @@ test.describe("CorpusArticleView - With Article", () => {
     // Since fetch() for the txtExtractFile URL won't work in tests,
     // the view may show loading or error state — but toolbar is always present
     await docScreenshot(page, "caml--article-view--toolbar");
+
+    await component.unmount();
+  });
+});
+
+test.describe("CorpusArticleView - Documents Drawer", () => {
+  test("should show Documents button and open drawer on click", async ({
+    mount,
+    page,
+  }) => {
+    // Intercept fetch for the CAML file to return minimal valid content
+    await page.route("**/media/test/readme.caml", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/plain",
+        body: "---\nversion: '1.0'\nhero:\n  title:\n    - Test Article\n---\n\n::: chapter {#intro}\n## Hello World\n:::\n",
+      })
+    );
+
+    const component = await mount(
+      <CorpusArticleViewTestWrapper
+        hasArticle={true}
+        showDocumentsButton={true}
+      />
+    );
+
+    // Wait for the article to parse and render the main toolbar
+    await expect(page.getByText("Back")).toBeVisible({ timeout: 15000 });
+
+    // Documents button should be visible in Explore mode
+    const docsButton = page.getByText("Documents", { exact: true });
+    await expect(docsButton).toBeVisible({ timeout: 10000 });
+
+    // Click to open drawer
+    await docsButton.click();
+
+    // Drawer close button should appear (drawer is open)
+    await expect(page.getByTitle("Close")).toBeVisible({ timeout: 5000 });
+
+    // Let animation settle
+    await page.waitForTimeout(500);
+
+    await docScreenshot(page, "caml--article-view--documents-drawer");
+
+    // Close via X button
+    await page.getByTitle("Close").click();
+
+    // Close button should disappear (drawer closed)
+    await expect(page.getByTitle("Close")).not.toBeVisible({ timeout: 3000 });
 
     await component.unmount();
   });
