@@ -99,11 +99,12 @@ function createTestCache() {
 export interface CorpusArticleViewTestWrapperProps {
   hasArticle?: boolean;
   corpus?: CorpusType;
+  showDocumentsButton?: boolean;
 }
 
 export const CorpusArticleViewTestWrapper: React.FC<
   CorpusArticleViewTestWrapperProps
-> = ({ hasArticle = true, corpus = MOCK_CORPUS }) => {
+> = ({ hasArticle = true, corpus = MOCK_CORPUS, showDocumentsButton }) => {
   const mock = hasArticle ? articleExistsMock : noArticleMock;
 
   return (
@@ -118,6 +119,7 @@ export const CorpusArticleViewTestWrapper: React.FC<
             corpus={corpus}
             onBack={() => {}}
             onEditArticle={() => {}}
+            showDocumentsButton={showDocumentsButton}
             testId="test-corpus-article"
           />
         </MockedProvider>
