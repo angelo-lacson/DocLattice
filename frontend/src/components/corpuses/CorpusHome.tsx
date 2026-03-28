@@ -202,10 +202,10 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
       <div
         style={{
           position: "relative",
-          height: "calc(100% + 2rem)",
+          height: "100%",
           minWidth: 0,
-          margin: "-1rem",
-          width: "calc(100% + 2rem)",
+          width: "100%",
+          overflowY: "auto",
         }}
       >
         <CorpusArticleView
