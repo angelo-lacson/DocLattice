@@ -42,36 +42,60 @@ const ArticleToolbar = styled.div`
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem 1.5rem;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 `;
 
-const BackButton = styled.button`
+const ToolbarButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  border: 1px solid ${OS_LEGAL_COLORS.border};
-  border-radius: 6px;
-  background: ${OS_LEGAL_COLORS.surface};
-  color: ${OS_LEGAL_COLORS.textTertiary};
+  padding: 0.375rem 0.875rem;
+  border: none;
+  border-radius: 9999px;
+  background: transparent;
+  color: #64748b;
   font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.2s ease;
+
+  svg {
+    transition: transform 0.2s ease;
+  }
 
   &:hover {
-    background: ${OS_LEGAL_COLORS.surfaceHover};
-    border-color: ${OS_LEGAL_COLORS.borderHover};
+    background: #f1f5f9;
+    color: #334155;
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+`;
+
+const BackButtonStyled = styled(ToolbarButton)`
+  &:hover svg {
+    transform: translateX(-2px);
+  }
+`;
+
+const EditButtonStyled = styled(ToolbarButton)`
+  color: #0f766e;
+
+  &:hover {
+    background: #f0fdfa;
+    color: #115e59;
   }
 `;
 
 const ToolbarTitle = styled.span`
   font-size: 0.8125rem;
-  color: ${OS_LEGAL_COLORS.textMuted};
-  font-weight: 500;
+  color: #94a3b8;
+  font-weight: 400;
+  letter-spacing: 0.01em;
 `;
 
 const LoadingContainer = styled.div`
@@ -190,10 +214,10 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
     return (
       <ArticleViewContainer data-testid={testId}>
         <ArticleToolbar>
-          <BackButton onClick={onBack}>
+          <BackButtonStyled onClick={onBack}>
             <ArrowLeft size={14} />
             Back
-          </BackButton>
+          </BackButtonStyled>
         </ArticleToolbar>
         <LoadingContainer>
           <p>Loading article...</p>
@@ -206,10 +230,10 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
     return (
       <ArticleViewContainer data-testid={testId}>
         <ArticleToolbar>
-          <BackButton onClick={onBack}>
+          <BackButtonStyled onClick={onBack}>
             <ArrowLeft size={14} />
             Back
-          </BackButton>
+          </BackButtonStyled>
         </ArticleToolbar>
         <EmptyState>
           <EmptyIcon>
@@ -230,10 +254,10 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
     return (
       <ArticleViewContainer data-testid={testId}>
         <ArticleToolbar>
-          <BackButton onClick={onBack}>
+          <BackButtonStyled onClick={onBack}>
             <ArrowLeft size={14} />
             Back
-          </BackButton>
+          </BackButtonStyled>
         </ArticleToolbar>
         <LoadingContainer>
           <p>Parsing article...</p>
@@ -245,16 +269,19 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
   return (
     <ArticleViewContainer data-testid={testId}>
       <ArticleToolbar>
-        <BackButton onClick={onBack}>
+        <BackButtonStyled onClick={onBack}>
           <ArrowLeft size={14} />
           Back
-        </BackButton>
+        </BackButtonStyled>
         <ToolbarTitle>{corpus.title}</ToolbarTitle>
         {onEditArticle && (
-          <BackButton onClick={onEditArticle} style={{ marginLeft: "auto" }}>
+          <EditButtonStyled
+            onClick={onEditArticle}
+            style={{ marginLeft: "auto" }}
+          >
             <Edit size={14} />
             Edit
-          </BackButton>
+          </EditButtonStyled>
         )}
       </ArticleToolbar>
 
