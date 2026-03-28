@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo } from "react";
+import styled from "styled-components";
 import { useQuery } from "@apollo/client";
 import {
   ChevronRight,
@@ -24,6 +25,7 @@ import {
   GetCorpusArticleOutput,
 } from "../../../graphql/queries";
 import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { CorpusType } from "../../../types/graphql-api";
 import { PermissionTypes } from "../../types";
 import { getPermissions } from "../../../utils/transform";
@@ -56,6 +58,55 @@ import {
   MobileMenuButton,
 } from "./styles";
 
+const CreateArticleCTA = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 1rem 1.25rem;
+  margin-top: 0.5rem;
+  background: none;
+  border: 2px dashed ${OS_LEGAL_COLORS.border};
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+
+  &:hover {
+    border-color: ${OS_LEGAL_COLORS.accent};
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+  }
+`;
+
+const CTAIconCircle = styled.div`
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: ${OS_LEGAL_COLORS.textMuted};
+  flex-shrink: 0;
+`;
+
+const CTATextGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+`;
+
+const CTATitle = styled.span`
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: ${OS_LEGAL_COLORS.textPrimary};
+`;
+
+const CTASubtitle = styled.span`
+  font-size: 0.6875rem;
+  color: ${OS_LEGAL_COLORS.textMuted};
+`;
+
 export interface CorpusLandingViewProps {
   /** The corpus object */
   corpus: CorpusType;
@@ -76,6 +127,8 @@ export interface CorpusLandingViewProps {
   onViewDiscussions?: () => void;
   /** Callback when "Read Article" is clicked */
   onViewArticle?: () => void;
+  /** Callback when "Create Article" CTA is clicked */
+  onCreateArticle?: () => void;
   /** Callback when a specific thread is clicked from the feed */
   onThreadClick?: (threadId: string) => void;
   /** Callback when mode toggle is clicked (only shown when present) */
@@ -114,6 +167,7 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
   onOpenMobileMenu,
   onViewDiscussions,
   onViewArticle,
+  onCreateArticle,
   onThreadClick,
   onModeToggle,
   isPowerUserMode = false,
@@ -338,6 +392,24 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
             </NoDescriptionContainer>
           )}
         </LandingHero>
+
+        {/* Create article CTA — shown when no Readme.CAML and user can edit */}
+        {!hasArticle && canEdit && onCreateArticle && (
+          <CreateArticleCTA
+            onClick={onCreateArticle}
+            data-testid={`${testId}-create-article-cta`}
+          >
+            <CTAIconCircle>
+              <BookOpen size={16} />
+            </CTAIconCircle>
+            <CTATextGroup>
+              <CTATitle>Create an introductory article</CTATitle>
+              <CTASubtitle>
+                Write a rich article for this corpus using CAML
+              </CTASubtitle>
+            </CTATextGroup>
+          </CreateArticleCTA>
+        )}
 
         {/* Chat section */}
         <ChatSection>
