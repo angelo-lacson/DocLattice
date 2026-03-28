@@ -32,6 +32,7 @@ const ArticleViewContainer = styled.div`
   width: 100%;
   min-height: 100vh;
   background: ${OS_LEGAL_COLORS.surface};
+  overflow-x: hidden;
 `;
 
 const ArticleToolbar = styled.div`
