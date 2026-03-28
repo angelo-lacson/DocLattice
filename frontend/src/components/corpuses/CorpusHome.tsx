@@ -204,6 +204,8 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
           position: "relative",
           overflowY: "auto",
           height: "100%",
+          width: "100%",
+          minWidth: 0,
         }}
       >
         <CorpusArticleView
