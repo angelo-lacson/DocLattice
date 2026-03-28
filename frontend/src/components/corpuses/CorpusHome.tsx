@@ -24,24 +24,29 @@ import { CorpusArticleView } from "./CorpusHome/CorpusArticleView";
 import { InlineChatBar } from "./CorpusHero/InlineChatBar";
 import { PillToggle, PillToggleLabel } from "./CorpusHome/styles";
 
-/** Floating pill bar overlaid on the article landing view */
-const FloatingControls = styled.div`
+/** Floating chat bar — centered at bottom */
+const FloatingChatBar = styled.div`
   position: fixed;
   bottom: 1.5rem;
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem;
+  padding: 0.375rem;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(12px);
-  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
-  max-width: 480px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
   width: calc(100% - 3rem);
+`;
+
+/** Floating mode toggle — anchored bottom-right */
+const FloatingModeToggle = styled.div`
+  position: fixed;
+  bottom: 1.75rem;
+  right: 1.5rem;
+  z-index: 20;
 `;
 
 export interface CorpusHomeProps {
@@ -219,19 +224,19 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
           }}
           testId="corpus-home-article"
         />
-        <FloatingControls data-testid="corpus-article-floating-controls">
-          <div style={{ flex: 1 }}>
-            <InlineChatBar
-              value={chatQuery}
-              onChange={onChatQueryChange || (() => {})}
-              onSubmit={onChatSubmit || (() => {})}
-              onViewHistory={onViewChatHistory || (() => {})}
-              showQuickActions={false}
-              autoFocus={false}
-              testId="corpus-article-chat"
-            />
-          </div>
-          {onModeToggle && (
+        <FloatingChatBar data-testid="corpus-article-floating-controls">
+          <InlineChatBar
+            value={chatQuery}
+            onChange={onChatQueryChange || (() => {})}
+            onSubmit={onChatSubmit || (() => {})}
+            onViewHistory={onViewChatHistory || (() => {})}
+            showQuickActions={false}
+            autoFocus={false}
+            testId="corpus-article-chat"
+          />
+        </FloatingChatBar>
+        {onModeToggle && (
+          <FloatingModeToggle>
             <PillToggle
               onClick={onModeToggle}
               title={
@@ -250,8 +255,8 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
                 Manage
               </PillToggleLabel>
             </PillToggle>
-          )}
-        </FloatingControls>
+          </FloatingModeToggle>
+        )}
       </div>
     );
   }
