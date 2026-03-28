@@ -199,7 +199,13 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
   // with floating chat and mode-toggle controls overlaid at the bottom.
   if (hasArticle) {
     return (
-      <div style={{ position: "relative" }}>
+      <div
+        style={{
+          position: "relative",
+          overflowY: "auto",
+          height: "100%",
+        }}
+      >
         <CorpusArticleView
           corpus={corpus}
           onBack={onNavigateToCorpuses || handleBackToLanding}
