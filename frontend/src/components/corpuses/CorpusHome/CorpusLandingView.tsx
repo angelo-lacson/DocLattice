@@ -11,8 +11,6 @@ import {
   ArrowRight,
   Plus,
   Menu,
-  Compass,
-  LayoutDashboard,
   BookOpen,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -51,8 +49,6 @@ import {
   MetadataItem,
   MetadataSeparator,
   AccessBadge,
-  PillToggle,
-  PillToggleLabel,
   ChatSection,
   ViewDetailsButton,
   HeaderRow,
@@ -132,7 +128,7 @@ export interface CorpusLandingViewProps {
   onCreateArticle?: () => void;
   /** Callback when a specific thread is clicked from the feed */
   onThreadClick?: (threadId: string) => void;
-  /** Callback when mode toggle is clicked (only shown when present) */
+  /** @deprecated Mode toggle is now rendered as a floating element by CorpusHome */
   onModeToggle?: () => void;
   /**
    * Whether the view is rendered from the power-user sidebar's home tab
@@ -170,7 +166,6 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
   onViewArticle,
   onCreateArticle,
   onThreadClick,
-  onModeToggle,
   isPowerUserMode = false,
   testId = "corpus-landing",
 }) => {
@@ -316,30 +311,6 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
                     {docCount} {docCount === 1 ? "document" : "documents"}
                   </span>
                 </MetadataItem>
-              </>
-            )}
-
-            {onModeToggle && (
-              <>
-                <MetadataSeparator />
-                <PillToggle
-                  onClick={onModeToggle}
-                  title={
-                    isPowerUserMode
-                      ? "Switch to explore view"
-                      : "Switch to corpus management view"
-                  }
-                  data-testid="power-user-toggle"
-                >
-                  <PillToggleLabel $active={!isPowerUserMode}>
-                    <Compass aria-hidden="true" size={12} />
-                    Explore
-                  </PillToggleLabel>
-                  <PillToggleLabel $active={isPowerUserMode}>
-                    <LayoutDashboard aria-hidden="true" size={12} />
-                    Manage
-                  </PillToggleLabel>
-                </PillToggle>
               </>
             )}
           </CenteredMetadataRow>

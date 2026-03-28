@@ -264,23 +264,46 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
   }
 
   return (
-    <CorpusLandingView
-      corpus={corpus}
-      onViewDetails={handleViewDetails}
-      onEditDescription={onEditDescription}
-      onNavigateToCorpuses={onNavigateToCorpuses}
-      chatQuery={chatQuery}
-      onChatQueryChange={onChatQueryChange}
-      onChatSubmit={onChatSubmit}
-      onViewChatHistory={onViewChatHistory}
-      onOpenMobileMenu={onOpenMobileMenu}
-      onModeToggle={onModeToggle}
-      isPowerUserMode={isPowerUserMode}
-      onViewDiscussions={handleViewDiscussions}
-      onViewArticle={handleViewArticle}
-      onCreateArticle={onEditArticle}
-      onThreadClick={handleThreadClick}
-      testId="corpus-home-landing"
-    />
+    <>
+      <CorpusLandingView
+        corpus={corpus}
+        onViewDetails={handleViewDetails}
+        onEditDescription={onEditDescription}
+        onNavigateToCorpuses={onNavigateToCorpuses}
+        chatQuery={chatQuery}
+        onChatQueryChange={onChatQueryChange}
+        onChatSubmit={onChatSubmit}
+        onViewChatHistory={onViewChatHistory}
+        onOpenMobileMenu={onOpenMobileMenu}
+        isPowerUserMode={isPowerUserMode}
+        onViewDiscussions={handleViewDiscussions}
+        onViewArticle={handleViewArticle}
+        onCreateArticle={onEditArticle}
+        onThreadClick={handleThreadClick}
+        testId="corpus-home-landing"
+      />
+      {onModeToggle && (
+        <FloatingModeToggle>
+          <PillToggle
+            onClick={onModeToggle}
+            title={
+              isPowerUserMode
+                ? "Switch to explore view"
+                : "Switch to corpus management view"
+            }
+            data-testid="landing-mode-toggle"
+          >
+            <PillToggleLabel $active={!isPowerUserMode}>
+              <Compass size={12} />
+              Explore
+            </PillToggleLabel>
+            <PillToggleLabel $active={!!isPowerUserMode}>
+              <LayoutDashboard size={12} />
+              Manage
+            </PillToggleLabel>
+          </PillToggle>
+        </FloatingModeToggle>
+      )}
+    </>
   );
 };
