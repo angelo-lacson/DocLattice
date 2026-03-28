@@ -2917,7 +2917,7 @@ export const Corpuses = () => {
             ))}
           </NavigationItems>
 
-          {/* Exit Power User Mode button */}
+          {/* Exit to Explore mode button */}
           <ExitPowerUserWrapper>
             <NavigationItem
               isActive={false}
@@ -2932,7 +2932,7 @@ export const Corpuses = () => {
             >
               <ArrowLeft />
               {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
-                <span style={{ flex: "1", textAlign: "left" }}>Focus Mode</span>
+                <span style={{ flex: "1", textAlign: "left" }}>Explore</span>
               )}
             </NavigationItem>
           </ExitPowerUserWrapper>

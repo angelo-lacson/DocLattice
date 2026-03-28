@@ -11,7 +11,8 @@ import {
   ArrowRight,
   Plus,
   Menu,
-  Zap,
+  Compass,
+  LayoutDashboard,
   BookOpen,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -136,7 +137,7 @@ export interface CorpusLandingViewProps {
   /**
    * Whether the view is rendered from the power-user sidebar's home tab
    * (true) vs the clean/focus landing mode (false). Controls the toggle
-   * button label ("Focus Mode" vs "Power User").
+   * button label ("Explore" vs "Manage").
    */
   isPowerUserMode?: boolean;
   /** Test ID for the component */
@@ -325,17 +326,18 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
                   onClick={onModeToggle}
                   title={
                     isPowerUserMode
-                      ? "Switch to focused view"
-                      : "Switch to full corpus management view"
+                      ? "Switch to explore view"
+                      : "Switch to corpus management view"
                   }
                   data-testid="power-user-toggle"
                 >
                   <PillToggleLabel $active={!isPowerUserMode}>
-                    Focus
+                    <Compass aria-hidden="true" size={12} />
+                    Explore
                   </PillToggleLabel>
                   <PillToggleLabel $active={isPowerUserMode}>
-                    <Zap aria-hidden="true" />
-                    Power
+                    <LayoutDashboard aria-hidden="true" size={12} />
+                    Manage
                   </PillToggleLabel>
                 </PillToggle>
               </>
