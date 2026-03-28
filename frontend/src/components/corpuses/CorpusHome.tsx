@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { useReactiveVar, useQuery } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import { Zap } from "lucide-react";
+import { Compass, LayoutDashboard } from "lucide-react";
 
 import { corpusDetailView } from "../../graphql/cache";
 import {
@@ -40,7 +40,7 @@ const FloatingControls = styled.div`
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 16px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
-  max-width: 600px;
+  max-width: 480px;
   width: calc(100% - 3rem);
 `;
 
@@ -236,17 +236,18 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
               onClick={onModeToggle}
               title={
                 isPowerUserMode
-                  ? "Switch to focused view"
-                  : "Switch to full corpus management view"
+                  ? "Switch to explore view"
+                  : "Switch to corpus management view"
               }
               data-testid="article-power-user-toggle"
             >
               <PillToggleLabel $active={!isPowerUserMode}>
-                Focus
+                <Compass size={12} />
+                Explore
               </PillToggleLabel>
               <PillToggleLabel $active={!!isPowerUserMode}>
-                <Zap size={12} />
-                Power
+                <LayoutDashboard size={12} />
+                Manage
               </PillToggleLabel>
             </PillToggle>
           )}
