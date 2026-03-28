@@ -730,11 +730,11 @@ test("does not render mode toggle when onModeToggle is not provided", async ({
   // Landing view should render
   await expect(page.getByTestId("corpus-home-landing")).toBeVisible();
 
-  // Power-user toggle should NOT be in the DOM (not just CSS-hidden)
-  await expect(page.getByTestId("power-user-toggle")).toHaveCount(0);
+  // Mode toggle should NOT be in the DOM (not just CSS-hidden)
+  await expect(page.getByTestId("landing-mode-toggle")).toHaveCount(0);
 });
 
-test("renders Focus/Power pill toggle when onModeToggle is provided", async ({
+test("renders Explore/Manage pill toggle when onModeToggle is provided", async ({
   mount,
   page,
 }) => {
@@ -747,22 +747,22 @@ test("renders Focus/Power pill toggle when onModeToggle is provided", async ({
     />
   );
 
-  // Toggle should be visible
-  const toggle = page.getByTestId("power-user-toggle");
+  // Toggle should be visible as floating element
+  const toggle = page.getByTestId("landing-mode-toggle");
   await expect(toggle).toBeVisible({ timeout: 10000 });
 
-  // "Focus" label should be active (non-power-user mode)
-  // "Power" label should be present but inactive
-  await expect(toggle.locator("text=Focus")).toBeVisible();
-  await expect(toggle.locator("text=Power")).toBeVisible();
+  // "Explore" label should be active (non-power-user mode)
+  // "Manage" label should be present but inactive
+  await expect(toggle.locator("text=Explore")).toBeVisible();
+  await expect(toggle.locator("text=Manage")).toBeVisible();
 
-  // Title should reflect focus-mode state
+  // Title should reflect explore-mode state
   await expect(toggle).toHaveAttribute(
     "title",
-    "Switch to full corpus management view"
+    "Switch to corpus management view"
   );
 
-  await docScreenshot(page, "corpus--mode-toggle--focus-mode");
+  await docScreenshot(page, "corpus--mode-toggle--explore-mode");
 });
 
 test("pill toggle reflects isPowerUserMode=true state", async ({
@@ -778,11 +778,11 @@ test("pill toggle reflects isPowerUserMode=true state", async ({
     />
   );
 
-  const toggle = page.getByTestId("power-user-toggle");
+  const toggle = page.getByTestId("landing-mode-toggle");
   await expect(toggle).toBeVisible({ timeout: 10000 });
 
-  // In power-user mode the toggle title should reflect "Switch to focused view"
-  await expect(toggle).toHaveAttribute("title", "Switch to focused view");
+  // In manage mode the toggle title should reflect "Switch to explore view"
+  await expect(toggle).toHaveAttribute("title", "Switch to explore view");
 });
 
 test("clicking mode toggle fires onModeToggle callback", async ({
@@ -802,7 +802,7 @@ test("clicking mode toggle fires onModeToggle callback", async ({
     />
   );
 
-  const toggle = page.getByTestId("power-user-toggle");
+  const toggle = page.getByTestId("landing-mode-toggle");
   await expect(toggle).toBeVisible({ timeout: 10000 });
   await toggle.click();
 
