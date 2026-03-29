@@ -5,7 +5,7 @@
  * Fetches the Readme.CAML document, parses its content, and renders
  * the full scrollytelling article experience.
  */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@apollo/client";
 import { ArrowLeft, FileText, Edit } from "lucide-react";
 import styled from "styled-components";
@@ -19,8 +19,15 @@ import {
 } from "../../../graphql/queries";
 import { CorpusType } from "../../../types/graphql-api";
 import { parseCaml } from "@os-legal/caml";
-import type { CamlDocument } from "@os-legal/caml";
-import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
+import type { CamlDocument, CamlCorpusIcon } from "@os-legal/caml";
+import {
+  CamlArticle,
+  CamlThemeProvider,
+  CorpusIconContainer,
+  CorpusIconImage,
+  CorpusIconCaption,
+  CorpusIconPlaceholder,
+} from "@os-legal/caml-react";
 import { MarkdownMessageRenderer } from "../../threads/MarkdownMessageRenderer";
 import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants";
 import { ArticleDocumentsDrawer } from "./ArticleDocumentsDrawer";
@@ -261,6 +268,32 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
     );
   }
 
+  const handleRenderCorpusIcon = useCallback(
+    (block: CamlCorpusIcon) => {
+      const iconUrl = corpus.icon;
+      return (
+        <CorpusIconContainer>
+          {iconUrl ? (
+            <CorpusIconImage
+              src={iconUrl}
+              alt={block.caption || corpus.title || "Corpus icon"}
+              $size={block.size}
+              $shape={block.shape}
+            />
+          ) : (
+            <CorpusIconPlaceholder $size={block.size} $shape={block.shape}>
+              {"\u{1F4C4}"}
+            </CorpusIconPlaceholder>
+          )}
+          {block.caption && (
+            <CorpusIconCaption>{block.caption}</CorpusIconCaption>
+          )}
+        </CorpusIconContainer>
+      );
+    },
+    [corpus.icon, corpus.title]
+  );
+
   if (!parsedDocument) {
     return (
       <ArticleViewContainer data-testid={testId}>
@@ -313,6 +346,7 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
           document={parsedDocument}
           stats={stats}
           renderMarkdown={(md) => <MarkdownMessageRenderer content={md} />}
+          renderCorpusIcon={handleRenderCorpusIcon}
         />
       </CamlThemeProvider>
     </ArticleViewContainer>
