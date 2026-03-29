@@ -22,7 +22,7 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from opencontractserver.constants.web_search import (
@@ -38,10 +38,55 @@ from opencontractserver.constants.web_search import (
     WEB_SEARCH_MAX_TOTAL_CHARS,
     WEB_SEARCH_RATE_LIMIT_PER_MINUTE,
     WEB_SEARCH_REQUEST_TIMEOUT_SECONDS,
-    WEB_SEARCH_SETTINGS_KEY,
+)
+from opencontractserver.llms.tools.base_tool import BaseTool
+from opencontractserver.pipeline.base.settings_schema import (
+    PipelineSetting,
+    SettingType,
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# WebSearchTool — BaseTool subclass with Settings schema
+# ============================================================================
+
+
+class WebSearchTool(BaseTool):
+    """Web search tool configuration and enablement gate.
+
+    Agents check ``WebSearchTool.is_configured()`` at resolution time.
+    If the required ``api_key`` secret is missing the tool is silently
+    skipped, just like a pipeline component without credentials.
+    """
+
+    tool_key = "web_search"
+
+    @dataclass
+    class Settings:
+        api_key: str = field(
+            default="",
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.SECRET,
+                    required=True,
+                    description="API key for the search provider (Brave or Tavily).",
+                    env_var="WEB_SEARCH_API_KEY",
+                )
+            },
+        )
+        provider: str = field(
+            default=DEFAULT_WEB_SEARCH_PROVIDER,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description=(
+                        f"Search provider: '{BRAVE_PROVIDER}' or '{TAVILY_PROVIDER}'."
+                    ),
+                )
+            },
+        )
 
 
 # ============================================================================
@@ -270,10 +315,7 @@ def _get_web_search_settings() -> dict[str, Any]:
       - ``api_key``: The API key for the configured provider
       - ``provider``: Provider identifier (``brave`` or ``tavily``)
     """
-    from opencontractserver.documents.models import PipelineSettings
-
-    ps = PipelineSettings.get_instance()
-    return ps.get_tool_settings(WEB_SEARCH_SETTINGS_KEY)
+    return WebSearchTool.get_settings()
 
 
 # ============================================================================
@@ -321,7 +363,7 @@ async def aweb_search(
         return (
             "Error: web search is not configured. An administrator must set "
             "the API key via Pipeline Settings > Tool Secrets (key: "
-            f"'{WEB_SEARCH_SETTINGS_KEY}')."
+            f"'{WebSearchTool.full_settings_key()}')."
         )
 
     provider_name = settings.get("provider", DEFAULT_WEB_SEARCH_PROVIDER)

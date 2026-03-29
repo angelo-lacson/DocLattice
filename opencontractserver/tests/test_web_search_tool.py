@@ -2,6 +2,8 @@
 Tests for the web search agent tool.
 
 Covers:
+  - BaseTool class and Settings schema
+  - Database-level enablement gating via is_configured()
   - Tool registration in AVAILABLE_TOOLS and ToolFunctionRegistry
   - SearchResult formatting
   - Rate limiter behaviour
@@ -23,6 +25,7 @@ from opencontractserver.constants.web_search import (
     WEB_SEARCH_MAX_SNIPPET_CHARS,
     WEB_SEARCH_SETTINGS_KEY,
 )
+from opencontractserver.llms.tools.base_tool import BaseTool
 from opencontractserver.llms.tools.tool_registry import (
     AVAILABLE_TOOLS,
     ToolCategory,
@@ -30,9 +33,68 @@ from opencontractserver.llms.tools.tool_registry import (
 )
 from opencontractserver.llms.tools.web_search_tools import (
     SearchResult,
+    WebSearchTool,
     _RateLimiter,
     aweb_search,
 )
+
+# ============================================================================
+# BaseTool class tests
+# ============================================================================
+
+
+class TestBaseTool:
+    """Test the BaseTool base class."""
+
+    def test_full_settings_key(self):
+        assert WebSearchTool.full_settings_key() == "tool:web_search"
+
+    def test_full_settings_key_requires_tool_key(self):
+        class BadTool(BaseTool):
+            tool_key = ""
+
+        with pytest.raises(ValueError, match="non-empty"):
+            BadTool.full_settings_key()
+
+    def test_get_schema(self):
+        schema = WebSearchTool.get_schema()
+        assert "api_key" in schema
+        assert "provider" in schema
+        assert schema["api_key"]["type"] == "secret"
+        assert schema["api_key"]["required"] is True
+        assert schema["provider"]["type"] == "optional"
+
+    def test_is_configured_false_when_no_settings(self):
+        with patch.object(WebSearchTool, "get_settings", return_value={}):
+            assert WebSearchTool.is_configured() is False
+
+    def test_is_configured_false_when_empty_api_key(self):
+        with patch.object(
+            WebSearchTool,
+            "get_settings",
+            return_value={"api_key": "", "provider": "brave"},
+        ):
+            assert WebSearchTool.is_configured() is False
+
+    def test_is_configured_true_when_api_key_present(self):
+        with patch.object(
+            WebSearchTool,
+            "get_settings",
+            return_value={"api_key": "test-key", "provider": "brave"},
+        ):
+            assert WebSearchTool.is_configured() is True
+
+    def test_tool_without_settings_always_configured(self):
+        class SimpleTool(BaseTool):
+            tool_key = "simple"
+
+        assert SimpleTool.is_configured() is True
+
+    def test_validate_returns_list(self):
+        with patch.object(WebSearchTool, "get_settings", return_value={}):
+            is_valid, errors = WebSearchTool.validate()
+            assert isinstance(errors, list)
+
 
 # ============================================================================
 # Registration tests
@@ -60,17 +122,56 @@ class TestWebSearchRegistration:
         assert entry is not None, "web_search not in ToolFunctionRegistry"
         assert asyncio.iscoroutinefunction(entry.async_func)
 
+    def test_web_search_has_tool_class(self):
+        registry = ToolFunctionRegistry.get()
+        entry = registry.resolve("web_search")
+        assert entry.tool_class is WebSearchTool
+
     def test_web_search_alias(self):
         registry = ToolFunctionRegistry.get()
         entry = registry.resolve("search_web")
         assert entry is not None, "search_web alias not registered"
         assert entry.definition.name == "web_search"
 
-    def test_web_search_converts_to_core_tool(self):
+
+# ============================================================================
+# Database-level enablement gating
+# ============================================================================
+
+
+class TestEnablementGating:
+    """Test that to_core_tool() respects is_configured() gate."""
+
+    def test_to_core_tool_returns_tool_when_configured(self):
         registry = ToolFunctionRegistry.get()
-        core_tool = registry.to_core_tool("web_search")
+        with patch.object(WebSearchTool, "is_configured", return_value=True):
+            core_tool = registry.to_core_tool("web_search")
         assert core_tool is not None
         assert core_tool.metadata.name == "web_search"
+
+    def test_to_core_tool_returns_none_when_not_configured(self):
+        registry = ToolFunctionRegistry.get()
+        with patch.object(WebSearchTool, "is_configured", return_value=False):
+            core_tool = registry.to_core_tool("web_search")
+        assert core_tool is None
+
+    def test_to_core_tool_skips_on_config_check_error(self):
+        registry = ToolFunctionRegistry.get()
+        with patch.object(
+            WebSearchTool, "is_configured", side_effect=RuntimeError("DB down")
+        ):
+            core_tool = registry.to_core_tool("web_search")
+        assert core_tool is None
+
+    def test_tools_without_tool_class_always_resolve(self):
+        """Non-BaseTool tools resolve unconditionally."""
+        registry = ToolFunctionRegistry.get()
+        # load_document_summary has no tool_class
+        entry = registry.resolve("load_document_summary")
+        assert entry is not None
+        assert entry.tool_class is None
+        core_tool = registry.to_core_tool("load_document_summary")
+        assert core_tool is not None
 
 
 # ============================================================================

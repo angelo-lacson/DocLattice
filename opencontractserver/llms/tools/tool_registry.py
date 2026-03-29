@@ -681,11 +681,18 @@ class ToolRegistryEntry:
     registered here.  ``PydanticAIToolWrapper`` does NOT wrap sync
     functions in a thread pool, so a sync tool that touches the Django
     ORM will raise ``SynchronousOnlyOperation`` at runtime.
+
+    If ``tool_class`` is set to a :class:`BaseTool` subclass, the tool
+    is only available when ``tool_class.is_configured()`` returns True.
+    This enables database-level enablement gating — the tool silently
+    disappears from agents until an admin configures the required
+    secrets (API keys, etc.) in PipelineSettings.
     """
 
     definition: ToolDefinition
     async_func: Callable
     aliases: tuple[str, ...] = field(default_factory=tuple)
+    tool_class: type | None = None  # BaseTool subclass for enablement gating
 
     def __post_init__(self) -> None:
         if not inspect.iscoroutinefunction(self.async_func):
@@ -730,12 +737,34 @@ class ToolFunctionRegistry:
         return self._entries.get(canonical)
 
     def to_core_tool(self, name: str) -> CoreTool | None:  # noqa: F821
-        """Resolve *name* -> ``CoreTool`` using its async implementation."""
+        """Resolve *name* -> ``CoreTool`` using its async implementation.
+
+        If the entry has a ``tool_class`` (:class:`BaseTool` subclass), the
+        tool is only returned when ``tool_class.is_configured()`` is True.
+        This enforces database-level enablement — unconfigured tools are
+        silently skipped, just like pipeline components without credentials.
+        """
         from opencontractserver.llms.tools.tool_factory import CoreTool
 
         entry = self.resolve(name)
         if not entry:
             return None
+
+        # Database-level enablement gate
+        if entry.tool_class is not None:
+            try:
+                if not entry.tool_class.is_configured():
+                    logger.info(
+                        "Tool '%s' skipped — not configured (missing required "
+                        "settings in PipelineSettings key '%s')",
+                        name,
+                        entry.tool_class.full_settings_key(),
+                    )
+                    return None
+            except Exception:
+                logger.debug("Tool '%s' configuration check failed — skipping", name)
+                return None
+
         return CoreTool.from_function(
             entry.async_func,
             name=entry.definition.name,
@@ -806,6 +835,7 @@ class ToolFunctionRegistry:
             aunpin_thread,
         )
         from opencontractserver.llms.tools.web_search_tools import (
+            WebSearchTool,
             aweb_search,
         )
 
@@ -882,6 +912,13 @@ class ToolFunctionRegistry:
             "notes": "get_document_notes",
         }
 
+        # Maps tool names to BaseTool subclasses for database-level
+        # enablement gating.  Tools without an entry here are always
+        # available (the legacy default).
+        TOOL_CLASSES: dict[str, type] = {
+            "web_search": WebSearchTool,
+        }
+
         definitions_by_name = {d.name: d for d in AVAILABLE_TOOLS}
         for name, (async_fn, aliases) in FUNCTION_MAP.items():
             defn = definitions_by_name.get(name)
@@ -896,6 +933,7 @@ class ToolFunctionRegistry:
                     definition=defn,
                     async_func=async_fn,
                     aliases=aliases,
+                    tool_class=TOOL_CLASSES.get(name),
                 )
             )
 
