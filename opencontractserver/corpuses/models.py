@@ -964,11 +964,16 @@ class Corpus(TreeNode):
 
         return deleted_paths
 
-    def get_documents(self):
+    def get_documents(self, include_caml=False):
         """
         Get all documents with active paths in this corpus.
 
         This method uses DocumentPath as the source of truth.
+
+        Args:
+            include_caml: If True, include CAML/markdown documents in results.
+                Defaults to False so extractors, analyzers, and other
+                internal processes skip CAML articles automatically.
 
         Returns:
             QuerySet of Document objects with active paths in this corpus
@@ -979,7 +984,14 @@ class Corpus(TreeNode):
             corpus=self, is_current=True, is_deleted=False
         ).values_list("document_id", flat=True)
 
-        return Document.objects.filter(id__in=active_doc_ids).distinct()
+        qs = Document.objects.filter(id__in=active_doc_ids).distinct()
+        if not include_caml:
+            from opencontractserver.constants.document_processing import (
+                MARKDOWN_MIME_TYPE,
+            )
+
+            qs = qs.exclude(file_type=MARKDOWN_MIME_TYPE)
+        return qs
 
     def document_count(self):
         """

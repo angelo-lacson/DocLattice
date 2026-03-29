@@ -193,7 +193,7 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
     with guardian checks and vector-based search.
     """
 
-    def visible_to_user(self, user, perm=None):
+    def visible_to_user(self, user, perm=None, **kwargs):
         """
         Override PermissionQuerySet.visible_to_user to include guardian
         permission checks. Without this override, chaining
@@ -219,10 +219,11 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
         # is_public flags.
         from opencontractserver.documents.models import DocumentPath
 
+        in_public_corpus_ids = DocumentPath.objects.filter(
+            corpus__is_public=True, is_current=True, is_deleted=False
+        ).values_list("document_id", flat=True)
+
         if user.is_anonymous:
-            in_public_corpus_ids = DocumentPath.objects.filter(
-                corpus__is_public=True, is_current=True, is_deleted=False
-            ).values_list("document_id", flat=True)
             return self.filter(
                 Q(is_public=True) | Q(id__in=in_public_corpus_ids)
             ).distinct()
@@ -238,10 +239,6 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
                 permission__codename="read_document", user_id=user.id
             ).values_list("content_object_id", flat=True)
 
-            in_public_corpus_ids = DocumentPath.objects.filter(
-                corpus__is_public=True, is_current=True, is_deleted=False
-            ).values_list("document_id", flat=True)
-
             return self.filter(
                 Q(creator=user)
                 | Q(is_public=True)
@@ -249,9 +246,6 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
                 | Q(id__in=in_public_corpus_ids)
             ).distinct()
         except LookupError:
-            in_public_corpus_ids = DocumentPath.objects.filter(
-                corpus__is_public=True, is_current=True, is_deleted=False
-            ).values_list("document_id", flat=True)
             return self.filter(
                 Q(creator=user) | Q(is_public=True) | Q(id__in=in_public_corpus_ids)
             ).distinct()

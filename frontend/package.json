@@ -126,7 +126,7 @@
     "**/*": "prettier --write --ignore-unknown"
   },
   "resolutions": {
-    "@os-legal/caml": "^0.0.1",
+    "@os-legal/caml": "^0.0.3",
     "@rjsf/validator-ajv8/ajv": "8.18.0",
     "ajv-formats/ajv": "8.18.0",
     "glob": "10.5.0",

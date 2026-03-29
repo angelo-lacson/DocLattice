@@ -366,13 +366,29 @@ class DocumentFilter(django_filters.FilterSet):
     has_label_with_title = filters.CharFilter(method="has_label_title")
     has_label_with_id = filters.CharFilter(method="has_label_id")
     text_search = filters.CharFilter(method="naive_text_search")
+    include_caml = filters.BooleanFilter(method="handle_include_caml")
 
     def handle_has_annotations_with_ids(self, queryset, info, value):
         annotation_pks = [from_global_id(val)[1] for val in value.split(",")]
         return queryset.filter(doc_annotation__in=annotation_pks)
 
     def filter_queryset(self, queryset):
-        return super().filter_queryset(queryset).distinct()
+        qs = super().filter_queryset(queryset).distinct()
+        # When filtering by corpus, exclude CAML/markdown files by default.
+        # Corpus views pass includeCaml=true to show them; extractors and
+        # analyzers omit the flag so CAML articles stay out of pipelines.
+        if self.data.get("in_corpus_with_id") and not self.data.get("include_caml"):
+            from opencontractserver.constants.document_processing import (
+                MARKDOWN_MIME_TYPE,
+            )
+
+            qs = qs.exclude(file_type=MARKDOWN_MIME_TYPE)
+        return qs
+
+    def handle_include_caml(self, queryset, name, value):
+        # No-op here; logic applied in filter_queryset when combined
+        # with in_corpus filtering.
+        return queryset
 
     def naive_text_search(self, queryset, name, value):
         return queryset.filter(Q(description__contains=value)).distinct()

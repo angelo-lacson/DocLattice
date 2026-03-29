@@ -53,14 +53,14 @@ import { FileUploadPackageProps } from "../widgets/modals/DocumentUploadModal";
 interface CorpusDocumentCardsProps {
   opened_corpus_id: string | null;
   viewMode?: ViewMode;
-  onCreateArticle?: () => void;
+  onOpenArticleEditor?: () => void;
   canUpdate?: boolean;
 }
 
 export const CorpusDocumentCards = ({
   opened_corpus_id,
   viewMode = "modern-list",
-  onCreateArticle,
+  onOpenArticleEditor,
   canUpdate = false,
 }: CorpusDocumentCardsProps) => {
   /**
@@ -112,6 +112,7 @@ export const CorpusDocumentCards = ({
           annotateDocLabels: true,
           inCorpusWithId: opened_corpus_id,
           includeMetadata: true,
+          includeCaml: true,
           // Only filter by folder when inside a corpus
           // null (corpus root) = "__root__" to show only root-level docs
           // string = specific folder ID
@@ -257,9 +258,9 @@ export const CorpusDocumentCards = ({
     if (
       document.title === CAML_ARTICLE_FILENAME &&
       document.fileType === MARKDOWN_MIME_TYPE &&
-      onCreateArticle
+      onOpenArticleEditor
     ) {
-      onCreateArticle();
+      onOpenArticleEditor();
       return;
     }
 
@@ -345,12 +346,12 @@ export const CorpusDocumentCards = ({
   });
 
   // Add "Create article" placeholder if no Readme.CAML exists and user can edit
-  if (!hasArticle && canUpdate && onCreateArticle && !selected_folder_id) {
+  if (!hasArticle && canUpdate && onOpenArticleEditor && !selected_folder_id) {
     prefixItems.push(
       <CreateArticlePlaceholder
         key="create-article"
         viewMode={viewMode === "modern-list" ? "modern-list" : "modern-card"}
-        onClick={onCreateArticle}
+        onClick={onOpenArticleEditor}
       />
     );
   }
