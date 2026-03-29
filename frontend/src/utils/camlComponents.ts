@@ -1,0 +1,119 @@
+/**
+ * Generic CAML component embed system.
+ *
+ * Provides a registry + marker parser so CAML prose blocks can embed arbitrary
+ * React components via a simple text marker syntax:
+ *
+ *   [component:TYPE key1=value1 key2=value2]
+ *
+ * Example markers:
+ *   [component:extract-grid extractId=RXh0cmFjdFR5cGU6Mg==]
+ *   [component:annotation-card annotationId=QW5ub3RhdGlvblR5cGU6MQ==]
+ *
+ * The registry maps TYPE strings to React components. Each component receives
+ * a plain `Record<string, string>` of the parsed key=value props.
+ *
+ * This is an interim mechanism until upstream @os-legal/caml-react supports a
+ * `customBlocks` prop (tracked in #1172). When that ships, migrate block types
+ * from this marker system to proper CAML block definitions.
+ */
+
+import { ComponentType } from "react";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** Props passed to every embedded CAML component. */
+export type CamlComponentProps = Record<string, string>;
+
+/**
+ * A React component that can be embedded in CAML prose.
+ * Uses a permissive signature so components with optional props
+ * (e.g. `{ extractId?: string; [key: string]: string | undefined }`)
+ * are assignable without casts.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type CamlEmbedComponent = ComponentType<any>;
+
+/** Result of parsing a `[component:...]` marker. */
+export interface ParsedComponentMarker {
+  type: string;
+  props: CamlComponentProps;
+}
+
+// ---------------------------------------------------------------------------
+// Marker parser
+// ---------------------------------------------------------------------------
+
+/**
+ * Regex matching `[component:TYPE key=value ...]` on a line by itself.
+ *
+ * Captures:
+ *   1: TYPE  — the component type name (alphanumeric + hyphens)
+ *   2: rest  — the remaining key=value pairs (may be empty)
+ */
+const COMPONENT_MARKER_RE = /^\[component:([a-zA-Z0-9-]+)(?:\s+(.*))?\]$/;
+
+/**
+ * Regex for individual `key=value` pairs. Values may be:
+ *   - Quoted:   key="some value with spaces"
+ *   - Unquoted: key=simple_value
+ */
+const PROP_RE = /([a-zA-Z_]\w*)=(?:"([^"]*)"|(\S+))/g;
+
+/**
+ * Try to parse a prose block's text content as a component marker.
+ *
+ * Returns the parsed marker if the entire trimmed content is a single
+ * `[component:...]` line, or `null` if it's regular markdown.
+ */
+export function parseComponentMarker(
+  content: string
+): ParsedComponentMarker | null {
+  const trimmed = content.trim();
+  const match = COMPONENT_MARKER_RE.exec(trimmed);
+  if (!match) return null;
+
+  const type = match[1];
+  const rest = match[2] ?? "";
+  const props: CamlComponentProps = {};
+
+  let propMatch: RegExpExecArray | null;
+  PROP_RE.lastIndex = 0;
+  while ((propMatch = PROP_RE.exec(rest)) !== null) {
+    const key = propMatch[1];
+    const value = propMatch[2] ?? propMatch[3]; // quoted or unquoted
+    props[key] = value;
+  }
+
+  return { type, props };
+}
+
+/**
+ * Build a `[component:...]` marker string from type and props.
+ *
+ * Used by the editor to insert markers at the cursor. Values containing
+ * spaces are automatically quoted.
+ */
+export function buildComponentMarker(
+  type: string,
+  props: CamlComponentProps
+): string {
+  const pairs = Object.entries(props).map(([k, v]) =>
+    /\s/.test(v) ? `${k}="${v}"` : `${k}=${v}`
+  );
+  const suffix = pairs.length > 0 ? " " + pairs.join(" ") : "";
+  return `[component:${type}${suffix}]`;
+}
+
+/**
+ * Wrap a marker in a CAML prose block fence, ready for insertion into
+ * the editor source.
+ */
+export function buildComponentProseFence(
+  type: string,
+  props: CamlComponentProps
+): string {
+  return `\n::: prose\n${buildComponentMarker(type, props)}\n:::\n`;
+}
