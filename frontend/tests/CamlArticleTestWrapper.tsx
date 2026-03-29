@@ -217,8 +217,26 @@ export const SAMPLE_CAML_DOCUMENT: CamlDocument = {
       ],
     },
     {
-      id: "case-tracker",
+      id: "branding",
       kicker: "Chapter 5",
+      title: "Corpus Branding",
+      blocks: [
+        {
+          type: "corpus-icon" as const,
+          size: "lg" as const,
+          shape: "avatar" as const,
+          caption: "Supply Chain Agreements",
+        },
+        {
+          type: "corpus-icon" as const,
+          size: "sm" as const,
+          shape: "rounded" as const,
+        },
+      ],
+    },
+    {
+      id: "case-tracker",
+      kicker: "Chapter 6",
       title: "Case Tracker",
       blocks: [
         {
