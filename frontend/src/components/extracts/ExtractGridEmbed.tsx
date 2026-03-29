@@ -196,7 +196,9 @@ interface GridRow {
 
 export interface ExtractGridEmbedProps {
   /** Relay global ID of the extract to embed. */
-  extractId: string;
+  extractId?: string;
+  /** All other props from the generic component marker are accepted. */
+  [key: string]: string | undefined;
 }
 
 export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
@@ -206,9 +208,21 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
     GetExtractGridEmbedOutput,
     GetExtractGridEmbedInput
   >(GET_EXTRACT_GRID_EMBED, {
-    variables: { extractId },
+    variables: { extractId: extractId ?? "" },
+    skip: !extractId,
     fetchPolicy: "cache-first",
   });
+
+  if (!extractId) {
+    return (
+      <EmbedWrapper>
+        <CenterMessage>
+          <AlertCircle size={20} color={OS_LEGAL_COLORS.textMuted} />
+          Missing extractId prop.
+        </CenterMessage>
+      </EmbedWrapper>
+    );
+  }
 
   const extract = data?.extract;
 

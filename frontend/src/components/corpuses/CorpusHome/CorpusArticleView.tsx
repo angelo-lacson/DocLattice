@@ -5,7 +5,7 @@
  * Fetches the Readme.CAML document, parses its content, and renders
  * the full scrollytelling article experience.
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@apollo/client";
 import { ArrowLeft, FileText, Edit } from "lucide-react";
 import styled from "styled-components";
@@ -21,16 +21,21 @@ import { CorpusType } from "../../../types/graphql-api";
 import { parseCaml } from "@os-legal/caml";
 import type { CamlDocument } from "@os-legal/caml";
 import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
-import { MarkdownMessageRenderer } from "../../threads/MarkdownMessageRenderer";
 import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants";
 import { ArticleDocumentsDrawer } from "./ArticleDocumentsDrawer";
 import { ExtractGridEmbed } from "../../extracts/ExtractGridEmbed";
+import {
+  useCamlComponentRenderer,
+  CamlComponentRegistry,
+} from "../../../hooks/useCamlComponentRenderer";
 
 /**
- * Regex matching `[extract-grid:EXTRACT_ID]` markers in prose content.
- * The ID is a Relay global ID (e.g. "RXh0cmFjdFR5cGU6Mg==").
+ * Registry of components that can be embedded in CAML prose blocks via
+ * `[component:TYPE ...]` markers. Add new component types here.
  */
-const EXTRACT_GRID_MARKER_RE = /^\[extract-grid:([^\]]+)\]$/;
+const CAML_COMPONENTS: CamlComponentRegistry = {
+  "extract-grid": ExtractGridEmbed,
+};
 
 // ---------------------------------------------------------------------------
 // Styled components
@@ -228,15 +233,8 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
     }
   }, [camlContent]);
 
-  // Custom markdown renderer that intercepts [extract-grid:ID] markers
-  const renderMarkdown = useCallback((md: string) => {
-    const trimmed = md.trim();
-    const match = EXTRACT_GRID_MARKER_RE.exec(trimmed);
-    if (match) {
-      return <ExtractGridEmbed extractId={match[1]} />;
-    }
-    return <MarkdownMessageRenderer content={md} />;
-  }, []);
+  // Markdown renderer with generic component marker interception
+  const renderMarkdown = useCamlComponentRenderer(CAML_COMPONENTS);
 
   if (loading) {
     return (

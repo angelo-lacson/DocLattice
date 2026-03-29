@@ -34,11 +34,20 @@ import {
 } from "../../graphql/mutations";
 import { parseCaml } from "@os-legal/caml";
 import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
-import { MarkdownMessageRenderer } from "../threads/MarkdownMessageRenderer";
 import { ExtractGridEmbed } from "../extracts/ExtractGridEmbed";
+import {
+  useCamlComponentRenderer,
+  CamlComponentRegistry,
+} from "../../hooks/useCamlComponentRenderer";
+import { buildComponentProseFence } from "../../utils/camlComponents";
 
-/** Regex matching `[extract-grid:EXTRACT_ID]` markers in prose content. */
-const EXTRACT_GRID_MARKER_RE = /^\[extract-grid:([^\]]+)\]$/;
+/**
+ * Registry of components available in the editor preview.
+ * Must match the registry used by CorpusArticleView.
+ */
+const CAML_COMPONENTS: CamlComponentRegistry = {
+  "extract-grid": ExtractGridEmbed,
+};
 
 // ---------------------------------------------------------------------------
 // Styled components
@@ -485,34 +494,27 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
       .filter((e: any) => e.finished || e.fullDocumentList?.length > 0);
   }, [extractsData]);
 
-  /** Insert `[extract-grid:ID]` marker as a prose block at the cursor. */
-  const handleInsertExtractGrid = useCallback(
-    (extractId: string) => {
+  /** Insert a component marker as a prose block at the cursor. */
+  const handleInsertComponent = useCallback(
+    (type: string, props: Record<string, string>) => {
       setShowExtractPicker(false);
-      const marker = `\n::: prose\n[extract-grid:${extractId}]\n:::\n`;
+      const fence = buildComponentProseFence(type, props);
 
       const textarea = textareaRef.current;
       if (textarea) {
         const pos = textarea.selectionStart ?? content.length;
         const before = content.slice(0, pos);
         const after = content.slice(pos);
-        setContent(before + marker + after);
+        setContent(before + fence + after);
       } else {
-        setContent((prev) => prev + marker);
+        setContent((prev) => prev + fence);
       }
     },
     [content]
   );
 
-  // Custom markdown renderer for the editor preview
-  const renderMarkdownPreview = useCallback((md: string) => {
-    const trimmed = md.trim();
-    const match = EXTRACT_GRID_MARKER_RE.exec(trimmed);
-    if (match) {
-      return <ExtractGridEmbed extractId={match[1]} />;
-    }
-    return <MarkdownMessageRenderer content={md} />;
-  }, []);
+  // Markdown renderer with generic component marker interception
+  const renderMarkdownPreview = useCamlComponentRenderer(CAML_COMPONENTS);
 
   const handleClose = () => {
     if (hasChanges) {
@@ -558,7 +560,11 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
                       corpusExtracts.map((ext: any) => (
                         <ExtractPickerItem
                           key={ext.id}
-                          onClick={() => handleInsertExtractGrid(ext.id)}
+                          onClick={() =>
+                            handleInsertComponent("extract-grid", {
+                              extractId: ext.id,
+                            })
+                          }
                         >
                           {ext.name}
                         </ExtractPickerItem>
