@@ -1,10 +1,17 @@
 import styled from "styled-components";
-import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
-import { modalFooterBorder } from "../widgets/modals/sharedModalStyles";
+import {
+  OS_LEGAL_COLORS,
+  OS_LEGAL_TYPOGRAPHY,
+} from "../../assets/configurations/osLegalStyles";
+import {
+  modalFooterBorder,
+  modalFooterMobile,
+} from "../widgets/modals/sharedModalStyles";
 import { useMutation, useReactiveVar } from "@apollo/client";
 import { toast } from "react-toastify";
 import {
   AlertTriangle,
+  Cookie,
   Users,
   Settings,
   Monitor,
@@ -12,8 +19,17 @@ import {
   MousePointer,
   Bug,
   Check,
+  Shield,
+  FileText,
+  Share2,
 } from "lucide-react";
-import { Button, Modal, ModalBody, ModalFooter } from "@os-legal/ui";
+import {
+  Button,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@os-legal/ui";
 
 import { showCookieAcceptModal, userObj } from "../../graphql/cache";
 import {
@@ -32,74 +48,123 @@ const StyledModalWrapper = styled.div`
   }
 
   .oc-modal {
-    max-width: 600px;
-    color: ${OS_LEGAL_COLORS.darkSurfaceText};
-    background: ${OS_LEGAL_COLORS.darkSurface};
+    max-width: 560px;
+  }
+
+  .oc-modal-header {
+    border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
   }
 
   .oc-modal-body {
-    background: ${OS_LEGAL_COLORS.darkSurface};
-    padding: 1.5rem;
+    padding: 1.25rem 1.5rem;
   }
 
   .oc-modal-footer {
     ${modalFooterBorder}
-    background: ${OS_LEGAL_COLORS.darkSurface};
-    border-top-color: ${OS_LEGAL_COLORS.darkSurfaceBorder};
+    ${modalFooterMobile}
     display: flex;
     justify-content: center;
   }
 `;
 
-const ModalHeaderSection = styled.div`
+const DemoBanner = styled.div`
   display: flex;
-  flex-direction: column;
   align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem;
+  background: ${OS_LEGAL_COLORS.warningSurface};
+  border: 1px solid ${OS_LEGAL_COLORS.warningBorder};
+  border-radius: 8px;
   margin-bottom: 1rem;
-`;
 
-const IconWrapper = styled.div`
-  color: #fbbf24;
-  margin-bottom: 0.5rem;
-`;
-
-const ModalTitle = styled.h2`
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: white;
-  margin: 0;
-`;
-
-const SectionHeading = styled.h4`
-  text-align: center;
-  color: white;
-  margin: 1.25rem 0 0.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-
-  u {
-    text-decoration-color: ${OS_LEGAL_COLORS.textMuted};
+  svg {
+    flex-shrink: 0;
+    color: ${OS_LEGAL_COLORS.warningText};
   }
+`;
+
+const DemoBannerText = styled.p`
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: ${OS_LEGAL_COLORS.warningText};
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+`;
+
+const Section = styled.div`
+  margin-bottom: 1rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const SectionLabel = styled.h4`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: ${OS_LEGAL_COLORS.textTertiary};
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+
+  svg {
+    flex-shrink: 0;
+    color: ${OS_LEGAL_COLORS.accent};
+  }
+`;
+
+const SectionBody = styled.p`
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
 `;
 
 const DataList = styled.ul`
   list-style: none;
   padding: 0;
-  margin: 0.5rem 0;
+  margin: 0.375rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 `;
 
 const DataListItem = styled.li`
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.4rem 0;
-  font-size: 0.95rem;
-  color: ${OS_LEGAL_COLORS.darkSurfaceText};
+  gap: 0.625rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  border-radius: 6px;
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
 
   svg {
     flex-shrink: 0;
-    color: ${OS_LEGAL_COLORS.darkSurfaceBorder};
+    color: ${OS_LEGAL_COLORS.textMuted};
   }
+`;
+
+const Disclaimer = styled.p`
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: ${OS_LEGAL_COLORS.textMuted};
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+`;
+
+const AnalyticsNote = styled.p`
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: ${OS_LEGAL_COLORS.textMuted};
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
 `;
 
 export const CookieConsentDialog = () => {
@@ -152,106 +217,118 @@ export const CookieConsentDialog = () => {
   return (
     <StyledModalWrapper>
       <Modal open onClose={() => {}}>
+        <ModalHeader
+          title={
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              <Cookie size={20} style={{ color: OS_LEGAL_COLORS.accent }} />
+              Cookie Policy &amp; Terms
+            </span>
+          }
+        />
         <ModalBody>
-          <ModalHeaderSection>
-            <IconWrapper>
-              <AlertTriangle size={48} />
-            </IconWrapper>
-            <ModalTitle>DEMO SYSTEM</ModalTitle>
-          </ModalHeaderSection>
+          <DemoBanner>
+            <AlertTriangle size={18} />
+            <DemoBannerText>
+              <strong>Demo system</strong> — no guarantee of uptime or data
+              retention. Accounts and data may be deleted at any time.
+            </DemoBannerText>
+          </DemoBanner>
 
-          <SectionHeading>
-            <u>Cookie Policy</u>
-          </SectionHeading>
-          <p>
-            This website uses cookies to enhance the user experience and help us
-            refine OpenContracts. We do not sell or share user information.
-            Please accept the cookie to continue.
-          </p>
+          <Section>
+            <SectionLabel>
+              <Shield size={14} />
+              Cookie Usage
+            </SectionLabel>
+            <SectionBody>
+              This site uses cookies to enhance your experience and help us
+              improve OpenContracts. We do not sell or share user information.
+            </SectionBody>
+          </Section>
 
-          <SectionHeading>
-            <u>NO REPRESENTATIONS OR WARRANTIES</u>
-          </SectionHeading>
-          <p>
-            This is a demo system with <b>NO</b> guarantee of uptime or data
-            retention. We may delete accounts and data{" "}
-            <u>AT ANY TIME AND FOR ANY REASON</u>. THE SOFTWARE IS PROVIDED "AS
-            IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
-            NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-            PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-            AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-            OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-            OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
-            OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-          </p>
+          <Section>
+            <SectionLabel>
+              <FileText size={14} />
+              Data We Collect
+            </SectionLabel>
+            <DataList>
+              <DataListItem>
+                <Users size={14} />
+                User information (email, name, IP)
+              </DataListItem>
+              <DataListItem>
+                <Settings size={14} />
+                Usage information
+              </DataListItem>
+              <DataListItem>
+                <Monitor size={14} />
+                System information
+              </DataListItem>
+            </DataList>
+          </Section>
 
-          <SectionHeading>
-            <u>Data We Collect</u>
-          </SectionHeading>
-          <DataList>
-            <DataListItem>
-              <Users size={16} />
-              <span>User Information (email, name, ip)</span>
-            </DataListItem>
-            <DataListItem>
-              <Settings size={16} />
-              <span>Usage Information</span>
-            </DataListItem>
-            <DataListItem>
-              <Monitor size={16} />
-              <span>System Information</span>
-            </DataListItem>
-          </DataList>
-
-          <SectionHeading>
-            <u>Data You Agree to Share</u>
-          </SectionHeading>
-          <p>
-            By interacting with this demo system, you agree to share the
-            following under a CC0 1.0 Universal license:
-          </p>
-          <DataList>
-            <DataListItem>
-              <Users size={16} />
-              <span>Labelsets &amp; Labels</span>
-            </DataListItem>
-            <DataListItem>
-              <Monitor size={16} />
-              <span>Configured Data Extractors</span>
-            </DataListItem>
-          </DataList>
+          <Section>
+            <SectionLabel>
+              <Share2 size={14} />
+              Data You Agree to Share
+            </SectionLabel>
+            <SectionBody>
+              By using this demo, you agree to share the following under a CC0
+              1.0 Universal license:
+            </SectionBody>
+            <DataList>
+              <DataListItem>
+                <Users size={14} />
+                Labelsets &amp; labels
+              </DataListItem>
+              <DataListItem>
+                <Monitor size={14} />
+                Configured data extractors
+              </DataListItem>
+            </DataList>
+          </Section>
 
           {analyticsEnabled && (
-            <>
-              <SectionHeading>
-                <u>Analytics &amp; Usage Tracking</u>
-              </SectionHeading>
-              <p>
-                We use PostHog to collect anonymous usage analytics to help us
-                understand how OpenContracts is used and improve the experience.
-                This includes:
-              </p>
+            <Section>
+              <SectionLabel>
+                <BarChart3 size={14} />
+                Analytics
+              </SectionLabel>
+              <SectionBody>
+                We use PostHog to collect anonymous usage analytics:
+              </SectionBody>
               <DataList>
                 <DataListItem>
-                  <BarChart3 size={16} />
-                  <span>Page views and navigation patterns</span>
+                  <BarChart3 size={14} />
+                  Page views and navigation patterns
                 </DataListItem>
                 <DataListItem>
-                  <MousePointer size={16} />
-                  <span>Feature usage statistics</span>
+                  <MousePointer size={14} />
+                  Feature usage statistics
                 </DataListItem>
                 <DataListItem>
-                  <Bug size={16} />
-                  <span>Error tracking for debugging</span>
+                  <Bug size={14} />
+                  Error tracking for debugging
                 </DataListItem>
               </DataList>
-              <p style={{ fontSize: "0.9em", opacity: 0.8 }}>
+              <AnalyticsNote>
                 Analytics data is used solely to improve OpenContracts and is
-                never sold or shared with third parties. You can opt out at any
-                time through your browser settings or by using Do Not Track.
-              </p>
-            </>
+                never sold or shared with third parties.
+              </AnalyticsNote>
+            </Section>
           )}
+
+          <Disclaimer>
+            THE SOFTWARE IS PROVIDED &ldquo;AS IS&rdquo;, WITHOUT WARRANTY OF
+            ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+            WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+            NONINFRINGEMENT.
+          </Disclaimer>
         </ModalBody>
         <ModalFooter>
           <Button
@@ -261,7 +338,7 @@ export const CookieConsentDialog = () => {
             leftIcon={<Check size={16} />}
             onClick={handleAccept}
           >
-            Accept
+            Accept &amp; Continue
           </Button>
         </ModalFooter>
       </Modal>
