@@ -2,12 +2,12 @@ python-slugify==8.0.4  # https://github.com/un33k/python-slugify
 Pillow>=10.4.0  # https://github.com/python-pillow/Pillow
 argon2-cffi==25.1.0  # https://github.com/hynek/argon2_cffi
 hiredis==3.3.1  # https://github.com/redis/hiredis-py
-redis==7.3.0  # https://github.com/redis/redis-py
-celery==5.6.2  # pyup: < 6.0  # https://github.com/celery/celery
+redis==7.4.0  # https://github.com/redis/redis-py
+celery==5.6.3  # pyup: < 6.0  # https://github.com/celery/celery
 flower==2.0.1  # https://github.com/mher/flower
 django-celery-beat==2.9.0  # https://github.com/celery/django-celery-beat
 pyjwt==2.12.1  # https://github.com/jpadilla/pyjwt
-cryptography==46.0.5  # https://github.com/pyca/cryptography
+cryptography==46.0.6  # https://github.com/pyca/cryptography
 pydantic==2.*
 typing-extensions==4.*  # https://github.com/python/typing_extensions
 requests==2.*  # https://requests.readthedocs.io/en/latest/
@@ -24,7 +24,7 @@ django-filter==25.1  # https://github.com/carltongibson/django-filter
 django-storages[boto3,google]==1.14.6  # https://github.com/jschneier/django-storages
 django-extensions==4.1  # https://github.com/django-extensions/django-extensions
 whitenoise==6.12.0
-django-tree-queries[admin]==0.23.1  # https://pypi.org/project/django-tree-queries/0.21.0/
+django-tree-queries[admin]==0.24.0  # https://pypi.org/project/django-tree-queries/0.21.0/
 django-cte==3.0.0  # https://github.com/dimagi/django-cte
 pgvector>=0.4.0  # Python binding for pgvector; PostgreSQL extension v0.8.2+ required for HNSW iterative scan (installed separately)
 channels==4.3.2  # https://github.com/django/channels
@@ -34,7 +34,7 @@ Twisted[tls,http2]
 
 # Django REST Framework
 # ------------------------------------------------------------------------------
-djangorestframework==3.17.0  # https://github.com/encode/django-rest-framework
+djangorestframework==3.17.1  # https://github.com/encode/django-rest-framework
 django-cors-headers==4.9.0  # https://github.com/adamchainz/django-cors-headers
 drf-extra-fields==3.7.0  # https://github.com/Hipo/drf-extra-fields
 
