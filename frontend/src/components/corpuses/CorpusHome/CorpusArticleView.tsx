@@ -5,7 +5,7 @@
  * Fetches the Readme.CAML document, parses its content, and renders
  * the full scrollytelling article experience.
  */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@apollo/client";
 import { ArrowLeft, FileText, Edit } from "lucide-react";
 import styled from "styled-components";
@@ -24,6 +24,13 @@ import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
 import { MarkdownMessageRenderer } from "../../threads/MarkdownMessageRenderer";
 import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants";
 import { ArticleDocumentsDrawer } from "./ArticleDocumentsDrawer";
+import { ExtractGridEmbed } from "../../extracts/ExtractGridEmbed";
+
+/**
+ * Regex matching `[extract-grid:EXTRACT_ID]` markers in prose content.
+ * The ID is a Relay global ID (e.g. "RXh0cmFjdFR5cGU6Mg==").
+ */
+const EXTRACT_GRID_MARKER_RE = /^\[extract-grid:([^\]]+)\]$/;
 
 // ---------------------------------------------------------------------------
 // Styled components
@@ -221,6 +228,16 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
     }
   }, [camlContent]);
 
+  // Custom markdown renderer that intercepts [extract-grid:ID] markers
+  const renderMarkdown = useCallback((md: string) => {
+    const trimmed = md.trim();
+    const match = EXTRACT_GRID_MARKER_RE.exec(trimmed);
+    if (match) {
+      return <ExtractGridEmbed extractId={match[1]} />;
+    }
+    return <MarkdownMessageRenderer content={md} />;
+  }, []);
+
   if (loading) {
     return (
       <ArticleViewContainer data-testid={testId}>
@@ -312,7 +329,7 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
         <CamlArticle
           document={parsedDocument}
           stats={stats}
-          renderMarkdown={(md) => <MarkdownMessageRenderer content={md} />}
+          renderMarkdown={renderMarkdown}
         />
       </CamlThemeProvider>
     </ArticleViewContainer>

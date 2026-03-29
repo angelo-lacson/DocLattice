@@ -2122,6 +2122,105 @@ export const GET_DATACELLS_FOR_EXTRACT = gql`
   }
 `;
 
+// ---------------------------------------------------------------------------
+// Extract grid embed — lightweight query for CAML article embedding
+// ---------------------------------------------------------------------------
+
+export interface GetExtractGridEmbedInput {
+  extractId: string;
+}
+
+export interface ExtractGridEmbedColumn {
+  id: string;
+  name: string;
+}
+
+export interface ExtractGridEmbedSource {
+  id: string;
+  page: number;
+  rawText: string;
+}
+
+export interface ExtractGridEmbedCell {
+  id: string;
+  column: ExtractGridEmbedColumn;
+  document: {
+    id: string;
+    title: string;
+    slug: string;
+    creator: { slug: string };
+  };
+  data: any;
+  correctedData: any;
+  completed: string | null;
+  failed: string | null;
+  fullSourceList: ExtractGridEmbedSource[];
+}
+
+export interface GetExtractGridEmbedOutput {
+  extract: {
+    id: string;
+    name: string;
+    corpus: {
+      id: string;
+      slug: string;
+      creator: { slug: string };
+    };
+    fieldset: {
+      id: string;
+      fullColumnList: ExtractGridEmbedColumn[];
+    };
+    fullDatacellList: ExtractGridEmbedCell[];
+  } | null;
+}
+
+export const GET_EXTRACT_GRID_EMBED = gql`
+  query GetExtractGridEmbed($extractId: ID!) {
+    extract(id: $extractId) {
+      id
+      name
+      corpus {
+        id
+        slug
+        creator {
+          slug
+        }
+      }
+      fieldset {
+        id
+        fullColumnList {
+          id
+          name
+        }
+      }
+      fullDatacellList {
+        id
+        column {
+          id
+          name
+        }
+        document {
+          id
+          title
+          slug
+          creator {
+            slug
+          }
+        }
+        data
+        correctedData
+        completed
+        failed
+        fullSourceList {
+          id
+          page
+          rawText
+        }
+      }
+    }
+  }
+`;
+
 export interface GetAnnotationsForAnalysisInput {
   analysisId: string;
   documentId?: string;
