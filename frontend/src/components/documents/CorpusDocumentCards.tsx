@@ -43,7 +43,10 @@ import {
   GetCorpusArticleOutput,
 } from "../../graphql/queries";
 import { CreateArticlePlaceholder } from "./CreateArticlePlaceholder";
-import { CAML_ARTICLE_FILENAME } from "../../assets/configurations/constants";
+import {
+  CAML_ARTICLE_FILENAME,
+  MARKDOWN_MIME_TYPE,
+} from "../../assets/configurations/constants";
 import { DocumentType } from "../../types/graphql-api";
 import { FileUploadPackageProps } from "../widgets/modals/DocumentUploadModal";
 
@@ -251,7 +254,11 @@ export const CorpusDocumentCards = ({
 
   const onOpen = (document: DocumentType) => {
     // CAML articles open in the article editor, not the document viewer
-    if (document.title === CAML_ARTICLE_FILENAME && onCreateArticle) {
+    if (
+      document.title === CAML_ARTICLE_FILENAME &&
+      document.fileType === MARKDOWN_MIME_TYPE &&
+      onCreateArticle
+    ) {
       onCreateArticle();
       return;
     }

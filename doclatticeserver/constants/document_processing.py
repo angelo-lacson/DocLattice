@@ -10,6 +10,10 @@ AppRegistryNotReady errors during settings loading.
 # Shared between versioning.py and corpus models.py — single source of truth.
 TEXT_MIMETYPES = {"text/plain", "text/markdown", "application/txt"}
 
+# MIME type for Markdown / CAML files.  Used in doc_tasks.py to skip
+# ingestion and in the parser pipeline for type detection.
+MARKDOWN_MIME_TYPE = "text/markdown"
+
 # Maximum file upload size in bytes (5 GB).
 # Used by Django's DATA_UPLOAD_MAX_MEMORY_SIZE setting.
 MAX_FILE_UPLOAD_SIZE_BYTES = 5_242_880_000

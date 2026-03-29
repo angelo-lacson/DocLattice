@@ -270,7 +270,7 @@ class DocumentManager(BaseVisibilityManager):
     def get_queryset(self):
         return DocumentQuerySet(self.model, using=self._db)
 
-    def visible_to_user(self, user=None, lightweight=False) -> QuerySet:
+    def visible_to_user(self, user=None, **kwargs) -> QuerySet:
         """Delegate to DocumentQuerySet which includes public-corpus logic."""
         return self.get_queryset().visible_to_user(user)
 
