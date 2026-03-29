@@ -290,3 +290,65 @@ class ComprehensivePermissionTestCase(TestCase):
         result = self.regular_client.execute(query, variable_values=variables)
         self.assertIsNotNone(result["data"]["corpus"])
         self.assertEqual(result["data"]["corpus"]["title"], "Private Corpus")
+
+
+class PublicCorpusDocumentVisibilityTest(TestCase):
+    """Tests for the public-corpus document visibility relaxation."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="pc_owner", password="password")
+        self.viewer = User.objects.create_user(
+            username="pc_viewer", password="password"
+        )
+
+        # Public corpus with a non-public document
+        self.public_corpus = Corpus.objects.create(
+            title="Public Corpus", creator=self.owner, is_public=True
+        )
+        self.non_public_doc = Document.objects.create(
+            title="Non-Public Doc", creator=self.owner, is_public=False
+        )
+        self.non_public_doc, _, _ = self.public_corpus.add_document(
+            document=self.non_public_doc, user=self.owner
+        )
+
+        # Private corpus with a public document
+        self.private_corpus = Corpus.objects.create(
+            title="Private Corpus", creator=self.owner, is_public=False
+        )
+        self.public_doc_in_private = Document.objects.create(
+            title="Public Doc Private Corpus", creator=self.owner, is_public=True
+        )
+        self.public_doc_in_private, _, _ = self.private_corpus.add_document(
+            document=self.public_doc_in_private, user=self.owner
+        )
+
+    def test_anonymous_sees_non_public_doc_in_public_corpus(self):
+        """Anonymous user can see a non-public doc via public corpus membership."""
+        anon = AnonymousUser()
+        visible = Document.objects.visible_to_user(anon, lightweight=True)
+        self.assertIn(self.non_public_doc.pk, visible.values_list("pk", flat=True))
+
+    def test_authenticated_sees_non_public_doc_in_public_corpus(self):
+        """Authenticated user without explicit permission sees doc via public corpus."""
+        visible = Document.objects.visible_to_user(self.viewer, lightweight=True)
+        self.assertIn(self.non_public_doc.pk, visible.values_list("pk", flat=True))
+
+    def test_public_doc_in_private_corpus_visible_via_is_public(self):
+        """A public document in a private corpus is still visible (via is_public)."""
+        visible = Document.objects.visible_to_user(self.viewer, lightweight=True)
+        self.assertIn(
+            self.public_doc_in_private.pk, visible.values_list("pk", flat=True)
+        )
+
+    def test_non_public_doc_in_private_corpus_not_visible(self):
+        """A non-public document in a private corpus is hidden."""
+        non_public_in_private = Document.objects.create(
+            title="Hidden Doc", creator=self.owner, is_public=False
+        )
+        non_public_in_private, _, _ = self.private_corpus.add_document(
+            document=non_public_in_private, user=self.owner
+        )
+
+        visible = Document.objects.visible_to_user(self.viewer, lightweight=True)
+        self.assertNotIn(non_public_in_private.pk, visible.values_list("pk", flat=True))

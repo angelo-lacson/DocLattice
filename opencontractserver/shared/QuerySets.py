@@ -212,11 +212,11 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
 
         # Documents in a public corpus are readable by everyone (including
         # anonymous users), even when the document itself is not individually
-        # marked is_public=True.  This intentionally relaxes the original
-        # permissioning guide rule ("Document AND corpus must both be
-        # is_public=True") so that corpus members like Readme.CAML are
-        # visible to anonymous visitors without requiring per-document
-        # is_public flags.
+        # marked is_public=True.  This relaxes the original permissioning
+        # guide rule so that corpus members like Readme.CAML are visible to
+        # anonymous visitors without requiring per-document is_public flags.
+        # The subquery is lazy (evaluated as part of the final SQL), so
+        # defining it here does not cause an extra query.
         from opencontractserver.documents.models import DocumentPath
 
         in_public_corpus_ids = DocumentPath.objects.filter(
