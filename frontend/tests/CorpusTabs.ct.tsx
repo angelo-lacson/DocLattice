@@ -34,6 +34,7 @@ import {
   GET_CORPUS_ACTIONS,
   GET_CORPUS_ENGAGEMENT_METRICS,
   GET_BADGES,
+  GET_CORPUS_ARTICLE,
 } from "../src/graphql/queries";
 import { CorpusType } from "../src/types/graphql-api";
 import { docScreenshot, releaseScreenshot } from "./utils/docScreenshot";
@@ -403,6 +404,7 @@ const createDocumentsMocks = (corpusId: string): MockedResponse[] => {
           inCorpusWithId: corpusId,
           annotateDocLabels: true,
           includeMetadata: true,
+          includeCaml: true,
         },
       },
       result: documentsResult,
@@ -415,6 +417,7 @@ const createDocumentsMocks = (corpusId: string): MockedResponse[] => {
           inFolderId: "__root__",
           annotateDocLabels: true,
           includeMetadata: true,
+          includeCaml: true,
         },
       },
       result: documentsResult,
@@ -599,6 +602,24 @@ const createCorpusActionsMock = (corpusId: string): MockedResponse => ({
   },
 });
 
+const createArticleMock = (corpusId: string): MockedResponse => ({
+  request: {
+    query: GET_CORPUS_ARTICLE,
+    variables: {
+      corpusId,
+      title: "Readme.CAML",
+    },
+  },
+  result: {
+    data: {
+      documents: {
+        edges: [],
+        __typename: "DocumentTypeConnection",
+      },
+    },
+  },
+});
+
 const createEmptyDocumentsMock = (): MockedResponse => ({
   request: {
     query: GET_DOCUMENTS,
@@ -638,6 +659,8 @@ const createAllTabMocks = (corpus: CorpusType): MockedResponse[] => [
   createCorpusActionsMock(corpus.id),
   createEngagementMetricsMock(corpus.id),
   createEmptyDocumentsMock(),
+  createArticleMock(corpus.id),
+  createArticleMock(corpus.id),
 ];
 
 /* -------------------------------------------------------------------------- */
