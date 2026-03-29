@@ -250,6 +250,12 @@ export const CorpusDocumentCards = ({
   };
 
   const onOpen = (document: DocumentType) => {
+    // CAML articles open in the article editor, not the document viewer
+    if (document.title === CAML_ARTICLE_FILENAME && onCreateArticle) {
+      onCreateArticle();
+      return;
+    }
+
     // Use smart navigation utility to prefer slugs and prevent redirects
     const corpusData = opened_corpus_id ? openedCorpus() : null;
     navigateToDocument(

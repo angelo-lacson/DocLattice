@@ -344,6 +344,17 @@ def ingest_doc(self, user_id: int, doc_id: int) -> dict[str, Any]:
         logger.error(f"Document with id {doc_id} does not exist.")
         return {"status": "failed", "doc_id": doc_id, "error": "Document not found"}
 
+    # CAML/markdown files are rendered client-side and never parsed.
+    # Mark as complete immediately so the pipeline doesn't touch them.
+    if document.file_type == "text/markdown":
+        document.processing_status = DocumentProcessingStatus.COMPLETE
+        document.save(update_fields=["processing_status"])
+        logger.info(
+            f"[ingest_doc] Skipping ingestion for markdown document {doc_id} "
+            "(rendered client-side)"
+        )
+        return {"status": "success", "doc_id": doc_id}
+
     # Set processing status to PROCESSING at start of first attempt
     if self.request.retries == 0:
         document.processing_status = DocumentProcessingStatus.PROCESSING
