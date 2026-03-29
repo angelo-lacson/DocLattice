@@ -136,21 +136,29 @@ class _RateLimiter:
         self._lock = asyncio.Lock()
 
     async def acquire(self) -> None:
-        """Block until a request slot is available."""
-        async with self._lock:
-            now = time.monotonic()
-            # Evict timestamps older than 60 s
-            cutoff = now - 60.0
-            self._timestamps = [t for t in self._timestamps if t > cutoff]
+        """Block until a request slot is available.
 
-            if len(self._timestamps) >= self._max:
-                # Wait until the oldest slot expires
+        The lock is released before sleeping so that other coroutines are
+        not blocked while this one waits for a rate-limit slot to open.
+        """
+        while True:
+            async with self._lock:
+                now = time.monotonic()
+                # Evict timestamps older than 60 s
+                cutoff = now - 60.0
+                self._timestamps = [t for t in self._timestamps if t > cutoff]
+
+                if len(self._timestamps) < self._max:
+                    # Slot available — record this request and return
+                    self._timestamps.append(time.monotonic())
+                    return
+
+                # Calculate how long to wait for the oldest slot to expire
                 wait = 60.0 - (now - self._timestamps[0])
-                if wait > 0:
-                    await asyncio.sleep(wait)
-                self._timestamps.pop(0)
 
-            self._timestamps.append(time.monotonic())
+            # Sleep *outside* the lock so other coroutines can proceed
+            if wait > 0:
+                await asyncio.sleep(wait)
 
 
 # One limiter per provider, lazily created
@@ -158,9 +166,7 @@ _limiters: dict[str, _RateLimiter] = {}
 
 
 def _get_limiter(provider: str) -> _RateLimiter:
-    if provider not in _limiters:
-        _limiters[provider] = _RateLimiter()
-    return _limiters[provider]
+    return _limiters.setdefault(provider, _RateLimiter())
 
 
 # ============================================================================
@@ -273,7 +279,6 @@ class TavilySearchProvider(SearchProvider):
             resp = await client.post(
                 TAVILY_SEARCH_ENDPOINT,
                 json=payload,
-                timeout=timeout,
             )
             resp.raise_for_status()
             data = resp.json()

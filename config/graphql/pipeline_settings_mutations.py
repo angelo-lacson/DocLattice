@@ -799,7 +799,7 @@ class UpdateToolSecretsMutation(graphene.Mutation):
     @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
     def mutate(root, info, tool_key, secrets=None, settings=None, merge=True):
         """Update secrets and/or settings for an agent tool."""
-        from opencontractserver.constants.web_search import TOOL_SETTINGS_PREFIX
+        from opencontractserver.constants.tools import TOOL_SETTINGS_PREFIX
         from opencontractserver.documents.models import PipelineSettings
 
         user = info.context.user
@@ -854,7 +854,10 @@ class UpdateToolSecretsMutation(graphene.Mutation):
             ps = PipelineSettings.get_instance()
 
             if not merge:
-                # Replace mode: clear existing tool data first
+                # Replace mode: wipe all existing secrets AND settings for this
+                # tool key before writing the new values.  This guarantees that
+                # stale keys from a previous provider configuration do not
+                # linger in the encrypted store.
                 ps.delete_tool_settings(tool_key)
 
             # Apply settings and secrets
@@ -919,7 +922,7 @@ class DeleteToolSecretsMutation(graphene.Mutation):
     @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
     def mutate(root, info, tool_key):
         """Delete all settings and secrets for a tool."""
-        from opencontractserver.constants.web_search import TOOL_SETTINGS_PREFIX
+        from opencontractserver.constants.tools import TOOL_SETTINGS_PREFIX
         from opencontractserver.documents.models import PipelineSettings
 
         user = info.context.user

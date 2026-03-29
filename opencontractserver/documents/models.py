@@ -1377,7 +1377,7 @@ class PipelineSettings(django.db.models.Model):
             List of tool keys (those starting with ``tool:``) that have
             at least one secret value stored.
         """
-        from opencontractserver.constants.web_search import TOOL_SETTINGS_PREFIX
+        from opencontractserver.constants.tools import TOOL_SETTINGS_PREFIX
 
         all_secrets = self.get_secrets()
         return [

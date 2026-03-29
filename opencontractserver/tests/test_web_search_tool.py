@@ -215,19 +215,23 @@ class TestSearchResult:
 
 
 class TestRateLimiter:
-    @pytest.mark.asyncio
-    async def test_allows_within_limit(self):
-        limiter = _RateLimiter(max_per_minute=5)
-        for _ in range(5):
-            await limiter.acquire()
-        # Should not block or raise
+    def test_allows_within_limit(self):
+        async def _run():
+            limiter = _RateLimiter(max_per_minute=5)
+            for _ in range(5):
+                await limiter.acquire()
+            # Should not block or raise
 
-    @pytest.mark.asyncio
-    async def test_tracks_timestamps(self):
-        limiter = _RateLimiter(max_per_minute=3)
-        await limiter.acquire()
-        await limiter.acquire()
-        assert len(limiter._timestamps) == 2
+        asyncio.run(_run())
+
+    def test_tracks_timestamps(self):
+        async def _run():
+            limiter = _RateLimiter(max_per_minute=3)
+            await limiter.acquire()
+            await limiter.acquire()
+            assert len(limiter._timestamps) == 2
+
+        asyncio.run(_run())
 
 
 # ============================================================================
@@ -236,8 +240,7 @@ class TestRateLimiter:
 
 
 class TestBraveSearchProvider:
-    @pytest.mark.asyncio
-    async def test_brave_search_parses_response(self):
+    def test_brave_search_parses_response(self):
         from opencontractserver.llms.tools.web_search_tools import BraveSearchProvider
 
         mock_response = MagicMock()
@@ -259,16 +262,19 @@ class TestBraveSearchProvider:
 
         provider = BraveSearchProvider()
 
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client_cls.return_value = mock_client
+        async def _run():
+            with patch("httpx.AsyncClient") as mock_client_cls:
+                mock_client = AsyncMock()
+                mock_client.get = AsyncMock(return_value=mock_response)
+                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_client.__aexit__ = AsyncMock(return_value=None)
+                mock_client_cls.return_value = mock_client
 
-            results = await provider.search(
-                query="test", num_results=5, api_key="test-key"
-            )
+                return await provider.search(
+                    query="test", num_results=5, api_key="test-key"
+                )
+
+        results = asyncio.run(_run())
 
         assert len(results) == 1
         assert results[0].title == "Test Result"
@@ -279,8 +285,7 @@ class TestBraveSearchProvider:
 
 
 class TestTavilySearchProvider:
-    @pytest.mark.asyncio
-    async def test_tavily_search_parses_response(self):
+    def test_tavily_search_parses_response(self):
         from opencontractserver.llms.tools.web_search_tools import TavilySearchProvider
 
         mock_response = MagicMock()
@@ -299,16 +304,19 @@ class TestTavilySearchProvider:
 
         provider = TavilySearchProvider()
 
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post = AsyncMock(return_value=mock_response)
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=None)
-            mock_client_cls.return_value = mock_client
+        async def _run():
+            with patch("httpx.AsyncClient") as mock_client_cls:
+                mock_client = AsyncMock()
+                mock_client.post = AsyncMock(return_value=mock_response)
+                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_client.__aexit__ = AsyncMock(return_value=None)
+                mock_client_cls.return_value = mock_client
 
-            results = await provider.search(
-                query="test", num_results=5, api_key="test-key"
-            )
+                return await provider.search(
+                    query="test", num_results=5, api_key="test-key"
+                )
+
+        results = asyncio.run(_run())
 
         assert len(results) == 1
         assert results[0].title == "Tavily Result"
@@ -321,32 +329,34 @@ class TestTavilySearchProvider:
 
 
 class TestAwebSearch:
-    @pytest.mark.asyncio
-    async def test_empty_query(self):
-        result = await aweb_search(query="")
+    def test_empty_query(self):
+        result = asyncio.run(aweb_search(query=""))
         assert "Error" in result
         assert "empty" in result.lower()
 
-    @pytest.mark.asyncio
-    async def test_missing_api_key(self):
-        with patch(
-            "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
-            return_value={},
-        ):
-            result = await aweb_search(query="test query")
+    def test_missing_api_key(self):
+        async def _run():
+            with patch(
+                "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
+                return_value={},
+            ):
+                return await aweb_search(query="test query")
+
+        result = asyncio.run(_run())
         assert "not configured" in result.lower()
 
-    @pytest.mark.asyncio
-    async def test_unknown_provider(self):
-        with patch(
-            "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
-            return_value={"api_key": "key", "provider": "nonexistent"},
-        ):
-            result = await aweb_search(query="test query")
+    def test_unknown_provider(self):
+        async def _run():
+            with patch(
+                "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
+                return_value={"api_key": "key", "provider": "nonexistent"},
+            ):
+                return await aweb_search(query="test query")
+
+        result = asyncio.run(_run())
         assert "unknown search provider" in result.lower()
 
-    @pytest.mark.asyncio
-    async def test_successful_search(self):
+    def test_successful_search(self):
         mock_results = [
             SearchResult(
                 title="Result 1",
@@ -360,138 +370,148 @@ class TestAwebSearch:
             ),
         ]
 
-        with patch(
-            "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
-            return_value={"api_key": "test-key", "provider": BRAVE_PROVIDER},
-        ), patch(
-            "opencontractserver.llms.tools.web_search_tools._get_limiter"
-        ) as mock_limiter_fn, patch.object(
-            type(
-                __import__(
-                    "opencontractserver.llms.tools.web_search_tools",
-                    fromlist=["_PROVIDERS"],
-                )._PROVIDERS[BRAVE_PROVIDER]
-            ),
-            "search",
-            new_callable=AsyncMock,
-            return_value=mock_results,
-        ):
-            mock_limiter = MagicMock()
-            mock_limiter.acquire = AsyncMock()
-            mock_limiter_fn.return_value = mock_limiter
+        async def _run():
+            with patch(
+                "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
+                return_value={"api_key": "test-key", "provider": BRAVE_PROVIDER},
+            ), patch(
+                "opencontractserver.llms.tools.web_search_tools._get_limiter"
+            ) as mock_limiter_fn, patch.object(
+                type(
+                    __import__(
+                        "opencontractserver.llms.tools.web_search_tools",
+                        fromlist=["_PROVIDERS"],
+                    )._PROVIDERS[BRAVE_PROVIDER]
+                ),
+                "search",
+                new_callable=AsyncMock,
+                return_value=mock_results,
+            ):
+                mock_limiter = MagicMock()
+                mock_limiter.acquire = AsyncMock()
+                mock_limiter_fn.return_value = mock_limiter
 
-            result = await aweb_search(query="test query", num_results=2)
+                return await aweb_search(query="test query", num_results=2)
 
+        result = asyncio.run(_run())
         assert "Result 1" in result
         assert "Result 2" in result
         assert "https://example.com/1" in result
 
-    @pytest.mark.asyncio
-    async def test_provider_error_handled(self):
-        with patch(
-            "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
-            return_value={"api_key": "test-key", "provider": BRAVE_PROVIDER},
-        ), patch(
-            "opencontractserver.llms.tools.web_search_tools._get_limiter"
-        ) as mock_limiter_fn, patch.object(
-            type(
-                __import__(
-                    "opencontractserver.llms.tools.web_search_tools",
-                    fromlist=["_PROVIDERS"],
-                )._PROVIDERS[BRAVE_PROVIDER]
-            ),
-            "search",
-            new_callable=AsyncMock,
-            side_effect=ConnectionError("network error"),
-        ):
-            mock_limiter = MagicMock()
-            mock_limiter.acquire = AsyncMock()
-            mock_limiter_fn.return_value = mock_limiter
+    def test_provider_error_handled(self):
+        async def _run():
+            with patch(
+                "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
+                return_value={"api_key": "test-key", "provider": BRAVE_PROVIDER},
+            ), patch(
+                "opencontractserver.llms.tools.web_search_tools._get_limiter"
+            ) as mock_limiter_fn, patch.object(
+                type(
+                    __import__(
+                        "opencontractserver.llms.tools.web_search_tools",
+                        fromlist=["_PROVIDERS"],
+                    )._PROVIDERS[BRAVE_PROVIDER]
+                ),
+                "search",
+                new_callable=AsyncMock,
+                side_effect=ConnectionError("network error"),
+            ):
+                mock_limiter = MagicMock()
+                mock_limiter.acquire = AsyncMock()
+                mock_limiter_fn.return_value = mock_limiter
 
-            result = await aweb_search(query="test")
+                return await aweb_search(query="test")
 
+        result = asyncio.run(_run())
         assert "Error" in result
         assert "ConnectionError" in result
 
-    @pytest.mark.asyncio
-    async def test_no_results(self):
-        with patch(
-            "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
-            return_value={"api_key": "test-key", "provider": BRAVE_PROVIDER},
-        ), patch(
-            "opencontractserver.llms.tools.web_search_tools._get_limiter"
-        ) as mock_limiter_fn, patch.object(
-            type(
-                __import__(
-                    "opencontractserver.llms.tools.web_search_tools",
-                    fromlist=["_PROVIDERS"],
-                )._PROVIDERS[BRAVE_PROVIDER]
-            ),
-            "search",
-            new_callable=AsyncMock,
-            return_value=[],
-        ):
-            mock_limiter = MagicMock()
-            mock_limiter.acquire = AsyncMock()
-            mock_limiter_fn.return_value = mock_limiter
+    def test_no_results(self):
+        async def _run():
+            with patch(
+                "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
+                return_value={"api_key": "test-key", "provider": BRAVE_PROVIDER},
+            ), patch(
+                "opencontractserver.llms.tools.web_search_tools._get_limiter"
+            ) as mock_limiter_fn, patch.object(
+                type(
+                    __import__(
+                        "opencontractserver.llms.tools.web_search_tools",
+                        fromlist=["_PROVIDERS"],
+                    )._PROVIDERS[BRAVE_PROVIDER]
+                ),
+                "search",
+                new_callable=AsyncMock,
+                return_value=[],
+            ):
+                mock_limiter = MagicMock()
+                mock_limiter.acquire = AsyncMock()
+                mock_limiter_fn.return_value = mock_limiter
 
-            result = await aweb_search(query="obscure query xyz")
+                return await aweb_search(query="obscure query xyz")
 
+        result = asyncio.run(_run())
         assert "No results" in result
 
-    @pytest.mark.asyncio
-    async def test_num_results_clamped(self):
+    def test_num_results_clamped(self):
         """num_results should be clamped to [1, MAX]."""
-        with patch(
-            "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
-            return_value={"api_key": "key", "provider": BRAVE_PROVIDER},
-        ), patch(
-            "opencontractserver.llms.tools.web_search_tools._get_limiter"
-        ) as mock_limiter_fn, patch.object(
-            type(
-                __import__(
-                    "opencontractserver.llms.tools.web_search_tools",
-                    fromlist=["_PROVIDERS"],
-                )._PROVIDERS[BRAVE_PROVIDER]
-            ),
-            "search",
-            new_callable=AsyncMock,
-            return_value=[],
-        ) as mock_search:
-            mock_limiter = MagicMock()
-            mock_limiter.acquire = AsyncMock()
-            mock_limiter_fn.return_value = mock_limiter
 
-            await aweb_search(query="test", num_results=100)
-            # num_results should be clamped to MAX
-            call_kwargs = mock_search.call_args
-            assert call_kwargs[1]["num_results"] <= 20
+        async def _run():
+            with patch(
+                "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
+                return_value={"api_key": "key", "provider": BRAVE_PROVIDER},
+            ), patch(
+                "opencontractserver.llms.tools.web_search_tools._get_limiter"
+            ) as mock_limiter_fn, patch.object(
+                type(
+                    __import__(
+                        "opencontractserver.llms.tools.web_search_tools",
+                        fromlist=["_PROVIDERS"],
+                    )._PROVIDERS[BRAVE_PROVIDER]
+                ),
+                "search",
+                new_callable=AsyncMock,
+                return_value=[],
+            ) as mock_search:
+                mock_limiter = MagicMock()
+                mock_limiter.acquire = AsyncMock()
+                mock_limiter_fn.return_value = mock_limiter
 
-    @pytest.mark.asyncio
-    async def test_invalid_search_type_defaults(self):
+                await aweb_search(query="test", num_results=100)
+                # num_results should be clamped to MAX
+                call_kwargs = mock_search.call_args
+                assert call_kwargs[1]["num_results"] <= 20
+
+        asyncio.run(_run())
+
+    def test_invalid_search_type_defaults(self):
         """Invalid search_type should default to 'general'."""
-        with patch(
-            "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
-            return_value={"api_key": "key", "provider": BRAVE_PROVIDER},
-        ), patch(
-            "opencontractserver.llms.tools.web_search_tools._get_limiter"
-        ) as mock_limiter_fn, patch.object(
-            type(
-                __import__(
-                    "opencontractserver.llms.tools.web_search_tools",
-                    fromlist=["_PROVIDERS"],
-                )._PROVIDERS[BRAVE_PROVIDER]
-            ),
-            "search",
-            new_callable=AsyncMock,
-            return_value=[],
-        ) as mock_search:
-            mock_limiter = MagicMock()
-            mock_limiter.acquire = AsyncMock()
-            mock_limiter_fn.return_value = mock_limiter
 
-            await aweb_search(query="test", search_type="invalid")
-            assert mock_search.call_args[1]["search_type"] == "general"
+        async def _run():
+            with patch(
+                "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
+                return_value={"api_key": "key", "provider": BRAVE_PROVIDER},
+            ), patch(
+                "opencontractserver.llms.tools.web_search_tools._get_limiter"
+            ) as mock_limiter_fn, patch.object(
+                type(
+                    __import__(
+                        "opencontractserver.llms.tools.web_search_tools",
+                        fromlist=["_PROVIDERS"],
+                    )._PROVIDERS[BRAVE_PROVIDER]
+                ),
+                "search",
+                new_callable=AsyncMock,
+                return_value=[],
+            ) as mock_search:
+                mock_limiter = MagicMock()
+                mock_limiter.acquire = AsyncMock()
+                mock_limiter_fn.return_value = mock_limiter
+
+                await aweb_search(query="test", search_type="invalid")
+                assert mock_search.call_args[1]["search_type"] == "general"
+
+        asyncio.run(_run())
 
 
 # ============================================================================

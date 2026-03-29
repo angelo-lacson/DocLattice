@@ -2,8 +2,10 @@
 Constants for the web search agent tool.
 
 Defines provider identifiers, rate limits, result formatting limits,
-and the settings key prefix used in PipelineSettings.
+and the web search settings key used in PipelineSettings.
 """
+
+from opencontractserver.constants.tools import TOOL_SETTINGS_PREFIX  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Provider identifiers
@@ -13,11 +15,8 @@ TAVILY_PROVIDER = "tavily"
 DEFAULT_WEB_SEARCH_PROVIDER = BRAVE_PROVIDER
 
 # ---------------------------------------------------------------------------
-# PipelineSettings key for tool secrets/settings
+# PipelineSettings key for web search tool secrets/settings
 # ---------------------------------------------------------------------------
-# Tool secrets are stored under a "tool:" namespace in PipelineSettings
-# encrypted_secrets to distinguish them from pipeline component secrets.
-TOOL_SETTINGS_PREFIX = "tool:"
 WEB_SEARCH_SETTINGS_KEY = f"{TOOL_SETTINGS_PREFIX}web_search"
 
 # ---------------------------------------------------------------------------

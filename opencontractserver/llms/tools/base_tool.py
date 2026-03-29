@@ -46,7 +46,7 @@ import dataclasses
 import logging
 from typing import Any, ClassVar
 
-from opencontractserver.constants.web_search import TOOL_SETTINGS_PREFIX
+from opencontractserver.constants.tools import TOOL_SETTINGS_PREFIX
 from opencontractserver.pipeline.base.settings_schema import (
     get_required_settings,
     get_secret_settings,
@@ -98,6 +98,13 @@ class BaseTool:
     @classmethod
     def get_settings(cls) -> dict[str, Any]:
         """Fetch merged settings + secrets from PipelineSettings DB.
+
+        **Sync-only**: This method performs synchronous ORM access via
+        ``PipelineSettings.get_instance()``.  It must only be called from
+        synchronous contexts (e.g. ``is_configured()`` during tool
+        resolution, or wrapped in ``sync_to_async`` for use inside async
+        tool functions).  Calling it directly from an async context will
+        raise ``SynchronousOnlyOperation``.
 
         Returns:
             Dict of all settings (non-sensitive merged with decrypted secrets).
