@@ -36,7 +36,6 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import transaction
 
-from opencontractserver.constants.document_processing import TEXT_MIMETYPES
 from opencontractserver.corpuses.models import Corpus, CorpusFolder
 from opencontractserver.documents.models import Document, DocumentPath
 
@@ -51,8 +50,10 @@ MIME_TO_EXTENSION = {
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
     "text/plain": ".txt",
-    "text/markdown": ".md",
 }
+
+# File types that are stored as txt_extract_file (plain text, no parsing needed)
+TEXT_MIMETYPES = {"text/plain", "application/txt"}
 
 
 def _create_content_file(

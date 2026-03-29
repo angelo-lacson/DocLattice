@@ -6,10 +6,6 @@ It MUST remain free of Django imports (models, apps, etc.) to avoid
 AppRegistryNotReady errors during settings loading.
 """
 
-# File types that are stored as txt_extract_file (plain text, no parsing needed).
-# Shared between versioning.py and corpus models.py — single source of truth.
-TEXT_MIMETYPES = {"text/plain", "text/markdown", "application/txt"}
-
 # Maximum file upload size in bytes (5 GB).
 # Used by Django's DATA_UPLOAD_MAX_MEMORY_SIZE setting.
 MAX_FILE_UPLOAD_SIZE_BYTES = 5_242_880_000
@@ -27,11 +23,6 @@ EMBEDDING_BATCH_SIZE = 100
 # Celery queue. Remaining annotations will be logged but not queued; re-running
 # the re-embed will pick up where it left off (idempotent via existing-embedding check).
 MAX_REEMBED_TASKS_PER_RUN = 500
-
-# Number of texts to send per HTTP request to the embedder's /embeddings/batch endpoint.
-# This is the API-level batch size, separate from EMBEDDING_BATCH_SIZE (task-level).
-# The embedder's 100-text truncation guard is a safety net; this is the operative control.
-EMBEDDING_API_BATCH_SIZE = 50
 
 # Maximum length for filename/title truncation when generating document paths
 MAX_FILENAME_LENGTH = 100

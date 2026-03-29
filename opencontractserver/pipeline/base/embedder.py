@@ -232,35 +232,3 @@ class BaseEmbedder(PipelineComponentBase, ABC):
             "Consider embedding text and image separately."
         )
         return None
-
-    def embed_texts_batch(
-        self, texts: list[str], **direct_kwargs
-    ) -> Optional[list[Optional[list[float]]]]:
-        """
-        Generate embeddings for multiple texts. Sequential fallback implementation.
-
-        Subclasses should override this for true batch API calls (e.g., POST to
-        /embeddings/batch). This default loops embed_text() and catches per-text
-        exceptions so the batch path works for any embedder.
-
-        Args:
-            texts: List of text strings to embed.
-            **direct_kwargs: Keyword arguments passed to embed_text().
-
-        Returns:
-            List of embedding vectors (one per text). Individual entries may be
-            None if that text failed. The outer list is always returned (never
-            None) so callers can distinguish per-text failure from total batch
-            failure.
-        """
-        results: list[Optional[list[float]]] = []
-        for text in texts:
-            try:
-                results.append(self.embed_text(text, **direct_kwargs))
-            except Exception as e:
-                logger.warning(
-                    f"{self.__class__.__name__}.embed_texts_batch: "
-                    f"embed_text() raised for one text: {e}"
-                )
-                results.append(None)
-        return results

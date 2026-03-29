@@ -157,13 +157,7 @@ class UploadDocument(graphene.Mutation):
             if kind is None:
 
                 if is_plaintext_content(file_bytes):
-                    # Detect markdown/CAML files by extension
-                    if filename and filename.lower().endswith(
-                        (".caml", ".md", ".markdown")
-                    ):
-                        kind = "text/markdown"
-                    else:
-                        kind = "text/plain"
+                    kind = "text/plain"
                 else:
                     return UploadDocument(
                         message="Unable to determine file type", ok=False, document=None
