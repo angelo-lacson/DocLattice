@@ -5,10 +5,16 @@
  * Uses the UploadDocument mutation to create/version the Readme.CAML document.
  * Preview pane renders the parsed CAML via CamlArticle renderer.
  */
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import { toast } from "react-toastify";
-import { BookOpen, Check, Eye, Edit, Save } from "lucide-react";
+import { BookOpen, Check, Eye, Edit, Save, Table2 } from "lucide-react";
 import styled from "styled-components";
 
 import { Modal } from "@os-legal/ui";
@@ -19,6 +25,7 @@ import {
   GET_CORPUS_ARTICLE,
   GetCorpusArticleInput,
   GetCorpusArticleOutput,
+  GET_EXTRACTS,
 } from "../../graphql/queries";
 import {
   UPLOAD_DOCUMENT,
@@ -28,6 +35,10 @@ import {
 import { parseCaml } from "@os-legal/caml";
 import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
 import { MarkdownMessageRenderer } from "../threads/MarkdownMessageRenderer";
+import { ExtractGridEmbed } from "../extracts/ExtractGridEmbed";
+
+/** Regex matching `[extract-grid:EXTRACT_ID]` markers in prose content. */
+const EXTRACT_GRID_MARKER_RE = /^\[extract-grid:([^\]]+)\]$/;
 
 // ---------------------------------------------------------------------------
 // Styled components
@@ -190,6 +201,68 @@ const UnsavedBadge = styled.span`
   color: ${OS_LEGAL_COLORS.warningText};
 `;
 
+const EditorToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid ${OS_LEGAL_COLORS.border};
+  background: ${OS_LEGAL_COLORS.surface};
+`;
+
+const ToolbarBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  font-size: 0.75rem;
+  cursor: pointer;
+  &:hover {
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+    color: ${OS_LEGAL_COLORS.textPrimary};
+  }
+`;
+
+const ExtractPickerDropdown = styled.div`
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  min-width: 280px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid ${OS_LEGAL_COLORS.border};
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+`;
+
+const ExtractPickerItem = styled.button`
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 0.8125rem;
+  color: ${OS_LEGAL_COLORS.textPrimary};
+  cursor: pointer;
+  &:hover {
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+  }
+`;
+
+const ExtractPickerEmpty = styled.div`
+  padding: 0.75rem;
+  font-size: 0.8125rem;
+  color: ${OS_LEGAL_COLORS.textMuted};
+  text-align: center;
+`;
+
 const CAML_TEMPLATE = `---
 version: "1.0"
 
@@ -291,6 +364,8 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
   const [hasChanges, setHasChanges] = useState(false);
   const [isNew, setIsNew] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [showExtractPicker, setShowExtractPicker] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Query for existing Readme.CAML
   const articleVars = useMemo<GetCorpusArticleInput>(
@@ -396,6 +471,49 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
     }
   }, [content, hasChanges, isNew, corpusId, uploadDocument, refetch, onUpdate]);
 
+  // Query for corpus extracts (for the insert toolbar)
+  const { data: extractsData } = useQuery(GET_EXTRACTS, {
+    variables: { corpusId, corpusAction_Isnull: true },
+    skip: !isOpen,
+  });
+
+  const corpusExtracts = useMemo(() => {
+    const edges = extractsData?.extracts?.edges ?? [];
+    return edges
+      .map((e: any) => e?.node)
+      .filter(Boolean)
+      .filter((e: any) => e.finished || e.fullDocumentList?.length > 0);
+  }, [extractsData]);
+
+  /** Insert `[extract-grid:ID]` marker as a prose block at the cursor. */
+  const handleInsertExtractGrid = useCallback(
+    (extractId: string) => {
+      setShowExtractPicker(false);
+      const marker = `\n::: prose\n[extract-grid:${extractId}]\n:::\n`;
+
+      const textarea = textareaRef.current;
+      if (textarea) {
+        const pos = textarea.selectionStart ?? content.length;
+        const before = content.slice(0, pos);
+        const after = content.slice(pos);
+        setContent(before + marker + after);
+      } else {
+        setContent((prev) => prev + marker);
+      }
+    },
+    [content]
+  );
+
+  // Custom markdown renderer for the editor preview
+  const renderMarkdownPreview = useCallback((md: string) => {
+    const trimmed = md.trim();
+    const match = EXTRACT_GRID_MARKER_RE.exec(trimmed);
+    if (match) {
+      return <ExtractGridEmbed extractId={match[1]} />;
+    }
+    return <MarkdownMessageRenderer content={md} />;
+  }, []);
+
   const handleClose = () => {
     if (hasChanges) {
       setShowCloseConfirm(true);
@@ -421,7 +539,37 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
               <Edit size={12} />
               CAML Source
             </PaneHeader>
+            <EditorToolbar>
+              <div style={{ position: "relative" }}>
+                <ToolbarBtn
+                  onClick={() => setShowExtractPicker((v) => !v)}
+                  title="Insert extract grid table"
+                >
+                  <Table2 size={12} />
+                  Insert Extract Grid
+                </ToolbarBtn>
+                {showExtractPicker && (
+                  <ExtractPickerDropdown>
+                    {corpusExtracts.length === 0 ? (
+                      <ExtractPickerEmpty>
+                        No extracts found for this corpus.
+                      </ExtractPickerEmpty>
+                    ) : (
+                      corpusExtracts.map((ext: any) => (
+                        <ExtractPickerItem
+                          key={ext.id}
+                          onClick={() => handleInsertExtractGrid(ext.id)}
+                        >
+                          {ext.name}
+                        </ExtractPickerItem>
+                      ))
+                    )}
+                  </ExtractPickerDropdown>
+                )}
+              </div>
+            </EditorToolbar>
             <EditorTextarea
+              ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Write your CAML article here..."
@@ -438,9 +586,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
               <CamlThemeProvider>
                 <CamlArticle
                   document={parsedDocument}
-                  renderMarkdown={(md) => (
-                    <MarkdownMessageRenderer content={md} />
-                  )}
+                  renderMarkdown={renderMarkdownPreview}
                 />
               </CamlThemeProvider>
             )}
