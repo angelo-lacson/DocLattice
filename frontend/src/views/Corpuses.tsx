@@ -2375,15 +2375,12 @@ export const Corpuses = () => {
             onOpenMobileMenu={() => setMobileSidebarOpen(true)}
             onSourceNavigate={handleSourceNavigate}
             isPowerUserMode={isPowerUserMode}
-            onModeToggle={
-              canUpdateCorpus
-                ? () =>
-                    updateModeParam(
-                      location,
-                      navigate,
-                      isPowerUserMode ? null : "power"
-                    )
-                : undefined
+            onModeToggle={() =>
+              updateModeParam(
+                location,
+                navigate,
+                isPowerUserMode ? null : "power"
+              )
             }
           />
         ),
