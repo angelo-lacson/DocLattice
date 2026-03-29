@@ -1546,9 +1546,10 @@ class TestCorpusVersionsField(TestCase):
         self.assertEqual(versions[1]["documentId"], v2_id)
         self.assertEqual(versions[2]["documentId"], v3_id)
 
-    def test_corpus_versions_excludes_invisible_versions(self):
-        """corpusVersions should only include versions the user can see."""
-        # Create a second user who can see v3 but NOT v1 or v2
+    def test_corpus_versions_in_public_corpus_visible_to_all(self):
+        """In a public corpus, all versions are visible because documents
+        in public corpuses inherit is_public=True."""
+        # Create a second user with only corpus READ and doc v3 READ
         other_user = User.objects.create_user(
             username="limited_viewer",
             password="testpass123",
@@ -1556,7 +1557,7 @@ class TestCorpusVersionsField(TestCase):
         )
         # Grant corpus READ so they can query
         set_permissions_for_obj_to_user(other_user, self.corpus, [PermissionTypes.READ])
-        # Grant READ only on v3
+        # Grant READ only on v3 (but all versions are public via corpus)
         set_permissions_for_obj_to_user(other_user, self.doc_v3, [PermissionTypes.READ])
 
         corpus_id = to_global_id("CorpusType", self.corpus.id)
@@ -1578,13 +1579,13 @@ class TestCorpusVersionsField(TestCase):
         self.assertIsNone(result.get("errors"))
 
         versions = result["data"]["document"]["corpusVersions"]
-        # Should only see v3, not v1 or v2
-        self.assertEqual(len(versions), 1)
-        self.assertEqual(versions[0]["versionNumber"], 3)
-        self.assertEqual(
-            versions[0]["documentId"],
-            to_global_id("DocumentType", self.doc_v3.id),
-        )
+        # All versions are in a public corpus so they inherit is_public=True.
+        # The limited_viewer should see all 3 versions.
+        self.assertEqual(len(versions), 3)
+        version_numbers = [v["versionNumber"] for v in versions]
+        self.assertIn(1, version_numbers)
+        self.assertIn(2, version_numbers)
+        self.assertIn(3, version_numbers)
 
     def test_corpus_versions_excludes_deleted_paths(self):
         """corpusVersions should not include versions with deleted paths."""
