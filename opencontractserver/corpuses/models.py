@@ -996,14 +996,20 @@ class Corpus(TreeNode):
     def document_count(self):
         """
         Get count of documents with active paths in this corpus.
+        Excludes CAML articles (text/markdown) so the count reflects
+        only user-uploaded documents.
 
         Returns:
             Integer count of active documents
         """
+        from opencontractserver.constants.document_processing import (
+            MARKDOWN_MIME_TYPE,
+        )
         from opencontractserver.documents.models import DocumentPath
 
         return (
             DocumentPath.objects.filter(corpus=self, is_current=True, is_deleted=False)
+            .exclude(document__file_type=MARKDOWN_MIME_TYPE)
             .values("document_id")
             .distinct()
             .count()

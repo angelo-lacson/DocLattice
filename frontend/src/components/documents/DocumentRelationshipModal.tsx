@@ -340,7 +340,7 @@ export const DocumentRelationshipModal: React.FC<
         limit: DOCUMENT_PICKER_SEARCH_LIMIT,
         annotateDocLabels: false,
         includeMetadata: false,
-        includeCaml: true,
+        includeCaml: false,
       },
       skip: !open || !corpusId,
       fetchPolicy: "cache-and-network",

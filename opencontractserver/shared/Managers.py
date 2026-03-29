@@ -270,9 +270,56 @@ class DocumentManager(BaseVisibilityManager):
     def get_queryset(self):
         return DocumentQuerySet(self.model, using=self._db)
 
-    def visible_to_user(self, user=None, **kwargs) -> QuerySet:
-        """Delegate to DocumentQuerySet which includes public-corpus logic."""
-        return self.get_queryset().visible_to_user(user, **kwargs)
+    def visible_to_user(self, user=None, lightweight=False) -> QuerySet:
+        """
+        Delegate permission filtering to DocumentQuerySet (which includes
+        public-corpus logic) then apply the same prefetch optimisation as
+        BaseVisibilityManager.
+        """
+        from django.contrib.auth.models import AnonymousUser
+        from django.db.models import Prefetch
+
+        if user is None:
+            user = AnonymousUser()
+
+        queryset = self.get_queryset().visible_to_user(user)
+        queryset = queryset.select_related("creator", "user_lock")
+
+        if not lightweight:
+            from opencontractserver.annotations.models import Annotation
+
+            queryset = queryset.prefetch_related(
+                Prefetch(
+                    "doc_annotations",
+                    queryset=Annotation.objects.select_related(
+                        "annotation_label", "corpus", "analysis", "creator"
+                    ),
+                    to_attr="_prefetched_doc_annotations",
+                ),
+                "rows",
+                "source_relationships",
+                "target_relationships",
+                "notes",
+            )
+
+            if user and not user.is_anonymous and not user.is_superuser:
+                from opencontractserver.documents.models import (
+                    DocumentUserObjectPermission,
+                )
+
+                queryset = queryset.prefetch_related(
+                    Prefetch(
+                        "documentuserobjectpermission_set",
+                        queryset=DocumentUserObjectPermission.objects.filter(
+                            user_id=user.id
+                        ).select_related("permission"),
+                        to_attr="_prefetched_user_perms",
+                    ),
+                    "documentgroupobjectpermission_set__permission",
+                    "documentgroupobjectpermission_set__group",
+                )
+
+        return queryset
 
     def search_by_embedding(self, query_vector, embedder_path, top_k=10):
         """

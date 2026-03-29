@@ -36,6 +36,7 @@ def _corpus_count_subqueries():
     from django.db.models import Count, OuterRef
 
     from opencontractserver.annotations.models import Annotation
+    from opencontractserver.constants.document_processing import MARKDOWN_MIME_TYPE
     from opencontractserver.documents.models import DocumentPath
 
     document_count_sq = (
@@ -44,6 +45,7 @@ def _corpus_count_subqueries():
             is_current=True,
             is_deleted=False,
         )
+        .exclude(document__file_type=MARKDOWN_MIME_TYPE)
         .values("corpus_id")
         .annotate(count=Count("document_id", distinct=True))
         .values("count")
