@@ -32,6 +32,7 @@ class ToolCategory(str, Enum):
     COORDINATION = "coordination"
     MODERATION = "moderation"
     IMAGE = "image"
+    WEB = "web"
 
 
 @dataclass(frozen=True)
@@ -111,6 +112,31 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
                 "search_strings",
                 "List of exact strings to find (all occurrences will be found)",
                 True,
+            ),
+        ),
+    ),
+    # -------------------------------------------------------------------------
+    # WEB TOOLS
+    # -------------------------------------------------------------------------
+    ToolDefinition(
+        name="web_search",
+        description=(
+            "Search the web for information. Useful for finding recent information, "
+            "verifying facts, or researching topics not covered in the loaded "
+            "documents. Returns titles, URLs, and content snippets."
+        ),
+        category=ToolCategory.WEB,
+        parameters=(
+            ("query", "The search query. Be specific for better results.", True),
+            (
+                "num_results",
+                "Number of results to return (1-20, default 5)",
+                False,
+            ),
+            (
+                "search_type",
+                'Type of search: "general" (default), "news", or "research"',
+                False,
             ),
         ),
     ),
@@ -779,6 +805,9 @@ class ToolFunctionRegistry:
             aunlock_thread,
             aunpin_thread,
         )
+        from opencontractserver.llms.tools.web_search_tools import (
+            aweb_search,
+        )
 
         # canonical_name -> (async_func, aliases)
         FUNCTION_MAP: dict[str, tuple[Callable, tuple[str, ...]]] = {
@@ -838,6 +867,8 @@ class ToolFunctionRegistry:
             "unpin_thread": (aunpin_thread, ()),
             # Utility tools
             "create_markdown_link": (acreate_markdown_link, ()),
+            # Web tools
+            "web_search": (aweb_search, ("search_web",)),
         }
         # NOTE: similarity_search, get_document_text_length, list_documents,
         # and ask_document are NOT in FUNCTION_MAP because they require

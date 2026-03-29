@@ -1307,6 +1307,86 @@ class PipelineSettings(django.db.models.Model):
         return settings
 
     # =====================================================================
+    # Tool Settings & Secrets
+    # =====================================================================
+    # Agent tools (web search, etc.) store configuration and secrets using
+    # the same encrypted_secrets infrastructure as pipeline components.
+    # Tool keys are namespaced with "tool:" prefix to avoid collisions.
+
+    def get_tool_settings(self, tool_key: str) -> dict:
+        """
+        Get merged settings + secrets for an agent tool.
+
+        Tool settings are stored in two places:
+          - ``component_settings[tool_key]`` for non-sensitive config
+          - ``encrypted_secrets[tool_key]`` for API keys / tokens
+
+        Args:
+            tool_key: Tool identifier, e.g. ``"tool:web_search"``.
+
+        Returns:
+            Dict of all settings (non-sensitive merged with secrets).
+        """
+        settings = dict(self.get_component_settings(tool_key))
+        secrets = self.get_component_secrets(tool_key)
+        settings.update(secrets)
+        return settings
+
+    def update_tool_settings(
+        self, tool_key: str, settings: dict, secrets: dict | None = None
+    ) -> None:
+        """
+        Update non-sensitive settings and optionally secrets for a tool.
+
+        Args:
+            tool_key: Tool identifier, e.g. ``"tool:web_search"``.
+            settings: Non-sensitive settings to store/merge.
+            secrets: Sensitive values (API keys) to encrypt and store.
+        """
+        # Merge non-sensitive settings
+        if settings:
+            current = self.component_settings or {}
+            if tool_key not in current:
+                current[tool_key] = {}
+            current[tool_key].update(settings)
+            self.component_settings = current
+
+        # Merge secrets
+        if secrets:
+            self.update_secrets(tool_key, secrets)
+
+    def delete_tool_settings(self, tool_key: str) -> None:
+        """
+        Remove all settings and secrets for a tool.
+
+        Args:
+            tool_key: Tool identifier, e.g. ``"tool:web_search"``.
+        """
+        # Remove non-sensitive settings
+        if self.component_settings and tool_key in self.component_settings:
+            del self.component_settings[tool_key]
+
+        # Remove secrets
+        self.delete_component_secrets(tool_key)
+
+    def get_tools_with_secrets(self) -> list[str]:
+        """
+        Return tool keys that have secrets configured.
+
+        Returns:
+            List of tool keys (those starting with ``tool:``) that have
+            at least one secret value stored.
+        """
+        from opencontractserver.constants.web_search import TOOL_SETTINGS_PREFIX
+
+        all_secrets = self.get_secrets()
+        return [
+            key
+            for key in all_secrets
+            if key.startswith(TOOL_SETTINGS_PREFIX) and all_secrets[key]
+        ]
+
+    # =====================================================================
     # Component Schema and Validation Methods
     # =====================================================================
 
