@@ -153,6 +153,9 @@ export const POPOVER_Z_INDEX = 100002;
 export const Z_INDEX = {
   /** In-page loading overlays (position: absolute within a relative parent) */
   OVERLAY: 10,
+  /** Document header — establishes stacking context above content when backdrop-filter is active.
+   *  Does not spatially overlap the sidebar (flex column layout), so 50 < sidebar's 90 is fine. */
+  HEADER: 50,
   /** Standard dropdown overlays (pickers, menus) */
   DROPDOWN: 100,
   /** Modal-level overlays (dialogs, full-screen) */

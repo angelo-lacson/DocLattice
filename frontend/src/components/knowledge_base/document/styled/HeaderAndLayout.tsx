@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import { Z_INDEX } from "../../../../assets/configurations/constants";
 import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
 
 export const HeaderContainer = styled.div`
@@ -10,6 +11,7 @@ export const HeaderContainer = styled.div`
   border-bottom: 1px solid rgba(231, 234, 237, 0.7);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
   position: relative;
+  z-index: ${Z_INDEX.HEADER};
   display: flex;
   align-items: center;
   justify-content: space-between;

@@ -6,6 +6,7 @@ from celery.utils.log import get_task_logger
 from django.contrib.auth import get_user_model
 
 from doclatticeserver.annotations.models import Annotation, Note
+from doclatticeserver.constants.document_processing import EMBEDDING_API_BATCH_SIZE
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.pipeline.base.embedder import BaseEmbedder
@@ -588,10 +589,6 @@ def calculate_embeddings_for_annotation_batch(
 
         # Batch-embed text-only annotations
         if text_only:
-            from doclatticeserver.constants.document_processing import (
-                EMBEDDING_API_BATCH_SIZE,
-            )
-
             _batch_embed_text_annotations(
                 text_only, embedder, embedder_path, EMBEDDING_API_BATCH_SIZE, result
             )
