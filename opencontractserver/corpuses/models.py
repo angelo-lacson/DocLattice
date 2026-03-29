@@ -17,6 +17,7 @@ from tree_queries.models import TreeNode
 
 from opencontractserver.constants.document_processing import (
     DEFAULT_DOCUMENT_PATH_PREFIX,
+    MARKDOWN_MIME_TYPE,
     MAX_FILENAME_LENGTH,
     MAX_PROCESSING_ERROR_LENGTH,
     MAX_PROCESSING_TRACEBACK_LENGTH,
@@ -986,10 +987,6 @@ class Corpus(TreeNode):
 
         qs = Document.objects.filter(id__in=active_doc_ids).distinct()
         if not include_caml:
-            from opencontractserver.constants.document_processing import (
-                MARKDOWN_MIME_TYPE,
-            )
-
             qs = qs.exclude(file_type=MARKDOWN_MIME_TYPE)
         return qs
 
@@ -1002,9 +999,6 @@ class Corpus(TreeNode):
         Returns:
             Integer count of active documents
         """
-        from opencontractserver.constants.document_processing import (
-            MARKDOWN_MIME_TYPE,
-        )
         from opencontractserver.documents.models import DocumentPath
 
         return (
