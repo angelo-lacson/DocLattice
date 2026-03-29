@@ -145,9 +145,10 @@ class ComprehensivePermissionTestCase(TestCase):
         result = self.owner_client.execute(query, variable_values=variables)
         self.assertEqual(len(result["data"]["corpus"]["documents"]["edges"]), 2)
 
-        # Test for regular user
+        # Test for regular user — all documents in a public corpus are visible
+        # (public-corpus visibility relaxation for CAML/readme support)
         result = self.regular_client.execute(query, variable_values=variables)
-        self.assertEqual(len(result["data"]["corpus"]["documents"]["edges"]), 1)
+        self.assertEqual(len(result["data"]["corpus"]["documents"]["edges"]), 2)
 
     def test_nested_annotation_visibility(self):
         query = """
