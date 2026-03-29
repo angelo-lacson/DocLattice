@@ -19,15 +19,8 @@ import {
 } from "../../../graphql/queries";
 import { CorpusType } from "../../../types/graphql-api";
 import { parseCaml } from "@os-legal/caml";
-import type { CamlDocument, CamlCorpusIcon } from "@os-legal/caml";
-import {
-  CamlArticle,
-  CamlThemeProvider,
-  CorpusIconContainer,
-  CorpusIconImage,
-  CorpusIconCaption,
-  CorpusIconPlaceholder,
-} from "@os-legal/caml-react";
+import type { CamlDocument } from "@os-legal/caml";
+import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
 import { MarkdownMessageRenderer } from "../../threads/MarkdownMessageRenderer";
 import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants";
 import { ArticleDocumentsDrawer } from "./ArticleDocumentsDrawer";
@@ -268,30 +261,14 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
     );
   }
 
-  const handleRenderCorpusIcon = useCallback(
-    (block: CamlCorpusIcon) => {
-      const iconUrl = corpus.icon;
-      return (
-        <CorpusIconContainer>
-          {iconUrl ? (
-            <CorpusIconImage
-              src={iconUrl}
-              alt={block.caption || corpus.title || "Corpus icon"}
-              $size={block.size}
-              $shape={block.shape}
-            />
-          ) : (
-            <CorpusIconPlaceholder $size={block.size} $shape={block.shape}>
-              {"\u{1F4C4}"}
-            </CorpusIconPlaceholder>
-          )}
-          {block.caption && (
-            <CorpusIconCaption>{block.caption}</CorpusIconCaption>
-          )}
-        </CorpusIconContainer>
-      );
+  const resolveImageSrc = useCallback(
+    (src: string): string | undefined => {
+      if (src === "corpus://current" || src === "corpus://icon") {
+        return corpus.icon || undefined;
+      }
+      return undefined;
     },
-    [corpus.icon, corpus.title]
+    [corpus.icon]
   );
 
   if (!parsedDocument) {
@@ -346,7 +323,7 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
           document={parsedDocument}
           stats={stats}
           renderMarkdown={(md) => <MarkdownMessageRenderer content={md} />}
-          renderCorpusIcon={handleRenderCorpusIcon}
+          resolveImageSrc={resolveImageSrc}
         />
       </CamlThemeProvider>
     </ArticleViewContainer>

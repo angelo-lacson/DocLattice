@@ -222,13 +222,16 @@ export const SAMPLE_CAML_DOCUMENT: CamlDocument = {
       title: "Corpus Branding",
       blocks: [
         {
-          type: "corpus-icon" as const,
+          type: "image" as const,
+          src: "corpus://current",
           size: "lg" as const,
           shape: "avatar" as const,
           caption: "Supply Chain Agreements",
         },
         {
-          type: "corpus-icon" as const,
+          type: "image" as const,
+          src: "https://example.com/logo.png",
+          alt: "Partner logo",
           size: "sm" as const,
           shape: "rounded" as const,
         },
