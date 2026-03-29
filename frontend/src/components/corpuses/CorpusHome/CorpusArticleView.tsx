@@ -23,6 +23,7 @@ import type { CamlDocument } from "@os-legal/caml";
 import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
 import { MarkdownMessageRenderer } from "../../threads/MarkdownMessageRenderer";
 import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants";
+import { CamlCitationResolver } from "../caml/CamlCitationResolver";
 import { ArticleDocumentsDrawer } from "./ArticleDocumentsDrawer";
 
 // ---------------------------------------------------------------------------
@@ -308,13 +309,11 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
         />
       )}
 
-      <CamlThemeProvider>
-        <CamlArticle
-          document={parsedDocument}
-          stats={stats}
-          renderMarkdown={(md) => <MarkdownMessageRenderer content={md} />}
-        />
-      </CamlThemeProvider>
+      <CamlCitationResolver
+        document={parsedDocument}
+        corpusId={corpus.id}
+        stats={stats}
+      />
     </ArticleViewContainer>
   );
 };
