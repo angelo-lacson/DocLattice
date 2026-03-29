@@ -272,7 +272,7 @@ class DocumentManager(BaseVisibilityManager):
 
     def visible_to_user(self, user=None, **kwargs) -> QuerySet:
         """Delegate to DocumentQuerySet which includes public-corpus logic."""
-        return self.get_queryset().visible_to_user(user)
+        return self.get_queryset().visible_to_user(user, **kwargs)
 
     def search_by_embedding(self, query_vector, embedder_path, top_k=10):
         """

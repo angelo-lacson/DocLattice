@@ -1893,6 +1893,7 @@ export const Corpuses = () => {
               annotateDocLabels: true,
               includeMetadata: true,
               inCorpusWithId: opened_corpus_id,
+              includeCaml: true,
             }
           : { annotateDocLabels: false, includeMetadata: false }),
         ...(filter_to_label_id ? { hasLabelWithId: filter_to_label_id } : {}),
@@ -2424,7 +2425,7 @@ export const Corpuses = () => {
                   <CorpusDocumentCards
                     opened_corpus_id={opened_corpus_id}
                     viewMode={documentsViewMode}
-                    onCreateArticle={() => setShowArticleEditor(true)}
+                    onOpenArticleEditor={() => setShowArticleEditor(true)}
                     canUpdate={canUpdateCorpus}
                   />
                 </FolderDocumentBrowser>
