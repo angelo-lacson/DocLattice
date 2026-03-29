@@ -22,7 +22,7 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from doclatticeserver.constants.web_search import (
@@ -38,10 +38,55 @@ from doclatticeserver.constants.web_search import (
     WEB_SEARCH_MAX_TOTAL_CHARS,
     WEB_SEARCH_RATE_LIMIT_PER_MINUTE,
     WEB_SEARCH_REQUEST_TIMEOUT_SECONDS,
-    WEB_SEARCH_SETTINGS_KEY,
+)
+from doclatticeserver.llms.tools.base_tool import BaseTool
+from doclatticeserver.pipeline.base.settings_schema import (
+    PipelineSetting,
+    SettingType,
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# WebSearchTool — BaseTool subclass with Settings schema
+# ============================================================================
+
+
+class WebSearchTool(BaseTool):
+    """Web search tool configuration and enablement gate.
+
+    Agents check ``WebSearchTool.is_configured()`` at resolution time.
+    If the required ``api_key`` secret is missing the tool is silently
+    skipped, just like a pipeline component without credentials.
+    """
+
+    tool_key = "web_search"
+
+    @dataclass
+    class Settings:
+        api_key: str = field(
+            default="",
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.SECRET,
+                    required=True,
+                    description="API key for the search provider (Brave or Tavily).",
+                    env_var="WEB_SEARCH_API_KEY",
+                )
+            },
+        )
+        provider: str = field(
+            default=DEFAULT_WEB_SEARCH_PROVIDER,
+            metadata={
+                "pipeline_setting": PipelineSetting(
+                    setting_type=SettingType.OPTIONAL,
+                    description=(
+                        f"Search provider: '{BRAVE_PROVIDER}' or '{TAVILY_PROVIDER}'."
+                    ),
+                )
+            },
+        )
 
 
 # ============================================================================
@@ -91,21 +136,29 @@ class _RateLimiter:
         self._lock = asyncio.Lock()
 
     async def acquire(self) -> None:
-        """Block until a request slot is available."""
-        async with self._lock:
-            now = time.monotonic()
-            # Evict timestamps older than 60 s
-            cutoff = now - 60.0
-            self._timestamps = [t for t in self._timestamps if t > cutoff]
+        """Block until a request slot is available.
 
-            if len(self._timestamps) >= self._max:
-                # Wait until the oldest slot expires
+        The lock is released before sleeping so that other coroutines are
+        not blocked while this one waits for a rate-limit slot to open.
+        """
+        while True:
+            async with self._lock:
+                now = time.monotonic()
+                # Evict timestamps older than 60 s
+                cutoff = now - 60.0
+                self._timestamps = [t for t in self._timestamps if t > cutoff]
+
+                if len(self._timestamps) < self._max:
+                    # Slot available — record this request and return
+                    self._timestamps.append(time.monotonic())
+                    return
+
+                # Calculate how long to wait for the oldest slot to expire
                 wait = 60.0 - (now - self._timestamps[0])
-                if wait > 0:
-                    await asyncio.sleep(wait)
-                self._timestamps.pop(0)
 
-            self._timestamps.append(time.monotonic())
+            # Sleep *outside* the lock so other coroutines can proceed
+            if wait > 0:
+                await asyncio.sleep(wait)
 
 
 # One limiter per provider, lazily created
@@ -113,9 +166,7 @@ _limiters: dict[str, _RateLimiter] = {}
 
 
 def _get_limiter(provider: str) -> _RateLimiter:
-    if provider not in _limiters:
-        _limiters[provider] = _RateLimiter()
-    return _limiters[provider]
+    return _limiters.setdefault(provider, _RateLimiter())
 
 
 # ============================================================================
@@ -228,7 +279,6 @@ class TavilySearchProvider(SearchProvider):
             resp = await client.post(
                 TAVILY_SEARCH_ENDPOINT,
                 json=payload,
-                timeout=timeout,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -270,10 +320,7 @@ def _get_web_search_settings() -> dict[str, Any]:
       - ``api_key``: The API key for the configured provider
       - ``provider``: Provider identifier (``brave`` or ``tavily``)
     """
-    from doclatticeserver.documents.models import PipelineSettings
-
-    ps = PipelineSettings.get_instance()
-    return ps.get_tool_settings(WEB_SEARCH_SETTINGS_KEY)
+    return WebSearchTool.get_settings()
 
 
 # ============================================================================
@@ -321,7 +368,7 @@ async def aweb_search(
         return (
             "Error: web search is not configured. An administrator must set "
             "the API key via Pipeline Settings > Tool Secrets (key: "
-            f"'{WEB_SEARCH_SETTINGS_KEY}')."
+            f"'{WebSearchTool.full_settings_key()}')."
         )
 
     provider_name = settings.get("provider", DEFAULT_WEB_SEARCH_PROVIDER)
