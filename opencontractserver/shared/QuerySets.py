@@ -210,8 +210,22 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
         if hasattr(user, "is_superuser") and user.is_superuser:
             return self.all()
 
+        # Documents in a public corpus are readable by everyone (including
+        # anonymous users).  This mirrors the permissioning guide rule:
+        #   "Document AND corpus must both be is_public=True for access"
+        # but also covers documents that inherit visibility purely from
+        # their corpus (e.g. Readme.CAML files that aren't individually
+        # marked is_public).
+        from opencontractserver.documents.models import DocumentPath
+
+        in_public_corpus_ids = DocumentPath.objects.filter(
+            corpus__is_public=True, is_current=True, is_deleted=False
+        ).values_list("document_id", flat=True)
+
         if user.is_anonymous:
-            return self.filter(is_public=True).distinct()
+            return self.filter(
+                Q(is_public=True) | Q(id__in=in_public_corpus_ids)
+            ).distinct()
 
         # Query guardian permission table directly for performance
         from django.apps import apps
@@ -225,10 +239,17 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
             ).values_list("content_object_id", flat=True)
 
             return self.filter(
-                Q(creator=user) | Q(is_public=True) | Q(id__in=permitted_ids)
+                Q(creator=user)
+                | Q(is_public=True)
+                | Q(id__in=permitted_ids)
+                | Q(id__in=in_public_corpus_ids)
             ).distinct()
         except LookupError:
-            return self.filter(Q(creator=user) | Q(is_public=True)).distinct()
+            return self.filter(
+                Q(creator=user)
+                | Q(is_public=True)
+                | Q(id__in=in_public_corpus_ids)
+            ).distinct()
 
 
 class AnnotationQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
