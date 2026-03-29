@@ -19,6 +19,7 @@ DEFAULT_TEMPLATE_NAMES = [
     "Document Summary Generator",
     "Key Terms Annotator",
     "Document Notes Generator",
+    "CAML Article Writer",
 ]
 
 User = get_user_model()
@@ -212,7 +213,7 @@ class DefaultTemplatesMigrationTest(TestCase):
         _create_default_action_templates(apps, None)
 
     def test_default_templates_exist(self):
-        """All 5 default templates should exist after migration."""
+        """All default templates should exist after migration."""
         for name in self.EXPECTED_NAMES:
             self.assertTrue(
                 CorpusActionTemplate.objects.filter(name=name).exists(),
@@ -235,12 +236,22 @@ class DefaultTemplatesMigrationTest(TestCase):
 
     def test_default_templates_are_active_and_enabled_on_clone(self):
         """Default templates should be active (used for new corpuses)
-        and cloned actions should start enabled."""
+        and cloned actions should start enabled, except opt-out templates."""
+        DISABLED_ON_CLONE = {"CAML Article Writer"}
         for template in CorpusActionTemplate.objects.filter(
             name__in=self.EXPECTED_NAMES
         ):
             self.assertTrue(template.is_active)
-            self.assertFalse(template.disabled_on_clone)
+            if template.name in DISABLED_ON_CLONE:
+                self.assertTrue(
+                    template.disabled_on_clone,
+                    f"'{template.name}' should be disabled on clone",
+                )
+            else:
+                self.assertFalse(
+                    template.disabled_on_clone,
+                    f"'{template.name}' should be enabled on clone",
+                )
 
     def test_default_templates_all_add_document_trigger(self):
         """All default templates should trigger on ADD_DOCUMENT."""
