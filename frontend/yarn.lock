@@ -1282,14 +1282,14 @@
     "@nodelib/fs.scandir" "2.1.5"
     fastq "^1.6.0"
 
-"@os-legal/caml-react@^0.0.1":
-  version "0.0.1"
-  resolved "https://registry.yarnpkg.com/@os-legal/caml-react/-/caml-react-0.0.1.tgz#ac34ed632462ab6f216fa5d7967da4ed51f9d654"
-  integrity sha512-BHgahn9cvsXs197iQt3a0qMk/zpcA9PuJ5W6pF4303115TWTKiXqr7ocW3OHaVv97oipXg6EMdrMQiRjES8YKA==
+"@os-legal/caml-react@^0.0.2":
+  version "0.0.2"
+  resolved "https://registry.yarnpkg.com/@os-legal/caml-react/-/caml-react-0.0.2.tgz#a5a6698b7d264d73b7f5b1a2037c1f361fb877b5"
+  integrity sha512-TMmZPqSQ6sAxO1WqUhZ/zA46qNRq+nLoDyqu+vTjOpZZ8gdZXmSHKC4DkYAh7bkgrUCpEd0gH6iRGIXsyxrwpQ==
   dependencies:
-    "@os-legal/caml" "workspace:*"
+    "@os-legal/caml" "^0.0.1"
 
-"@os-legal/caml@^0.0.1", "@os-legal/caml@workspace:*":
+"@os-legal/caml@^0.0.1":
   version "0.0.1"
   resolved "https://registry.yarnpkg.com/@os-legal/caml/-/caml-0.0.1.tgz#e3fc3005bee4ea6f07a162c01a1eba0119162b4b"
   integrity sha512-vfDUYndR/AtOVnoNhd0uc49NWz90WjPZfZpaDw0C4XFChdWTVnjANp9HlSQOlkw6taQ1sjWVMuPH+tzkEuLPNQ==
