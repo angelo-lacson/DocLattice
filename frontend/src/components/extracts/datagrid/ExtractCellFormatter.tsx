@@ -198,6 +198,15 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
     }
   }, [cellRef]);
 
+  // Clear pending mouse-leave timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (mouseLeaveTimeoutRef.current) {
+        clearTimeout(mouseLeaveTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Close popup on outside click or Escape key
   useEffect(() => {
     if (!isPopupOpen) {
