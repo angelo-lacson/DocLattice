@@ -694,6 +694,11 @@ def extract_thumbnail(self, doc_id: int) -> None:
 
     file_type: str = document.file_type
 
+    # CAML/markdown files have no visual content to thumbnail.
+    if file_type == MARKDOWN_MIME_TYPE:
+        logger.info(f"[extract_thumbnail] Skipping thumbnail for markdown doc {doc_id}")
+        return
+
     # Check for preferred thumbnailer in database settings first
     from opencontractserver.documents.models import PipelineSettings
 
