@@ -294,6 +294,22 @@ output, no preamble, no commentary.
 - Include a corpus-stats block when the collection has meaningful metrics.
 """
 
+# Tools for the CAML Article Writer — every tool is also pre-authorized.
+# Extracted to a single list so it isn't duplicated in the template dict.
+_CAML_ARTICLE_TOOLS = [
+    "list_documents",
+    "ask_document",
+    "load_document_text",
+    "get_document_text_length",
+    "load_document_summary",
+    "get_document_description",
+    "get_document_summary",
+    "get_corpus_description",
+    "update_corpus_description",
+    "similarity_search",
+    "get_document_notes",
+]
+
 TEMPLATES = [
     {
         "name": "Document Description Updater",
@@ -451,32 +467,8 @@ TEMPLATES = [
         "sort_order": 60,
         "disabled_on_clone": True,
         "system_instructions": _CAML_ARTICLE_SYSTEM_INSTRUCTIONS,
-        "tools": [
-            "list_documents",
-            "ask_document",
-            "load_document_text",
-            "get_document_text_length",
-            "load_document_summary",
-            "get_document_description",
-            "get_document_summary",
-            "get_corpus_description",
-            "update_corpus_description",
-            "similarity_search",
-            "get_document_notes",
-        ],
-        "pre_authorized": [
-            "list_documents",
-            "ask_document",
-            "load_document_text",
-            "get_document_text_length",
-            "load_document_summary",
-            "get_document_description",
-            "get_document_summary",
-            "get_corpus_description",
-            "update_corpus_description",
-            "similarity_search",
-            "get_document_notes",
-        ],
+        "tools": _CAML_ARTICLE_TOOLS,
+        "pre_authorized": _CAML_ARTICLE_TOOLS,
         "instructions": (
             "A new document was added to this corpus. Research the entire "
             "collection and produce (or update) a beautiful CAML article "

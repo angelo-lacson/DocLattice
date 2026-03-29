@@ -9,6 +9,9 @@ from opencontractserver.corpuses.models import (
     CorpusActionTrigger,
 )
 from opencontractserver.corpuses.template_seeds import (
+    _CAML_ARTICLE_SYSTEM_INSTRUCTIONS,
+)
+from opencontractserver.corpuses.template_seeds import (
     create_default_action_templates as _create_default_action_templates,
 )
 
@@ -269,6 +272,14 @@ class DefaultTemplatesMigrationTest(TestCase):
                 len(template.pre_authorized_tools) > 0,
                 f"Template '{template.name}' has no pre-authorized tools",
             )
+
+    def test_caml_article_writer_uses_custom_system_instructions(self):
+        """CAML Article Writer agent config must use the dedicated CAML prompt."""
+        template = CorpusActionTemplate.objects.get(name="CAML Article Writer")
+        self.assertEqual(
+            template.agent_config.system_instructions,
+            _CAML_ARTICLE_SYSTEM_INSTRUCTIONS,
+        )
 
     def test_seeding_is_idempotent(self):
         """Calling create_default_action_templates twice doesn't duplicate records."""
