@@ -1,6 +1,7 @@
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 import {
   OS_LEGAL_COLORS,
+  OS_LEGAL_SPACING,
   OS_LEGAL_TYPOGRAPHY,
 } from "../../assets/configurations/osLegalStyles";
 import {
@@ -42,13 +43,23 @@ import {
   isPostHogConfigured,
 } from "../../utils/analytics";
 
+const sansFont = css`
+  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+`;
+
+const ModalHeaderTitle = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
 const StyledModalWrapper = styled.div`
   .oc-modal-overlay {
     z-index: 2000;
   }
 
   .oc-modal {
-    max-width: 560px;
+    max-width: ${OS_LEGAL_SPACING.subtitleMaxWidth};
   }
 
   .oc-modal-header {
@@ -57,6 +68,8 @@ const StyledModalWrapper = styled.div`
 
   .oc-modal-body {
     padding: 1.25rem 1.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
   }
 
   .oc-modal-footer {
@@ -74,7 +87,7 @@ const DemoBanner = styled.div`
   padding: 0.75rem 1rem;
   background: ${OS_LEGAL_COLORS.warningSurface};
   border: 1px solid ${OS_LEGAL_COLORS.warningBorder};
-  border-radius: 8px;
+  border-radius: ${OS_LEGAL_SPACING.borderRadiusButton};
   margin-bottom: 1rem;
 
   svg {
@@ -88,7 +101,7 @@ const DemoBannerText = styled.p`
   font-size: 0.8125rem;
   line-height: 1.45;
   color: ${OS_LEGAL_COLORS.warningText};
-  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+  ${sansFont}
 `;
 
 const Section = styled.div`
@@ -109,7 +122,7 @@ const SectionLabel = styled.h4`
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: ${OS_LEGAL_COLORS.textTertiary};
-  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+  ${sansFont}
 
   svg {
     flex-shrink: 0;
@@ -122,7 +135,7 @@ const SectionBody = styled.p`
   font-size: 0.875rem;
   line-height: 1.55;
   color: ${OS_LEGAL_COLORS.textSecondary};
-  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+  ${sansFont}
 `;
 
 const DataList = styled.ul`
@@ -143,7 +156,7 @@ const DataListItem = styled.li`
   color: ${OS_LEGAL_COLORS.textSecondary};
   background: ${OS_LEGAL_COLORS.surfaceLight};
   border-radius: 6px;
-  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+  ${sansFont}
 
   svg {
     flex-shrink: 0;
@@ -155,16 +168,16 @@ const Disclaimer = styled.p`
   margin: 0;
   font-size: 0.75rem;
   line-height: 1.5;
-  color: ${OS_LEGAL_COLORS.textMuted};
-  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  ${sansFont}
 `;
 
 const AnalyticsNote = styled.p`
   margin: 0.5rem 0 0;
   font-size: 0.75rem;
   line-height: 1.45;
-  color: ${OS_LEGAL_COLORS.textMuted};
-  font-family: ${OS_LEGAL_TYPOGRAPHY.fontFamilySans};
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  ${sansFont}
 `;
 
 export const CookieConsentDialog = () => {
@@ -219,16 +232,10 @@ export const CookieConsentDialog = () => {
       <Modal open onClose={() => {}}>
         <ModalHeader
           title={
-            <span
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-            >
+            <ModalHeaderTitle>
               <Cookie size={20} style={{ color: OS_LEGAL_COLORS.accent }} />
               Cookie Policy &amp; Terms
-            </span>
+            </ModalHeaderTitle>
           }
         />
         <ModalBody>
@@ -318,7 +325,8 @@ export const CookieConsentDialog = () => {
               </DataList>
               <AnalyticsNote>
                 Analytics data is used solely to improve OpenContracts and is
-                never sold or shared with third parties.
+                never sold or shared with third parties. You can opt out at any
+                time through your browser settings or by using Do Not Track.
               </AnalyticsNote>
             </Section>
           )}
@@ -327,7 +335,11 @@ export const CookieConsentDialog = () => {
             THE SOFTWARE IS PROVIDED &ldquo;AS IS&rdquo;, WITHOUT WARRANTY OF
             ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
             WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-            NONINFRINGEMENT.
+            NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+            BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+            ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+            CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+            SOFTWARE.
           </Disclaimer>
         </ModalBody>
         <ModalFooter>
