@@ -445,7 +445,7 @@ TEMPLATES = [
         "description": (
             "Researches the document collection and produces a polished "
             "CAML article for the corpus home page, combining narrative "
-            "prose with rich data visualisations."
+            "prose with rich data visualizations."
         ),
         "trigger": _TRIGGER_ADD_DOCUMENT,
         "sort_order": 60,
@@ -542,16 +542,16 @@ def create_default_action_templates(apps, schema_editor):
         )
         return
 
+    default_system_instructions = (
+        "You are an automated document processing agent. "
+        "Execute the task described in your instructions precisely. "
+        "Use only the tools provided. Do not ask questions."
+    )
+
     for tmpl_def in TEMPLATES:
         # Idempotency: skip if this template already exists.
         if CorpusActionTemplate.objects.filter(name=tmpl_def["name"]).exists():
             continue
-
-        default_system_instructions = (
-            "You are an automated document processing agent. "
-            "Execute the task described in your instructions precisely. "
-            "Use only the tools provided. Do not ask questions."
-        )
 
         agent_config = AgentConfiguration.objects.create(
             name=f"{tmpl_def['name']} Agent",
