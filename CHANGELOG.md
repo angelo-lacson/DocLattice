@@ -9,10 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CAML Interactive Article System** (PR #1156): Full-stack support for corpus articles using CAML (Corpus Article Markup Language). Includes a two-pass parser (tokenizer + block parsers), typed intermediate representation, and composable renderer supporting hero sections, cards, pills, tabs, timelines, CTAs, signup blocks, corpus stats, and pullquotes. Backend adds `MarkdownParser` pipeline component (`opencontractserver/pipeline/parsers/oc_markdown_parser.py`) with `text/markdown` MIME type detection, `text_to_frontmatter` title filter on `DocumentFilter`, and centralized `TEXT_MIMETYPES` constant (`opencontractserver/constants/document_processing.py`). Frontend adds `CamlArticleEditor` modal with live preview, `CorpusArticleView` for rendered article display, and `CorpusLandingView` integration for article discovery. Comprehensive unit tests for parser and `safeHref` XSS guard (34 tests), plus Playwright component tests with `docScreenshot` captures for all block types.
 - **Batch embedding aggregation**: `_batch_embed_text_annotations()` helper in `opencontractserver/tasks/embeddings_task.py` aggregates text-only annotations into sub-batches and calls `embed_texts_batch()`, reducing HTTP requests from N to ceil(N/50). `EMBEDDING_API_BATCH_SIZE` constant (50) in `opencontractserver/constants/document_processing.py` controls API-level sub-batch size. `BaseEmbedder.embed_texts_batch()` in `opencontractserver/pipeline/base/embedder.py` provides sequential fallback for embedders without native batch support. `MicroserviceEmbedder.embed_texts_batch()` in `opencontractserver/pipeline/embedders/sent_transformer_microservice.py` calls `/embeddings/batch` endpoint.
+
+### Fixed
+
+- **CAML YAML parser nested key bug**: Fixed `parseYamlFrontmatter` in `frontend/src/caml/parser/tokenizer.ts` where `content` used `line.trimEnd()` instead of `line.trimEnd().trimStart()`, causing the key-value regex (`^[a-zA-Z_]...`) to fail for indented nested keys (e.g., `hero.kicker`). Nested frontmatter properties were silently dropped, producing empty objects.
 
 ### Changed
 
+- **Replaced hardcoded hex colors with OS_LEGAL_COLORS tokens** in `CamlArticleEditor.tsx` and `CorpusArticleView.tsx`: All hardcoded hex values (`#e2e8f0`, `#fafbfc`, `#f8fafc`, `#64748b`, `#94a3b8`, `#ffffff`, `#fef3c7`, `#92400e`, `#475569`, `#f1f5f9`, `#cbd5e1`) replaced with semantic design tokens from `osLegalStyles.ts`.
+- **Extracted `isExternalHref` helper** in `frontend/src/caml/renderer/safeHref.ts`: Deduplicated `href.startsWith("http")` checks across `CamlBlocks.tsx` and `CamlFooter.tsx` into a shared utility function.
+- **Removed redundant `articleStats` useMemo** in `CorpusArticleView.tsx`: The memo mirrored its input without transformation; `stats` is now passed directly to `CamlArticle`.
 - **Batch embedding task partitioning**: `calculate_embeddings_for_annotation_batch` in `opencontractserver/tasks/embeddings_task.py` now partitions annotations into text-only (batch path via `_batch_embed_text_annotations`) and multimodal (individual path) when `embedder_path` is provided. No changes to callers (`ensure_embeddings_for_corpus`, `reembed_corpus`).
 
 ### Fixed
