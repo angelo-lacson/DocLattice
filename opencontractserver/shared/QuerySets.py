@@ -210,17 +210,29 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
         if hasattr(user, "is_superuser") and user.is_superuser:
             return self.all()
 
-        # Documents in a public corpus are readable by everyone (including
-        # anonymous users), even when the document itself is not individually
-        # marked is_public=True.  This relaxes the original permissioning
-        # guide rule so that corpus members like Readme.CAML are visible to
-        # anonymous visitors without requiring per-document is_public flags.
+        # Markdown/CAML documents in a public corpus are readable by
+        # everyone (including anonymous users), even when the document
+        # itself is not individually marked is_public=True.  This allows
+        # corpus readme articles (Readme.CAML) to be visible to anonymous
+        # visitors without requiring per-document is_public flags.
+        #
+        # Scoped to MARKDOWN_MIME_TYPE only so that other document types
+        # in a public corpus still require their own is_public=True flag,
+        # preserving the original permissioning guide rule for non-CAML
+        # documents.
+        #
         # The subquery is lazy (evaluated as part of the final SQL), so
         # defining it here does not cause an extra query.
+        from opencontractserver.constants.document_processing import (
+            MARKDOWN_MIME_TYPE,
+        )
         from opencontractserver.documents.models import DocumentPath
 
         in_public_corpus_ids = DocumentPath.objects.filter(
-            corpus__is_public=True, is_current=True, is_deleted=False
+            corpus__is_public=True,
+            is_current=True,
+            is_deleted=False,
+            document__file_type=MARKDOWN_MIME_TYPE,
         ).values_list("document_id", flat=True)
 
         if user.is_anonymous:

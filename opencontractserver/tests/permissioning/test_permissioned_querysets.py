@@ -145,10 +145,10 @@ class ComprehensivePermissionTestCase(TestCase):
         result = self.owner_client.execute(query, variable_values=variables)
         self.assertEqual(len(result["data"]["corpus"]["documents"]["edges"]), 2)
 
-        # Test for regular user — all documents in a public corpus are visible
-        # (public-corpus visibility relaxation for CAML/readme support)
+        # Test for regular user — only public docs and markdown/CAML docs in
+        # a public corpus are visible (non-markdown private docs remain hidden)
         result = self.regular_client.execute(query, variable_values=variables)
-        self.assertEqual(len(result["data"]["corpus"]["documents"]["edges"]), 2)
+        self.assertEqual(len(result["data"]["corpus"]["documents"]["edges"]), 1)
 
     def test_nested_annotation_visibility(self):
         query = """
@@ -293,23 +293,47 @@ class ComprehensivePermissionTestCase(TestCase):
 
 
 class PublicCorpusDocumentVisibilityTest(TestCase):
-    """Tests for the public-corpus document visibility relaxation."""
+    """Tests for the public-corpus markdown document visibility relaxation.
+
+    Only markdown/CAML documents in public corpora are visible to users
+    without explicit document permissions. Non-markdown documents still
+    require their own is_public=True flag.
+    """
 
     def setUp(self):
+        from opencontractserver.constants.document_processing import (
+            MARKDOWN_MIME_TYPE,
+        )
+
         self.owner = User.objects.create_user(username="pc_owner", password="password")
         self.viewer = User.objects.create_user(
             username="pc_viewer", password="password"
         )
 
-        # Public corpus with a non-public document
+        # Public corpus with documents of different types
         self.public_corpus = Corpus.objects.create(
             title="Public Corpus", creator=self.owner, is_public=True
         )
-        self.non_public_doc = Document.objects.create(
-            title="Non-Public Doc", creator=self.owner, is_public=False
+
+        # Non-public PDF document (should NOT be visible via relaxation)
+        self.non_public_pdf = Document.objects.create(
+            title="Non-Public PDF",
+            creator=self.owner,
+            is_public=False,
         )
-        self.non_public_doc, _, _ = self.public_corpus.add_document(
-            document=self.non_public_doc, user=self.owner
+        self.non_public_pdf, _, _ = self.public_corpus.add_document(
+            document=self.non_public_pdf, user=self.owner
+        )
+
+        # Non-public markdown/CAML document (SHOULD be visible via relaxation)
+        self.non_public_caml = Document.objects.create(
+            title="Readme.CAML",
+            creator=self.owner,
+            is_public=False,
+            file_type=MARKDOWN_MIME_TYPE,
+        )
+        self.non_public_caml, _, _ = self.public_corpus.add_document(
+            document=self.non_public_caml, user=self.owner
         )
 
         # Private corpus with a public document
@@ -323,16 +347,27 @@ class PublicCorpusDocumentVisibilityTest(TestCase):
             document=self.public_doc_in_private, user=self.owner
         )
 
-    def test_anonymous_sees_non_public_doc_in_public_corpus(self):
-        """Anonymous user can see a non-public doc via public corpus membership."""
+    def test_anonymous_sees_markdown_in_public_corpus(self):
+        """Anonymous user can see a non-public markdown doc via public corpus."""
         anon = AnonymousUser()
         visible = Document.objects.visible_to_user(anon, lightweight=True)
-        self.assertIn(self.non_public_doc.pk, visible.values_list("pk", flat=True))
+        self.assertIn(self.non_public_caml.pk, visible.values_list("pk", flat=True))
 
-    def test_authenticated_sees_non_public_doc_in_public_corpus(self):
-        """Authenticated user without explicit permission sees doc via public corpus."""
+    def test_anonymous_cannot_see_pdf_in_public_corpus(self):
+        """Anonymous user cannot see a non-public PDF in a public corpus."""
+        anon = AnonymousUser()
+        visible = Document.objects.visible_to_user(anon, lightweight=True)
+        self.assertNotIn(self.non_public_pdf.pk, visible.values_list("pk", flat=True))
+
+    def test_authenticated_sees_markdown_in_public_corpus(self):
+        """Authenticated user without explicit permission sees markdown doc."""
         visible = Document.objects.visible_to_user(self.viewer, lightweight=True)
-        self.assertIn(self.non_public_doc.pk, visible.values_list("pk", flat=True))
+        self.assertIn(self.non_public_caml.pk, visible.values_list("pk", flat=True))
+
+    def test_authenticated_cannot_see_pdf_in_public_corpus(self):
+        """Authenticated user without permission cannot see non-public PDF."""
+        visible = Document.objects.visible_to_user(self.viewer, lightweight=True)
+        self.assertNotIn(self.non_public_pdf.pk, visible.values_list("pk", flat=True))
 
     def test_public_doc_in_private_corpus_visible_via_is_public(self):
         """A public document in a private corpus is still visible (via is_public)."""
@@ -352,3 +387,22 @@ class PublicCorpusDocumentVisibilityTest(TestCase):
 
         visible = Document.objects.visible_to_user(self.viewer, lightweight=True)
         self.assertNotIn(non_public_in_private.pk, visible.values_list("pk", flat=True))
+
+    def test_markdown_in_private_corpus_not_visible(self):
+        """A non-public markdown doc in a private corpus is still hidden."""
+        from opencontractserver.constants.document_processing import (
+            MARKDOWN_MIME_TYPE,
+        )
+
+        caml_in_private = Document.objects.create(
+            title="Readme.CAML",
+            creator=self.owner,
+            is_public=False,
+            file_type=MARKDOWN_MIME_TYPE,
+        )
+        caml_in_private, _, _ = self.private_corpus.add_document(
+            document=caml_in_private, user=self.owner
+        )
+
+        visible = Document.objects.visible_to_user(self.viewer, lightweight=True)
+        self.assertNotIn(caml_in_private.pk, visible.values_list("pk", flat=True))
