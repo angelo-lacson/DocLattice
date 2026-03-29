@@ -277,6 +277,129 @@ class TestBatchTaskIntegration(TestCase):
                 individual_ann = mock_individual.call_args[0][0]
                 self.assertEqual(individual_ann.pk, image_ann.pk)
 
+    def test_multimodal_individual_returns_false(self):
+        """When _create_embedding_for_annotation returns False, annotation is recorded as failed."""
+        image_ann = self._make_annotation(
+            "Has image",
+            modalities=[ContentModality.TEXT.value, ContentModality.IMAGE.value],
+        )
+
+        multimodal_path = (
+            "opencontractserver.pipeline.embedders.test_embedder.TestMultimodalEmbedder"
+        )
+
+        with patch(
+            "opencontractserver.tasks.embeddings_task._create_embedding_for_annotation"
+        ) as mock_individual:
+            mock_individual.return_value = False
+
+            with patch(
+                "opencontractserver.tasks.embeddings_task._batch_embed_text_annotations"
+            ):
+                result = calculate_embeddings_for_annotation_batch(
+                    annotation_ids=[image_ann.pk],
+                    embedder_path=multimodal_path,
+                )
+
+                self.assertEqual(result["succeeded"], 0)
+                self.assertEqual(result["failed"], 1)
+                self.assertTrue(any("returned False" in e for e in result["errors"]))
+
+    def test_multimodal_individual_raises_exception(self):
+        """When _create_embedding_for_annotation raises, annotation is recorded as failed."""
+        image_ann = self._make_annotation(
+            "Has image",
+            modalities=[ContentModality.TEXT.value, ContentModality.IMAGE.value],
+        )
+
+        multimodal_path = (
+            "opencontractserver.pipeline.embedders.test_embedder.TestMultimodalEmbedder"
+        )
+
+        with patch(
+            "opencontractserver.tasks.embeddings_task._create_embedding_for_annotation"
+        ) as mock_individual:
+            mock_individual.side_effect = RuntimeError("Embedding service down")
+
+            with patch(
+                "opencontractserver.tasks.embeddings_task._batch_embed_text_annotations"
+            ):
+                result = calculate_embeddings_for_annotation_batch(
+                    annotation_ids=[image_ann.pk],
+                    embedder_path=multimodal_path,
+                )
+
+                self.assertEqual(result["succeeded"], 0)
+                self.assertEqual(result["failed"], 1)
+                self.assertTrue(
+                    any("Embedding service down" in e for e in result["errors"])
+                )
+
+    @patch("opencontractserver.tasks.embeddings_task._apply_dual_embedding_strategy")
+    def test_dual_embedding_exception_records_failure(self, mock_dual):
+        """When _apply_dual_embedding_strategy raises, annotation is recorded as failed."""
+        ann = self._make_annotation("Test text")
+        mock_dual.side_effect = RuntimeError("Dual strategy failed")
+
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[ann.pk],
+            corpus_id=123,
+        )
+
+        self.assertEqual(result["succeeded"], 0)
+        self.assertEqual(result["failed"], 1)
+        self.assertTrue(any("Dual strategy failed" in e for e in result["errors"]))
+
+    def test_batch_embed_add_embedding_returns_none(self):
+        """When add_embedding returns None, annotation is recorded as failed."""
+        annotations = [self._make_annotation("Test text")]
+        result = {
+            "total": 1,
+            "succeeded": 0,
+            "failed": 0,
+            "skipped": 0,
+            "errors": [],
+        }
+
+        mock_embedder = MagicMock()
+        mock_embedder.embed_texts_batch.return_value = [[0.1] * 384]
+
+        with patch.object(annotations[0], "add_embedding", return_value=None):
+            _batch_embed_text_annotations(
+                annotations, mock_embedder, TEST_EMBEDDER_PATH, 50, result
+            )
+
+        self.assertEqual(result["succeeded"], 0)
+        self.assertEqual(result["failed"], 1)
+        self.assertTrue(
+            any("add_embedding returned None" in e for e in result["errors"])
+        )
+
+    def test_batch_embed_add_embedding_raises(self):
+        """When add_embedding raises, annotation is recorded as failed."""
+        annotations = [self._make_annotation("Test text")]
+        result = {
+            "total": 1,
+            "succeeded": 0,
+            "failed": 0,
+            "skipped": 0,
+            "errors": [],
+        }
+
+        mock_embedder = MagicMock()
+        mock_embedder.embed_texts_batch.return_value = [[0.1] * 384]
+
+        with patch.object(
+            annotations[0], "add_embedding", side_effect=Exception("DB error")
+        ):
+            _batch_embed_text_annotations(
+                annotations, mock_embedder, TEST_EMBEDDER_PATH, 50, result
+            )
+
+        self.assertEqual(result["succeeded"], 0)
+        self.assertEqual(result["failed"], 1)
+        self.assertTrue(any("add_embedding error" in e for e in result["errors"]))
+
 
 class TestBaseEmbedderSequentialFallback(TestCase):
     """Test that BaseEmbedder.embed_texts_batch() sequential fallback works."""
