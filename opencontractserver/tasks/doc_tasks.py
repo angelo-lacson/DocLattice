@@ -21,6 +21,7 @@ from opencontractserver.constants import (
     MAX_PROCESSING_ERROR_LENGTH,
     MAX_PROCESSING_TRACEBACK_LENGTH,
 )
+from opencontractserver.constants.document_processing import MARKDOWN_MIME_TYPE
 from opencontractserver.constants.truncation import (
     MAX_DOC_TITLE_FALLBACK_LENGTH,
     MAX_NOTIFICATION_ERROR_LENGTH,
@@ -346,7 +347,7 @@ def ingest_doc(self, user_id: int, doc_id: int) -> dict[str, Any]:
 
     # CAML/markdown files are rendered client-side and never parsed.
     # Mark as complete immediately so the pipeline doesn't touch them.
-    if document.file_type == "text/markdown":
+    if document.file_type == MARKDOWN_MIME_TYPE:
         document.processing_status = DocumentProcessingStatus.COMPLETE
         document.save(update_fields=["processing_status"])
         logger.info(

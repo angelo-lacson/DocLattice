@@ -211,18 +211,18 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
             return self.all()
 
         # Documents in a public corpus are readable by everyone (including
-        # anonymous users).  This mirrors the permissioning guide rule:
-        #   "Document AND corpus must both be is_public=True for access"
-        # but also covers documents that inherit visibility purely from
-        # their corpus (e.g. Readme.CAML files that aren't individually
-        # marked is_public).
+        # anonymous users), even when the document itself is not individually
+        # marked is_public=True.  This intentionally relaxes the original
+        # permissioning guide rule ("Document AND corpus must both be
+        # is_public=True") so that corpus members like Readme.CAML are
+        # visible to anonymous visitors without requiring per-document
+        # is_public flags.
         from opencontractserver.documents.models import DocumentPath
 
-        in_public_corpus_ids = DocumentPath.objects.filter(
-            corpus__is_public=True, is_current=True, is_deleted=False
-        ).values_list("document_id", flat=True)
-
         if user.is_anonymous:
+            in_public_corpus_ids = DocumentPath.objects.filter(
+                corpus__is_public=True, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
             return self.filter(
                 Q(is_public=True) | Q(id__in=in_public_corpus_ids)
             ).distinct()
@@ -238,6 +238,10 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
                 permission__codename="read_document", user_id=user.id
             ).values_list("content_object_id", flat=True)
 
+            in_public_corpus_ids = DocumentPath.objects.filter(
+                corpus__is_public=True, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+
             return self.filter(
                 Q(creator=user)
                 | Q(is_public=True)
@@ -245,10 +249,11 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
                 | Q(id__in=in_public_corpus_ids)
             ).distinct()
         except LookupError:
+            in_public_corpus_ids = DocumentPath.objects.filter(
+                corpus__is_public=True, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
             return self.filter(
-                Q(creator=user)
-                | Q(is_public=True)
-                | Q(id__in=in_public_corpus_ids)
+                Q(creator=user) | Q(is_public=True) | Q(id__in=in_public_corpus_ids)
             ).distinct()
 
 
