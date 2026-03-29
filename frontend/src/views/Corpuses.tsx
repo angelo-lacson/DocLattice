@@ -147,6 +147,7 @@ import { buildQueryParams } from "../utils/navigationUtils";
 import { toGlobalId } from "../utils/idValidation";
 import { CorpusHome } from "../components/corpuses/CorpusHome";
 import { CorpusDescriptionEditor } from "../components/corpuses/CorpusDescriptionEditor";
+import { CamlArticleEditor } from "../components/corpuses/CamlArticleEditor";
 import { CorpusDiscussionsView } from "../components/discussions/CorpusDiscussionsView";
 import { BadgeManagement } from "../components/badges/BadgeManagement";
 import { CorpusEngagementDashboard } from "../components/analytics/CorpusEngagementDashboard";
@@ -373,6 +374,7 @@ const CorpusQueryView = ({
   opened_corpus,
   opened_corpus_id,
   setShowDescriptionEditor,
+  setShowArticleEditor,
   onNavigate,
   onBack,
   canUpdate,
@@ -386,6 +388,7 @@ const CorpusQueryView = ({
   opened_corpus: CorpusType | null;
   opened_corpus_id: string | null;
   setShowDescriptionEditor: (show: boolean) => void;
+  setShowArticleEditor: (show: boolean) => void;
   onNavigate?: (tabIndex: number) => void;
   onBack?: () => void;
   canUpdate?: boolean;
@@ -394,6 +397,7 @@ const CorpusQueryView = ({
     totalAnnotations: number;
     totalAnalyses: number;
     totalExtracts: number;
+    totalThreads: number;
   };
   statsLoading: boolean;
   onOpenMobileMenu?: () => void;
@@ -571,6 +575,7 @@ const CorpusQueryView = ({
             <CorpusHome
               corpus={opened_corpus as CorpusType}
               onEditDescription={() => setShowDescriptionEditor(true)}
+              onEditArticle={() => setShowArticleEditor(true)}
               onNavigate={onNavigate}
               onBack={onBack}
               canUpdate={canUpdate}
@@ -1643,6 +1648,7 @@ export const Corpuses = () => {
   const urlTab = useReactiveVar(selectedTab);
   const [showDescriptionEditor, setShowDescriptionEditor] =
     useState<boolean>(false);
+  const [showArticleEditor, setShowArticleEditor] = useState<boolean>(false);
   const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(false); // Collapsed by default, opens on hover
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
 
@@ -2360,6 +2366,7 @@ export const Corpuses = () => {
             opened_corpus={opened_corpus}
             opened_corpus_id={opened_corpus_id}
             setShowDescriptionEditor={setShowDescriptionEditor}
+            setShowArticleEditor={setShowArticleEditor}
             onNavigate={(tabIndex) => setActiveTab(tabIndex)}
             onBack={() => navigate("/corpuses")}
             canUpdate={canUpdateCorpus}
@@ -2417,6 +2424,8 @@ export const Corpuses = () => {
                   <CorpusDocumentCards
                     opened_corpus_id={opened_corpus_id}
                     viewMode={documentsViewMode}
+                    onCreateArticle={() => setShowArticleEditor(true)}
+                    canUpdate={canUpdateCorpus}
                   />
                 </FolderDocumentBrowser>
               )}
@@ -2908,7 +2917,7 @@ export const Corpuses = () => {
             ))}
           </NavigationItems>
 
-          {/* Exit Power User Mode button */}
+          {/* Exit to Explore mode button */}
           <ExitPowerUserWrapper>
             <NavigationItem
               isActive={false}
@@ -2923,7 +2932,7 @@ export const Corpuses = () => {
             >
               <ArrowLeft />
               {(use_mobile_layout ? mobileSidebarOpen : sidebarExpanded) && (
-                <span style={{ flex: "1", textAlign: "left" }}>Focus Mode</span>
+                <span style={{ flex: "1", textAlign: "left" }}>Explore</span>
               )}
             </NavigationItem>
           </ExitPowerUserWrapper>
@@ -2983,6 +2992,16 @@ export const Corpuses = () => {
                 }
                 refetchStats(); // Refresh stats after description update
                 setShowDescriptionEditor(false);
+              }}
+            />
+          )}
+          {opened_corpus && showArticleEditor && (
+            <CamlArticleEditor
+              corpusId={opened_corpus.id}
+              isOpen={showArticleEditor}
+              onClose={() => setShowArticleEditor(false)}
+              onUpdate={() => {
+                refetchStats();
               }}
             />
           )}

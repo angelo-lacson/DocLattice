@@ -20,6 +20,10 @@ export const MENTION_SEARCH_MIN_CHARS = 2;
 // Used for truncating annotation text in mention chips and pickers
 export const MENTION_PREVIEW_LENGTH = 24;
 
+// CAML article configuration
+// The conventional document title for corpus articles (like GitHub's README)
+export const CAML_ARTICLE_FILENAME = "Readme.CAML";
+
 // Label/UI colors
 // Default neutral gray color (Tailwind slate-400) used for inactive/placeholder states
 export const DEFAULT_LABEL_COLOR = "94a3b8";
