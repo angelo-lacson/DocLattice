@@ -83,12 +83,6 @@ class TestEmbedder(BaseEmbedder):
         )
         return vector
 
-    def embed_texts_batch(
-        self, texts: list[str], **direct_kwargs
-    ) -> list[Optional[list[float]]]:
-        """Batch embed using deterministic _embed_text_impl for each text."""
-        return [self._embed_text_impl(text) for text in texts]
-
 
 class TestMultimodalEmbedder(BaseEmbedder):
     """
@@ -141,9 +135,3 @@ class TestMultimodalEmbedder(BaseEmbedder):
             vector.append(float_val)
 
         return vector
-
-    def embed_texts_batch(
-        self, texts: list[str], **direct_kwargs
-    ) -> list[Optional[list[float]]]:
-        """Batch embed using deterministic _embed_text_impl for each text."""
-        return [self._embed_text_impl(text) for text in texts]
