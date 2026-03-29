@@ -1388,12 +1388,12 @@ test.describe("Corpus - Power User Mode", () => {
     // Sidebar should NOT be visible (clean view)
     await expect(page.getByTestId("navigation-sidebar")).toBeHidden();
 
-    // Power User toggle should be visible (user has CAN_UPDATE)
-    // Toggle is a pill with "Focus" and "Power" labels
-    const toggle = page.getByTestId("power-user-toggle");
+    // Mode toggle should be visible (user has CAN_UPDATE)
+    // Toggle is a floating pill with "Explore" and "Manage" labels
+    const toggle = page.getByTestId("landing-mode-toggle");
     await expect(toggle).toBeVisible();
-    await expect(toggle).toContainText("Focus");
-    await expect(toggle).toContainText("Power");
+    await expect(toggle).toContainText("Explore");
+    await expect(toggle).toContainText("Manage");
 
     await docScreenshot(page, "corpus--landing--clean-view");
   });
@@ -1409,8 +1409,8 @@ test.describe("Corpus - Power User Mode", () => {
     const landing = page.getByTestId("corpus-home-landing");
     await expect(landing).toBeVisible({ timeout: 10000 });
 
-    // Power User toggle should NOT be visible (no CAN_UPDATE permission)
-    await expect(page.getByTestId("power-user-toggle")).toBeHidden();
+    // Mode toggle should NOT be visible (no CAN_UPDATE permission)
+    await expect(page.getByTestId("landing-mode-toggle")).toBeHidden();
   });
 
   test("should show sidebar and exit button in power user mode", async ({
@@ -1444,11 +1444,11 @@ test.describe("Corpus - Power User Mode", () => {
     await expect(page.getByTestId("navigation-sidebar")).not.toBeVisible({
       timeout: 10000,
     });
-    const powerToggle = page.getByTestId("power-user-toggle");
-    await expect(powerToggle).toBeVisible();
+    const modeToggle = page.getByTestId("landing-mode-toggle");
+    await expect(modeToggle).toBeVisible();
 
-    // Click Power User toggle - sidebar should appear
-    await powerToggle.click();
+    // Click Manage toggle - sidebar should appear
+    await modeToggle.click();
     await expect(page.getByTestId("navigation-sidebar")).toBeVisible({
       timeout: 10000,
     });
