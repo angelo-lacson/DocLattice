@@ -145,10 +145,10 @@ class ComprehensivePermissionTestCase(TestCase):
         result = self.owner_client.execute(query, variable_values=variables)
         self.assertEqual(len(result["data"]["corpus"]["documents"]["edges"]), 2)
 
-        # Test for regular user — only public docs and markdown/CAML docs in
-        # a public corpus are visible (non-markdown private docs remain hidden)
+        # Test for regular user — all docs in a public corpus inherit
+        # is_public=True, so the regular user sees both documents.
         result = self.regular_client.execute(query, variable_values=variables)
-        self.assertEqual(len(result["data"]["corpus"]["documents"]["edges"]), 1)
+        self.assertEqual(len(result["data"]["corpus"]["documents"]["edges"]), 2)
 
     def test_nested_annotation_visibility(self):
         query = """
@@ -293,11 +293,14 @@ class ComprehensivePermissionTestCase(TestCase):
 
 
 class PublicCorpusDocumentVisibilityTest(TestCase):
-    """Tests for the public-corpus markdown document visibility relaxation.
+    """Tests for public-corpus → document is_public propagation.
 
-    Only markdown/CAML documents in public corpora are visible to users
-    without explicit document permissions. Non-markdown documents still
-    require their own is_public=True flag.
+    Documents in public corpora automatically inherit is_public=True,
+    preserving the permissioning guide rule: both document AND corpus
+    must be is_public=True for anonymous access.  Propagation happens
+    at three points:
+      1. Corpus.add_document() / import_document() — on creation
+      2. Corpus.save() — when is_public changes
     """
 
     def setUp(self):
@@ -310,99 +313,171 @@ class PublicCorpusDocumentVisibilityTest(TestCase):
             username="pc_viewer", password="password"
         )
 
-        # Public corpus with documents of different types
+        # Public corpus — documents added here inherit is_public=True
         self.public_corpus = Corpus.objects.create(
             title="Public Corpus", creator=self.owner, is_public=True
         )
 
-        # Non-public PDF document (should NOT be visible via relaxation)
-        self.non_public_pdf = Document.objects.create(
-            title="Non-Public PDF",
-            creator=self.owner,
-            is_public=False,
+        # Source docs are created with is_public=False, but the corpus
+        # copies produced by add_document() inherit from the public corpus.
+        source_pdf = Document.objects.create(
+            title="PDF Doc", creator=self.owner, is_public=False
         )
-        self.non_public_pdf, _, _ = self.public_corpus.add_document(
-            document=self.non_public_pdf, user=self.owner
+        self.pdf_in_public, _, _ = self.public_corpus.add_document(
+            document=source_pdf, user=self.owner
         )
 
-        # Non-public markdown/CAML document (SHOULD be visible via relaxation)
-        self.non_public_caml = Document.objects.create(
+        source_caml = Document.objects.create(
             title="Readme.CAML",
             creator=self.owner,
             is_public=False,
             file_type=MARKDOWN_MIME_TYPE,
         )
-        self.non_public_caml, _, _ = self.public_corpus.add_document(
-            document=self.non_public_caml, user=self.owner
+        self.caml_in_public, _, _ = self.public_corpus.add_document(
+            document=source_caml, user=self.owner
         )
 
-        # Private corpus with a public document
+        # Private corpus — documents added here stay private
         self.private_corpus = Corpus.objects.create(
             title="Private Corpus", creator=self.owner, is_public=False
         )
-        self.public_doc_in_private = Document.objects.create(
+        source_public = Document.objects.create(
             title="Public Doc Private Corpus", creator=self.owner, is_public=True
         )
         self.public_doc_in_private, _, _ = self.private_corpus.add_document(
-            document=self.public_doc_in_private, user=self.owner
+            document=source_public, user=self.owner
         )
 
-    def test_anonymous_sees_markdown_in_public_corpus(self):
-        """Anonymous user can see a non-public markdown doc via public corpus."""
+    # -- Propagation on add_document --
+
+    def test_add_document_to_public_corpus_sets_is_public(self):
+        """Documents added to a public corpus get is_public=True."""
+        self.assertTrue(self.pdf_in_public.is_public)
+        self.assertTrue(self.caml_in_public.is_public)
+
+    def test_add_document_to_private_corpus_preserves_source_public(self):
+        """Public source doc keeps is_public=True when added to private corpus."""
+        self.assertTrue(self.public_doc_in_private.is_public)
+
+    def test_add_document_to_private_corpus_stays_private(self):
+        """Private source doc stays is_public=False in private corpus."""
+        source = Document.objects.create(
+            title="Hidden", creator=self.owner, is_public=False
+        )
+        copy, _, _ = self.private_corpus.add_document(document=source, user=self.owner)
+        self.assertFalse(copy.is_public)
+
+    # -- Anonymous visibility (via standard is_public filter) --
+
+    def test_anonymous_sees_all_docs_in_public_corpus(self):
+        """Anonymous user sees all docs in public corpus (both inherited public)."""
         anon = AnonymousUser()
-        visible = Document.objects.visible_to_user(anon, lightweight=True)
-        self.assertIn(self.non_public_caml.pk, visible.values_list("pk", flat=True))
+        visible_pks = set(
+            Document.objects.visible_to_user(anon, lightweight=True).values_list(
+                "pk", flat=True
+            )
+        )
+        self.assertIn(self.pdf_in_public.pk, visible_pks)
+        self.assertIn(self.caml_in_public.pk, visible_pks)
 
-    def test_anonymous_cannot_see_pdf_in_public_corpus(self):
-        """Anonymous user cannot see a non-public PDF in a public corpus."""
+    def test_anonymous_sees_public_doc_in_private_corpus(self):
+        """A public doc in a private corpus is visible via its own is_public."""
         anon = AnonymousUser()
-        visible = Document.objects.visible_to_user(anon, lightweight=True)
-        self.assertNotIn(self.non_public_pdf.pk, visible.values_list("pk", flat=True))
-
-    def test_authenticated_sees_markdown_in_public_corpus(self):
-        """Authenticated user without explicit permission sees markdown doc."""
-        visible = Document.objects.visible_to_user(self.viewer, lightweight=True)
-        self.assertIn(self.non_public_caml.pk, visible.values_list("pk", flat=True))
-
-    def test_authenticated_cannot_see_pdf_in_public_corpus(self):
-        """Authenticated user without permission cannot see non-public PDF."""
-        visible = Document.objects.visible_to_user(self.viewer, lightweight=True)
-        self.assertNotIn(self.non_public_pdf.pk, visible.values_list("pk", flat=True))
-
-    def test_public_doc_in_private_corpus_visible_via_is_public(self):
-        """A public document in a private corpus is still visible (via is_public)."""
-        visible = Document.objects.visible_to_user(self.viewer, lightweight=True)
-        self.assertIn(
-            self.public_doc_in_private.pk, visible.values_list("pk", flat=True)
+        visible_pks = set(
+            Document.objects.visible_to_user(anon, lightweight=True).values_list(
+                "pk", flat=True
+            )
         )
+        self.assertIn(self.public_doc_in_private.pk, visible_pks)
 
-    def test_non_public_doc_in_private_corpus_not_visible(self):
-        """A non-public document in a private corpus is hidden."""
-        non_public_in_private = Document.objects.create(
-            title="Hidden Doc", creator=self.owner, is_public=False
+    def test_anonymous_cannot_see_private_doc_in_private_corpus(self):
+        """Private doc in private corpus is hidden from anonymous users."""
+        source = Document.objects.create(
+            title="Hidden", creator=self.owner, is_public=False
         )
-        non_public_in_private, _, _ = self.private_corpus.add_document(
-            document=non_public_in_private, user=self.owner
+        copy, _, _ = self.private_corpus.add_document(document=source, user=self.owner)
+
+        anon = AnonymousUser()
+        visible_pks = set(
+            Document.objects.visible_to_user(anon, lightweight=True).values_list(
+                "pk", flat=True
+            )
         )
+        self.assertNotIn(copy.pk, visible_pks)
 
-        visible = Document.objects.visible_to_user(self.viewer, lightweight=True)
-        self.assertNotIn(non_public_in_private.pk, visible.values_list("pk", flat=True))
+    # -- Authenticated user without explicit permissions --
 
-    def test_markdown_in_private_corpus_not_visible(self):
-        """A non-public markdown doc in a private corpus is still hidden."""
-        from opencontractserver.constants.document_processing import (
-            MARKDOWN_MIME_TYPE,
+    def test_authenticated_sees_all_docs_in_public_corpus(self):
+        """Authenticated user without permissions sees public-corpus docs."""
+        visible_pks = set(
+            Document.objects.visible_to_user(self.viewer, lightweight=True).values_list(
+                "pk", flat=True
+            )
         )
+        self.assertIn(self.pdf_in_public.pk, visible_pks)
+        self.assertIn(self.caml_in_public.pk, visible_pks)
 
-        caml_in_private = Document.objects.create(
-            title="Readme.CAML",
+    # -- Corpus is_public change propagation --
+
+    def test_corpus_becomes_public_propagates_to_documents(self):
+        """When a corpus becomes public, all its documents become public."""
+        source = Document.objects.create(
+            title="Initially Private", creator=self.owner, is_public=False
+        )
+        copy, _, _ = self.private_corpus.add_document(document=source, user=self.owner)
+        self.assertFalse(copy.is_public)
+
+        self.private_corpus.is_public = True
+        self.private_corpus.save()
+
+        copy.refresh_from_db()
+        self.assertTrue(copy.is_public)
+
+    def test_corpus_becomes_private_revokes_public(self):
+        """When a corpus becomes private, docs not in another public corpus
+        lose is_public=True."""
+        # caml_in_public is only in self.public_corpus
+        self.assertTrue(self.caml_in_public.is_public)
+
+        self.public_corpus.is_public = False
+        self.public_corpus.save()
+
+        self.caml_in_public.refresh_from_db()
+        self.assertFalse(self.caml_in_public.is_public)
+
+    def test_corpus_becomes_private_preserves_multi_corpus_doc(self):
+        """When a corpus becomes private, docs still in another public corpus
+        keep is_public=True."""
+        # Create a second public corpus and add the same source doc
+        other_public = Corpus.objects.create(
+            title="Other Public", creator=self.owner, is_public=True
+        )
+        source = Document.objects.create(
+            title="Shared Doc", creator=self.owner, is_public=False
+        )
+        copy_in_first, _, _ = self.public_corpus.add_document(
+            document=source, user=self.owner
+        )
+        # Add the SAME corpus copy to the other public corpus by creating
+        # a DocumentPath pointing to it
+        from opencontractserver.documents.models import DocumentPath
+
+        DocumentPath.objects.create(
+            document=copy_in_first,
+            corpus=other_public,
+            path="/docs/shared",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
             creator=self.owner,
-            is_public=False,
-            file_type=MARKDOWN_MIME_TYPE,
-        )
-        caml_in_private, _, _ = self.private_corpus.add_document(
-            document=caml_in_private, user=self.owner
         )
 
-        visible = Document.objects.visible_to_user(self.viewer, lightweight=True)
-        self.assertNotIn(caml_in_private.pk, visible.values_list("pk", flat=True))
+        self.assertTrue(copy_in_first.is_public)
+
+        # Now make the first public corpus private
+        self.public_corpus.is_public = False
+        self.public_corpus.save()
+
+        copy_in_first.refresh_from_db()
+        # Still public because it's in other_public
+        self.assertTrue(copy_in_first.is_public)

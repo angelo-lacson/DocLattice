@@ -230,6 +230,9 @@ def import_document(
                 inherited_set = None
 
             # Create new document version (isolated within corpus)
+            # Documents in public corpora inherit is_public=True so that
+            # the permissioning guide rule (both flags must be True) is
+            # naturally satisfied without queryset-level overrides.
             new_doc = Document.objects.create(
                 title=doc_kwargs.get("title", old_doc.title),
                 description=doc_kwargs.get("description", old_doc.description),
@@ -240,6 +243,7 @@ def import_document(
                 version_tree_id=old_doc.version_tree_id,  # Same tree
                 parent=old_doc,
                 is_current=True,
+                is_public=corpus.is_public or old_doc.is_public,
                 structural_annotation_set=inherited_set,
                 creator=user,
                 **{
@@ -321,6 +325,9 @@ def import_document(
                     )
                 effective_txt_file = None
 
+            # Documents in public corpora inherit is_public=True so that
+            # the permissioning guide rule (both flags must be True) is
+            # naturally satisfied without queryset-level overrides.
             doc = Document.objects.create(
                 title=doc_kwargs.get("title", f"Document at {path}"),
                 description=doc_kwargs.get("description", ""),
@@ -330,6 +337,7 @@ def import_document(
                 pdf_file_hash=content_hash,
                 version_tree_id=tree_id,
                 is_current=True,
+                is_public=corpus.is_public,
                 parent=None,  # Root of content tree
                 source_document=None,  # Set via add_document() when dragging existing docs
                 creator=user,

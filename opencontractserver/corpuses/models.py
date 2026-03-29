@@ -460,7 +460,72 @@ class Corpus(TreeNode):
 
         self.modified = timezone.now()
 
-        return super().save(*args, **kwargs)
+        # Detect is_public changes so we can propagate to documents.
+        # Only check when updating an existing corpus and is_public might change.
+        _propagate_public = False
+        if self.pk:
+            update_fields = kwargs.get("update_fields")
+            if update_fields is None or "is_public" in update_fields:
+                old_is_public = (
+                    Corpus.objects.filter(pk=self.pk)
+                    .values_list("is_public", flat=True)
+                    .first()
+                )
+                if old_is_public is not None and old_is_public != self.is_public:
+                    _propagate_public = True
+
+        result = super().save(*args, **kwargs)
+
+        if _propagate_public:
+            self._propagate_public_status_to_documents()
+
+        return result
+
+    def _propagate_public_status_to_documents(self):
+        """Propagate this corpus's is_public flag to its documents.
+
+        When a corpus becomes public, all its documents become public.
+        When a corpus becomes private, documents are set private ONLY if
+        they are not in any other public corpus (preserving visibility
+        for documents shared across multiple corpora).
+
+        This maintains the permissioning guide's rule: both document AND
+        corpus must have is_public=True for anonymous access.
+        """
+        from opencontractserver.documents.models import Document, DocumentPath
+
+        doc_ids = list(
+            DocumentPath.objects.filter(
+                corpus=self, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+        )
+
+        if not doc_ids:
+            return
+
+        if self.is_public:
+            # Corpus became public → all its documents become public
+            Document.objects.filter(id__in=doc_ids, is_public=False).update(
+                is_public=True
+            )
+        else:
+            # Corpus became private → revoke public only for documents
+            # NOT in any other public corpus
+            in_other_public = set(
+                DocumentPath.objects.filter(
+                    document_id__in=doc_ids,
+                    corpus__is_public=True,
+                    is_current=True,
+                    is_deleted=False,
+                )
+                .exclude(corpus=self)
+                .values_list("document_id", flat=True)
+            )
+            revoke_ids = [d for d in doc_ids if d not in in_other_public]
+            if revoke_ids:
+                Document.objects.filter(id__in=revoke_ids, is_public=True).update(
+                    is_public=False
+                )
 
     def has_documents(self) -> bool:
         """Check whether this corpus has any active documents (via DocumentPath)."""
@@ -685,7 +750,8 @@ class Corpus(TreeNode):
                 md_summary_file=document.md_summary_file,
                 page_count=document.page_count,
                 custom_meta=document.custom_meta,  # Inherit custom metadata
-                is_public=document.is_public,  # Inherit public status
+                is_public=self.is_public
+                or document.is_public,  # Public corpus → public doc
                 version_tree_id=tree_id,  # NEW isolated version tree
                 is_current=True,
                 parent=None,  # Root of NEW content tree
