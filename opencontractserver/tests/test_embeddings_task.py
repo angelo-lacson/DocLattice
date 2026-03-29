@@ -1465,8 +1465,8 @@ class TestMicroserviceEmbedderBatchUnit(unittest.TestCase):
     @patch(
         "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
     )
-    def test_batch_nan_returns_none(self, mock_post):
-        """NaN in embeddings returns None."""
+    def test_batch_nan_per_element(self, mock_post):
+        """NaN rows return None per-element; valid rows are preserved."""
         embeddings_with_nan = [[0.1] * 383 + [float("nan")], [0.2] * 384]
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -1475,7 +1475,11 @@ class TestMicroserviceEmbedderBatchUnit(unittest.TestCase):
 
         result = self.embedder.embed_texts_batch(["a", "b"])
 
-        self.assertIsNone(result)
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result), 2)
+        self.assertIsNone(result[0])  # NaN row
+        self.assertIsNotNone(result[1])  # Valid row
+        self.assertEqual(len(result[1]), 384)
 
     @patch(
         "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"

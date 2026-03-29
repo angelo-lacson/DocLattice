@@ -156,7 +156,7 @@ class MicroserviceEmbedder(BaseEmbedder):
 
     def embed_texts_batch(
         self, texts: list[str], **direct_kwargs
-    ) -> Optional[list[list[float]]]:
+    ) -> Optional[list[Optional[list[float]]]]:
         """
         Generate embeddings for multiple texts in one request via /embeddings/batch.
 
@@ -165,7 +165,8 @@ class MicroserviceEmbedder(BaseEmbedder):
             **direct_kwargs: Additional kwargs that can override settings.
 
         Returns:
-            List of embedding vectors, or None on error (entire batch fails).
+            List of embedding vectors (individual entries may be None if that
+            text produced NaN), or None on total failure (network/server error).
         """
         if len(texts) > 100:
             logger.warning(f"Batch size {len(texts)} exceeds max 100. Truncating.")
@@ -205,12 +206,17 @@ class MicroserviceEmbedder(BaseEmbedder):
                 if embeddings_array.ndim == 3:
                     embeddings_array = embeddings_array.squeeze(axis=1)
                 if np.isnan(embeddings_array).any():
-                    nan_indices = np.where(np.isnan(embeddings_array).any(axis=1))[0]
+                    nan_mask = np.isnan(embeddings_array).any(axis=1)
+                    nan_indices = np.where(nan_mask)[0]
                     logger.error(
                         f"Batch embeddings contain NaN at indices: "
                         f"{nan_indices.tolist()}. Batch size: {len(texts)}"
                     )
-                    return None
+                    # Return per-element: None for NaN rows, valid vectors otherwise
+                    return [
+                        None if nan_mask[i] else row.tolist()
+                        for i, row in enumerate(embeddings_array)
+                    ]
                 return embeddings_array.tolist()
             elif 400 <= response.status_code < 500:
                 logger.error(
