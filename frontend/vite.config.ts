@@ -137,6 +137,12 @@ export default defineConfig({
     setupFiles: "./src/setupTests.ts",
     css: true,
     reporters: ["verbose"],
+    deps: {
+      // @os-legal/caml-react uses styled-components template literals in its
+      // ESM bundle. Vitest's jsdom environment needs these inlined so the
+      // styled-components CJS interop resolves correctly.
+      inline: ["@os-legal/caml-react"],
+    },
     // More specific include pattern
     include: ["src/**/*.test.{ts,tsx}"],
     // Explicitly exclude Playwright directories and node_modules

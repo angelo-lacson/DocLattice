@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { toast } from "react-toastify";
 import { useMutation, useQuery, useReactiveVar } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
@@ -38,18 +38,27 @@ import {
   RequestDocumentsInputs,
   RequestDocumentsOutputs,
   GET_DOCUMENTS,
+  GET_CORPUS_ARTICLE,
+  GetCorpusArticleInput,
+  GetCorpusArticleOutput,
 } from "../../graphql/queries";
+import { CreateArticlePlaceholder } from "./CreateArticlePlaceholder";
+import { CAML_ARTICLE_FILENAME } from "../../assets/configurations/constants";
 import { DocumentType } from "../../types/graphql-api";
 import { FileUploadPackageProps } from "../widgets/modals/DocumentUploadModal";
 
 interface CorpusDocumentCardsProps {
   opened_corpus_id: string | null;
   viewMode?: ViewMode;
+  onCreateArticle?: () => void;
+  canUpdate?: boolean;
 }
 
 export const CorpusDocumentCards = ({
   opened_corpus_id,
   viewMode = "modern-list",
+  onCreateArticle,
+  canUpdate = false,
 }: CorpusDocumentCardsProps) => {
   /**
    * Similar to AnnotationCorpusCards, this component wraps the DocumentCards component
@@ -64,6 +73,27 @@ export const CorpusDocumentCards = ({
   );
   const filter_to_label_id = useReactiveVar(filterToLabelId);
   const selected_folder_id = useReactiveVar(selectedFolderId);
+
+  // Check if Readme.CAML already exists (for placeholder tile)
+  const articleQueryVars = useMemo<GetCorpusArticleInput>(
+    () => ({
+      corpusId: opened_corpus_id || "",
+      title: CAML_ARTICLE_FILENAME,
+    }),
+    [opened_corpus_id]
+  );
+
+  const { data: articleData } = useQuery<
+    GetCorpusArticleOutput,
+    GetCorpusArticleInput
+  >(GET_CORPUS_ARTICLE, {
+    variables: articleQueryVars,
+    skip: !opened_corpus_id,
+  });
+
+  const hasArticle =
+    (articleData?.documents?.edges?.length ?? 0) > 0 &&
+    !!articleData?.documents?.edges[0]?.node?.txtExtractFile;
 
   const navigate = useNavigate();
 
@@ -300,6 +330,17 @@ export const CorpusDocumentCards = ({
       />
     );
   });
+
+  // Add "Create article" placeholder if no Readme.CAML exists and user can edit
+  if (!hasArticle && canUpdate && onCreateArticle && !selected_folder_id) {
+    prefixItems.push(
+      <CreateArticlePlaceholder
+        key="create-article"
+        viewMode={viewMode === "modern-list" ? "modern-list" : "modern-card"}
+        onClick={onCreateArticle}
+      />
+    );
+  }
 
   // Note: DndContext is now provided by FolderDocumentBrowser parent component
   // View toggles are now in the FolderDocumentBrowser toolbar

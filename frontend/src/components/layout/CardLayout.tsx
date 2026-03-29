@@ -8,7 +8,7 @@ interface CardLayoutProps {
   children?: React.ReactChild | React.ReactChild[];
   Modals?: React.ReactChild | React.ReactChild[];
   BreadCrumbs?: React.ReactChild | null | undefined;
-  SearchBar: React.ReactChild;
+  SearchBar?: React.ReactChild;
   style?: React.CSSProperties;
 }
 
@@ -113,7 +113,6 @@ export const CardLayout: React.FC<CardLayoutProps> = ({
 }) => {
   const { width } = useWindowDimensions();
   const use_mobile = width <= 600;
-  const use_responsive = width <= 1000 && width > 600;
 
   return (
     <CardContainer
@@ -122,7 +121,7 @@ export const CardLayout: React.FC<CardLayoutProps> = ({
       style={{ ...style }}
     >
       {Modals}
-      <SearchBarWrapper>{SearchBar}</SearchBarWrapper>
+      {SearchBar && <SearchBarWrapper>{SearchBar}</SearchBarWrapper>}
       {BreadCrumbs && (!use_mobile || width > 768) && (
         <StyledSegment
           style={{
@@ -136,10 +135,10 @@ export const CardLayout: React.FC<CardLayoutProps> = ({
       <ScrollableSegment
         id="ScrollableSegment"
         style={{
-          padding: use_mobile ? "0" : use_responsive ? "0.5rem" : "1rem",
+          padding: 0,
           flex: 1,
           minHeight: 0,
-          marginBottom: use_mobile ? "0" : use_responsive ? "12px" : "20px",
+          marginBottom: 0,
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.12)",
         }}
         className="CardHolder"
@@ -175,24 +174,21 @@ const CardContainer = styled.div<CardContainerArgs>(({ width }) => {
       ${baseStyling}
       max-height: 100vh;
       height: 100%;
-      padding: clamp(0.25rem, 1vw, 0.5rem);
-      padding-bottom: clamp(0.5rem, 2vh, 0.75rem);
+      padding: 0.25rem;
     `;
   } else if (width <= 1000 && width > 600) {
     return `
       ${baseStyling}
       max-height: 100vh;
       height: 100%;
-      padding: clamp(0.5rem, 1.5vw, 0.75rem);
-      padding-bottom: clamp(0.5rem, 2vh, 0.75rem);
+      padding: 0.5rem;
     `;
   } else {
     return `
       ${baseStyling}
       max-height: 100vh;
       height: 100%;
-      padding: clamp(1.25rem, 2.5vw, 1.5rem);
-      padding-bottom: clamp(1.375rem, 3vh, 1.625rem);
+      padding: 0.75rem;
     `;
   }
 });
