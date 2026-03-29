@@ -776,6 +776,7 @@ class Corpus(TreeNode):
                         "title",
                         "description",
                         "file_type",
+                        "is_public",
                         "structural_annotation_set",
                     ]
                 },

@@ -243,13 +243,15 @@ def import_document(
                 version_tree_id=old_doc.version_tree_id,  # Same tree
                 parent=old_doc,
                 is_current=True,
-                is_public=corpus.is_public or old_doc.is_public,
+                is_public=corpus.is_public
+                or old_doc.is_public
+                or doc_kwargs.get("is_public", False),
                 structural_annotation_set=inherited_set,
                 creator=user,
                 **{
                     k: v
                     for k, v in doc_kwargs.items()
-                    if k not in ["title", "description", "file_type"]
+                    if k not in ["title", "description", "file_type", "is_public"]
                 },
             )
 
@@ -337,14 +339,14 @@ def import_document(
                 pdf_file_hash=content_hash,
                 version_tree_id=tree_id,
                 is_current=True,
-                is_public=corpus.is_public,
+                is_public=corpus.is_public or doc_kwargs.get("is_public", False),
                 parent=None,  # Root of content tree
                 source_document=None,  # Set via add_document() when dragging existing docs
                 creator=user,
                 **{
                     k: v
                     for k, v in doc_kwargs.items()
-                    if k not in ["title", "description", "file_type"]
+                    if k not in ["title", "description", "file_type", "is_public"]
                 },
             )
             version = 1

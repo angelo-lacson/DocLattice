@@ -347,6 +347,9 @@ def ingest_doc(self, user_id: int, doc_id: int) -> dict[str, Any]:
 
     # CAML/markdown files are rendered client-side and never parsed.
     # Mark as complete immediately so the pipeline doesn't touch them.
+    # NOTE: The post_save signal in documents/signals.py also guards against
+    # this, but this check acts as a defensive fallback in case ingest_doc
+    # is called directly (e.g., via Celery retry or manual invocation).
     if document.file_type == MARKDOWN_MIME_TYPE:
         document.processing_status = DocumentProcessingStatus.COMPLETE
         document.save(update_fields=["processing_status"])
@@ -695,6 +698,8 @@ def extract_thumbnail(self, doc_id: int) -> None:
     file_type: str = document.file_type
 
     # CAML/markdown files have no visual content to thumbnail.
+    # Defensive check - the signal in documents/signals.py prevents the
+    # pipeline from being queued, but this guards against direct calls.
     if file_type == MARKDOWN_MIME_TYPE:
         logger.info(f"[extract_thumbnail] Skipping thumbnail for markdown doc {doc_id}")
         return
