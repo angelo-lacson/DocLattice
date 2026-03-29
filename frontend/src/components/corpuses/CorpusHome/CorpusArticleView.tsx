@@ -20,11 +20,16 @@ import {
 import { CorpusType } from "../../../types/graphql-api";
 import { parseCaml } from "@os-legal/caml";
 import type { CamlDocument } from "@os-legal/caml";
-import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
-import { MarkdownMessageRenderer } from "../../threads/MarkdownMessageRenderer";
 import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants";
-import { CamlCitationResolver } from "../caml/CamlCitationResolver";
+import { CamlDirectiveRenderer } from "../caml/CamlDirectiveRenderer";
+import { registerDirectiveHandler } from "../caml/directiveRegistry";
+import { useCiteHandler } from "../caml/useCiteHandler";
 import { ArticleDocumentsDrawer } from "./ArticleDocumentsDrawer";
+
+// Register OC-specific directive handlers.
+// This runs once at module load — additional handlers can be registered
+// elsewhere (e.g., a plugin system, feature flags, etc.).
+registerDirectiveHandler("cite", useCiteHandler);
 
 // ---------------------------------------------------------------------------
 // Styled components
@@ -309,9 +314,9 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
         />
       )}
 
-      <CamlCitationResolver
+      <CamlDirectiveRenderer
         document={parsedDocument}
-        corpusId={corpus.id}
+        handlerContext={{ corpusId: corpus.id }}
         stats={stats}
       />
     </ArticleViewContainer>

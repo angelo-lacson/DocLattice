@@ -85,47 +85,68 @@ The parser:
 3. Strips the directive from `content` (so markdown renderers don't show it)
 4. Appends to `directives[]` with the resolved context text
 
-### Phase 2 — Resolution (OpenContracts frontend)
+### Phase 2 — Directive Handler Registry (Host Application)
 
-OpenContracts already has `SEMANTIC_SEARCH_ANNOTATIONS` — a GraphQL query
-that does hybrid vector+text search scoped to a corpus. The frontend
-resolves cite directives by calling this existing query.
+The parser extracts directives without knowing what any agent does. The host
+application registers handlers for each agent name via a **directive registry**.
 
-**New component**: `CamlCitationResolver` — a render-slot wrapper that:
-1. Walks the parsed `CamlDocument` looking for `directives`
-2. For each `@cite` directive, fires `semanticSearch(query: context, corpusId)`
-3. Renders resolved citations as inline chips
-4. Renders unresolved directives as pulsing placeholders
+```typescript
+// directiveRegistry.ts — ships in @os-legal/caml-react or host app
 
-**New component**: `CamlCitationChip` — renders a single citation as a
-hover-expandable chip showing:
-- Annotation snippet (truncated)
-- Document title
-- Deep link to annotation in document viewer
+type DirectiveHandlerHook = (
+  directive: CamlInlineDirective,
+  context: DirectiveHandlerContext
+) => DirectiveHandlerResult;
 
-### Integration Points
+// Register at module load
+registerDirectiveHandler("cite", useCiteHandler);
+registerDirectiveHandler("review", useReviewHandler);
+```
 
-`CorpusArticleView` and `CamlArticleEditor` pass a new `renderCitation`
-render slot to `CamlArticle`. This requires a minor upstream change to
-`@os-legal/caml-react` to thread the slot through to prose blocks.
+Each handler is a React hook that:
+- Receives the parsed directive + application context (corpus ID, etc.)
+- Returns `{ loading, node, error }` — the renderer displays `node` inline
+
+This design means:
+- `@os-legal/caml` knows nothing about citations, reviews, or any agent
+- `@os-legal/caml-react` provides a generic `renderDirective` slot
+- Host apps register handlers — different apps can support different agents
+- Adding a new agent = writing one hook + one `registerDirectiveHandler()` call
+
+### Phase 3 — Rendering (Generic Renderer)
+
+**`CamlDirectiveRenderer`** wraps `CamlArticle` and:
+1. Walks the parsed `CamlDocument` extracting directives from prose blocks
+2. Strips directive syntax from content (clean markdown for rendering)
+3. For each directive, looks up the registered handler by agent name
+4. Renders handler output via `DirectiveSlot` components after each prose block
+
+### OpenContracts-Specific Handlers
+
+**`useCiteHandler`** — resolves `@cite` directives using the existing
+`SEMANTIC_SEARCH_ANNOTATIONS` GraphQL query (hybrid vector+text search).
+Returns `CamlCitationChip` components — hover-expandable pills showing
+annotation snippet, document title, similarity score, and deep link.
 
 ## File Changes
 
 ### Upstream (`@os-legal/caml`)
 - `packages/caml/src/types.ts` — Add `CamlInlineDirective`, extend `CamlProse`
-- `packages/caml/src/inlineDirectives.ts` — New: `extractInlineDirectives()` function
+- `packages/caml/src/inlineDirectives.ts` — New: `extractInlineDirectives()` (pure, zero-dep)
 - `packages/caml/src/tokenizer.ts` — Call `extractInlineDirectives()` on prose blocks
 - `packages/caml/src/index.ts` — Re-export new types
 
 ### Upstream (`@os-legal/caml-react`)
 - `packages/caml-react/src/CamlArticle.tsx` — Thread `renderDirective` slot
 - `packages/caml-react/src/CamlBlocks.tsx` — Prose block renders directive slots
+- `packages/caml-react/src/directiveRegistry.ts` — Optional: ship registry as convenience
 
 ### OpenContracts
+- `frontend/src/components/corpuses/caml/directiveRegistry.ts` — Handler registry
+- `frontend/src/components/corpuses/caml/CamlDirectiveRenderer.tsx` — Generic renderer
+- `frontend/src/components/corpuses/caml/useCiteHandler.tsx` — @cite handler (OC-specific)
 - `frontend/src/components/corpuses/caml/CamlCitationChip.tsx` — Citation chip component
-- `frontend/src/components/corpuses/caml/CamlCitationResolver.tsx` — Resolution wrapper
-- `frontend/src/components/corpuses/CorpusHome/CorpusArticleView.tsx` — Wire render slot
-- `frontend/src/components/corpuses/CamlArticleEditor.tsx` — Wire render slot
+- `frontend/src/components/corpuses/CorpusHome/CorpusArticleView.tsx` — Wire renderer + register handlers
 
 ## Backwards Compatibility
 
