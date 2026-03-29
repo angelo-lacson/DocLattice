@@ -239,8 +239,8 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
       // Use requestAnimationFrame to ensure the DOM has rendered
       requestAnimationFrame(() => {
         firstMenuItemRef.current?.focus();
+        setOpenedViaKeyboard(false);
       });
-      setOpenedViaKeyboard(false);
     }
   }, [isPopupOpen, openedViaKeyboard]);
 
@@ -388,27 +388,32 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                 );
               }}
               onKeyDown={(e) => {
-                if (
-                  e.key === "ArrowRight" ||
-                  e.key === "ArrowLeft" ||
-                  e.key === "ArrowDown" ||
-                  e.key === "ArrowUp"
-                ) {
+                const items = popupRef.current?.querySelectorAll(
+                  '[role="menuitem"]:not(:disabled):not([aria-disabled="true"])'
+                );
+                if (!items || items.length === 0) return;
+                const itemsArr = Array.from(items) as HTMLElement[];
+                const currentIndex = itemsArr.indexOf(
+                  document.activeElement as HTMLElement
+                );
+
+                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                   e.preventDefault();
-                  const items = popupRef.current?.querySelectorAll(
-                    '[role="menuitem"]:not(:disabled)'
-                  );
-                  if (!items || items.length === 0) return;
-                  const itemsArr = Array.from(items) as HTMLElement[];
-                  const currentIndex = itemsArr.indexOf(
-                    document.activeElement as HTMLElement
-                  );
-                  const forward =
-                    e.key === "ArrowRight" || e.key === "ArrowDown";
+                  const forward = e.key === "ArrowDown";
                   const nextIndex = forward
                     ? (currentIndex + 1) % itemsArr.length
                     : (currentIndex - 1 + itemsArr.length) % itemsArr.length;
                   itemsArr[nextIndex].focus();
+                } else if (e.key === "Home") {
+                  e.preventDefault();
+                  itemsArr[0].focus();
+                } else if (e.key === "End") {
+                  e.preventDefault();
+                  itemsArr[itemsArr.length - 1].focus();
+                } else if (e.key === "Tab") {
+                  e.preventDefault();
+                  setIsPopupOpen(false);
+                  statusDotRef.current?.focus();
                 }
               }}
             >

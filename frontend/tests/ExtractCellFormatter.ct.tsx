@@ -279,23 +279,23 @@ test.describe("ExtractCellFormatter", () => {
     const approveButton = page.locator('button[aria-label="Approve"]');
     await expect(approveButton).toBeFocused({ timeout: 2000 });
 
-    // Press ArrowRight to move to Edit
-    await page.keyboard.press("ArrowRight");
+    // Press ArrowDown to move to Edit
+    await page.keyboard.press("ArrowDown");
     const editButton = page.locator('button[aria-label="Edit"]');
     await expect(editButton).toBeFocused({ timeout: 2000 });
 
-    // Press ArrowRight to move to View Sources
-    await page.keyboard.press("ArrowRight");
+    // Press ArrowDown to move to View Sources
+    await page.keyboard.press("ArrowDown");
     const viewSourcesButton = page.locator('button[aria-label="View Sources"]');
     await expect(viewSourcesButton).toBeFocused({ timeout: 2000 });
 
-    // Press ArrowRight to move to Reject
-    await page.keyboard.press("ArrowRight");
+    // Press ArrowDown to move to Reject
+    await page.keyboard.press("ArrowDown");
     const rejectButton = page.locator('button[aria-label="Reject"]');
     await expect(rejectButton).toBeFocused({ timeout: 2000 });
 
-    // Press ArrowRight again to wrap around to Approve
-    await page.keyboard.press("ArrowRight");
+    // Press ArrowDown again to wrap around to Approve
+    await page.keyboard.press("ArrowDown");
     await expect(approveButton).toBeFocused({ timeout: 2000 });
 
     await component.unmount();

@@ -6,6 +6,7 @@ from celery.utils.log import get_task_logger
 from django.contrib.auth import get_user_model
 
 from opencontractserver.annotations.models import Annotation, Note
+from opencontractserver.constants.document_processing import EMBEDDING_API_BATCH_SIZE
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
@@ -588,10 +589,6 @@ def calculate_embeddings_for_annotation_batch(
 
         # Batch-embed text-only annotations
         if text_only:
-            from opencontractserver.constants.document_processing import (
-                EMBEDDING_API_BATCH_SIZE,
-            )
-
             _batch_embed_text_annotations(
                 text_only, embedder, embedder_path, EMBEDDING_API_BATCH_SIZE, result
             )

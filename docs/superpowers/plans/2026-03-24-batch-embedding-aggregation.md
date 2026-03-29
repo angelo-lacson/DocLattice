@@ -43,7 +43,7 @@ EMBEDDING_API_BATCH_SIZE = 50
 
 - [ ] **Step 2: Verify import works**
 
-Run: `cd /home/jman/Code/OpenContracts && python -c "from opencontractserver.constants.document_processing import EMBEDDING_API_BATCH_SIZE; print(EMBEDDING_API_BATCH_SIZE)"`
+Run: `python -c "from opencontractserver.constants.document_processing import EMBEDDING_API_BATCH_SIZE; print(EMBEDDING_API_BATCH_SIZE)"`
 Expected: `50`
 
 - [ ] **Step 3: Commit**
@@ -100,7 +100,7 @@ After the `embed_text_and_image` method (ends at line 234), add:
 
 - [ ] **Step 2: Verify no import errors**
 
-Run: `cd /home/jman/Code/OpenContracts && docker compose -f local.yml run --rm django python -c "from opencontractserver.pipeline.base.embedder import BaseEmbedder; print(hasattr(BaseEmbedder, 'embed_texts_batch'))"`
+Run: `docker compose -f local.yml run --rm django python -c "from opencontractserver.pipeline.base.embedder import BaseEmbedder; print(hasattr(BaseEmbedder, 'embed_texts_batch'))"`
 Expected: `True`
 
 - [ ] **Step 3: Commit**
@@ -207,7 +207,7 @@ After `_embed_text_impl` (ends at line 155), add:
 
 - [ ] **Step 2: Verify no import errors**
 
-Run: `cd /home/jman/Code/OpenContracts && docker compose -f local.yml run --rm django python -c "from opencontractserver.pipeline.embedders.sent_transformer_microservice import MicroserviceEmbedder; print(hasattr(MicroserviceEmbedder, 'embed_texts_batch'))"`
+Run: `docker compose -f local.yml run --rm django python -c "from opencontractserver.pipeline.embedders.sent_transformer_microservice import MicroserviceEmbedder; print(hasattr(MicroserviceEmbedder, 'embed_texts_batch'))"`
 Expected: `True`
 
 - [ ] **Step 3: Commit**
@@ -246,7 +246,7 @@ git commit -m "Add embed_texts_batch() to MicroserviceEmbedder for batch API cal
 
 - [ ] **Step 3: Verify**
 
-Run: `cd /home/jman/Code/OpenContracts && docker compose -f local.yml run --rm django python -c "from opencontractserver.pipeline.embedders.test_embedder import TestEmbedder, TestMultimodalEmbedder; e = TestEmbedder(); r = e.embed_texts_batch(['hello', 'world']); print(len(r), len(r[0]))"`
+Run: `docker compose -f local.yml run --rm django python -c "from opencontractserver.pipeline.embedders.test_embedder import TestEmbedder, TestMultimodalEmbedder; e = TestEmbedder(); r = e.embed_texts_batch(['hello', 'world']); print(len(r), len(r[0]))"`
 Expected: `2 384`
 
 - [ ] **Step 4: Commit**
@@ -363,7 +363,7 @@ At the top of `embeddings_task.py`, the imports don't need changing yet — the 
 
 - [ ] **Step 3: Verify syntax**
 
-Run: `cd /home/jman/Code/OpenContracts && docker compose -f local.yml run --rm django python -c "from opencontractserver.tasks.embeddings_task import _batch_embed_text_annotations; print('OK')"`
+Run: `docker compose -f local.yml run --rm django python -c "from opencontractserver.tasks.embeddings_task import _batch_embed_text_annotations; print('OK')"`
 Expected: `OK`
 
 - [ ] **Step 4: Commit**
@@ -464,12 +464,12 @@ Replace lines 484-521 (from `for annotation_id in annotation_ids:` through the e
 
 - [ ] **Step 2: Verify syntax**
 
-Run: `cd /home/jman/Code/OpenContracts && docker compose -f local.yml run --rm django python -c "from opencontractserver.tasks.embeddings_task import calculate_embeddings_for_annotation_batch; print('OK')"`
+Run: `docker compose -f local.yml run --rm django python -c "from opencontractserver.tasks.embeddings_task import calculate_embeddings_for_annotation_batch; print('OK')"`
 Expected: `OK`
 
 - [ ] **Step 3: Run existing tests to verify no regressions**
 
-Run: `cd /home/jman/Code/OpenContracts && docker compose -f test.yml run --rm django pytest opencontractserver/tests/test_personal_corpus.py::TestCalculateEmbeddingsForAnnotationBatch -v --keepdb`
+Run: `docker compose -f test.yml run --rm django pytest opencontractserver/tests/test_personal_corpus.py::TestCalculateEmbeddingsForAnnotationBatch -v --keepdb`
 Expected: All 5 existing tests pass.
 
 - [ ] **Step 4: Commit**
@@ -866,12 +866,12 @@ class TestBaseEmbedderSequentialFallback(TestCase):
 
 - [ ] **Step 2: Run the tests**
 
-Run: `cd /home/jman/Code/OpenContracts && docker compose -f test.yml run --rm django pytest opencontractserver/tests/test_batch_embedding.py -v --keepdb`
+Run: `docker compose -f test.yml run --rm django pytest opencontractserver/tests/test_batch_embedding.py -v --keepdb`
 Expected: All 11 tests pass.
 
 - [ ] **Step 3: Run the existing batch task tests to verify no regressions**
 
-Run: `cd /home/jman/Code/OpenContracts && docker compose -f test.yml run --rm django pytest opencontractserver/tests/test_personal_corpus.py::TestCalculateEmbeddingsForAnnotationBatch -v --keepdb`
+Run: `docker compose -f test.yml run --rm django pytest opencontractserver/tests/test_personal_corpus.py::TestCalculateEmbeddingsForAnnotationBatch -v --keepdb`
 Expected: All 5 existing tests pass.
 
 - [ ] **Step 4: Commit**
@@ -889,12 +889,12 @@ git commit -m "Add integration tests for batch embedding aggregation"
 
 - [ ] **Step 1: Run pre-commit hooks**
 
-Run: `cd /home/jman/Code/OpenContracts && pre-commit run --all-files`
+Run: `pre-commit run --all-files`
 Expected: All hooks pass. If formatting changes are needed, stage and commit them.
 
 - [ ] **Step 2: Run full affected test suite**
 
-Run: `cd /home/jman/Code/OpenContracts && docker compose -f test.yml run --rm django pytest opencontractserver/tests/test_batch_embedding.py opencontractserver/tests/test_personal_corpus.py opencontractserver/tests/test_multimodal_embedder_unit.py -v --keepdb`
+Run: `docker compose -f test.yml run --rm django pytest opencontractserver/tests/test_batch_embedding.py opencontractserver/tests/test_personal_corpus.py opencontractserver/tests/test_multimodal_embedder_unit.py -v --keepdb`
 Expected: All tests pass — new batch tests, existing batch task tests, existing multimodal embedder tests.
 
 - [ ] **Step 3: Update CHANGELOG.md**
