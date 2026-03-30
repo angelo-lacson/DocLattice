@@ -732,9 +732,10 @@ GRAPHENE_MIDDLEWARE = [
     "config.graphql.permissioning.permission_annotator.middleware.PermissionAnnotatingMiddleware",
 ]
 
-# Add JWT middleware if using Auth0
-if USE_AUTH0:
-    GRAPHENE_MIDDLEWARE.append("graphql_jwt.middleware.JSONWebTokenMiddleware")
+# JWT middleware is always needed — both Auth0 and password login
+# return JWT tokens via the tokenAuth mutation, and subsequent
+# GraphQL requests use Authorization: Bearer <token>.
+GRAPHENE_MIDDLEWARE.append("graphql_jwt.middleware.JSONWebTokenMiddleware")
 
 # Add API Key middleware if enabled
 if USE_API_KEY_AUTH:
@@ -785,7 +786,9 @@ DEFAULT_PERMISSIONS_GROUP = "Public Objects Access"
 # NOTE(deferred): These could be consolidated into an EMBEDDER_KWARGS dict
 # (similar to PARSER_KWARGS) once all embedder backends are pluggable.
 # Microservice URLs - read from environment with defaults
-EMBEDDINGS_MICROSERVICE_URL = env("EMBEDDINGS_MICROSERVICE_URL")
+EMBEDDINGS_MICROSERVICE_URL = env(
+    "EMBEDDINGS_MICROSERVICE_URL", default="http://vector-embedder:8000"
+)
 VECTOR_EMBEDDER_API_KEY = env("VECTOR_EMBEDDER_API_KEY", default="abc123")
 # CLIP embedder configuration (768-dimensional vectors)
 CLIP_EMBEDDER_URL = env("CLIP_EMBEDDER_URL", default="http://vector-embedder:8000")
@@ -817,7 +820,9 @@ MULTIMODAL_EMBEDDING_WEIGHTS = {
     "text_weight": env.float("MULTIMODAL_TEXT_WEIGHT", default=0.3),
     "image_weight": env.float("MULTIMODAL_IMAGE_WEIGHT", default=0.7),
 }
-DOCLING_PARSER_SERVICE_URL = env("DOCLING_PARSER_SERVICE_URL")
+DOCLING_PARSER_SERVICE_URL = env(
+    "DOCLING_PARSER_SERVICE_URL", default="http://docling-parser:8000/parse/"
+)
 DOCLING_PARSER_TIMEOUT = env.int(
     "DOCLING_PARSER_TIMEOUT", default=300  # 5 minutes default
 )
