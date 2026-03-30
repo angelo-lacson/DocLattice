@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **CAML Interactive Article System** (PR #1156): Full-stack support for corpus articles using CAML (Corpus Article Markup Language). Includes a two-pass parser (tokenizer + block parsers), typed intermediate representation, and composable renderer supporting hero sections, cards, pills, tabs, timelines, CTAs, signup blocks, corpus stats, and pullquotes. Backend adds `MarkdownParser` pipeline component (`opencontractserver/pipeline/parsers/oc_markdown_parser.py`) with `text/markdown` MIME type detection, `text_to_frontmatter` title filter on `DocumentFilter`, and centralized `TEXT_MIMETYPES` constant (`opencontractserver/constants/document_processing.py`). Frontend adds `CamlArticleEditor` modal with live preview, `CorpusArticleView` for rendered article display, and `CorpusLandingView` integration for article discovery. Comprehensive unit tests for parser and `safeHref` XSS guard (34 tests), plus Playwright component tests with `docScreenshot` captures for all block types.
+- **CAML Interactive Article System** (PR #1156): Frontend support for corpus articles using CAML (Corpus Article Markup Language). Includes a two-pass parser (tokenizer + block parsers), typed intermediate representation, and composable renderer supporting hero sections, cards, pills, tabs, timelines, CTAs, signup blocks, corpus stats, and pullquotes. Frontend adds `CamlArticleEditor` modal with live preview, `CorpusArticleView` for rendered article display, and `CorpusLandingView` integration for article discovery. Playwright component tests with `docScreenshot` captures for all block types.
 
 ### Fixed
 
@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Semantic UI removal cleanup** (Closes #1123): Fixed `folderIconAlpha` color mismatch in `ExtractCellFormatter.tsx` StatusDot box-shadows — replaced hardcoded `rgba(245, 158, 11, ...)` with `folderIconAlpha()` to match `getCellBackground()`. Changed Revoke button in `WorkerTokensSection.tsx` from `variant="secondary"` with inline danger color to `variant="danger"` for proper destructive-action styling. Removed conflicting `box-shadow` and `border-radius` from `StyledModalInner` in `EditMessageModal.tsx` to prevent doubled styling with `OsModal` wrapper. Added `role="menu"`, `aria-label`, `aria-haspopup`, keyboard support, and arrow key navigation (roving tabindex) to custom popup in `ExtractCellFormatter.tsx`. Removed redundant Escape key handler from `StatusDot` `onKeyDown` (already handled by global listener). Extracted inline `maxHeight: "70vh"` in `SelectDocumentsModal.tsx` to `MODAL_BODY_MAX_HEIGHT` constant in `constants.ts`.
 - **Annotation rendering cleanup** (Closes #1144): Replaced hardcoded `"4px 4px 0 0"` border-radius with `ANNOTATION_BOUNDARY_RADIUS` constant in `SearchResult.tsx` and `ChatSourceResult.tsx`. Removed dead `border` prop from `SelectionInfo` interface and call sites. Used `APPROVED_RGB` constant for approved-state box-shadow in `SelectionBoundary.tsx` (matching `REJECTED_RGB` pattern). Added `TOKEN_EXPANSION_PX` constant and replaced magic `-1`/`+2` token expansion values across `SelectionTokenGroup.tsx`, `Tokens.tsx`, and `ChatSourceTokens.tsx`. Consolidated `[Previous Unreleased]` CHANGELOG section into single `[Unreleased]` block. Removed debug `console.log` statements from `DocumentKnowledgeBase.ct.tsx`, `SearchResult.tsx`, and `SelectionTokenGroup.tsx`. Moved annotation display reactive var initialization into `useEffect` in `DocumentKnowledgeBaseTestWrapper.tsx`.
 
 ### Added
@@ -50,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Deferred structural annotation loading for PDF performance**: Structural annotations (headers, sections, paragraphs — often 4,000-6,000 for large documents) are no longer fetched in the initial GraphQL queries. They are loaded lazily via `GET_DOCUMENT_STRUCTURAL_ANNOTATIONS` only when the user toggles structural visibility on. Also removed redundant structural annotation re-fetching during analysis/extract switching (structural annotations are analysis-independent). For a 200-page document, this eliminates ~5-20MB of JSON from the initial payload (`frontend/src/graphql/queries.ts`, `frontend/src/components/knowledge_base/document/DocumentKnowledgeBase.tsx`, `frontend/src/components/annotator/context/AnnotationAtoms.tsx`).
-- **OC_* annotations filtered from Feed**: Platform-generated annotations with labels prefixed `OC_` (e.g., `OC_SECTION`) are now always hidden from the UnifiedContentFeed, preventing structural index entries from cluttering the annotation feed (`frontend/src/components/knowledge_base/document/unified_feed/UnifiedContentFeed.tsx`).
+- **OC\_\* annotations filtered from Feed**: Platform-generated annotations with labels prefixed `OC_` (e.g., `OC_SECTION`) are now always hidden from the UnifiedContentFeed, preventing structural index entries from cluttering the annotation feed (`frontend/src/components/knowledge_base/document/unified_feed/UnifiedContentFeed.tsx`).
 - **Improved sidebar tab spacing**: Reduced tab dimensions (76px/88px height, 36px/44px width), gap (4px), padding, icon size, and font size to prevent overlap when additional tabs are present (`frontend/src/components/knowledge_base/document/styled/SidebarTabs.tsx`).
 - **Softened PDF annotation bounding boxes to diffuse highlighter-pen aesthetic**: Replaced hard-edged borders on annotation boundaries, tokens, and label pills with multi-layer box-shadow glows. Boundaries use a three-layer shadow (outer, mid, inset) that feathers into the page. Tokens use a single-layer soft blur. Approved/rejected states pulse with matching diffuse glows instead of solid borders. Extracted shared `computeAnnotationBoxShadow` utility (`frontend/src/utils/colorUtils.ts`) to eliminate duplicated shadow logic between `SelectionBoundary` and `ResultBoundary`. Added named constants for all shadow radii, opacity levels, border-radius tiers, and status colors (`frontend/src/assets/configurations/constants.ts`). Removed dead code: `getBorderWidthFromBounds`, unused `$border` prop, unused `$isSelected` prop. Fixed `pulseMaroon` animation color mismatch (was `rgba(180, 40, 40)`, now matches static rejected state).
 - **Reorganized upload documentation into dedicated `docs/upload_methods/` section**: Consolidated scattered upload-related docs into 8 user-facing reference pages covering single upload, bulk ZIP import, corpus export/import, annotated document import, worker uploads, supported formats, and annotation side effects. Simplified `docs/walkthrough/step-1-add-documents.md` and `docs/walkthrough/advanced/export-import-corpuses.md` to reference the new guides. Trimmed `docs/architecture/bulk-import.md` to focus on internal implementation. Removed obsolete `docs/features/zip_import_with_folders_design.md` design doc (feature is fully implemented).
@@ -204,7 +205,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `llms.txt` / `llms-full.txt`: Now auto-populate an "Available Collections" section listing all public corpuses with titles, slugs, document counts, and descriptions. Hostnames are resolved from the request instead of using placeholder text. Links use proper inline Markdown format per the llmstxt.org spec
   - `sitemap.xml`: New XML sitemap listing homepage, public corpuses, their documents (via DocumentPath), and discovery endpoints
   - `.well-known/mcp.json`: New MCP server discovery endpoint listing the global MCP server and per-corpus scoped servers
-  (`opencontractserver/discovery/views.py`, `opencontractserver/discovery/urls.py`, `config/urls.py`)
+    (`opencontractserver/discovery/views.py`, `opencontractserver/discovery/urls.py`, `config/urls.py`)
 - **Traefik routing for discovery endpoints**: Updated production and CI Traefik configs to route `/robots.txt`, `/llms.txt`, `/llms-full.txt`, `/sitemap.xml`, and `/.well-known/*` to Django instead of the frontend nginx container (`compose/production/traefik/traefik.yml`, `compose/production/traefik/traefik-ci.yml`)
 - **MCP discovery link in HTML head**: Added `<link rel="alternate" type="application/json" href="/.well-known/mcp.json">` to `frontend/index.html` for agent discovery
 - **Comprehensive test suite** for all five discovery endpoints covering content types, spec conformance, public/private corpus filtering, hostname resolution, and edge cases (`opencontractserver/discovery/tests/test_discovery_views.py`)
@@ -228,6 +229,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Unified Rate Limiting for WebSocket and MCP (Closes #730, #745)
+
 - Replaced `django-ratelimit` with a custom protocol-agnostic rate limiting engine (`config/ratelimit/`) supporting GraphQL, WebSocket, MCP, and Django views through a single shared infrastructure
 - **Engine** (`config/ratelimit/engine.py`): Fixed-window counter algorithm using Django cache (Redis in production), with sync `is_rate_limited()` and async `ais_rate_limited()` APIs
 - **Identity resolution** (`config/ratelimit/keys.py`): Unified IP extraction from both `HttpRequest` (GraphQL/views) and ASGI scope (WebSocket/MCP), plus key building with `user_or_ip`, `ip`, and `user` strategies
@@ -247,6 +249,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Action Library (Corpus Action Templates)
+
 - **CorpusActionTemplate model** for reusable, agent-based action definitions that users can browse and add to individual corpuses (`opencontractserver/corpuses/models.py`)
 - **5 default action templates** seeded via data migration: Document Description Updater, Corpus Description Updater, Document Summary Generator, Key Terms Annotator, Document Notes Generator — each with a dedicated `AgentConfiguration` and curated tool set (`opencontractserver/agents/migrations/0010_create_default_action_templates.py`)
 - **Action Library UI**: "Add from Library" picker in Corpus Settings lets users browse available templates and add them to a corpus on demand. New corpora start empty — no auto-cloning (`frontend/src/components/corpuses/settings/CorpusActionsSection.tsx`)
@@ -257,6 +260,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`seed_action_templates` management command**: Idempotent command for seeding default templates on fresh databases (`opencontractserver/corpuses/management/commands/seed_action_templates.py`)
 
 #### Optimize Vector Search and Index Scalability for Million-Scale Corpora
+
 - **HNSW indexes on all Embedding vector columns** (384–4096 dimensions): Approximate nearest neighbor search reduces vector queries from O(n) sequential scan to O(log n). Created via `AddIndexConcurrently` to avoid table locks during index creation (`opencontractserver/annotations/models.py`, `opencontractserver/annotations/migrations/0063_add_hnsw_indexes_and_search_vector.py`)
 - **Eliminated Python-side materialization** in `VectorSearchViaEmbeddingMixin.search_by_embedding()`: Previously materialized ALL matching rows into Python, sorted, and sliced. Now uses PostgreSQL `ORDER BY + LIMIT` so only top-k rows cross the wire. The unique constraint from migration 0059 guarantees no JOIN duplicates, removing the need for `DISTINCT ON` (`opencontractserver/shared/mixins.py`)
 - **PostgreSQL full-text search** on Annotation: Added `search_vector` (`SearchVectorField`) with GIN index and a database trigger that auto-populates tsvector from `raw_text` on INSERT/UPDATE. Replaces `LIKE '%term%'` (`icontains`) with indexed tsvector matching for 100x+ faster text search at scale (`opencontractserver/annotations/models.py`)
@@ -291,6 +295,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Screenshot tests for new landing view states: clean view, discussion feed, empty discussions, and power user mode (`frontend/tests/CorpusHome.ct.tsx`, `frontend/tests/CorpusTabs.ct.tsx`)
 
 #### Security Headers Middleware (CSP, Referrer-Policy, Permissions-Policy)
+
 - Added `SecurityHeadersMiddleware` in `config/middleware.py` that attaches `Content-Security-Policy` and `Permissions-Policy` headers to every HTTP response; Referrer-Policy is handled by Django's built-in `SecurityMiddleware` via `SECURE_REFERRER_POLICY`
 - Middleware positioned after `SecurityMiddleware` so it is the final authority on security headers in the response phase
 - CSP directives configured via `SECURE_CSP_DIRECTIVES` dict in `config/settings/base.py` — covers `default-src`, `script-src` (with `blob:` for PDF.js worker fallback), `style-src`, `img-src`, `font-src`, `connect-src`, `worker-src`, `object-src`, `frame-ancestors`, `base-uri`, and `form-action`
@@ -302,6 +307,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests in `opencontractserver/tests/test_security_headers_middleware.py` — unit tests, integration test against `/api/health/`, and `validate_csp_domain()` tests
 
 #### Expand Corpus Import Test Coverage (Closes #999)
+
 - Rewrote `test_corpus_import.py` with proper `TransactionTestCase` base class (previously `ImportCorpusTestCase` with no parent, never discovered by test runners)
 - Fixed `FieldFile.save()` call signature in test setup helper (was passing `ContentFile` as `name` instead of `(name, content)`)
 - Grouped read-only assertions into 2 test methods using `subTest` to reduce import pipeline executions from 15 to 5
@@ -314,18 +320,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 #### Missing embedding dimensions in VALID_EMBEDDING_DIMS
+
 - `VALID_EMBEDDING_DIMS` was missing dimensions 1024, 2048, and 4096, causing validation failures for embedders that produce these common dimensions (e.g., some OpenAI and Cohere models). Added missing entries to `VALID_EMBEDDING_DIMS` and `DIM_TO_FIELD_MAP` in `opencontractserver/constants/search.py`.
 
 #### Fix My Documents Corpus Not Navigable Due to Missing Slugs
+
 - **Root cause**: Migration 0038 created personal corpuses using historical models which bypass `Corpus.save()` slug auto-generation, leaving `slug=NULL`. The frontend requires both `corpus.slug` and `creator.slug` to build navigation URLs (`/c/<user>/<corpus>`), so clicking "My Documents" logged "Cannot navigate to corpus without slugs" and did nothing.
 - **Fix (model)**: `Corpus.get_or_create_personal_corpus()` now detects when a returned corpus lacks a slug and triggers `save()` to backfill it on access (`opencontractserver/corpuses/models.py:518-521`).
 - **Fix (migration)**: Added data migration `0043_backfill_corpus_slugs` that backfills slugs for all existing corpuses and users missing them (`opencontractserver/corpuses/migrations/0043_backfill_corpus_slugs.py`).
 
 #### Skip redundant document re-parsing during corpus import
+
 - Set `processing_started` on standalone documents created via `create_document_from_export_data()` to prevent the post_save signal from triggering `ingest_doc` (`opencontractserver/utils/importing.py:323`)
 - Imported documents already have PAWLS data from the export; re-parsing wasted resources and failed in environments without a parser service
 
 #### Tighten JSON Field Validation for Malformed Input (Closes #1001)
+
 - **Root cause**: `CustomJSONFieldFormTests.TestForm` used `NullableJSONField()` (a model field) instead of `UTF8JSONFormField` (a form field). Django's `Form` metaclass silently ignores model fields, so the form had zero fields and `is_valid()` always returned `True` — masking the fact that malformed JSON was never validated.
 - **Fix**: Changed `TestForm.json_field` to `UTF8JSONFormField(required=False)` so form validation actually runs through Django's `forms.JSONField.to_python()`, which raises `ValidationError` on `json.JSONDecodeError` (`opencontractserver/tests/test_custom_fields.py:76`).
 - **Re-enabled**: `test_form_with_invalid_json` now asserts that `'not json'` is correctly rejected (`opencontractserver/tests/test_custom_fields.py:90-92`).
@@ -334,14 +344,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 #### Deployment: migration 0063 backfill may need a maintenance window for large deployments
+
 - Operators with >1M annotations should consider running the search_vector backfill (Phase 4 of migration 0063) during a maintenance window. The migration now emits `RAISE NOTICE` progress messages so operators can monitor backfill progress in PostgreSQL logs.
 - Production `maintenance_work_mem` reduced from `2GB` to `512MB`. The higher value is only needed during the initial HNSW index build; operators should temporarily increase it for that migration, then revert (`production.yml`).
 - `hnsw.ef_search` increased from `40` to `64` to match `ef_construction`, improving recall for legal document search (`compose/production/postgres/init.sql`, migration 0063).
 
 #### Annotation text search now uses PostgreSQL full-text search with English stemming
+
 - The annotation mention search (`resolve_search_annotations_for_mention`) and the semantic search resolver now use `SearchQuery` on a GIN-indexed `search_vector` column instead of `raw_text__icontains`. This means text queries now match English-stemmed forms (e.g., searching "contract" also matches "contracting" and "contracted") rather than requiring exact substring matches. This is a semantic behavior change for users accustomed to exact substring matching on `raw_text`. See `config/graphql/search_queries.py`.
 
 #### Triage and Clean Up TODO/FIXME Comments (Closes #971)
+
 - Removed 62 TODO/FIXME/HACK annotations across 43 backend and frontend files
 - Replaced vague TODOs with `NOTE(deferred):` comments explaining deferral reasoning
 - Deleted stale comments referencing non-existent files, already-implemented features, and empty test stubs
@@ -351,24 +364,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Consolidated redundant `logger.debug()` calls in `utils/files.py`
 
 #### Extract Magic Numbers to Constants Files (Closes #970)
+
 - Replaced hardcoded upload limit, truncation lengths, DPI, and title limits with named constants in `constants/document_processing.py` and `constants/llm_tools.py`
 - Reused existing `MAX_PROCESSING_ERROR_LENGTH`/`MAX_PROCESSING_TRACEBACK_LENGTH` in `corpuses/models.py`
 
 #### GraphQL Module Modularization (Closes #972)
+
 - Split `graphene_types.py` (3,717→107 lines), `mutations.py` (6,229→405 lines), `queries.py` (4,408→54 lines) into domain-specific files
 - Full backward compatibility via re-exports; no logic changes
 
 #### Consolidate Duplicate String Truncation Utilities (Closes #976)
+
 - Added `truncate()` helper in `opencontractserver/utils/text.py` and named constants in `constants/truncation.py`
 - Replaced inline truncation across `core_tools.py`, `doc_tasks.py`, and `corpuses/models.py`
 
 #### Break Up Large Frontend Components (Closes #977)
+
 - Split 5 large components: StyledContainers (2,115→12), SystemSettings (2,616→1,108), CorpusChat (2,347→1,346), DocumentKnowledgeBase (3,363→2,322), ChatTray (2,215→1,772)
 - Extracted shared chat WebSocket types into canonical `chat/types.ts`; renamed duplicate ConversationListView components; replaced `any` types with explicit typed properties
 
 ### Removed
 
 #### Deprecated Semantic UI React Components and Icon Picker (PR #1009)
+
 - Deleted 103 files (~20,900 lines) of deprecated frontend components, hooks, and tests that had been fully replaced by OS Legal styled equivalents
 - Removed icon picker widget (`IconSelector.tsx`, `IconDropdown.tsx`, `IconPickerModal.tsx`, `icons.ts`, `styles.module.css`)
 - Removed unused Semantic UI wrapper components: `DocTypeLabelDisplay`, `DocTypeLabels`, `LabelSelector`, `SemanticSidebar`, and related CSS
@@ -383,14 +401,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Replace Mock Data with Real User Query in @mention Dropdown (Closes #1002)
+
 - **useMentionUsers hook** (`frontend/src/components/threads/hooks/useMentionUsers.ts`): Replaced hardcoded mock users with real `SEARCH_USERS_FOR_MENTION` GraphQL query. Added 300ms debounced input to reduce excessive API calls and minimum character threshold (2 chars). Hook now returns `{ users, loading, error }` instead of just `MentionUser[]`.
 - **MentionPicker component** (`frontend/src/components/threads/MentionPicker.tsx`): Added loading and error state rendering. Shows "Searching users..." during query execution and "Failed to load users" on errors. Added `loading` and `error` optional props to `MentionPickerProps`.
 
 #### Deep Linking and Context Menu for Text/PDF Annotators (Closes #958)
+
 - Copy Link actions in PDF (`SelectionLayer.tsx`) and TXT (`TxtAnnotator.tsx`) context menus encode selections as `?tb=` deep link URLs
 - URL-driven annotation selection from chat sources (`ChatTray.tsx`); delete button for processing documents (`ModernDocumentItem.tsx`)
 
 #### Corpus Export Test Coverage (Closes #997)
+
 - Added `test_exported_document_structure` to validate exported document data structure: top-level keys, PAWLS page schema, annotation structure with bounding boxes and token references, and PDF burn-in validity (`opencontractserver/tests/test_corpus_export.py`)
 - Added `test_round_trip_consistency` to compare exported data against original import fixture: document title, content, PAWLS page dimensions and token counts, annotation count, raw text, label names (mapped through label lookups), and bounding box coordinates (`opencontractserver/tests/test_corpus_export.py`)
 - Added `test_exported_label_names_match_fixture` to verify exported label name sets match the labels actually used in the import fixture (`opencontractserver/tests/test_corpus_export.py`)
@@ -398,31 +419,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cleaned up existing tests by removing verbose print statements and TODO comments
 
 #### Expand burn_doc_annotations Test (Closes #1000)
+
 - Added `test_burn_doc_annotations_with_text_labels` to exercise the text-label PDF burning code path with TOKEN_LABEL fixtures and bounding-box annotation data (`opencontractserver/tests/test_doc_tasks.py`)
 - Validates output PDF contains highlight annotations with correct subtype, label text, and non-empty base64-encoded content
 - Validates `doc_export` JSON contains expected `doc_labels` and `labelled_text` entries
 - Renamed existing test to `test_burn_doc_annotations_doc_labels_only` for clarity
 
 #### Test Coverage for Untested Backend Modules (Closes #975)
+
 - Unit tests for feedback, shared utils, constants, types, and MCP extended modules (`opencontractserver/tests/`)
 
 ### Fixed
 
 #### Code Review Fixes for Text Block Deep Linking (#958)
+
 - Document resolution via corpus membership (`DocumentPath`) instead of `creator=owner`; simplified default path to return already-resolved doc
 - Cross-document source click flash fix; `useClearTextBlockOnInteraction` hook consolidation; clipboard `.catch()` for non-HTTPS; dead code removal
 
 #### Document Version Selector UI Cleanup (Closes #964)
+
 - Removed unused query fields (`versionCount`, `hasVersionHistory`, etc.); added WAI-ARIA keyboard navigation; safe `v?` fallback during load
 - Backend validation for invalid version numbers (≤ 0); isCurrent JSDoc; updated test mocks and new keyboard nav tests
 
 #### Rollup Vulnerability (Closes #973)
+
 - Pinned `rollup: "^4.59.0"` via yarn resolutions to fix 3 high-severity path traversal advisories
 - **Result**: rollup updated from 4.53.1 to 4.59.0, eliminating all 3 rollup-related audit advisories
 
 ### Added
 
 #### Worker Upload Management UI and Documentation (#955)
+
 - **GraphQL queries**: `workerAccounts`, `corpusAccessTokens`, `workerDocumentUploads` resolvers with proper permission checks (superuser-only for accounts, superuser/corpus-creator for tokens and uploads) (`config/graphql/queries.py`)
 - **ReactivateWorkerAccount mutation**: Allows superusers to re-enable previously deactivated worker accounts (`config/graphql/worker_mutations.py`)
 - **Worker Account management page**: New admin page at `/admin/worker-accounts` for creating, listing, and activating/deactivating worker service accounts (`frontend/src/components/admin/WorkerAccountManagement.tsx`)
@@ -431,6 +458,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Component tests**: Playwright component tests for WorkerAccountManagement with automated documentation screenshots
 
 #### Document Version Selector End-to-End Documentation (Closes #954)
+
 - **User-facing guide**: `docs/features/document_versioning.md` — covers version creation workflow, visual status indicators (gray/blue/orange badges), Version History Panel usage, and Trash folder recovery
 - **Documentation screenshots**: Added `docScreenshot` calls to capture five key UI states:
   - `versioning--badge--single-version` — gray badge for documents without history (`frontend/tests/VersionBadge.ct.tsx`)
@@ -442,15 +470,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 #### Worker Upload Permission Expansion (#955)
+
 - `CreateCorpusAccessTokenMutation` and `RevokeCorpusAccessTokenMutation` now allow corpus creators (not just superusers) to manage tokens scoped to their own corpora
 - GlobalSettingsPanel refreshed with OS Legal design tokens and lucide-react icons, replacing Semantic UI dependencies
 
 #### Auth0 Refresh Token Migration (#955)
+
 - **DEPLOYMENT NOTE**: `useRefreshTokens: true` is now enabled in the Auth0 SDK configuration (`frontend/src/index.tsx`). Deployments using Auth0 **must** enable "Refresh Token Rotation" in the Auth0 dashboard before deploying this change, or silent authentication will fail for all users.
 
 ### Fixed
 
 #### Document Version Structural Annotation Set Inheritance
+
 - **Bug**: When a document was updated with new content (different hash), `import_document()` unconditionally inherited the old version's `structural_annotation_set`. This caused the parser's `_create_structural_annotation_set()` to short-circuit (early return at `pipeline/base/parser.py:299`), leaving freshly-parsed structural annotations orphaned — never migrated into a set.
 - **Fix**: `opencontractserver/documents/versioning.py:224-231` — `structural_annotation_set` is now only inherited when the content hash is unchanged. When content changes, the field is set to `None` so the parser creates a fresh `StructuralAnnotationSet` during ingestion.
 - **Tests**: `opencontractserver/tests/test_structural_annotation_portability.py` — replaced single test with two: one verifying `None` on changed content, one verifying inheritance on identical content.
@@ -458,6 +489,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Annotation Versioning and Document Version-Aware Deep Linking
+
 - **Version-aware document resolution**: `documentInCorpusBySlugs` GraphQL query now accepts optional `versionNumber` parameter to resolve a specific historical version of a document (`config/graphql/queries.py`)
 - **Corpus versions field**: New `corpusVersions(corpusId)` field on `DocumentType` returns all versions of a document in a corpus with version number, document ID, slug, creation date, and current status (`config/graphql/graphene_types.py`)
 - **`CorpusVersionInfoType` GraphQL type**: New type for version selector data returned by `corpusVersions` field
@@ -469,6 +501,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Routing documentation**: Updated `docs/frontend/routing_system.md` with version parameter documentation, examples, and reactive var listing
 
 #### Worker Document Upload System
+
 - **New Django app** `opencontractserver.worker_uploads` — enables external document-processing workers to upload fully ingested, annotated, and embedded documents to a target corpus via REST API
 - **Service account model** (`WorkerAccount`): dedicated machine identity with auto-created Django User for permission compatibility. Created via `createWorkerAccount` GraphQL mutation (superuser only)
 - **Corpus-scoped access tokens** (`CorpusAccessToken`): cryptographically random 256-bit tokens scoped to a single corpus, with configurable expiry and per-token rate limiting. Created via `createCorpusAccessToken` GraphQL mutation
@@ -488,12 +521,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Filename sanitization**: worker-supplied document titles are sanitized before use as filenames, stripping path traversal characters and null bytes
 
 ### Technical Details
+
 - New files: `opencontractserver/worker_uploads/{models,views,auth,serializers,tasks,urls,apps}.py`, `config/graphql/worker_mutations.py`
 - Migrations: `0001_initial.py` (models), `0002_setup_beat_schedule.py` (cleanup old DB schedule), `0003_hash_token_keys.py` (SHA-256 token hashing)
 - Settings: `WORKER_UPLOAD_BATCH_SIZE` (default 50), `MAX_WORKER_UPLOAD_SIZE_BYTES` (default 256 MB), `CELERY_TASK_ROUTES` for queue isolation, `CELERY_BEAT_SCHEDULE` for periodic drain
 - Tests: `opencontractserver/tests/test_worker_uploads.py` covering models, hashed token auth, REST endpoints, file size limits, batch processor, filename sanitization, null corpus creator guard, and GraphQL mutations
 
 #### Corpus Export Format Specification and Validation Utility
+
 - **Format specification**: `docs/architecture/corpus-export-format-spec.md` — complete reference for V1 and V2 corpus export ZIP format covering all data.json fields, PAWLs structure, referential integrity rules, security limits, and import behavior
 - **Standalone validator**: `opencontractserver/utils/validate_export.py` — checks structural and referential integrity of export ZIPs without requiring Django or a database. Usable as CLI (`python -m opencontractserver.utils.validate_export corpus.zip`) or library (`validate_export()` / `validate_data_json()`)
 - **Validation checks**: ZIP↔data.json file consistency, label definitions and type constraints, annotation token/page index bounds, annotation bounds non-negativity, structural set hash consistency, folder hierarchy (circular reference detection, path consistency), document path references, relationship label type enforcement (including structural relationships), V2 required top-level fields, conversation/message/vote cross-references, unknown version warnings
@@ -502,12 +537,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 #### Migrate from deprecated PyPDF2 to pypdf (Closes #938)
+
 - Replaced `PyPDF2==3.0.1` with `pypdf` in `requirements/base.txt`
 - Removed redundant `pypdf` entry from `requirements/local.txt` (now provided by base)
 - Updated imports in `opencontractserver/utils/files.py`, `opencontractserver/utils/etl.py`, and `opencontractserver/tests/test_pdf_redaction.py`
 - Removed unused `add_highlight_to_page` function from `opencontractserver/utils/files.py` (used deprecated `_addObject` API, never called)
 
 #### Django 4.2 → 5.2 LTS Upgrade
+
 - **Django version**: Upgraded from Django 4.2.24 to 5.2.11 (LTS)
   - `requirements/base.txt`, `requirements/local.txt`, `requirements/production.txt`
 - **STORAGES migration**: Replaced deprecated `STATICFILES_STORAGE` and `DEFAULT_FILE_STORAGE` settings with the unified `STORAGES` dict (required since Django 5.1)
@@ -544,6 +581,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 #### Dependency Security Updates
+
 - **Django 4.2.24 → 4.2.28 (now 5.2.11)**: CVEs fixed by the 5.2.11 LTS release include multiple SQL injection vectors (CVE-2025-59681, CVE-2025-64459, CVE-2025-13372, CVE-2026-1312, CVE-2026-1287, CVE-2026-1207), directory traversal (CVE-2025-59682), DoS attacks (CVE-2025-64458, CVE-2025-64460), and user enumeration timing attack (CVE-2025-13473)
   - Updated in `requirements/base.txt`, `requirements/local.txt`, `requirements/production.txt`
 - **cryptography 46.0.3 → 46.0.5**: Fixes CVE-2026-26007 — missing subgroup validation in ECDSA/ECDH public key loading for SECT curves, enabling signature forgery and private key leakage
@@ -556,16 +594,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 #### TxtAnnotator Infinite Re-render Loop (Closes #933)
+
 - **Unstable default parameter**: `chatSources = []` in `TxtAnnotator` component props created a new array reference on every render, triggering infinite re-renders via `useEffect` dependency arrays when the prop was not explicitly passed (`frontend/src/components/annotator/renderers/txt/TxtAnnotator.tsx:335`)
 - Extracted `ChatSourceHighlight` interface and defined module-level `EMPTY_CHAT_SOURCES` constant as the default value, ensuring referential stability across renders
 
 #### Follow-up Text Annotation Fixes (Closes #911)
+
 - **Double-scroll bug**: `toggleSelectedAnnotation` in `AnnotatorSidebar.tsx:758` and `RelationshipList.tsx:106` called `scrollIntoView` for all annotation types, including text span annotations which already scroll via `TxtAnnotator`'s own `selectedAnnotations` useEffect. This caused two competing scroll animations. Fixed by guarding with `instanceof ServerTokenAnnotation` check.
 - **Phantom ID tracking**: `TxtAnnotator.tsx:366` built `currentIds` from all visible annotations before verifying DOM elements existed. Annotations without rendered spans became "ghost" IDs tracked in `registeredAnnotationIdsRef` but never actually registered. Fixed by only adding IDs to the tracking set after confirming a DOM element was found and registered.
 - **Page number display regression**: `HighlightItem.tsx` and `RelationHighlightItem.tsx` now use `(annotation instanceof ServerTokenAnnotation || annotation.page > 0)` to show page labels. PDF token annotations always display page labels (page is always meaningful), while span annotations only display them when `page > 0` (since `page=0` is a sentinel for "no page concept applies").
 - **TypeScript type narrowing**: `HighlightItem.tsx:176` stored `instanceof` check in an intermediate boolean variable, preventing TypeScript's control-flow narrowing. Inlined the `instanceof` check directly in the conditional.
 
 #### BaseChunkedParser Robustness and Consistency (Closes #926)
+
 - **Config ValueError not wrapped**: `calculate_page_chunks` raises `ValueError` for invalid `max_pages_per_chunk`/`min_pages_for_chunking`, but the call in `_parse_document_impl` was unwrapped. Now caught and re-raised as `DocumentParsingError(is_transient=False)` (`opencontractserver/pipeline/base/chunked_parser.py`)
 - **Small-document annotations unprefixed**: Single-chunk documents returned directly from `_parse_chunk_with_retry` without passing through `_reassemble_chunk_results`, resulting in unprefixed annotation/relationship IDs. Now all results consistently receive `c0_` prefixed IDs (`opencontractserver/pipeline/base/chunked_parser.py`)
 - **Uncovered backoff cap branch**: `MAX_CHUNK_RETRY_BACKOFF_SECONDS` cap was never exercised by tests. Added test with `chunk_retry_limit=4` that verifies backoff values `[5, 10, 20, 30]` where the 4th retry hits the 30s cap (`opencontractserver/tests/test_chunked_parser.py`)
@@ -586,12 +627,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New sentence extraction tests** (`opencontractserver/tests/test_context_guardrails.py`): Added `test_markdown_bullet_list_split` and `test_double_newline_paragraph_split` covering the improved regex
 
 #### MCP Documentation Accuracy (Closes #924)
+
 - **Missing `created` field in tool return docs**: `list_public_corpuses`, `list_documents`, and `list_annotations` all return a `created` ISO 8601 timestamp, but `llms-full.txt` omitted it from the documented return shapes
 - **Incorrect annotation label shape**: `list_annotations` return docs showed `label` (string) but the actual response uses `annotation_label: { text, color, label_type }` (object) — updated to match `format_annotation()` in `opencontractserver/mcp/formatters.py`
 - **Underdocumented `document://` resource**: The resource description only said "Document metadata and full extracted text" without listing the actual fields. Added field inventory including `text_preview` (first 500 chars), `full_text`, `corpus`, and `created` — critical for agents choosing between preview and full text under context window constraints
 - **File**: `frontend/public/llms-full.txt`
 
 #### BaseChunkedParser Cleanup (Closes #914)
+
 - **Duplicate test line**: Removed redundant `PdfReader` assignment in `test_pdf_splitting.py:95`
 - **Infinite loop guard**: Added input validation for `max_pages_per_chunk` and `min_pages_for_chunking` in `calculate_page_chunks()` (`opencontractserver/utils/pdf_splitting.py`); added `max_concurrent_chunks` validation in `_parse_document_impl` (`opencontractserver/pipeline/base/chunked_parser.py`)
 - **Dead code / ID inconsistency**: Removed single-chunk fast-path short-circuit in `_reassemble_chunk_results()` that returned unprefixed IDs, creating inconsistency with multi-chunk results
@@ -604,11 +647,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cross-chunk limitation documented**: Enhanced class docstring with follow-up improvement suggestion for section-aware chunk boundaries
 
 ### Added
+
 - Unit tests for `HighlightItem` scroll behavior and page label display (`frontend/src/components/annotator/sidebar/__tests__/HighlightItem.scroll.test.tsx`)
 
 ### Security
 
 #### Resolve Dependabot Security Advisories (pydantic-ai + ajv)
+
 - **pydantic-ai 0.2.x → 1.x migration**: Upgraded from pydantic-ai 0.2.20 to >=1.56.0,<2 to resolve CVE in older version. Migration includes:
   - `End` import moved from `pydantic_ai.agent` to `pydantic_graph` (`opencontractserver/llms/agents/pydantic_ai_agents.py`)
   - All 3 `PydanticAIAgent` creation sites migrated from `system_prompt=` to `instructions=` to use the 1.x-recommended parameter that is always included in model requests regardless of message history
@@ -619,6 +664,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ajv ReDoS fix (CVE in ajv <8.17.1)**: Added scoped Yarn resolutions for `@rjsf/validator-ajv8/ajv` and `ajv-formats/ajv` to pin ajv 8.18.0, avoiding conflict with schema-utils which requires ajv 6.x (`frontend/package.json`)
 
 #### IDOR Vulnerabilities Fixed in 4 GraphQL Mutations
+
 - **HIGH**: Fixed information leakage allowing object ID enumeration via different error messages
   - `RemoveAnnotation` (`config/graphql/mutations.py`)
   - `RejectAnnotation` (`config/graphql/mutations.py`)
@@ -631,6 +677,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test Coverage**: Added IDOR protection tests in `test_permission_fixes.py` and `test_voting_mutations_graphql.py`
 
 #### QuerySet Permission Filtering Gaps Fixed
+
 - `DocumentQuerySet.visible_to_user()` and `NoteQuerySet.visible_to_user()` inherited from `PermissionQuerySet` which had guardian permission checks commented out — only checking `is_public` and `creator`
   - `opencontractserver/shared/QuerySets.py` (classes `DocumentQuerySet`, `NoteQuerySet`)
 - `AnnotationQuerySet.visible_to_user()` checked document/corpus visibility via `is_public` and `creator` only, missing guardian permission lookups for documents and corpuses
@@ -642,6 +689,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 #### Corpus Export/Import V2: Audit and Roundtrip Fixes
+
 - **SPAN_LABEL and RELATIONSHIP_LABEL missing from label export**: `build_label_lookups()` in `opencontractserver/utils/etl.py` only exported TOKEN_LABEL and DOC_TYPE_LABEL labels. SPAN_LABEL and RELATIONSHIP_LABEL labels were silently dropped, causing annotation and relationship import to fail. Now all four label types are exported.
 - **Relationship labels not gathered from Relationship model**: `build_label_lookups()` only queried labels from `Annotation` objects. Labels used exclusively on `Relationship` objects (RELATIONSHIP_LABEL type) were never collected. Added Relationship model queries to capture these labels.
 - **Label lookup key mismatch for structural annotations and relationships**: Structural annotations and relationships reference labels by TEXT in exports, but the import label_lookup was keyed by PK strings. Created a text-keyed label lookup (`label_lookup_by_text`) in `_import_corpus()` for use by `import_structural_annotation_set()` and `_import_v2_relationships()`.
@@ -662,6 +710,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - File: `opencontractserver/tasks/import_tasks_v2.py`
 
 ### Technical Details
+
 - All label types (TOKEN_LABEL, SPAN_LABEL, RELATIONSHIP_LABEL) are now exported in the `text_labels` dict with their actual `label_type` preserved for correct deserialization
 - Conversation document hash (`chat_with_document_hash`) is exported alongside the document ID for cross-system re-linking
 - Timestamp patching uses `Model.all_objects.filter(pk=obj.pk).update()` to bypass `auto_now`/`auto_now_add` behavior
@@ -670,6 +719,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Chunked Document Processing for Large PDFs
+
 - **New `BaseChunkedParser` abstract class** (`opencontractserver/pipeline/base/chunked_parser.py`): Extends `BaseParser` to transparently split large PDF documents into page-range chunks for independent parsing and reassembly. Documents below a configurable page threshold are processed as a single request (zero overhead). Features:
   - Automatic PDF splitting via pypdf with configurable `max_pages_per_chunk` (default: 50) and `min_pages_for_chunking` (default: 75)
   - Optional concurrent chunk dispatch via `ThreadPoolExecutor` (`max_concurrent_chunks`, default: 3)
@@ -681,6 +731,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **DoclingParser now extends `BaseChunkedParser`** (`opencontractserver/pipeline/parsers/docling_parser_rest.py`): Large documents are automatically split and parsed in chunks. Configurable via `PipelineSettings` (`DOCLING_MAX_PAGES_PER_CHUNK`, `DOCLING_MIN_PAGES_FOR_CHUNKING`, `DOCLING_MAX_CONCURRENT_CHUNKS`). Image extraction runs once on the full PDF after reassembly via `_post_reassemble_hook`.
 
 #### Context Guardrails & Conversation Compaction (Closes #898)
+
 - **Context guardrails constants** (`opencontractserver/constants/context_guardrails.py`): Centralized configuration for model context windows (OpenAI, Anthropic, Google), compaction thresholds, tool output limits, and token estimation parameters. Covers 20+ model variants with sensible defaults.
 - **Token estimation** (`opencontractserver/llms/context_guardrails.py`): Fast heuristic token counter (~3.5 chars/token) for estimating conversation size without importing heavyweight tokeniser libraries. Intentionally over-estimates to trigger compaction conservatively.
 - **Model context window lookup** (`context_guardrails.py`): Resolves model names to context window sizes via exact match then longest-prefix matching, with a 128K default fallback for unknown models.
@@ -697,12 +748,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 #### Pipeline Registry: Deduplicate and Filter Abstract Components
+
 - **Removed `MultimodalMicroserviceEmbedder` backwards-compatibility alias**: The module-level alias `MultimodalMicroserviceEmbedder = CLIPMicroserviceEmbedder` in `opencontractserver/pipeline/embedders/multimodal_microservice.py` has been removed. Use `CLIPMicroserviceEmbedder` directly.
 - **Fixed duplicate embedder entries in pipeline registry**: `_discover_subclasses()` in `opencontractserver/pipeline/registry.py` now deduplicates discovered classes by identity and skips abstract intermediate base classes via `inspect.isabstract()`, preventing aliases and abstract bases from appearing in the get-embedders query endpoint.
 
 ### Fixed
 
 #### Prompt Injection via User-Controlled Content in Agent Prompts
+
 - **Root cause**: Thread and document action prompt builders injected user-controlled content (message bodies, thread titles, document titles) directly into Markdown-structured LLM prompts without any sanitisation boundary. A user who can post a message to a moderated thread could craft content that overrides agent instructions.
   - File: `opencontractserver/tasks/agent_tasks.py` (lines 808-848)
   - File: `opencontractserver/llms/agents/core_agents.py` (lines 963-983, 1036-1054)
@@ -714,6 +767,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Updated tests: `opencontractserver/tests/test_thread_corpus_actions.py` — added `test_async_thread_action_prompt_fences_user_content`
 
 #### Prompt Injection Mitigation Follow-up (Closes #913)
+
 - **Dead code fix**: `warn_if_content_large()` was called on truncated message previews (max 203 chars) but checks against a 1000-char threshold, making the warning ineffective. Moved the call to run on full content before truncation.
   - File: `opencontractserver/tasks/agent_tasks.py` (`_build_thread_action_system_prompt`)
 - **Inconsistent monitoring**: Document and corpus titles embedded in system prompts in `core_agents.py` and `pydantic_ai_agents.py` now have `warn_if_content_large()` calls for consistent size monitoring.
@@ -725,6 +779,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - File: `opencontractserver/utils/prompt_sanitization.py`
 
 #### Frontend: Most views show legacy corpus.description instead of versioned mdDescription (Closes #892)
+
 - **Backend description sync**: `Corpus.update_description()` now keeps the plain-text `description` field in sync when `md_description` is updated via the versioned markdown system. A new `_markdown_to_plain_text()` static method strips markdown formatting for the plain-text field.
   - File: `opencontractserver/corpuses/models.py` (lines 249-272, `update_description` method)
 - **New `useCorpusMdDescription` hook**: Reusable React hook that fetches markdown content from a corpus's `mdDescription` URL and returns the raw text for rendering with `SafeMarkdown`.
@@ -742,6 +797,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - File: `frontend/src/types/graphql-api.ts`
 
 #### Edit Description Modal Does Not Save on Update (Issue #899)
+
 - **Root cause**: The edit document CRUDModal in `App.tsx` had a no-op `onSubmit` handler that only closed the modal without calling the `UPDATE_DOCUMENT` mutation, so changes were silently discarded
   - File: `frontend/src/App.tsx` (lines 128-149, 398)
 - **Fix**: Added `useMutation` hook for `UPDATE_DOCUMENT` in `App.tsx` with proper `onCompleted`/`onError` handlers and `refetchQueries: "active"` to refresh displayed data
@@ -751,6 +807,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 #### Import/Export Pipeline Consolidation
+
 - **DRY refactor of import/export code**: Extracted shared helpers into `opencontractserver/utils/importing.py`:
   - `prepare_import_labels()` - eliminates 4x duplicated label loading boilerplate
   - `create_document_from_export_data()` - eliminates 3x duplicated document creation
@@ -766,6 +823,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Store Model Name in ChatMessage Metadata (#897)
+
 - **Automatic model name persistence**: The LLM model name from `AgentConfig` is now stored in the `data` JSON field of every `ChatMessage` produced by an agent, enabling debugging, auditing, and reproducibility
   - `opencontractserver/llms/agents/core_agents.py` — all five `CoreConversationManager` message-writing methods now persist `data["model_name"]`:
     - `create_placeholder_message()` and `store_llm_message()` — unconditional write at creation time
@@ -774,6 +832,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `opencontractserver/tests/test_core_agents.py` — covers explicit model name, default model name, all five methods, and `setdefault` preservation semantics
 
 #### Nested Approval Gates for Corpus Agent Sub-Agents
+
 - **Sub-agent approval propagation**: When a corpus agent delegates a question to a document sub-agent via `ask_document`, and the sub-agent encounters a tool requiring approval, the approval request now propagates up to the corpus agent level and is surfaced to the user via WebSocket (`ASYNC_APPROVAL_NEEDED`)
   - File: `opencontractserver/llms/agents/pydantic_ai_agents.py` (ask_document_tool closure)
 - **Frontend sub-tool unwrapping**: CorpusChat's approval modal now displays the actual sub-tool name/arguments instead of the generic `ask_document` wrapper, with validation for malformed metadata
@@ -784,6 +843,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - File: `docs/architecture/llms/README.md`
 
 #### Expose Tool Usage in Chat UI
+
 - **Tool Usage Badge** (`frontend/src/components/widgets/chat/ChatMessage.tsx:1180-1288`): Assistant messages that use tools now display a wrench icon badge ("X tools used") in the message header, visible in both document and corpus chat views. Users can quickly see AI tool usage without expanding the full timeline, improving agent transparency.
 - **Tool Call Popover** (`ChatMessage.tsx:1222-1286`): Hovering over the badge opens a popover listing each tool call's formatted name, JSON input arguments, and output result. Keyboard accessible (Enter/Space to toggle, Escape to close) with full ARIA attributes.
 - **Tool result content in timeline**: Backend now captures tool result/output content in timeline `tool_result` entries (previously only stored tool name)
@@ -793,16 +853,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tool result entries for search tools** (`pydantic_ai_agents.py:642-657, 686-702, 807-813`): `similarity_search`, `search_exact_text`, and `ask_document` now emit `tool_result` timeline entries with result summaries (e.g., "Found 3 matching annotations"). Other tools use a generic extractor with "Completed" fallback.
 
 #### Automated Documentation Screenshots
+
 - **Screenshot capture utility** (`frontend/tests/utils/docScreenshot.ts`): Captures screenshots during Playwright component tests using an enforced `{area}--{component}--{state}` naming convention
 - **CI workflow** (`.github/workflows/screenshots.yml`): Automatically runs component tests on PRs touching `frontend/` or `docs/`, then commits updated screenshots back to the PR branch
 - **Initial screenshot coverage**: Landing page components (hero, stats bar, trending corpuses, call-to-action) and badge components (celebration modal, toast)
 
 #### V2 Export Format
+
 - **`OPEN_CONTRACTS_V2` export format**: New export type available in `StartCorpusExport` mutation that includes structural annotation sets, folder hierarchy, relationships, agent config, markdown descriptions, and conversations
 - **`content_modalities` now exported**: Annotations with IMAGE or other modalities now survive export/import round-trips (`opencontractserver/utils/etl.py:build_document_export`)
 - **Migration `0025_alter_userexport_format_add_v2`**: Adds `OPEN_CONTRACTS_V2` to UserExport format choices
 
 #### Edge Case Tests for Personal Corpus (Issue #839)
+
 - **Concurrent creation race condition test**: Verifies that 5 concurrent threads calling `get_or_create_personal_corpus()` all return the same corpus with no duplicates or errors
   - File: `opencontractserver/tests/test_personal_corpus.py` (`TestConcurrentPersonalCorpusCreation`)
 - **Delete and recreate flow tests**: Verifies that after deleting a personal corpus, recreation produces a new corpus with correct attributes and permissions
@@ -813,29 +876,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 #### MCP Telemetry in Async Context
+
 - **`SynchronousOnlyOperation` in MCP server** (`config/telemetry.py`, `opencontractserver/mcp/telemetry.py`, `opencontractserver/mcp/server.py`): Added async telemetry functions (`arecord_event`, `arecord_mcp_tool_call`, `arecord_mcp_resource_read`, `arecord_mcp_request`) that use `sync_to_async` to safely run Django ORM lookups in a thread pool. Prevents "You cannot call this from an async context" errors on every MCP request.
 - **Installation ID caching** (`config/telemetry.py:91-113`): Added process-lifetime cache for installation UUID to eliminate redundant database queries on every telemetry call, particularly beneficial for high-frequency MCP requests.
 
 #### Security: LLM Prompt Injection Protection for Approval Bypass
+
 - **Replaced `skip_approval` function parameter with `config._approval_bypass_allowed` flag**: The previous design exposed a `skip_approval` parameter in `ask_document_tool`'s function signature that a malicious LLM could set to `True` to bypass approval gates. Now uses a runtime flag on `AgentConfig` that only `resume_with_approval()` can set, wrapped in a `try/finally` block to guarantee reset
   - File: `opencontractserver/llms/agents/pydantic_ai_agents.py`
 
 #### Inconsistent Approval Status Handling in CorpusChat
+
 - **Added `updateMessageApprovalStatus` to CorpusChat**: Previously, `ASYNC_APPROVAL_RESULT` handler in CorpusChat only cleared pending state without updating message `approvalStatus`, unlike ChatTray and useAgentChat which both call `updateMessageApprovalStatus`. Now consistent across all components
   - File: `frontend/src/components/corpuses/CorpusChat.tsx`
 - **Added message `approvalStatus: "awaiting"` on ASYNC_APPROVAL_NEEDED**: CorpusChat now marks messages as awaiting approval in both `chat` and `serverMessages` state arrays, matching ChatTray/useAgentChat behavior
   - File: `frontend/src/components/corpuses/CorpusChat.tsx`
 
 #### Defensive Handling of Malformed Approval Events
+
 - **Backend**: `ask_document_tool` now validates `pending_tool_call` is a dict with a non-empty `name` key before raising `ToolConfirmationRequired`; malformed events are logged and skipped
   - File: `opencontractserver/llms/agents/pydantic_ai_agents.py`
 - **Frontend**: `_sub_tool_name` validation checks type is string and non-empty; `_sub_tool_arguments` validates type is object before use
   - File: `frontend/src/components/corpuses/CorpusChat.tsx`
 
 #### Corpus Agent Action Failure: griffe/pydantic-ai Incompatibility
+
 - **Pin `griffe>=1.3.2,<2`** (`requirements/base.txt`): griffe 2.0.0 (released 2026-02-09) removed the `**options` catch-all from all docstring parsers. pydantic-ai 0.2.x unconditionally passes `returns_named_value` and `returns_multiple_items` as parser options to all parsers (including numpy), causing `TypeError: parse_numpy() got an unexpected keyword argument 'returns_named_value'`. This broke all `run_agent_corpus_action` tasks during agent creation. Pinning griffe below 2.0 restores the `**options` parameter that absorbs these Google-specific options harmlessly.
 
 #### SynchronousOnlyOperation in Vector Store Construction from Async Context
+
 - **Wrap vector store construction in `sync_to_async`** (`opencontractserver/llms/vector_stores/pydantic_ai_vector_stores.py:392`): `create_vector_search_tool()` now wraps `PydanticAIAnnotationVectorStore(...)` in `sync_to_async` so the sync ORM calls inside `CoreAnnotationVectorStore.__init__` (embedder resolution via `get_embedder()`) run in a thread pool instead of triggering Django's `SynchronousOnlyOperation`.
 - **Pre-resolve embedder_path in `PydanticAIDocumentAgent.create()`** (`opencontractserver/llms/agents/pydantic_ai_agents.py:1529`): Added async embedder pre-resolution using `aget_embedder()` before constructing the vector store, matching the existing pattern in `PydanticAICorpusAgent.create()`. This prevents the sync `get_embedder()` fallback from hitting the ORM in an async context.
 - **Defensive `sync_to_async` fallback in both agent `create()` methods** (`pydantic_ai_agents.py`): If `aget_embedder()` fails and `embedder_path` remains `None`, the `PydanticAIAnnotationVectorStore(...)` constructor is wrapped in `sync_to_async` so the ORM calls inside `get_embedder()` run in a thread pool. Applied to both `PydanticAIDocumentAgent.create()` and `PydanticAICorpusAgent.create()`.
@@ -844,6 +913,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 #### Streamlined Agentic Corpus Action Configuration
+
 - **Renamed `agent_prompt` to `task_instructions`** on `CorpusAction` model (`opencontractserver/corpuses/models.py`): Single, clearly-named field for describing what the agent should do. Migration `0041` handles the rename.
 - **Goal-oriented system prompt assembly** (`opencontractserver/tasks/agent_tasks.py`): Agent corpus actions now auto-generate a structured system prompt with automation guardrails ("you MUST use tools"), execution context (trigger type, document metadata, corpus info), and the user's task instructions. Agents no longer receive raw `system_instructions` as the system prompt — the system wraps everything in a goal-oriented format that prevents conversational responses.
 - **Document context injection**: Document-based agent actions now inject document title, ID, corpus title, and current description into the system prompt so agents don't waste tool calls loading basic metadata.
@@ -883,6 +953,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Orphaned QUEUED executions if Celery broker is unavailable**: The `RunCorpusAction` mutation creates a `CorpusActionExecution` with `QUEUED` status and dispatches the Celery task via `transaction.on_commit()`. If the Celery broker is down at commit time, the task dispatch silently fails and the execution record stays `QUEUED` indefinitely. This is a general characteristic of the `on_commit` + Celery pattern used throughout the codebase. Monitor for stale `QUEUED` records if broker reliability is a concern.
 
 #### Edge Case Tests for Personal Corpus (Issue #839)
+
 - **Concurrent creation race condition test**: Verifies that 5 concurrent threads calling `get_or_create_personal_corpus()` all return the same corpus with no duplicates or errors
   - File: `opencontractserver/tests/test_personal_corpus.py` (`TestConcurrentPersonalCorpusCreation`)
 - **Delete and recreate flow tests**: Verifies that after deleting a personal corpus, recreation produces a new corpus with correct attributes and permissions
@@ -911,6 +982,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 #### Enable Relationships for Span-Based (Text) Annotations (Closes #281)
+
 - **File type detection inconsistency**: Multiple frontend components checked for text file types using only `startsWith("text/")`, missing documents with `application/txt` MIME type. Created centralized `isTextFileType()` and `isPdfFileType()` utilities in `frontend/src/utils/files.ts` and updated all callers.
 - **Label initialization race condition**: The `initialized.current` ref in `UISettingsAtom.tsx` (line 288) could be set to `true` after span label initialization, preventing relationship labels from auto-initializing on subsequent effect runs. Replaced with separate `spanLabelInitialized` and `relationLabelInitialized` refs.
 - **Type restrictions blocking span annotations in relationship UI**: `RelationItem`, `RelationHighlightItem`, `HighlightItem`, and `annotationSelectedViaRelationship()` only accepted `ServerTokenAnnotation` (PDF annotations). Updated all to accept `ServerTokenAnnotation | ServerSpanAnnotation` union type, enabling the sidebar relationship display and creation flow for text documents.

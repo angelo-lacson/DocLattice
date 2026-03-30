@@ -32,6 +32,7 @@ import {
   uploadModalPreloadedFiles,
 } from "../../../graphql/cache";
 import { FileUploadPackageProps } from "./DocumentUploadModal";
+import { MODAL_BODY_MAX_HEIGHT } from "../../../assets/configurations/constants";
 
 /**
  * Overrides the nested card styling from CreateAndSearchBar when rendered
@@ -211,7 +212,7 @@ export const SelectDocumentsModal = ({
         style={{
           flex: 1,
           overflow: "hidden",
-          maxHeight: "70vh",
+          maxHeight: MODAL_BODY_MAX_HEIGHT,
           padding: "0.5rem 1rem",
         }}
       >

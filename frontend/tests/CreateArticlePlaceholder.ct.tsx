@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/experimental-ct-react";
 import { CreateArticlePlaceholderHarness } from "./CreateArticlePlaceholderTestWrapper";
 import { docScreenshot } from "./utils/docScreenshot";
 
-test.describe("CreateArticlePlaceholder - Card View", () => {
+test.describe("CreateArticlePlaceholder - Card Mode", () => {
   test("should render card placeholder with title and subtitle", async ({
     mount,
     page,
@@ -16,20 +16,27 @@ test.describe("CreateArticlePlaceholder - Card View", () => {
     await expect(page.getByText("Readme.CAML")).toBeVisible();
     await expect(page.getByText("Create a corpus article")).toBeVisible();
 
-    await docScreenshot(page, "documents--create-article-placeholder--card");
+    await docScreenshot(page, "caml--cta--card-placeholder");
   });
 
-  test("should trigger onClick when clicked", async ({ mount, page }) => {
-    await mount(<CreateArticlePlaceholderHarness viewMode="modern-card" />);
+  test("should call onClick when card is clicked", async ({ mount, page }) => {
+    let clicked = false;
+    await mount(
+      <CreateArticlePlaceholderHarness
+        viewMode="modern-card"
+        onClick={() => {
+          clicked = true;
+        }}
+      />
+    );
 
     const placeholder = page.getByTestId("create-article-placeholder");
     await placeholder.click();
-
-    await expect(page.getByTestId("click-detected")).toBeVisible();
+    expect(clicked).toBe(true);
   });
 });
 
-test.describe("CreateArticlePlaceholder - List View", () => {
+test.describe("CreateArticlePlaceholder - List Mode", () => {
   test("should render list placeholder with title and subtitle", async ({
     mount,
     page,
@@ -42,6 +49,6 @@ test.describe("CreateArticlePlaceholder - List View", () => {
     await expect(page.getByText("Readme.CAML")).toBeVisible();
     await expect(page.getByText("Create a corpus article")).toBeVisible();
 
-    await docScreenshot(page, "documents--create-article-placeholder--list");
+    await docScreenshot(page, "caml--cta--list-placeholder");
   });
 });
