@@ -24,6 +24,9 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlparse
+
+import httpx
 
 from doclatticeserver.constants.web_search import (
     BRAVE_PROVIDER,
@@ -161,7 +164,10 @@ class _RateLimiter:
                 await asyncio.sleep(wait)
 
 
-# One limiter per provider, lazily created
+# One limiter per provider, lazily created.
+# NOTE: asyncio.Lock is bound to a single event loop. This is safe under
+# Celery's multiprocess model (one loop per worker), but would raise
+# RuntimeError if shared across threads with separate event loops.
 _limiters: dict[str, _RateLimiter] = {}
 
 
@@ -202,8 +208,6 @@ class BraveSearchProvider(SearchProvider):
         api_key: str,
         search_type: str = "general",
     ) -> list[SearchResult]:
-        import httpx
-
         headers = {
             "Accept": "application/json",
             "Accept-Encoding": "gzip",
@@ -258,8 +262,6 @@ class TavilySearchProvider(SearchProvider):
         api_key: str,
         search_type: str = "general",
     ) -> list[SearchResult]:
-        import httpx
-
         payload: dict[str, Any] = {
             "api_key": api_key,
             "query": query,
@@ -291,11 +293,7 @@ class TavilySearchProvider(SearchProvider):
                     url=item.get("url", ""),
                     snippet=item.get("content", ""),
                     published_date=item.get("published_date", ""),
-                    source=(
-                        item.get("url", "").split("/")[2]
-                        if "/" in item.get("url", "")
-                        else ""
-                    ),
+                    source=urlparse(item.get("url", "")).netloc,
                 )
             )
         return results
@@ -306,21 +304,6 @@ _PROVIDERS: dict[str, SearchProvider] = {
     BRAVE_PROVIDER: BraveSearchProvider(),
     TAVILY_PROVIDER: TavilySearchProvider(),
 }
-
-
-# ============================================================================
-# Settings retrieval helpers
-# ============================================================================
-
-
-def _get_web_search_settings() -> dict[str, Any]:
-    """Retrieve web search tool settings from PipelineSettings singleton.
-
-    Returns a dict that may contain:
-      - ``api_key``: The API key for the configured provider
-      - ``provider``: Provider identifier (``brave`` or ``tavily``)
-    """
-    return WebSearchTool.get_settings()
 
 
 # ============================================================================
@@ -357,11 +340,13 @@ async def aweb_search(
 
     num_results = max(1, min(num_results, WEB_SEARCH_MAX_NUM_RESULTS))
 
+    # NOTE: "research" mode triggers Tavily's "advanced" search_depth.
+    # Brave silently treats it as a standard "general" search.
     if search_type not in ("general", "news", "research"):
         search_type = "general"
 
     # Load settings (DB access via sync_to_async)
-    settings = await sync_to_async(_get_web_search_settings)()
+    settings = await sync_to_async(WebSearchTool.get_settings)()
 
     api_key = settings.get("api_key", "")
     if not api_key:

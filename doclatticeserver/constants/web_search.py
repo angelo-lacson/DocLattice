@@ -5,7 +5,7 @@ Defines provider identifiers, rate limits, result formatting limits,
 and the web search settings key used in PipelineSettings.
 """
 
-from doclatticeserver.constants.tools import TOOL_SETTINGS_PREFIX  # noqa: F401
+from doclatticeserver.constants.tools import TOOL_SETTINGS_PREFIX
 
 # ---------------------------------------------------------------------------
 # Provider identifiers
