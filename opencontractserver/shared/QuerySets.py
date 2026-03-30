@@ -201,6 +201,11 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
 
         Follows the same pattern as BaseVisibilityManager.visible_to_user
         (opencontractserver/shared/Managers.py lines 103-118).
+
+        Note: **kwargs is present for forward-compatibility so that callers
+        can pass additional keyword arguments (e.g. from manager delegation)
+        without raising TypeError.  Currently unused at the queryset level;
+        prefetch optimisation is handled by DocumentManager.
         """
         from django.contrib.auth.models import AnonymousUser
 

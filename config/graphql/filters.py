@@ -17,6 +17,7 @@ from opencontractserver.annotations.models import (
 )
 from opencontractserver.badges.models import Badge, UserBadge
 from opencontractserver.constants.annotations import MANUAL_ANNOTATION_SENTINEL
+from opencontractserver.constants.document_processing import MARKDOWN_MIME_TYPE
 from opencontractserver.conversations.models import (
     ChatMessage,
     Conversation,
@@ -377,11 +378,11 @@ class DocumentFilter(django_filters.FilterSet):
         # When filtering by corpus, exclude CAML/markdown files by default.
         # Corpus views pass includeCaml=true to show them; extractors and
         # analyzers omit the flag so CAML articles stay out of pipelines.
+        #
+        # Note: self.data values are Python-typed (bool, not str) because
+        # graphene-django deserializes GraphQL arguments before populating
+        # the filterset. The falsy check on include_caml is therefore safe.
         if self.data.get("in_corpus_with_id") and not self.data.get("include_caml"):
-            from opencontractserver.constants.document_processing import (
-                MARKDOWN_MIME_TYPE,
-            )
-
             qs = qs.exclude(file_type=MARKDOWN_MIME_TYPE)
         return qs
 

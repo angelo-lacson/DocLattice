@@ -20,6 +20,7 @@ from config.graphql.graphene_types import (
     DocumentPathType,
 )
 from config.graphql.ratelimits import get_user_tier_rate, graphql_ratelimit_dynamic
+from opencontractserver.constants.document_processing import MARKDOWN_MIME_TYPE
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.feedback.models import UserFeedback
@@ -36,7 +37,6 @@ def _corpus_count_subqueries():
     from django.db.models import Count, OuterRef
 
     from opencontractserver.annotations.models import Annotation
-    from opencontractserver.constants.document_processing import MARKDOWN_MIME_TYPE
     from opencontractserver.documents.models import DocumentPath
 
     document_count_sq = (
