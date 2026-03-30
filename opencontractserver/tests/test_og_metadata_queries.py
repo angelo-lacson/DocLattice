@@ -351,8 +351,10 @@ class OGDocumentInCorpusMetadataTestCase(TestCase):
         )
         self.assertEqual(data["creatorName"], "og_doc_corpus_user")
 
-    def test_private_doc_in_public_corpus_returns_none(self):
-        """Test that private doc in public corpus returns None."""
+    def test_doc_added_as_private_to_public_corpus_inherits_public(self):
+        """Test that a document added to a public corpus inherits is_public=True
+        and returns OG metadata. Under the relaxed permission model, documents
+        in public corpuses are always public."""
         query = """
             query GetOGDocInCorpus(
                 $userSlug: String!,
@@ -365,6 +367,8 @@ class OGDocumentInCorpusMetadataTestCase(TestCase):
                     documentSlug: $documentSlug
                 ) {
                     title
+                    description
+                    creatorName
                 }
             }
         """
@@ -378,7 +382,13 @@ class OGDocumentInCorpusMetadataTestCase(TestCase):
         )
 
         self.assertIsNone(result.get("errors"))
-        self.assertIsNone(result["data"]["ogDocumentInCorpusMetadata"])
+        data = result["data"]["ogDocumentInCorpusMetadata"]
+        self.assertIsNotNone(
+            data,
+            "Document in public corpus should be public and return OG metadata",
+        )
+        self.assertEqual(data["title"], "Private Doc in Corpus")
+        self.assertEqual(data["creatorName"], "og_doc_corpus_user")
 
     def test_doc_in_private_corpus_returns_none(self):
         """Test that any doc in private corpus returns None."""
