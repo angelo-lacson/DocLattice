@@ -15,6 +15,7 @@ Covers:
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import urlparse
 
 import pytest
 from django.test import TestCase, override_settings
@@ -181,11 +182,16 @@ class TestEnablementGating:
 
 class TestSearchResult:
     def test_basic_format(self):
-        r = SearchResult(title="Test", url="https://example.com", snippet="Hello")
+        test_url = "https://example.com"
+        r = SearchResult(title="Test", url=test_url, snippet="Hello")
         formatted = r.format(1)
         assert "### Result 1" in formatted
         assert "**Test**" in formatted
-        assert "https://example.com" in formatted
+        # Validate URL appears in output by parsing rather than substring match
+        parsed = urlparse(test_url)
+        assert parsed.scheme == "https"
+        assert parsed.hostname == "example.com"
+        assert test_url in formatted
         assert "Hello" in formatted
 
     def test_snippet_truncation(self):
@@ -337,7 +343,7 @@ class TestAwebSearch:
     def test_missing_api_key(self):
         async def _run():
             with patch(
-                "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
+                "opencontractserver.llms.tools.web_search_tools.WebSearchTool.get_settings",
                 return_value={},
             ):
                 return await aweb_search(query="test query")
@@ -348,7 +354,7 @@ class TestAwebSearch:
     def test_unknown_provider(self):
         async def _run():
             with patch(
-                "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
+                "opencontractserver.llms.tools.web_search_tools.WebSearchTool.get_settings",
                 return_value={"api_key": "key", "provider": "nonexistent"},
             ):
                 return await aweb_search(query="test query")
@@ -372,7 +378,7 @@ class TestAwebSearch:
 
         async def _run():
             with patch(
-                "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
+                "opencontractserver.llms.tools.web_search_tools.WebSearchTool.get_settings",
                 return_value={"api_key": "test-key", "provider": BRAVE_PROVIDER},
             ), patch(
                 "opencontractserver.llms.tools.web_search_tools._get_limiter"
@@ -401,7 +407,7 @@ class TestAwebSearch:
     def test_provider_error_handled(self):
         async def _run():
             with patch(
-                "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
+                "opencontractserver.llms.tools.web_search_tools.WebSearchTool.get_settings",
                 return_value={"api_key": "test-key", "provider": BRAVE_PROVIDER},
             ), patch(
                 "opencontractserver.llms.tools.web_search_tools._get_limiter"
@@ -429,7 +435,7 @@ class TestAwebSearch:
     def test_no_results(self):
         async def _run():
             with patch(
-                "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
+                "opencontractserver.llms.tools.web_search_tools.WebSearchTool.get_settings",
                 return_value={"api_key": "test-key", "provider": BRAVE_PROVIDER},
             ), patch(
                 "opencontractserver.llms.tools.web_search_tools._get_limiter"
@@ -458,7 +464,7 @@ class TestAwebSearch:
 
         async def _run():
             with patch(
-                "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
+                "opencontractserver.llms.tools.web_search_tools.WebSearchTool.get_settings",
                 return_value={"api_key": "key", "provider": BRAVE_PROVIDER},
             ), patch(
                 "opencontractserver.llms.tools.web_search_tools._get_limiter"
@@ -489,7 +495,7 @@ class TestAwebSearch:
 
         async def _run():
             with patch(
-                "opencontractserver.llms.tools.web_search_tools._get_web_search_settings",
+                "opencontractserver.llms.tools.web_search_tools.WebSearchTool.get_settings",
                 return_value={"api_key": "key", "provider": BRAVE_PROVIDER},
             ), patch(
                 "opencontractserver.llms.tools.web_search_tools._get_limiter"
@@ -521,6 +527,14 @@ class TestAwebSearch:
 
 class TestPipelineSettingsToolSecrets(TestCase):
     """Test PipelineSettings tool secret helpers."""
+
+    def tearDown(self):
+        """Clean up tool settings to avoid leaking state to other tests."""
+        from opencontractserver.documents.models import PipelineSettings
+
+        ps = PipelineSettings.get_instance()
+        ps.delete_tool_settings(WEB_SEARCH_SETTINGS_KEY)
+        ps.save()
 
     @override_settings(
         PIPELINE_SETTINGS_CACHE_TTL_SECONDS=0,

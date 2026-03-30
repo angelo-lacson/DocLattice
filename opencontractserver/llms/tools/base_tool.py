@@ -156,19 +156,19 @@ class BaseTool:
                 )
                 return False
 
-        # Check required secret settings
+        # Check required secret settings — values are never logged to
+        # avoid leaking sensitive information.
         secret_names = get_secret_settings(cls)
-        for name in secret_names:
-            # Determine if this secret is required by examining the schema
-            schema = get_settings_schema(cls)
-            info = schema.get(name, {})
+        schema = get_settings_schema(cls)
+        for secret_field in secret_names:
+            info = schema.get(secret_field, {})
             if info.get("required", False):
-                val = settings_dict.get(name)
-                if val is None or (isinstance(val, str) and not val.strip()):
+                raw = settings_dict.get(secret_field)
+                is_empty = raw is None or (isinstance(raw, str) and not raw.strip())
+                if is_empty:
                     logger.debug(
-                        "Tool '%s' not configured: missing required secret '%s'",
+                        "Tool '%s' not configured: a required secret is missing.",
                         cls.tool_key,
-                        name,
                     )
                     return False
 
