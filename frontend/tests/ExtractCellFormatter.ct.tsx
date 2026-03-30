@@ -198,4 +198,152 @@ test.describe("ExtractCellFormatter", () => {
 
     await component.unmount();
   });
+
+  test("opens popup via keyboard and focuses first menu item", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <ExtractCellFormatterTestWrapper
+        value="Keyboard test"
+        cellStatus={{
+          isApproved: false,
+          isRejected: false,
+          isEdited: false,
+          isLoading: false,
+          correctedData: null,
+          originalData: "Keyboard test",
+        }}
+        isExtractComplete={true}
+      />
+    );
+
+    await expect(page.locator("text=Keyboard test")).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Focus the status dot via its ARIA role
+    const statusDot = page.locator(
+      '[role="button"][aria-label="Cell status actions"]'
+    );
+    await expect(statusDot).toBeVisible({ timeout: 5000 });
+    await statusDot.focus();
+
+    // Open popup via Enter key
+    await page.keyboard.press("Enter");
+
+    // Verify popup opened and first menu item (Approve) is focused
+    const approveButton = page.locator('button[aria-label="Approve"]');
+    await expect(approveButton).toBeVisible({ timeout: 5000 });
+    await expect(approveButton).toBeFocused({ timeout: 2000 });
+
+    await component.unmount();
+  });
+
+  test("arrow keys navigate between menu items", async ({ mount, page }) => {
+    // Provide cell with fullSourceList so View Sources button is enabled
+    // and arrow key navigation can reach all four menu items
+    const mockCell = {
+      id: "test-cell-1",
+      fullSourceList: [{ id: "ann-1" }],
+    } as any;
+
+    const component = await mount(
+      <ExtractCellFormatterTestWrapper
+        value="Arrow nav test"
+        cellStatus={{
+          isApproved: false,
+          isRejected: false,
+          isEdited: false,
+          isLoading: false,
+          correctedData: null,
+          originalData: "Arrow nav test",
+        }}
+        isExtractComplete={true}
+        cell={mockCell}
+      />
+    );
+
+    await expect(page.locator("text=Arrow nav test")).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Open popup via keyboard
+    const statusDot = page.locator(
+      '[role="button"][aria-label="Cell status actions"]'
+    );
+    await statusDot.focus();
+    await page.keyboard.press("Enter");
+
+    // Wait for first item to be focused
+    const approveButton = page.locator('button[aria-label="Approve"]');
+    await expect(approveButton).toBeFocused({ timeout: 2000 });
+
+    // Press ArrowDown to move to Edit
+    await page.keyboard.press("ArrowDown");
+    const editButton = page.locator('button[aria-label="Edit"]');
+    await expect(editButton).toBeFocused({ timeout: 2000 });
+
+    // Press ArrowDown to move to View Sources
+    await page.keyboard.press("ArrowDown");
+    const viewSourcesButton = page.locator('button[aria-label="View Sources"]');
+    await expect(viewSourcesButton).toBeFocused({ timeout: 2000 });
+
+    // Press ArrowDown to move to Reject
+    await page.keyboard.press("ArrowDown");
+    const rejectButton = page.locator('button[aria-label="Reject"]');
+    await expect(rejectButton).toBeFocused({ timeout: 2000 });
+
+    // Press ArrowDown again to wrap around to Approve
+    await page.keyboard.press("ArrowDown");
+    await expect(approveButton).toBeFocused({ timeout: 2000 });
+
+    await component.unmount();
+  });
+
+  test("Escape key closes popup and returns focus to status dot", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <ExtractCellFormatterTestWrapper
+        value="Escape test"
+        cellStatus={{
+          isApproved: false,
+          isRejected: false,
+          isEdited: false,
+          isLoading: false,
+          correctedData: null,
+          originalData: "Escape test",
+        }}
+        isExtractComplete={true}
+      />
+    );
+
+    await expect(page.locator("text=Escape test")).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Open popup via keyboard
+    const statusDot = page.locator(
+      '[role="button"][aria-label="Cell status actions"]'
+    );
+    await statusDot.focus();
+    await page.keyboard.press("Enter");
+
+    // Verify popup is open
+    const menu = page.locator('[role="menu"]');
+    await expect(menu).toBeVisible({ timeout: 5000 });
+
+    // Press Escape to close
+    await page.keyboard.press("Escape");
+
+    // Popup should be hidden
+    await expect(menu).not.toBeVisible({ timeout: 5000 });
+
+    // Focus should return to the status dot
+    await expect(statusDot).toBeFocused({ timeout: 2000 });
+
+    await component.unmount();
+  });
 });
