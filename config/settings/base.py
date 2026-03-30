@@ -732,9 +732,10 @@ GRAPHENE_MIDDLEWARE = [
     "config.graphql.permissioning.permission_annotator.middleware.PermissionAnnotatingMiddleware",
 ]
 
-# Add JWT middleware if using Auth0
-if USE_AUTH0:
-    GRAPHENE_MIDDLEWARE.append("graphql_jwt.middleware.JSONWebTokenMiddleware")
+# JWT middleware is always needed — both Auth0 and password login
+# return JWT tokens via the tokenAuth mutation, and subsequent
+# GraphQL requests use Authorization: Bearer <token>.
+GRAPHENE_MIDDLEWARE.append("graphql_jwt.middleware.JSONWebTokenMiddleware")
 
 # Add API Key middleware if enabled
 if USE_API_KEY_AUTH:
