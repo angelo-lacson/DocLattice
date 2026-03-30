@@ -63,9 +63,7 @@ interface EditMessageModalProps {
 const StyledModalInner = styled.div`
   width: 90vw;
   max-width: 700px;
-  border-radius: ${CORPUS_RADII.xl};
   overflow: hidden;
-  box-shadow: ${CORPUS_SHADOWS.xl};
   background: white;
   display: flex;
   flex-direction: column;
@@ -76,7 +74,6 @@ const StyledModalInner = styled.div`
     height: 100vh;
     max-height: 100vh;
     margin: 0;
-    border-radius: 0;
   }
 `;
 
