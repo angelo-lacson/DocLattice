@@ -93,7 +93,6 @@ DEBUG = env.bool("DJANGO_DEBUG", False)
 # In local dev, use simple static file serving (no manifest required).
 # The base.py CompressedManifestStaticFilesStorage requires collectstatic
 # which is unnecessary when runserver serves static files directly.
-if "staticfiles" in STORAGES:  # noqa: F405
-    STORAGES["staticfiles"] = {  # noqa: F405
-        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-    }
+STORAGES["staticfiles"] = {  # noqa: F405
+    "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+}

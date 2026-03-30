@@ -36,7 +36,7 @@ services:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/admin/login/\")'"]
       interval: 10s
       timeout: 5s
-      retries: 30
+      retries: 12
       start_period: 60s
 
   postgres:
@@ -163,9 +163,9 @@ services:
       - "5555:5555"
     command: /start-flower
     healthcheck:
-      test: ["CMD-SHELL", "celery -A config.celery_app inspect ping --timeout 10"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:5555/ || exit 1"]
       interval: 30s
-      timeout: 15s
+      timeout: 10s
       retries: 3
       start_period: 30s
 
