@@ -462,6 +462,13 @@ class Corpus(TreeNode):
 
         # Detect is_public changes so we can propagate to documents.
         # Only check when updating an existing corpus and is_public might change.
+        #
+        # Race condition note: there is a TOCTOU window between the SELECT
+        # (old_is_public lookup) and the UPDATE (super().save()).  A concurrent
+        # save() could change is_public between these two calls, potentially
+        # causing a missed propagation.  This is acceptable because corpus
+        # visibility changes are low-frequency admin operations, and the
+        # propagation is idempotent so a retry or subsequent save corrects it.
         _propagate_public = False
         if self.pk:
             update_fields = kwargs.get("update_fields")
