@@ -30,12 +30,6 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-interface DirectiveLocation {
-  /** Unique key: `chapterIdx-blockIdx-directiveIdx` */
-  key: string;
-  directive: CamlInlineDirective;
-}
-
 export interface CamlDirectiveRendererProps {
   /** The parsed CAML document (from `parseCaml()`) */
   document: CamlDocument;
@@ -51,65 +45,16 @@ export interface CamlDirectiveRendererProps {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Walk the parsed CamlDocument and extract all inline directives from
- * prose blocks, keyed by position.
- */
-function collectDirectives(doc: CamlDocument): DirectiveLocation[] {
-  const result: DirectiveLocation[] = [];
-
-  doc.chapters.forEach((chapter, ci) => {
-    chapter.blocks.forEach((block, bi) => {
-      if (block.type !== "prose") return;
-
-      const { directives } = extractInlineDirectives(block.content);
-      directives.forEach((d, di) => {
-        result.push({
-          key: `${ci}-${bi}-${di}`,
-          directive: d,
-        });
-      });
-    });
-  });
-
-  return result;
-}
-
-/**
- * Build a modified CamlDocument where prose blocks have directive syntax
- * stripped from their content.
- */
-function stripDirectivesFromDocument(doc: CamlDocument): CamlDocument {
-  return {
-    ...doc,
-    chapters: doc.chapters.map((chapter) => ({
-      ...chapter,
-      blocks: chapter.blocks.map((block) => {
-        if (block.type !== "prose") return block;
-        const { content } = extractInlineDirectives(block.content);
-        return { ...block, content };
-      }),
-    })),
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Inner component that renders a single directive via its registered handler.
-// Must be a component (not inline) so that handler hooks are called correctly.
+// Only mounted when a handler exists (filtering happens in the parent), so
+// the hook call is unconditional and React hook ordering is stable.
 // ---------------------------------------------------------------------------
 
 const DirectiveSlot: React.FC<{
   directive: CamlInlineDirective;
   context: DirectiveHandlerContext;
 }> = ({ directive, context }) => {
-  const handler = getDirectiveHandler(directive.agent);
-  if (!handler) return null;
-
-  // The handler is a React hook — it can use useState, useQuery, etc.
-  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const handler = getDirectiveHandler(directive.agent)!;
   const result = handler(directive, context);
   return <>{result.node}</>;
 };
@@ -123,48 +68,70 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
   handlerContext,
   stats,
 }) => {
-  const cleanedDocument = useMemo(
-    () => stripDirectivesFromDocument(document),
-    [document]
-  );
+  // Single pass: extract directives and build cleaned document simultaneously.
+  // Each prose block is parsed once via extractInlineDirectives, producing both
+  // the stripped content and the directive list keyed by position.
+  const { cleanedDocument, positionToDirectives } = useMemo(() => {
+    const directiveMap = new Map<string, CamlInlineDirective[]>();
 
-  // Build a map: cleaned prose content → list of directives for that block.
-  // This lets the renderMarkdown wrapper know which directives to render
-  // after each prose block.
-  const contentToDirectives = useMemo(() => {
-    const map = new Map<string, CamlInlineDirective[]>();
+    const cleaned: CamlDocument = {
+      ...document,
+      chapters: document.chapters.map((chapter, ci) => ({
+        ...chapter,
+        blocks: chapter.blocks.map((block, bi) => {
+          if (block.type !== "prose") return block;
+          const { content, directives } = extractInlineDirectives(
+            block.content
+          );
+          if (directives.length > 0) {
+            directiveMap.set(`${ci}-${bi}`, directives);
+          }
+          return { ...block, content };
+        }),
+      })),
+    };
 
-    document.chapters.forEach((chapter) => {
-      chapter.blocks.forEach((block) => {
+    return { cleanedDocument: cleaned, positionToDirectives: directiveMap };
+  }, [document]);
+
+  // Build a reverse lookup: cleaned content string -> position key.
+  // This is needed because renderMarkdown receives the cleaned text and
+  // we need to find the matching directives by position.
+  const contentToPositionKey = useMemo(() => {
+    const map = new Map<string, string>();
+    cleanedDocument.chapters.forEach((chapter, ci) => {
+      chapter.blocks.forEach((block, bi) => {
         if (block.type !== "prose") return;
-        const { content, directives } = extractInlineDirectives(block.content);
-        if (directives.length > 0) {
-          map.set(content, directives);
+        const key = `${ci}-${bi}`;
+        if (positionToDirectives.has(key)) {
+          map.set(block.content.trim(), key);
         }
       });
     });
-
     return map;
-  }, [document]);
+  }, [cleanedDocument, positionToDirectives]);
 
   const renderMarkdown = useMemo(() => {
     return (md: string) => {
-      const directives = contentToDirectives.get(md.trim());
+      const posKey = contentToPositionKey.get(md.trim());
+      const directives = posKey ? positionToDirectives.get(posKey) : undefined;
 
       return (
         <>
           <MarkdownMessageRenderer content={md} />
-          {directives?.map((d, i) => (
-            <DirectiveSlot
-              key={`${d.agent}-${d.scope}-${i}`}
-              directive={d}
-              context={handlerContext}
-            />
-          ))}
+          {directives
+            ?.filter((d) => getDirectiveHandler(d.agent))
+            .map((d, i) => (
+              <DirectiveSlot
+                key={`${d.agent}-${d.scope}-${i}`}
+                directive={d}
+                context={handlerContext}
+              />
+            ))}
         </>
       );
     };
-  }, [contentToDirectives, handlerContext]);
+  }, [contentToPositionKey, positionToDirectives, handlerContext]);
 
   return (
     <CamlThemeProvider>
