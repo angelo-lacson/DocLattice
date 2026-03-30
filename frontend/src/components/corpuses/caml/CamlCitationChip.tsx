@@ -5,7 +5,8 @@
  * annotation text snippet, document title, similarity score, and a deep link
  * to view the annotation in the document viewer.
  */
-import React, { useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
+import { Link } from "react-router-dom";
 import { BookOpen } from "lucide-react";
 import styled from "styled-components";
 
@@ -129,7 +130,7 @@ const PopoverScore = styled.span`
   white-space: nowrap;
 `;
 
-const PopoverLink = styled.a`
+const PopoverLink = styled(Link)`
   display: block;
   margin-top: 0.5rem;
   padding-top: 0.5rem;
@@ -158,6 +159,8 @@ export const CamlCitationChip: React.FC<CamlCitationChipProps> = ({
   const [showPopover, setShowPopover] = useState(false);
   const hideTimeout = useRef<ReturnType<typeof setTimeout>>();
 
+  useEffect(() => () => clearTimeout(hideTimeout.current), []);
+
   const handleMouseEnter = () => {
     clearTimeout(hideTimeout.current);
     setShowPopover(true);
@@ -178,11 +181,15 @@ export const CamlCitationChip: React.FC<CamlCitationChipProps> = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <Chip $color={citation.labelColor || OS_LEGAL_COLORS.accent}>
+      <Chip
+        $color={citation.labelColor || OS_LEGAL_COLORS.accent}
+        aria-haspopup="true"
+        aria-expanded={showPopover}
+      >
         {citation.labelText || "Citation"}
       </Chip>
 
-      <Popover $visible={showPopover}>
+      <Popover $visible={showPopover} role="tooltip">
         <PopoverLabel $color={citation.labelColor || OS_LEGAL_COLORS.accent}>
           {citation.labelText || "Annotation"}
         </PopoverLabel>
@@ -195,7 +202,7 @@ export const CamlCitationChip: React.FC<CamlCitationChipProps> = ({
           </PopoverDocTitle>
           <PopoverScore>{scorePercent}% match</PopoverScore>
         </PopoverMeta>
-        <PopoverLink href={deepLink}>View in document →</PopoverLink>
+        <PopoverLink to={deepLink}>View in document →</PopoverLink>
       </Popover>
     </ChipWrapper>
   );

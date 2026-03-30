@@ -51,11 +51,14 @@ export function useCiteHandler(
   >(SEMANTIC_SEARCH_ANNOTATIONS);
 
   const mode = directive.args.mode ?? "best";
-  const requestedLimit = directive.args.limit
+  const parsed = directive.args.limit
     ? parseInt(directive.args.limit, 10)
-    : mode === "all"
-    ? ALL_MODE_DEFAULT_LIMIT
-    : DEFAULT_LIMIT;
+    : NaN;
+  const requestedLimit = isNaN(parsed)
+    ? mode === "all"
+      ? ALL_MODE_DEFAULT_LIMIT
+      : DEFAULT_LIMIT
+    : parsed;
   const limit = Math.min(requestedLimit, MAX_LIMIT);
 
   useEffect(() => {
