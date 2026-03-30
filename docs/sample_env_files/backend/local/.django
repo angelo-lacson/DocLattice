@@ -7,6 +7,7 @@ DJANGO_SUPERUSER_USERNAME=admin
 
 # General
 # ------------------------------------------------------------------------------
+DJANGO_DEBUG=True
 USE_DOCKER=yes
 IPYTHONDIR=/app/.ipython
 # IMPORTANT: Generate a unique secret key for production!
