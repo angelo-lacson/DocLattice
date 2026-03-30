@@ -3,31 +3,23 @@ import { CreateArticlePlaceholder } from "../src/components/documents/CreateArti
 
 interface Props {
   viewMode?: "modern-card" | "modern-list";
+  onClick?: () => void;
 }
 
 export const CreateArticlePlaceholderHarness: React.FC<Props> = ({
   viewMode = "modern-card",
+  onClick = () => {},
 }) => {
-  const [clicked, setClicked] = React.useState(false);
-
   return (
     <div
       style={{
-        width: "100vw",
-        height: "100vh",
+        width: viewMode === "modern-card" ? 240 : 500,
+        padding: "1rem",
         background: "#f5f5f5",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "2rem",
       }}
       data-testid="harness-root"
     >
-      <CreateArticlePlaceholder
-        viewMode={viewMode}
-        onClick={() => setClicked(true)}
-      />
-      {clicked && <div data-testid="click-detected">Clicked!</div>}
+      <CreateArticlePlaceholder viewMode={viewMode} onClick={onClick} />
     </div>
   );
 };

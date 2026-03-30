@@ -30,6 +30,7 @@ import {
   ServerAnnotationType,
   LabelDisplayBehavior,
 } from "../../../types/graphql-api";
+import { Z_INDEX } from "../../../assets/configurations/constants";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   getDocumentUrl,
@@ -58,7 +59,7 @@ const StatusDot = styled.div<{ statusColor: string }>`
       case OS_LEGAL_COLORS.dangerBorderHover:
         return "0 0 0 3px rgba(248, 113, 113, 0.15)";
       case OS_LEGAL_COLORS.folderIcon:
-        return "0 0 0 3px rgba(245, 158, 11, 0.15)";
+        return `0 0 0 3px ${folderIconAlpha(0.15)}`;
       default:
         return "0 0 0 3px rgba(148, 163, 184, 0.15)";
     }
@@ -73,7 +74,7 @@ const StatusDot = styled.div<{ statusColor: string }>`
         case OS_LEGAL_COLORS.dangerBorderHover:
           return "0 0 0 4px rgba(248, 113, 113, 0.25)";
         case OS_LEGAL_COLORS.folderIcon:
-          return "0 0 0 4px rgba(245, 158, 11, 0.25)";
+          return `0 0 0 4px ${folderIconAlpha(0.25)}`;
         default:
           return "0 0 0 4px rgba(148, 163, 184, 0.25)";
       }
@@ -176,6 +177,12 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
 
   const cellRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+  const firstMenuItemRef = useRef<HTMLButtonElement>(null);
+  const statusDotRef = useRef<HTMLDivElement>(null);
+  const mouseLeaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const [openedViaKeyboard, setOpenedViaKeyboard] = useState(false);
   const [cellWidth, setCellWidth] = useState<number>(0);
 
   const navigate = useNavigate();
@@ -191,9 +198,25 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
     }
   }, [cellRef]);
 
+  // Clear pending mouse-leave timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (mouseLeaveTimeoutRef.current) {
+        clearTimeout(mouseLeaveTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Close popup on outside click or Escape key
   useEffect(() => {
-    if (!isPopupOpen) return;
+    if (!isPopupOpen) {
+      // Clear any pending mouse-leave timeout when popup closes
+      if (mouseLeaveTimeoutRef.current) {
+        clearTimeout(mouseLeaveTimeoutRef.current);
+        mouseLeaveTimeoutRef.current = null;
+      }
+      return;
+    }
 
     const handleClickOutside = (e: MouseEvent) => {
       if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
@@ -201,7 +224,10 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
       }
     };
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsPopupOpen(false);
+      if (e.key === "Escape") {
+        setIsPopupOpen(false);
+        statusDotRef.current?.focus();
+      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -209,8 +235,23 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
+      if (mouseLeaveTimeoutRef.current) {
+        clearTimeout(mouseLeaveTimeoutRef.current);
+        mouseLeaveTimeoutRef.current = null;
+      }
     };
   }, [isPopupOpen]);
+
+  // Focus the first menu item when popup opens via keyboard
+  useEffect(() => {
+    if (isPopupOpen && openedViaKeyboard) {
+      // Use requestAnimationFrame to ensure the DOM has rendered
+      requestAnimationFrame(() => {
+        firstMenuItemRef.current?.focus();
+        setOpenedViaKeyboard(false);
+      });
+    }
+  }, [isPopupOpen, openedViaKeyboard]);
 
   const statusColor = () => {
     if (cellStatus?.isApproved) return OS_LEGAL_COLORS.greenMedium; // Modern green
@@ -310,27 +351,87 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
       {!cellStatus?.isLoading && isExtractComplete && (
         <>
           <StatusDot
+            ref={statusDotRef}
             statusColor={statusColor()}
             onClick={() => setIsPopupOpen(!isPopupOpen)}
+            role="button"
+            aria-haspopup="menu"
+            aria-expanded={isPopupOpen}
+            aria-label="Cell status actions"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setIsPopupOpen(!isPopupOpen);
+                if (!isPopupOpen) {
+                  setOpenedViaKeyboard(true);
+                }
+              }
+            }}
           />
           {isPopupOpen && (
             <div
               ref={popupRef}
+              role="menu"
+              aria-label="Cell actions"
               style={{
                 position: "absolute",
                 top: "-4px",
                 right: "24px",
-                zIndex: 100,
+                zIndex: Z_INDEX.DROPDOWN,
                 background: "white",
                 borderRadius: "8px",
                 boxShadow: "0 4px 16px rgba(0, 0, 0, 0.12)",
                 border: `1px solid ${OS_LEGAL_COLORS.border}`,
               }}
-              onMouseLeave={() => setTimeout(() => setIsPopupOpen(false), 300)}
+              onMouseEnter={() => {
+                if (mouseLeaveTimeoutRef.current) {
+                  clearTimeout(mouseLeaveTimeoutRef.current);
+                  mouseLeaveTimeoutRef.current = null;
+                }
+              }}
+              onMouseLeave={() => {
+                mouseLeaveTimeoutRef.current = setTimeout(
+                  () => setIsPopupOpen(false),
+                  300
+                );
+              }}
+              onKeyDown={(e) => {
+                const items = popupRef.current?.querySelectorAll(
+                  '[role="menuitem"]:not(:disabled):not([aria-disabled="true"])'
+                );
+                if (!items || items.length === 0) return;
+                const itemsArr = Array.from(items) as HTMLElement[];
+                const currentIndex = itemsArr.indexOf(
+                  document.activeElement as HTMLElement
+                );
+
+                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  const forward = e.key === "ArrowDown";
+                  const nextIndex = forward
+                    ? (currentIndex + 1) % itemsArr.length
+                    : (currentIndex - 1 + itemsArr.length) % itemsArr.length;
+                  itemsArr[nextIndex].focus();
+                } else if (e.key === "Home") {
+                  e.preventDefault();
+                  itemsArr[0].focus();
+                } else if (e.key === "End") {
+                  e.preventDefault();
+                  itemsArr[itemsArr.length - 1].focus();
+                } else if (e.key === "Tab") {
+                  e.preventDefault();
+                  setIsPopupOpen(false);
+                  statusDotRef.current?.focus();
+                }
+              }}
             >
               <ButtonContainer>
                 <div className="buttons">
                   <IconButton
+                    ref={firstMenuItemRef}
+                    role="menuitem"
+                    tabIndex={-1}
                     aria-label="Approve"
                     title="Approve"
                     size="sm"
@@ -350,6 +451,8 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                     <Check size={14} />
                   </IconButton>
                   <IconButton
+                    role="menuitem"
+                    tabIndex={-1}
                     aria-label="Edit"
                     title="Edit"
                     size="sm"
@@ -370,6 +473,8 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                     <Edit2 size={14} />
                   </IconButton>
                   <IconButton
+                    role="menuitem"
+                    tabIndex={-1}
                     aria-label="View Sources"
                     title="View Sources"
                     size="sm"
@@ -393,6 +498,8 @@ export const ExtractCellFormatter: React.FC<ExtractCellFormatterProps> = ({
                     <Eye size={14} />
                   </IconButton>
                   <IconButton
+                    role="menuitem"
+                    tabIndex={-1}
                     aria-label="Reject"
                     title="Reject"
                     size="sm"
