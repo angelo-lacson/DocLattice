@@ -62,6 +62,8 @@ AUTH0_M2M_MANAGEMENT_API_ID=<your-m2m-client-id>
 AUTH0_M2M_MANAGEMENT_GRANT_TYPE=client_credentials
 
 # Microservice URLs
+# These defaults use docker-compose internal hostnames. For Kubernetes,
+# bare metal, or managed service deployments, replace with the actual URLs.
 # ------------------------------------------------------------------------------
 EMBEDDINGS_MICROSERVICE_URL=http://vector-embedder:8000
 DOCLING_PARSER_SERVICE_URL=http://docling-parser:8000/parse/
