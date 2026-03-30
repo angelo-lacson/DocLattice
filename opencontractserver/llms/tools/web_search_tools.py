@@ -25,6 +25,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+import httpx
+
 from opencontractserver.constants.web_search import (
     BRAVE_PROVIDER,
     BRAVE_SEARCH_ENDPOINT,
@@ -202,8 +204,6 @@ class BraveSearchProvider(SearchProvider):
         api_key: str,
         search_type: str = "general",
     ) -> list[SearchResult]:
-        import httpx
-
         headers = {
             "Accept": "application/json",
             "Accept-Encoding": "gzip",
@@ -258,8 +258,6 @@ class TavilySearchProvider(SearchProvider):
         api_key: str,
         search_type: str = "general",
     ) -> list[SearchResult]:
-        import httpx
-
         payload: dict[str, Any] = {
             "api_key": api_key,
             "query": query,

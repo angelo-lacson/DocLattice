@@ -130,6 +130,10 @@ class BaseTool:
         This is the gate used by ``_resolve_tools()`` to decide whether a
         tool backed by ``BaseTool`` should be available to agents.
 
+        **Sync-only**: delegates to :meth:`get_settings` which performs
+        synchronous ORM access.  Must not be called from an async context
+        without wrapping in ``sync_to_async``.
+
         Returns:
             True if every setting marked ``required=True`` has a non-empty
             value in PipelineSettings; False otherwise.
