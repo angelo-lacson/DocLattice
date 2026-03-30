@@ -131,10 +131,23 @@ This is the DRY principle applied to institutional knowledge: annotate once, bui
 ### Development
 
 ```bash
-git clone https://github.com/JSv4/OpenContracts.git
+git clone https://github.com/Open-Source-Legal/OpenContracts.git
 cd OpenContracts
-docker compose -f local.yml up
+
+# Copy sample environment files
+mkdir -p .envs/.local
+cp ./docs/sample_env_files/backend/local/.django ./.envs/.local/.django
+cp ./docs/sample_env_files/backend/local/.postgres ./.envs/.local/.postgres
+cp ./docs/sample_env_files/frontend/local/django.auth.env ./.envs/.local/.frontend
+
+# Build and start all services (including frontend)
+docker compose -f local.yml build
+docker compose -f local.yml --profile fullstack up
 ```
+
+Then open http://localhost:3000 and log in with `admin` / `Openc0ntracts_def@ult`.
+
+See the [full Quick Start guide](docs/quick_start.md) for details and troubleshooting.
 
 ### Production
 
