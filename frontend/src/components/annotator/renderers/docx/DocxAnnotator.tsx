@@ -21,6 +21,7 @@ import React, {
   useRef,
   useMemo,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   ANNOTATION_LABEL_CLASS,
   getGlobalOffsetFromDomPosition,
@@ -52,6 +53,7 @@ import {
   ShortcutHint,
 } from "../../components/SelectionActionMenu";
 import { clampMenuPosition } from "../../../../utils/layout";
+import { Z_INDEX } from "../../../../assets/configurations/constants";
 import DOMPurify from "dompurify";
 import { Tag, X } from "lucide-react";
 import { OS_LEGAL_COLORS } from "../../../../assets/configurations/osLegalStyles";
@@ -916,36 +918,40 @@ const DocxAnnotator: React.FC<DocxAnnotatorProps> = ({
         />
       </div>
 
-      {/* Annotation creation menu */}
-      {menuPosition && pendingSelection && (
-        <SelectionActionMenu
-          ref={menuRef}
-          onMouseDown={(e) => e.stopPropagation()}
-          style={{
-            position: "fixed",
-            left: `${menuPosition.x}px`,
-            top: `${menuPosition.y}px`,
-            zIndex: 1000,
-          }}
-        >
-          <ActionMenuItem onClick={handleCreateAnnotation}>
-            <Tag size={14} />
-            <span>Annotate Selection</span>
-            <ShortcutHint>Enter</ShortcutHint>
-          </ActionMenuItem>
-          <MenuDivider />
-          <ActionMenuItem
-            onClick={() => {
-              setMenuPosition(null);
-              setPendingSelection(null);
-              window.getSelection()?.removeAllRanges();
+      {/* Annotation creation menu — rendered via portal to escape
+          PDFContainer's stacking context (z-index: 1) */}
+      {menuPosition &&
+        pendingSelection &&
+        createPortal(
+          <SelectionActionMenu
+            ref={menuRef}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{
+              position: "fixed",
+              left: `${menuPosition.x}px`,
+              top: `${menuPosition.y}px`,
+              zIndex: Z_INDEX.CONTEXT_MENU,
             }}
           >
-            <X size={14} />
-            <span>Cancel</span>
-          </ActionMenuItem>
-        </SelectionActionMenu>
-      )}
+            <ActionMenuItem onClick={handleCreateAnnotation}>
+              <Tag size={14} />
+              <span>Annotate Selection</span>
+              <ShortcutHint>Enter</ShortcutHint>
+            </ActionMenuItem>
+            <MenuDivider />
+            <ActionMenuItem
+              onClick={() => {
+                setMenuPosition(null);
+                setPendingSelection(null);
+                window.getSelection()?.removeAllRanges();
+              }}
+            >
+              <X size={14} />
+              <span>Cancel</span>
+            </ActionMenuItem>
+          </SelectionActionMenu>,
+          document.body
+        )}
     </div>
   );
 };
