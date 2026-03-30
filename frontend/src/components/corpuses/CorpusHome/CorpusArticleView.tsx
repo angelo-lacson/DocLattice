@@ -221,6 +221,19 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
     }
   }, [camlContent]);
 
+  // Resolve CAML image protocol URIs to actual URLs.
+  // Both "corpus://current" and "corpus://icon" map to the corpus icon —
+  // "current" is the canonical form, "icon" is a convenience alias.
+  const resolveImageSrc = useCallback(
+    (src: string): string | undefined => {
+      if (src === "corpus://current" || src === "corpus://icon") {
+        return corpus.icon || undefined;
+      }
+      return undefined;
+    },
+    [corpus.icon]
+  );
+
   if (loading) {
     return (
       <ArticleViewContainer data-testid={testId}>
@@ -260,16 +273,6 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
       </ArticleViewContainer>
     );
   }
-
-  const resolveImageSrc = useCallback(
-    (src: string): string | undefined => {
-      if (src === "corpus://current" || src === "corpus://icon") {
-        return corpus.icon || undefined;
-      }
-      return undefined;
-    },
-    [corpus.icon]
-  );
 
   if (!parsedDocument) {
     return (
