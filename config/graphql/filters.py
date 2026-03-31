@@ -387,8 +387,11 @@ class DocumentFilter(django_filters.FilterSet):
         return qs
 
     def handle_include_caml(self, queryset, name, value):
-        # No-op here; logic applied in filter_queryset when combined
-        # with in_corpus filtering.
+        # Intentional no-op: the actual CAML exclusion lives in
+        # filter_queryset() above (line ~385) which checks both
+        # in_corpus_with_id and include_caml together.  Passing
+        # includeCaml=false without a corpus filter has no effect
+        # because CAML exclusion only applies to corpus-scoped queries.
         return queryset
 
     def naive_text_search(self, queryset, name, value):
