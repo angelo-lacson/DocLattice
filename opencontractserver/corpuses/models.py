@@ -1037,6 +1037,28 @@ class Corpus(TreeNode):
                         f"{path_record.path} from corpus {self.pk}"
                     )
 
+        # After removal, revoke is_public for documents no longer in any
+        # public corpus.  This mirrors the revocation logic in
+        # _propagate_public_status_to_documents and ensures documents
+        # don't remain publicly visible after removal.
+        if deleted_paths and self.is_public:
+            removed_doc_ids = list({dp.document_id for dp in deleted_paths})
+            still_in_public = set(
+                DocumentPath.objects.filter(
+                    document_id__in=removed_doc_ids,
+                    corpus__is_public=True,
+                    is_current=True,
+                    is_deleted=False,
+                ).values_list("document_id", flat=True)
+            )
+            revoke_ids = [d for d in removed_doc_ids if d not in still_in_public]
+            if revoke_ids:
+                from opencontractserver.documents.models import Document
+
+                Document.objects.filter(id__in=revoke_ids, is_public=True).update(
+                    is_public=False
+                )
+
         return deleted_paths
 
     def get_documents(self, include_caml=False):
