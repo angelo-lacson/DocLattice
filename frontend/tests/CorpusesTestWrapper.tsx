@@ -36,6 +36,7 @@ import {
   GET_CORPUS_CONVERSATIONS,
   GET_CORPUS_ENGAGEMENT_METRICS,
   GET_BADGES,
+  GET_CORPUS_ARTICLE,
 } from "../src/graphql/queries";
 import { GET_CORPUS_FOLDERS } from "../src/graphql/queries/folders";
 import { GET_CORPUS_METADATA_COLUMNS } from "../src/graphql/metadataOperations";
@@ -51,7 +52,15 @@ const createTestCache = () =>
       Query: {
         fields: {
           corpuses: relayStylePagination(),
-          documents: relayStylePagination(),
+          documents: relayStylePagination([
+            "inCorpusWithId",
+            "inFolderId",
+            "textSearch",
+            "hasLabelWithId",
+            "hasAnnotationsWithIds",
+            "includeCaml",
+            "title",
+          ]),
           annotations: relayStylePagination(),
           analyses: relayStylePagination(),
           extracts: relayStylePagination(),
@@ -178,6 +187,7 @@ const WILDCARD_QUERIES = [
   { name: "GetCorpusWithHistory", query: GET_CORPUS_WITH_HISTORY },
   { name: "GetCorpusConversations", query: GET_CORPUS_CONVERSATIONS },
   { name: "GetCorpusFolders", query: GET_CORPUS_FOLDERS },
+  { name: "GetCorpusArticle", query: GET_CORPUS_ARTICLE },
 ] as const;
 
 // Create wildcard link to respond to repeated queries with consistent results

@@ -6,9 +6,13 @@ It MUST remain free of Django imports (models, apps, etc.) to avoid
 AppRegistryNotReady errors during settings loading.
 """
 
+# MIME type for Markdown / CAML files.  Used in doc_tasks.py to skip
+# ingestion and in the parser pipeline for type detection.
+MARKDOWN_MIME_TYPE = "text/markdown"
+
 # File types that are stored as txt_extract_file (plain text, no parsing needed).
 # Shared between versioning.py and corpus models.py — single source of truth.
-TEXT_MIMETYPES = {"text/plain", "text/markdown", "application/txt"}
+TEXT_MIMETYPES = {"text/plain", MARKDOWN_MIME_TYPE, "application/txt"}
 
 # Maximum file upload size in bytes (5 GB).
 # Used by Django's DATA_UPLOAD_MAX_MEMORY_SIZE setting.

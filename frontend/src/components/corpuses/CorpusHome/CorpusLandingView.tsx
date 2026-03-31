@@ -125,7 +125,7 @@ export interface CorpusLandingViewProps {
   /** Callback when "Read Article" is clicked */
   onViewArticle?: () => void;
   /** Callback when "Create Article" CTA is clicked */
-  onCreateArticle?: () => void;
+  onOpenArticleEditor?: () => void;
   /** Callback when a specific thread is clicked from the feed */
   onThreadClick?: (threadId: string) => void;
   /** @deprecated Mode toggle is now rendered as a floating element by CorpusHome */
@@ -164,7 +164,7 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
   onOpenMobileMenu,
   onViewDiscussions,
   onViewArticle,
-  onCreateArticle,
+  onOpenArticleEditor,
   onThreadClick,
   isPowerUserMode = false,
   testId = "corpus-landing",
@@ -367,9 +367,9 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
         </LandingHero>
 
         {/* Create article CTA — shown when no Readme.CAML and user can edit */}
-        {!hasArticle && canEdit && onCreateArticle && (
+        {!hasArticle && canEdit && onOpenArticleEditor && (
           <CreateArticleCTA
-            onClick={onCreateArticle}
+            onClick={onOpenArticleEditor}
             data-testid={`${testId}-create-article-cta`}
           >
             <CTAIconCircle>
