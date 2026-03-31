@@ -4,7 +4,6 @@ filter exclusion, and upload mutation file-type detection.
 """
 
 from django.contrib.auth import get_user_model
-from django.db.models.signals import post_save
 from django.test import TestCase
 from django.utils import timezone
 from graphene.test import Client
@@ -14,10 +13,7 @@ from config.graphql.schema import schema
 from opencontractserver.constants.document_processing import MARKDOWN_MIME_TYPE
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document, DocumentProcessingStatus
-from opencontractserver.documents.signals import (
-    DOC_CREATE_UID,
-    process_doc_on_create_atomic,
-)
+from opencontractserver.documents.signals import process_doc_on_create_atomic
 
 User = get_user_model()
 
@@ -27,24 +23,21 @@ class TestContext:
         self.user = user
 
 
-def _create_doc_without_signal(*, title, creator, file_type, **kwargs):
-    """Create a Document with the post_save signal temporarily disconnected."""
-    post_save.disconnect(
-        process_doc_on_create_atomic,
-        sender=Document,
-        dispatch_uid=DOC_CREATE_UID,
+def _create_doc_bypass_pipeline(*, title, creator, file_type, **kwargs):
+    """Create a Document that bypasses the processing pipeline.
+
+    Sets processing_started so the post_save signal guard
+    (``if created and not instance.processing_started``) skips task
+    queuing.  This avoids disconnecting/reconnecting the signal, which
+    can cause cross-test interference with TransactionTestCase tests.
+    """
+    return Document.objects.create(
+        title=title,
+        creator=creator,
+        file_type=file_type,
+        processing_started=timezone.now(),
+        **kwargs,
     )
-    try:
-        doc = Document.objects.create(
-            title=title, creator=creator, file_type=file_type, **kwargs
-        )
-    finally:
-        post_save.connect(
-            process_doc_on_create_atomic,
-            sender=Document,
-            dispatch_uid=DOC_CREATE_UID,
-        )
-    return doc
 
 
 class CamlSignalHandlerTest(TestCase):
@@ -57,12 +50,17 @@ class CamlSignalHandlerTest(TestCase):
 
     def test_signal_handler_marks_markdown_complete(self):
         """process_doc_on_create_atomic marks markdown docs as COMPLETED."""
-        doc = _create_doc_without_signal(
+        doc = _create_doc_bypass_pipeline(
             title="Readme.CAML",
             creator=self.user,
             file_type=MARKDOWN_MIME_TYPE,
         )
-        # Verify doc starts pending
+        # Reset processing_started so the handler guard passes
+        Document.objects.filter(pk=doc.pk).update(
+            processing_started=None,
+            processing_status=DocumentProcessingStatus.PENDING,
+        )
+        doc.refresh_from_db()
         self.assertEqual(doc.processing_status, DocumentProcessingStatus.PENDING)
 
         # Call the signal handler directly
@@ -75,11 +73,17 @@ class CamlSignalHandlerTest(TestCase):
 
     def test_signal_handler_skips_non_created(self):
         """Signal handler is a no-op when created=False."""
-        doc = _create_doc_without_signal(
+        doc = _create_doc_bypass_pipeline(
             title="Readme.CAML",
             creator=self.user,
             file_type=MARKDOWN_MIME_TYPE,
         )
+        # Reset so we can verify the handler doesn't change it
+        Document.objects.filter(pk=doc.pk).update(
+            processing_started=None,
+            processing_status=DocumentProcessingStatus.PENDING,
+        )
+        doc.refresh_from_db()
 
         process_doc_on_create_atomic(sender=Document, instance=doc, created=False)
 
@@ -89,14 +93,12 @@ class CamlSignalHandlerTest(TestCase):
 
     def test_signal_handler_skips_already_started(self):
         """Signal handler is a no-op when processing_started is already set."""
-        doc = _create_doc_without_signal(
+        doc = _create_doc_bypass_pipeline(
             title="Readme.CAML",
             creator=self.user,
             file_type=MARKDOWN_MIME_TYPE,
         )
-        # Simulate processing_started being set
-        doc.processing_started = timezone.now()
-        doc.save(update_fields=["processing_started"])
+        # processing_started is already set from _create_doc_bypass_pipeline
 
         process_doc_on_create_atomic(sender=Document, instance=doc, created=True)
 
@@ -115,7 +117,7 @@ class CamlIngestDocSkipTest(TestCase):
 
     def test_ingest_doc_skips_markdown(self):
         """ingest_doc marks markdown documents as COMPLETED without parsing."""
-        doc = _create_doc_without_signal(
+        doc = _create_doc_bypass_pipeline(
             title="article.md",
             creator=self.user,
             file_type=MARKDOWN_MIME_TYPE,
@@ -141,7 +143,7 @@ class CamlExtractThumbnailSkipTest(TestCase):
 
     def test_extract_thumbnail_skips_markdown(self):
         """extract_thumbnail returns early for markdown docs without error."""
-        doc = _create_doc_without_signal(
+        doc = _create_doc_bypass_pipeline(
             title="article.md",
             creator=self.user,
             file_type=MARKDOWN_MIME_TYPE,
