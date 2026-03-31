@@ -351,7 +351,7 @@ def ingest_doc(self, user_id: int, doc_id: int) -> dict[str, Any]:
     # this, but this check acts as a defensive fallback in case ingest_doc
     # is called directly (e.g., via Celery retry or manual invocation).
     if document.file_type == MARKDOWN_MIME_TYPE:
-        document.processing_status = DocumentProcessingStatus.COMPLETE
+        document.processing_status = DocumentProcessingStatus.COMPLETED
         document.save(update_fields=["processing_status"])
         logger.info(
             f"[ingest_doc] Skipping ingestion for markdown document {doc_id} "

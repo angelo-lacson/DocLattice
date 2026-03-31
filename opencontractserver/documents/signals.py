@@ -53,7 +53,7 @@ def process_doc_on_create_atomic(sender, instance, created, **kwargs):
             from opencontractserver.documents.models import DocumentProcessingStatus
 
             instance.processing_started = timezone.now()
-            instance.processing_status = DocumentProcessingStatus.COMPLETE
+            instance.processing_status = DocumentProcessingStatus.COMPLETED
             instance.backend_lock = False
             instance.save(
                 update_fields=[
