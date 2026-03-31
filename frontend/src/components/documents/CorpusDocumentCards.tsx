@@ -391,7 +391,6 @@ export const CorpusDocumentCards = ({
               height: "100%",
               display: "flex",
               flexDirection: "column",
-              paddingTop: "3.5rem", // Add padding to prevent overlap with view toggle buttons
             }}
             style={{
               flex: 1,
@@ -413,7 +412,6 @@ export const CorpusDocumentCards = ({
         ) : (
           <div
             style={{
-              paddingTop: "3.5rem",
               height: "100%",
               display: "flex",
               flexDirection: "column",
