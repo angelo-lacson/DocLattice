@@ -278,7 +278,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
         isPowerUserMode={isPowerUserMode}
         onViewDiscussions={handleViewDiscussions}
         onViewArticle={handleViewArticle}
-        onCreateArticle={onEditArticle}
+        onOpenArticleEditor={onEditArticle}
         onThreadClick={handleThreadClick}
         testId="corpus-home-landing"
       />

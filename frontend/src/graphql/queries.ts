@@ -54,6 +54,7 @@ export const GET_DOCUMENTS = gql`
     $annotateDocLabels: Boolean!
     $hasAnnotationsWithIds: String
     $includeMetadata: Boolean!
+    $includeCaml: Boolean
   ) {
     documents(
       inCorpusWithId: $inCorpusWithId
@@ -61,6 +62,7 @@ export const GET_DOCUMENTS = gql`
       textSearch: $textSearch
       hasLabelWithId: $hasLabelWithId
       hasAnnotationsWithIds: $hasAnnotationsWithIds
+      includeCaml: $includeCaml
       first: $limit
       after: $cursor
     ) {

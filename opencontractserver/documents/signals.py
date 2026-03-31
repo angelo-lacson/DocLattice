@@ -43,6 +43,31 @@ def process_doc_on_create_atomic(sender, instance, created, **kwargs):
     """
     if created and not instance.processing_started:
 
+        # CAML/markdown files are rendered client-side and need no
+        # server-side processing (no parsing, thumbnailing, or embedding).
+        from opencontractserver.constants.document_processing import (
+            MARKDOWN_MIME_TYPE,
+        )
+
+        if instance.file_type == MARKDOWN_MIME_TYPE:
+            from opencontractserver.documents.models import DocumentProcessingStatus
+
+            instance.processing_started = timezone.now()
+            instance.processing_status = DocumentProcessingStatus.COMPLETED
+            instance.backend_lock = False
+            instance.save(
+                update_fields=[
+                    "processing_started",
+                    "processing_status",
+                    "backend_lock",
+                ]
+            )
+            logger.info(
+                f"Skipping pipeline for markdown document {instance.id} "
+                "(rendered client-side)"
+            )
+            return
+
         ingest_tasks = []
 
         # Add the thumbnail extraction task

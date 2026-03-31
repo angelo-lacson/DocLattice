@@ -101,6 +101,7 @@ interface DocumentQueryVariables {
   textSearch?: string;
   hasLabelWithId?: string;
   inCorpusWithId?: string;
+  includeCaml?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -870,7 +871,10 @@ export const Documents = () => {
     annotateDocLabels: Boolean(filtered_to_corpus || filtered_to_labelset_id),
     ...(document_search_term && { textSearch: document_search_term }),
     ...(filtered_to_label_id && { hasLabelWithId: filtered_to_label_id }),
-    ...(filtered_to_corpus && { inCorpusWithId: filtered_to_corpus.id }),
+    ...(filtered_to_corpus && {
+      inCorpusWithId: filtered_to_corpus.id,
+      includeCaml: true,
+    }),
   };
 
   const {
