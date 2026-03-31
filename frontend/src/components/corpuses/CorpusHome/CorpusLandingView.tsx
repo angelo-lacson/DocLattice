@@ -19,11 +19,7 @@ import {
   GET_CORPUS_WITH_HISTORY,
   GetCorpusWithHistoryQuery,
   GetCorpusWithHistoryQueryVariables,
-  GET_CORPUS_ARTICLE,
-  GetCorpusArticleInput,
-  GetCorpusArticleOutput,
 } from "../../../graphql/queries";
-import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { CorpusType } from "../../../types/graphql-api";
 import { PermissionTypes } from "../../types";
@@ -107,6 +103,8 @@ const CTASubtitle = styled.span`
 export interface CorpusLandingViewProps {
   /** The corpus object */
   corpus: CorpusType;
+  /** Whether a Readme.CAML article exists — provided by parent to avoid redundant query */
+  hasArticle?: boolean;
   /** Callback when "View Details" is clicked */
   onViewDetails: () => void;
   /** Callback when edit description is clicked */
@@ -154,6 +152,7 @@ export interface CorpusLandingViewProps {
  */
 export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
   corpus,
+  hasArticle: hasArticleProp,
   onViewDetails,
   onEditDescription,
   onNavigateToCorpuses,
@@ -182,17 +181,7 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
     variables: historyVariables,
   });
 
-  // Check if a Readme.CAML article exists in this corpus
-  const articleVars = useMemo<GetCorpusArticleInput>(
-    () => ({ corpusId: corpus.id, title: CAML_ARTICLE_FILENAME }),
-    [corpus.id]
-  );
-  const { data: articleData } = useQuery<
-    GetCorpusArticleOutput,
-    GetCorpusArticleInput
-  >(GET_CORPUS_ARTICLE, { variables: articleVars });
-
-  const hasArticle = (articleData?.documents?.edges?.length ?? 0) > 0;
+  const hasArticle = hasArticleProp ?? false;
 
   // Fetch markdown content from URL
   useEffect(() => {
