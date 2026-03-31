@@ -5133,7 +5133,12 @@ export const GET_CORPUS_DOCUMENTS_FOR_TOC = gql`
 
 export const GET_CORPUS_ARTICLE = gql`
   query GetCorpusArticle($corpusId: String!, $title: String!) {
-    documents(inCorpusWithId: $corpusId, title: $title, first: 1) {
+    documents(
+      inCorpusWithId: $corpusId
+      title: $title
+      includeCaml: true
+      first: 1
+    ) {
       edges {
         node {
           id
