@@ -810,6 +810,23 @@ test.describe("Corpus Navigation - Desktop", () => {
       page.getByTestId("corpus-home-landing-discussions")
     ).toBeVisible({ timeout: 10000 });
 
+    // Wait for InlineChatBar framer-motion animation to complete (opacity 0→1, 300ms)
+    const chatBar = page.getByTestId("corpus-home-landing-chat");
+    await expect(chatBar).toBeVisible({ timeout: 5000 });
+    // Framer-motion uses CSS opacity which Playwright's toBeVisible doesn't check.
+    // Wait for the animation to settle (300ms animation + 200ms delay + buffer).
+    await expect
+      .poll(
+        async () => {
+          const opacity = await chatBar.evaluate(
+            (el) => window.getComputedStyle(el).opacity
+          );
+          return parseFloat(opacity);
+        },
+        { timeout: 3000 }
+      )
+      .toBeGreaterThan(0.9);
+
     await docScreenshot(page, "nav--corpus-home--desktop", { fullPage: true });
   });
 
@@ -833,6 +850,20 @@ test.describe("Corpus Navigation - Desktop", () => {
     await expect(
       page.locator("span").filter({ hasText: /^About$/ })
     ).toBeVisible();
+
+    // Wait for CorpusAbout framer-motion animation to complete (opacity 0→1, 400ms)
+    const aboutCard = page.getByTestId("corpus-home-details-about");
+    await expect
+      .poll(
+        async () => {
+          const opacity = await aboutCard.evaluate(
+            (el) => window.getComputedStyle(el).opacity
+          );
+          return parseFloat(opacity);
+        },
+        { timeout: 3000 }
+      )
+      .toBeGreaterThan(0.9);
 
     await docScreenshot(page, "nav--corpus-details--desktop");
   });
@@ -893,6 +924,21 @@ test.describe("Corpus Navigation - Mobile", () => {
       page.getByTestId("corpus-home-landing-discussions")
     ).toBeVisible({ timeout: 10000 });
 
+    // Wait for InlineChatBar framer-motion animation to complete
+    const chatBar = page.getByTestId("corpus-home-landing-chat");
+    await expect(chatBar).toBeVisible({ timeout: 5000 });
+    await expect
+      .poll(
+        async () => {
+          const opacity = await chatBar.evaluate(
+            (el) => window.getComputedStyle(el).opacity
+          );
+          return parseFloat(opacity);
+        },
+        { timeout: 3000 }
+      )
+      .toBeGreaterThan(0.9);
+
     await docScreenshot(page, "nav--corpus-home--mobile", { fullPage: true });
   });
 
@@ -908,6 +954,20 @@ test.describe("Corpus Navigation - Mobile", () => {
     // Wait for details view
     const detailsView = page.getByTestId("corpus-home-details");
     await expect(detailsView).toBeVisible({ timeout: 10000 });
+
+    // Wait for CorpusAbout framer-motion animation to complete
+    const aboutCard = page.getByTestId("corpus-home-details-about");
+    await expect
+      .poll(
+        async () => {
+          const opacity = await aboutCard.evaluate(
+            (el) => window.getComputedStyle(el).opacity
+          );
+          return parseFloat(opacity);
+        },
+        { timeout: 3000 }
+      )
+      .toBeGreaterThan(0.9);
 
     await docScreenshot(page, "nav--corpus-details--mobile");
   });
