@@ -43,21 +43,24 @@ import {
   GetCorpusArticleOutput,
 } from "../../graphql/queries";
 import { CreateArticlePlaceholder } from "./CreateArticlePlaceholder";
-import { CAML_ARTICLE_FILENAME } from "../../assets/configurations/constants";
+import {
+  CAML_ARTICLE_FILENAME,
+  MARKDOWN_MIME_TYPE,
+} from "../../assets/configurations/constants";
 import { DocumentType } from "../../types/graphql-api";
 import { FileUploadPackageProps } from "../widgets/modals/DocumentUploadModal";
 
 interface CorpusDocumentCardsProps {
   opened_corpus_id: string | null;
   viewMode?: ViewMode;
-  onCreateArticle?: () => void;
+  onOpenArticleEditor?: () => void;
   canUpdate?: boolean;
 }
 
 export const CorpusDocumentCards = ({
   opened_corpus_id,
   viewMode = "modern-list",
-  onCreateArticle,
+  onOpenArticleEditor,
   canUpdate = false,
 }: CorpusDocumentCardsProps) => {
   /**
@@ -109,6 +112,7 @@ export const CorpusDocumentCards = ({
           annotateDocLabels: true,
           inCorpusWithId: opened_corpus_id,
           includeMetadata: true,
+          includeCaml: true,
           // Only filter by folder when inside a corpus
           // null (corpus root) = "__root__" to show only root-level docs
           // string = specific folder ID
@@ -250,6 +254,16 @@ export const CorpusDocumentCards = ({
   };
 
   const onOpen = (document: DocumentType) => {
+    // CAML articles open in the article editor, not the document viewer
+    if (
+      document.title === CAML_ARTICLE_FILENAME &&
+      document.fileType === MARKDOWN_MIME_TYPE &&
+      onOpenArticleEditor
+    ) {
+      onOpenArticleEditor();
+      return;
+    }
+
     // Use smart navigation utility to prefer slugs and prevent redirects
     const corpusData = opened_corpus_id ? openedCorpus() : null;
     navigateToDocument(
@@ -332,12 +346,12 @@ export const CorpusDocumentCards = ({
   });
 
   // Add "Create article" placeholder if no Readme.CAML exists and user can edit
-  if (!hasArticle && canUpdate && onCreateArticle && !selected_folder_id) {
+  if (!hasArticle && canUpdate && onOpenArticleEditor && !selected_folder_id) {
     prefixItems.push(
       <CreateArticlePlaceholder
         key="create-article"
         viewMode={viewMode === "modern-list" ? "modern-list" : "modern-card"}
-        onClick={onCreateArticle}
+        onClick={onOpenArticleEditor}
       />
     );
   }
@@ -377,7 +391,6 @@ export const CorpusDocumentCards = ({
               height: "100%",
               display: "flex",
               flexDirection: "column",
-              paddingTop: "3.5rem", // Add padding to prevent overlap with view toggle buttons
             }}
             style={{
               flex: 1,
@@ -399,7 +412,6 @@ export const CorpusDocumentCards = ({
         ) : (
           <div
             style={{
-              paddingTop: "3.5rem",
               height: "100%",
               display: "flex",
               flexDirection: "column",

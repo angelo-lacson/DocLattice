@@ -522,9 +522,8 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
     }
   }, [forceNewChat]);
 
-  // Modify the effect that sends the initial query
+  // Send the initial query once the WebSocket is ready
   useEffect(() => {
-    // Do not send if the provided initialQuery is empty or whitespace
     if (
       initialQuery &&
       initialQuery.trim().length > 0 &&
@@ -533,8 +532,21 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
     ) {
       const timer = setTimeout(() => {
         if (socketRef.current && wsReady) {
-          // Simply send the initial query over websocket (without adding it to chat)
-          socketRef.current.send(JSON.stringify({ query: initialQuery }));
+          const trimmed = initialQuery.trim();
+          setChat((prev) => [
+            ...prev,
+            {
+              messageId: `user_${Date.now()}_${Math.random()
+                .toString(36)
+                .substr(2)}`,
+              user: user_obj?.email || "You",
+              content: trimmed,
+              timestamp: new Date().toLocaleString(),
+              isAssistant: false,
+              isComplete: false,
+            },
+          ]);
+          socketRef.current.send(JSON.stringify({ query: trimmed }));
           setNewMessage("");
           setWsError(null);
         }
@@ -542,7 +554,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
 
       return () => clearTimeout(timer);
     }
-  }, [initialQuery, wsReady, isNewChat]);
+  }, [initialQuery, wsReady, isNewChat, user_obj?.email]);
 
   /**
    * Loads existing conversation by ID, clearing local state, then showing chat UI.

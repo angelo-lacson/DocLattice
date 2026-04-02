@@ -274,6 +274,7 @@ export const cache = new InMemoryCache({
           "textSearch",
           "hasLabelWithId",
           "hasAnnotationsWithIds",
+          "includeCaml",
           "title",
         ]),
         corpuses: relayStylePagination(),
