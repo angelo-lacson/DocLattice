@@ -75,7 +75,7 @@ const Popover = styled.div<{ $visible: boolean }>`
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
-  z-index: 100;
+  z-index: 1100;
   opacity: ${({ $visible }) => ($visible ? 1 : 0)};
   pointer-events: ${({ $visible }) => ($visible ? "auto" : "none")};
   transition: opacity 0.15s ease;
@@ -146,6 +146,22 @@ const PopoverLink = styled(Link)`
 `;
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a deep link URL to view an annotation in the document viewer.
+ * Centralised here so the URL scheme is in one place; if the routing
+ * system later provides path helpers this is the only call site to update.
+ */
+function buildAnnotationDeepLink(
+  citation: Pick<ResolvedCitation, "corpusSlug" | "documentSlug" | "page">
+): string {
+  const base = `/corpuses/${citation.corpusSlug}/documents/${citation.documentSlug}`;
+  return citation.page != null ? `${base}?page=${citation.page}` : base;
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -170,9 +186,7 @@ export const CamlCitationChip: React.FC<CamlCitationChipProps> = ({
     hideTimeout.current = setTimeout(() => setShowPopover(false), 200);
   };
 
-  const deepLink = `/corpuses/${citation.corpusSlug}/documents/${
-    citation.documentSlug
-  }${citation.page != null ? `?page=${citation.page}` : ""}`;
+  const deepLink = buildAnnotationDeepLink(citation);
 
   const scorePercent = Math.round(citation.similarityScore * 100);
 
@@ -183,6 +197,7 @@ export const CamlCitationChip: React.FC<CamlCitationChipProps> = ({
     >
       <Chip
         $color={citation.labelColor || OS_LEGAL_COLORS.accent}
+        aria-label={`Citation: ${citation.labelText || "Citation"}`}
         aria-haspopup="true"
         aria-expanded={showPopover}
       >
@@ -240,4 +255,35 @@ const PulsingChip = styled.span`
 
 export const CamlCitationLoading: React.FC = () => (
   <PulsingChip>finding citation…</PulsingChip>
+);
+
+// ---------------------------------------------------------------------------
+// Error placeholder
+// ---------------------------------------------------------------------------
+
+const ErrorChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  margin: 0 0.125rem;
+  border: 1px solid ${OS_LEGAL_COLORS.danger}33;
+  border-radius: 9999px;
+  background: ${OS_LEGAL_COLORS.danger}0d;
+  color: ${OS_LEGAL_COLORS.danger};
+  font-size: 0.6875rem;
+  font-weight: 500;
+  vertical-align: baseline;
+`;
+
+interface CamlCitationErrorProps {
+  message?: string;
+}
+
+export const CamlCitationError: React.FC<CamlCitationErrorProps> = ({
+  message,
+}) => (
+  <ErrorChip title={message ?? "Citation search failed"}>
+    citation failed
+  </ErrorChip>
 );

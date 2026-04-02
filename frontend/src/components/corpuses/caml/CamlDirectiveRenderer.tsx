@@ -95,25 +95,36 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
   }, [document]);
 
   // Build a reverse lookup: cleaned content string -> position key.
-  // This is needed because renderMarkdown receives the cleaned text and
-  // we need to find the matching directives by position.
+  // Uses a counter suffix to disambiguate duplicate prose content —
+  // if two blocks have identical text after directive stripping, each
+  // gets a unique key like "content#0" / "content#1".
   const contentToPositionKey = useMemo(() => {
     const map = new Map<string, string>();
+    const counts = new Map<string, number>();
     cleanedDocument.chapters.forEach((chapter, ci) => {
       chapter.blocks.forEach((block, bi) => {
         if (block.type !== "prose") return;
         const key = `${ci}-${bi}`;
         if (positionToDirectives.has(key)) {
-          map.set(block.content.trim(), key);
+          const trimmed = block.content.trim();
+          const count = counts.get(trimmed) ?? 0;
+          counts.set(trimmed, count + 1);
+          map.set(`${trimmed}#${count}`, key);
         }
       });
     });
     return map;
   }, [cleanedDocument, positionToDirectives]);
 
+  // Track how many times each content string has been seen during
+  // rendering so we can match it to the correct positional key.
   const renderMarkdown = useMemo(() => {
+    const renderCounts = new Map<string, number>();
     return (md: string) => {
-      const posKey = contentToPositionKey.get(md.trim());
+      const trimmed = md.trim();
+      const count = renderCounts.get(trimmed) ?? 0;
+      renderCounts.set(trimmed, count + 1);
+      const posKey = contentToPositionKey.get(`${trimmed}#${count}`);
       const directives = posKey ? positionToDirectives.get(posKey) : undefined;
 
       return (
@@ -121,9 +132,9 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
           <MarkdownMessageRenderer content={md} />
           {directives
             ?.filter((d) => getDirectiveHandler(d.agent))
-            .map((d, i) => (
+            .map((d) => (
               <DirectiveSlot
-                key={`${d.agent}-${d.scope}-${i}`}
+                key={`${d.agent}-${d.scope}-${d.offset}`}
                 directive={d}
                 context={handlerContext}
               />

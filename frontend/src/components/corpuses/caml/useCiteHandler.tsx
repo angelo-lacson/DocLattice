@@ -21,6 +21,7 @@ import type {
 } from "./directiveRegistry";
 import {
   CamlCitationChip,
+  CamlCitationError,
   CamlCitationLoading,
   ResolvedCitation,
 } from "./CamlCitationChip";
@@ -63,6 +64,10 @@ export function useCiteHandler(
 
   useEffect(() => {
     if (resolvedRef.current || !context.corpusId || !directive.context) return;
+
+    // Mark as in-flight to prevent duplicate requests. The ref is set
+    // synchronously before the async call to avoid race conditions from
+    // React batched re-renders.
     resolvedRef.current = true;
 
     searchAnnotations({
@@ -90,12 +95,18 @@ export function useCiteHandler(
         setCitations(results);
       })
       .catch((err) => {
+        // Clear in-flight flag so a retry is possible if context changes
+        resolvedRef.current = false;
         setError(err.message ?? "Citation search failed");
       });
   }, [directive.context, context.corpusId, limit, searchAnnotations]);
 
   if (error) {
-    return { loading: false, node: null, error };
+    return {
+      loading: false,
+      node: <CamlCitationError message={error} />,
+      error,
+    };
   }
 
   if (!citations) {
