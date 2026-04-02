@@ -115,8 +115,13 @@ class BaseTool:
 
             ps = PipelineSettings.get_instance()
             return ps.get_tool_settings(cls.full_settings_key())
-        except Exception as e:
-            logger.debug("Could not load tool settings for '%s': %s", cls.tool_key, e)
+        except Exception:
+            # Log only the tool key — exception details may contain
+            # connection strings or other sensitive information.
+            logger.debug(
+                "Could not load tool settings for '%s' (exception suppressed)",
+                cls.tool_key,
+            )
             return {}
 
     # ------------------------------------------------------------------

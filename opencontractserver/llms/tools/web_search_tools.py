@@ -192,7 +192,7 @@ class SearchProvider(ABC):
         search_type: str = "general",
     ) -> list[SearchResult]:
         """Execute a search and return structured results."""
-        ...
+        raise NotImplementedError
 
 
 class BraveSearchProvider(SearchProvider):
@@ -431,8 +431,6 @@ def _web_search_sync_for_tests(
     loop is already running.  This is intentionally private — callers
     outside the test suite should use :func:`aweb_search` directly.
     """
-    import asyncio
-
     return asyncio.run(
         aweb_search(query=query, num_results=num_results, search_type=search_type)
     )

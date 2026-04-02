@@ -15,7 +15,6 @@ Covers:
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
-from urllib.parse import urlparse
 
 import pytest
 from django.test import TestCase, override_settings
@@ -188,10 +187,6 @@ class TestSearchResult:
         formatted = r.format(1)
         assert "### Result 1" in formatted
         assert "**Test**" in formatted
-        # Validate URL appears in output by parsing rather than substring match
-        parsed = urlparse(test_url)
-        assert parsed.scheme == "https"
-        assert parsed.hostname == "example.com"
         assert test_url in formatted
         assert "Hello" in formatted
 
