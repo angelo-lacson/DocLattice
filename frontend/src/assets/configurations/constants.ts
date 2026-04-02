@@ -23,6 +23,8 @@ export const MENTION_PREVIEW_LENGTH = 24;
 // CAML article configuration
 // The conventional document title for corpus articles (like GitHub's README)
 export const CAML_ARTICLE_FILENAME = "Readme.CAML";
+// MIME type used by the backend for CAML/Markdown documents
+export const MARKDOWN_MIME_TYPE = "text/markdown";
 
 // Label/UI colors
 // Default neutral gray color (Tailwind slate-400) used for inactive/placeholder states

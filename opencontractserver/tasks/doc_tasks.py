@@ -21,6 +21,7 @@ from opencontractserver.constants import (
     MAX_PROCESSING_ERROR_LENGTH,
     MAX_PROCESSING_TRACEBACK_LENGTH,
 )
+from opencontractserver.constants.document_processing import MARKDOWN_MIME_TYPE
 from opencontractserver.constants.truncation import (
     MAX_DOC_TITLE_FALLBACK_LENGTH,
     MAX_NOTIFICATION_ERROR_LENGTH,
@@ -343,6 +344,20 @@ def ingest_doc(self, user_id: int, doc_id: int) -> dict[str, Any]:
     except Document.DoesNotExist:
         logger.error(f"Document with id {doc_id} does not exist.")
         return {"status": "failed", "doc_id": doc_id, "error": "Document not found"}
+
+    # CAML/markdown files are rendered client-side and never parsed.
+    # Mark as complete immediately so the pipeline doesn't touch them.
+    # NOTE: The post_save signal in documents/signals.py also guards against
+    # this, but this check acts as a defensive fallback in case ingest_doc
+    # is called directly (e.g., via Celery retry or manual invocation).
+    if document.file_type == MARKDOWN_MIME_TYPE:
+        document.processing_status = DocumentProcessingStatus.COMPLETED
+        document.save(update_fields=["processing_status"])
+        logger.info(
+            f"[ingest_doc] Skipping ingestion for markdown document {doc_id} "
+            "(rendered client-side)"
+        )
+        return {"status": "success", "doc_id": doc_id}
 
     # Set processing status to PROCESSING at start of first attempt
     if self.request.retries == 0:
@@ -681,6 +696,13 @@ def extract_thumbnail(self, doc_id: int) -> None:
         return
 
     file_type: str = document.file_type
+
+    # CAML/markdown files have no visual content to thumbnail.
+    # Defensive check - the signal in documents/signals.py prevents the
+    # pipeline from being queued, but this guards against direct calls.
+    if file_type == MARKDOWN_MIME_TYPE:
+        logger.info(f"[extract_thumbnail] Skipping thumbnail for markdown doc {doc_id}")
+        return
 
     # Check for preferred thumbnailer in database settings first
     from opencontractserver.documents.models import PipelineSettings

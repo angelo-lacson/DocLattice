@@ -162,6 +162,7 @@ export const DocumentRelationshipModalTestWrapper: React.FC<Props> = (
             limit: DOCUMENT_PICKER_SEARCH_LIMIT,
             annotateDocLabels: false,
             includeMetadata: false,
+            includeCaml: false,
           },
         },
         result: {
@@ -189,6 +190,7 @@ export const DocumentRelationshipModalTestWrapper: React.FC<Props> = (
             limit: DOCUMENT_PICKER_SEARCH_LIMIT,
             annotateDocLabels: false,
             includeMetadata: false,
+            includeCaml: false,
           },
         },
         result: {

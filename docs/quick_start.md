@@ -30,6 +30,7 @@ called source in your user's home directory:
     $ mkdir source
     $ cd source
     $ git clone https://github.com/Open-Source-Legal/OpenContracts.git
+    $ cd OpenContracts
 ```
 
 ## **Step 2**: Copy sample .env files to appropriate folders
@@ -82,19 +83,13 @@ not using something like auth0 and are going to rely on Django auth to provision
 
 ## **Step 3**: Build the Stack
 
-Change into the directory of the repository you just cloned, e.g.:
-
-```
-    $ cd OpenContracts
-```
-
 Now, you need to build the docker compose stack. If you are okay with the default username and password, and, most
 importantly, you are NOT PLANNING TO HOST THE APPLICATION online, the default local settings are sufficient.
 
 **Note:** The build process requires the .env files to be in place (from Step 2), as Docker will use these during the build.
 
 ```
-    $ docker-compose -f local.yml build
+    $ docker compose -f local.yml build
 ```
 
 This command will:
@@ -113,7 +108,7 @@ If you're **not** planning to do any frontend development, the easiest way to ge
 just type:
 
 ```commandline
-    $ docker-compose -f local.yml --profile fullstack up
+    $ docker compose -f local.yml --profile fullstack up
 ```
 
 This will start docker compose and add a container for the frontend to the stack.
@@ -125,7 +120,7 @@ If you plan to actively develop the frontend, you'll need to run the backend and
 First, start the backend services (without the frontend):
 
 ```commandline
-    $ docker-compose -f local.yml up
+    $ docker compose -f local.yml up
 ```
 
 Then, in a new terminal, navigate to the
@@ -147,13 +142,13 @@ Before logging in, let's verify everything is running correctly:
 
 1. **Check that all containers are running:**
    ```
-   $ docker-compose -f local.yml ps
+   $ docker compose -f local.yml ps
    ```
    You should see containers for: django, postgres, redis, celeryworker, celerybeat, and (if using Option 1) frontend.
 
 2. **Check the logs for any errors:**
    ```
-   $ docker-compose -f local.yml logs django
+   $ docker compose -f local.yml logs django
    ```
 
 3. **Verify the backend is accessible:**
@@ -204,14 +199,14 @@ See our [authentication guide](./configuration/authentication.md) for how to cre
 
 3. **Database connection errors**: Ensure the postgres container is fully started before the django container. The system should handle this automatically, but if issues persist, try:
    ```
-   $ docker-compose -f local.yml down
-   $ docker-compose -f local.yml up
+   $ docker compose -f local.yml down
+   $ docker compose -f local.yml up
    ```
 
    If you're reusing an existing PostgreSQL volume with different credentials, clean the volumes:
    ```
-   $ docker-compose -f local.yml down -v
-   $ docker-compose -f local.yml up
+   $ docker compose -f local.yml down -v
+   $ docker compose -f local.yml up
    ```
 
 4. **Missing .envs directory**: Make sure you created the `.envs/.local/` directory and copied all three required env files (.django, .postgres, and .frontend)
@@ -252,10 +247,10 @@ $ docker compose -f production.yml up
 
 | Operation | Local Development | Production |
 |-----------|-------------------|------------|
-| Build | `docker-compose -f local.yml build` | `docker compose -f production.yml build` |
-| Start | `docker-compose -f local.yml up` | `docker compose -f production.yml up` |
-| Migrations | `docker-compose -f local.yml run django python manage.py migrate` | `docker compose -f production.yml --profile migrate up migrate` |
-| Logs | `docker-compose -f local.yml logs django` | `docker compose -f production.yml logs django` |
+| Build | `docker compose -f local.yml build` | `docker compose -f production.yml build` |
+| Start | `docker compose -f local.yml up` | `docker compose -f production.yml up` |
+| Migrations | `docker compose -f local.yml run django python manage.py migrate` | `docker compose -f production.yml --profile migrate up migrate` |
+| Logs | `docker compose -f local.yml logs django` | `docker compose -f production.yml logs django` |
 
 ## **Useful Docker Commands**
 
@@ -264,31 +259,31 @@ Here are some helpful commands for managing your OpenContracts installation:
 ### Container Management
 ```bash
 # View running containers
-$ docker-compose -f local.yml ps
+$ docker compose -f local.yml ps
 
 # Stop all containers
-$ docker-compose -f local.yml down
+$ docker compose -f local.yml down
 
 # Stop and remove all containers and volumes (WARNING: deletes data)
-$ docker-compose -f local.yml down -v
+$ docker compose -f local.yml down -v
 
 # Restart a specific service
-$ docker-compose -f local.yml restart django
+$ docker compose -f local.yml restart django
 
 # View logs for a specific service
-$ docker-compose -f local.yml logs -f django
+$ docker compose -f local.yml logs -f django
 ```
 
 ### Database Management
 ```bash
 # Create a database backup
-$ docker-compose -f local.yml exec postgres backup
+$ docker compose -f local.yml exec postgres backup
 
 # Run Django shell
-$ docker-compose -f local.yml run django python manage.py shell
+$ docker compose -f local.yml run django python manage.py shell
 
 # Run database migrations manually
-$ docker-compose -f local.yml run django python manage.py migrate
+$ docker compose -f local.yml run django python manage.py migrate
 
 # For production deployments - run migrations using the dedicated service
 $ docker compose -f production.yml --profile migrate up migrate
@@ -297,7 +292,7 @@ $ docker compose -f production.yml --profile migrate up migrate
 ### Troubleshooting
 ```bash
 # Rebuild containers after code changes
-$ docker-compose -f local.yml build
+$ docker compose -f local.yml build
 
 # Remove unused Docker resources
 $ docker system prune -a

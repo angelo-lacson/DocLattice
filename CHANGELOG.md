@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Quickstart blockers** (PR #1179): Fixed several issues preventing first-time setup from working:
+  - Missing `EMBEDDINGS_MICROSERVICE_URL` and `DOCLING_PARSER_SERVICE_URL` env var defaults crash Django on startup (`config/settings/base.py`)
+  - Celerybeat race condition on first boot — added Django healthcheck and `service_healthy` dependency for celery services (`local.yml`)
+  - Password login broken — JWT middleware was gated behind `USE_AUTH0=True` so `tokenAuth` tokens were never validated (`config/settings/base.py`)
+  - Admin user login 500 — `User.save()` re-validated slug on `last_login` updates, and `"admin"` is a reserved slug (`opencontractserver/users/models.py`)
+  - Django admin panel 500 on static files — overrode `StaticFilesStorage` in local settings (`config/settings/local.py`)
+  - Nginx duplicate `.js` MIME type warning (`frontend/conf/conf.d/default.conf`)
+  - Updated README quickstart with missing steps and corrected `docker compose` v2 syntax
+
 ### Added
 
 - **CAML Interactive Article System** (PR #1156): Frontend support for corpus articles using CAML (Corpus Article Markup Language). Includes a two-pass parser (tokenizer + block parsers), typed intermediate representation, and composable renderer supporting hero sections, cards, pills, tabs, timelines, CTAs, signup blocks, corpus stats, and pullquotes. Frontend adds `CamlArticleEditor` modal with live preview, `CorpusArticleView` for rendered article display, and `CorpusLandingView` integration for article discovery. Playwright component tests with `docScreenshot` captures for all block types.

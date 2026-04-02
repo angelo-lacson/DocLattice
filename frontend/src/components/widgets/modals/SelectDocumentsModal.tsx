@@ -97,6 +97,7 @@ export const SelectDocumentsModal = ({
   }
   if (filtered_to_corpus) {
     document_variables["inCorpusWithId"] = filtered_to_corpus.id;
+    document_variables["includeCaml"] = false;
   }
   // Only annotate document labels if there is a selected corpus to cut down on possible explosion of possible labels otherwise.
   if (filtered_to_corpus || filtered_to_labelset_id) {
