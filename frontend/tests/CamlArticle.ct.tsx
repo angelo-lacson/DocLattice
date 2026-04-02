@@ -405,3 +405,63 @@ test.describe("CamlArticle - Case History Block", () => {
     await component.unmount();
   });
 });
+
+test.describe("CamlArticle - Image Block with resolveImageSrc", () => {
+  test("should resolve corpus://current to a URL via resolveImageSrc", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(<CamlArticleTestWrapper />);
+
+    // Scroll to the branding chapter
+    await page.getByText("Corpus Branding").scrollIntoViewIfNeeded();
+
+    // The corpus://current image should be resolved by the default mock resolver
+    const imageBlock = page.locator('[data-testid="image-block"]').first();
+    await expect(imageBlock).toBeVisible({ timeout: 5000 });
+
+    // Should render an img tag (not a placeholder) for the resolved image
+    const resolvedImg = imageBlock.locator('[data-testid="image-block-img"]');
+    await expect(resolvedImg).toBeVisible();
+    await expect(resolvedImg).toHaveAttribute(
+      "src",
+      "https://example.com/corpus-icon.png"
+    );
+
+    // The external https:// image should also render as an img
+    const externalBlock = page.locator('[data-testid="image-block"]').nth(1);
+    const externalImg = externalBlock.locator(
+      '[data-testid="image-block-img"]'
+    );
+    await expect(externalImg).toBeVisible();
+    await expect(externalImg).toHaveAttribute(
+      "src",
+      "https://example.com/logo.png"
+    );
+
+    // Caption on the first image
+    await expect(page.getByTestId("image-block-caption").first()).toBeVisible();
+
+    await docScreenshot(page, "caml--image-block--corpus-resolved");
+
+    await component.unmount();
+  });
+
+  test("should show placeholder when resolveImageSrc returns undefined", async ({
+    mount,
+    page,
+  }) => {
+    const noResolver = (_src: string) => undefined;
+    const component = await mount(
+      <CamlArticleTestWrapper resolveImageSrc={noResolver} />
+    );
+
+    await page.getByText("Corpus Branding").scrollIntoViewIfNeeded();
+
+    // corpus://current should show placeholder since resolver returns undefined
+    const placeholder = page.locator('[data-testid="image-block-placeholder"]');
+    await expect(placeholder.first()).toBeVisible({ timeout: 5000 });
+
+    await component.unmount();
+  });
+});
