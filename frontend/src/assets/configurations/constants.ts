@@ -343,6 +343,13 @@ export const MESSAGE_COUNT_COLORS = {
 // Warning color for partially supported file types (amber/yellow)
 export const PARTIALLY_SUPPORTED_WARNING_COLOR = "#D69E2E";
 
+// Datacell status indicator colors (used in ExtractGridEmbed status dots)
+export const DATACELL_STATUS_COLORS = {
+  FAILED: "#ef4444",
+  COMPLETE: "#22c55e",
+  PENDING: "#94a3b8",
+} as const;
+
 // Processing failure UI colors (used in DocumentItem, ModernDocumentItem)
 export const FAILURE_COLORS = {
   ICON_BG: "#dc2626",

@@ -14,8 +14,9 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@apollo/client";
 import { ExternalLink, AlertCircle, Loader2, Table2 } from "lucide-react";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 
+import { DATACELL_STATUS_COLORS } from "../../assets/configurations/constants";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import {
   GET_EXTRACT_GRID_EMBED,
@@ -27,15 +28,28 @@ import {
 import { getDocumentUrl, buildQueryParams } from "../../utils/navigationUtils";
 
 // ---------------------------------------------------------------------------
+// Keyframes
+// ---------------------------------------------------------------------------
+
+const spin = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+`;
+
+// ---------------------------------------------------------------------------
 // Styled components
 // ---------------------------------------------------------------------------
+
+const SpinningLoader = styled(Loader2)`
+  animation: ${spin} 1s linear infinite;
+`;
 
 const EmbedWrapper = styled.div`
   margin: 1.5rem 0;
   border-radius: 12px;
   border: 1px solid ${OS_LEGAL_COLORS.border};
   overflow: hidden;
-  background: #fff;
+  background: ${OS_LEGAL_COLORS.surface};
 `;
 
 const EmbedHeader = styled.div`
@@ -213,20 +227,10 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
     fetchPolicy: "cache-first",
   });
 
-  if (!extractId) {
-    return (
-      <EmbedWrapper>
-        <CenterMessage>
-          <AlertCircle size={20} color={OS_LEGAL_COLORS.textMuted} />
-          Missing extractId prop.
-        </CenterMessage>
-      </EmbedWrapper>
-    );
-  }
-
   const extract = data?.extract;
 
   // Build row-major grid: group datacells by document
+  // NOTE: This hook must remain above all early returns (Rules of Hooks).
   const { columns, rows } = useMemo(() => {
     if (!extract)
       return { columns: [] as ExtractGridEmbedColumn[], rows: [] as GridRow[] };
@@ -245,12 +249,23 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
     return { columns: cols, rows: Array.from(rowMap.values()) };
   }, [extract]);
 
+  if (!extractId) {
+    return (
+      <EmbedWrapper>
+        <CenterMessage>
+          <AlertCircle size={20} color={OS_LEGAL_COLORS.textMuted} />
+          Missing extractId prop.
+        </CenterMessage>
+      </EmbedWrapper>
+    );
+  }
+
   // --- Loading state ---
   if (loading) {
     return (
       <EmbedWrapper>
         <CenterMessage>
-          <Loader2 size={20} style={{ animation: "spin 1s linear infinite" }} />
+          <SpinningLoader size={20} />
           Loading extract data...
         </CenterMessage>
       </EmbedWrapper>
@@ -342,12 +357,14 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
 
                   return (
                     <Td key={col.id}>
-                      {isFailed && <StatusDot $color="#ef4444" />}
+                      {isFailed && (
+                        <StatusDot $color={DATACELL_STATUS_COLORS.FAILED} />
+                      )}
                       {isComplete && !isFailed && (
-                        <StatusDot $color="#22c55e" />
+                        <StatusDot $color={DATACELL_STATUS_COLORS.COMPLETE} />
                       )}
                       {!isComplete && !isFailed && (
-                        <StatusDot $color="#94a3b8" />
+                        <StatusDot $color={DATACELL_STATUS_COLORS.PENDING} />
                       )}
                       <CellContent>{displayValue}</CellContent>
                       {sources.length > 0 && (

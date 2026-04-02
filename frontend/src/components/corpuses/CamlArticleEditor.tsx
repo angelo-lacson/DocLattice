@@ -20,12 +20,16 @@ import styled from "styled-components";
 import { Modal } from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
-import { CAML_ARTICLE_FILENAME } from "../../assets/configurations/constants";
+import {
+  CAML_ARTICLE_FILENAME,
+  DEBOUNCE,
+} from "../../assets/configurations/constants";
 import {
   GET_CORPUS_ARTICLE,
   GetCorpusArticleInput,
   GetCorpusArticleOutput,
   GET_EXTRACTS,
+  GetExtractsOutput,
 } from "../../graphql/queries";
 import {
   UPLOAD_DOCUMENT,
@@ -34,20 +38,9 @@ import {
 } from "../../graphql/mutations";
 import { parseCaml } from "@os-legal/caml";
 import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
-import { ExtractGridEmbed } from "../extracts/ExtractGridEmbed";
-import {
-  useCamlComponentRenderer,
-  CamlComponentRegistry,
-} from "../../hooks/useCamlComponentRenderer";
+import { useCamlComponentRenderer } from "../../hooks/useCamlComponentRenderer";
 import { buildComponentProseFence } from "../../utils/camlComponents";
-
-/**
- * Registry of components available in the editor preview.
- * Must match the registry used by CorpusArticleView.
- */
-const CAML_COMPONENTS: CamlComponentRegistry = {
-  "extract-grid": ExtractGridEmbed,
-};
+import { CAML_COMPONENTS } from "../../utils/camlComponentRegistry";
 
 // ---------------------------------------------------------------------------
 // Styled components
@@ -244,7 +237,7 @@ const ExtractPickerDropdown = styled.div`
   min-width: 280px;
   max-height: 240px;
   overflow-y: auto;
-  background: #fff;
+  background: ${OS_LEGAL_COLORS.surface};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -375,6 +368,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [showExtractPicker, setShowExtractPicker] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const extractPickerRef = useRef<HTMLDivElement>(null);
 
   // Query for existing Readme.CAML
   const articleVars = useMemo<GetCorpusArticleInput>(
@@ -481,7 +475,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
   }, [content, hasChanges, isNew, corpusId, uploadDocument, refetch, onUpdate]);
 
   // Query for corpus extracts (for the insert toolbar)
-  const { data: extractsData } = useQuery(GET_EXTRACTS, {
+  const { data: extractsData } = useQuery<GetExtractsOutput>(GET_EXTRACTS, {
     variables: { corpusId, corpusAction_Isnull: true },
     skip: !isOpen,
   });
@@ -489,28 +483,47 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
   const corpusExtracts = useMemo(() => {
     const edges = extractsData?.extracts?.edges ?? [];
     return edges
-      .map((e: any) => e?.node)
+      .map((e) => e?.node)
       .filter(Boolean)
-      .filter((e: any) => e.finished || e.fullDocumentList?.length > 0);
+      .filter((e) => e.finished || (e.fullDocumentList?.length ?? 0) > 0);
   }, [extractsData]);
+
+  // Close extract picker when clicking outside
+  useEffect(() => {
+    if (!showExtractPicker) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        extractPickerRef.current &&
+        !extractPickerRef.current.contains(event.target as Node)
+      ) {
+        setShowExtractPicker(false);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+    }, DEBOUNCE.CLICK_OUTSIDE_DELAY_MS);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showExtractPicker]);
 
   /** Insert a component marker as a prose block at the cursor. */
   const handleInsertComponent = useCallback(
     (type: string, props: Record<string, string>) => {
       setShowExtractPicker(false);
       const fence = buildComponentProseFence(type, props);
-
       const textarea = textareaRef.current;
-      if (textarea) {
-        const pos = textarea.selectionStart ?? content.length;
-        const before = content.slice(0, pos);
-        const after = content.slice(pos);
-        setContent(before + fence + after);
-      } else {
-        setContent((prev) => prev + fence);
-      }
+
+      setContent((prev) => {
+        const pos = textarea?.selectionStart ?? prev.length;
+        return prev.slice(0, pos) + fence + prev.slice(pos);
+      });
     },
-    [content]
+    []
   );
 
   // Markdown renderer with generic component marker interception
@@ -542,7 +555,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
               CAML Source
             </PaneHeader>
             <EditorToolbar>
-              <div style={{ position: "relative" }}>
+              <div ref={extractPickerRef} style={{ position: "relative" }}>
                 <ToolbarBtn
                   onClick={() => setShowExtractPicker((v) => !v)}
                   title="Insert extract grid table"
@@ -557,7 +570,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
                         No extracts found for this corpus.
                       </ExtractPickerEmpty>
                     ) : (
-                      corpusExtracts.map((ext: any) => (
+                      corpusExtracts.map((ext) => (
                         <ExtractPickerItem
                           key={ext.id}
                           onClick={() =>

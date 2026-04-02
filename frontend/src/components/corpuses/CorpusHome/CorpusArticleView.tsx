@@ -23,19 +23,8 @@ import type { CamlDocument } from "@os-legal/caml";
 import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
 import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants";
 import { ArticleDocumentsDrawer } from "./ArticleDocumentsDrawer";
-import { ExtractGridEmbed } from "../../extracts/ExtractGridEmbed";
-import {
-  useCamlComponentRenderer,
-  CamlComponentRegistry,
-} from "../../../hooks/useCamlComponentRenderer";
-
-/**
- * Registry of components that can be embedded in CAML prose blocks via
- * `[component:TYPE ...]` markers. Add new component types here.
- */
-const CAML_COMPONENTS: CamlComponentRegistry = {
-  "extract-grid": ExtractGridEmbed,
-};
+import { useCamlComponentRenderer } from "../../../hooks/useCamlComponentRenderer";
+import { CAML_COMPONENTS } from "../../../utils/camlComponentRegistry";
 
 // ---------------------------------------------------------------------------
 // Styled components

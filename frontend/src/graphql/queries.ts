@@ -2140,7 +2140,6 @@ export interface ExtractGridEmbedColumn {
 export interface ExtractGridEmbedSource {
   id: string;
   page: number;
-  rawText: string;
 }
 
 export interface ExtractGridEmbedCell {
@@ -2216,7 +2215,6 @@ export const GET_EXTRACT_GRID_EMBED = gql`
         fullSourceList {
           id
           page
-          rawText
         }
       }
     }
