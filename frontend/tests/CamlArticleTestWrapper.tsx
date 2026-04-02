@@ -277,14 +277,25 @@ export const SAMPLE_CAML_DOCUMENT: CamlDocument = {
   ],
 };
 
+const MOCK_CORPUS_ICON_URL = "https://example.com/corpus-icon.png";
+
+const defaultResolveImageSrc = (src: string): string | undefined => {
+  if (src === "corpus://current" || src === "corpus://icon") {
+    return MOCK_CORPUS_ICON_URL;
+  }
+  return undefined;
+};
+
 export interface CamlArticleTestWrapperProps {
   document?: CamlDocument;
   stats?: Record<string, number | undefined>;
+  resolveImageSrc?: (src: string) => string | undefined;
 }
 
 export const CamlArticleTestWrapper: React.FC<CamlArticleTestWrapperProps> = ({
   document: doc = SAMPLE_CAML_DOCUMENT,
   stats,
+  resolveImageSrc = defaultResolveImageSrc,
 }) => {
   return (
     <MemoryRouter>
@@ -293,7 +304,11 @@ export const CamlArticleTestWrapper: React.FC<CamlArticleTestWrapperProps> = ({
         data-testid="caml-article-test-root"
       >
         <CamlThemeProvider>
-          <CamlArticle document={doc} stats={stats} />
+          <CamlArticle
+            document={doc}
+            stats={stats}
+            resolveImageSrc={resolveImageSrc}
+          />
         </CamlThemeProvider>
       </div>
     </MemoryRouter>
