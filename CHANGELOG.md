@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **CAML Interactive Article System** (PR #1156): Frontend support for corpus articles using CAML (Corpus Article Markup Language). Includes a two-pass parser (tokenizer + block parsers), typed intermediate representation, and composable renderer supporting hero sections, cards, pills, tabs, timelines, CTAs, signup blocks, corpus stats, and pullquotes. Frontend adds `CamlArticleEditor` modal with live preview, `CorpusArticleView` for rendered article display, and `CorpusLandingView` integration for article discovery. Playwright component tests with `docScreenshot` captures for all block types.
+- **Extract grid embed in CAML articles** (PR #1177): New `ExtractGridEmbed` component renders extract data tables inline in CAML articles via `[component:extract-grid extractId=...]` marker syntax. Includes `useCamlComponentRenderer` hook and `camlComponents` utility for a generic component marker system, `CAML_COMPONENTS` shared registry (`frontend/src/utils/camlComponentRegistry.ts`), and `ExtractPickerDropdown` toolbar in the editor for inserting extract grids. Query (`GET_EXTRACT_GRID_EMBED`) fetches extract fieldset columns, datacells, and source annotations with deep links to the document viewer.
 
 ### Fixed
 
