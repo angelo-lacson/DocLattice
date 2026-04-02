@@ -61,13 +61,11 @@ export interface CamlDirectiveRendererTestWrapperProps {
 export const CamlDirectiveRendererTestWrapper: React.FC<
   CamlDirectiveRendererTestWrapperProps
 > = ({ document: doc = DOCUMENT_WITH_DIRECTIVES }) => {
-  // Register mock handler inside the component to avoid module-level
-  // singleton collisions when both test and production code are loaded
-  // in the same process.
-  useEffect(() => {
-    registerDirectiveHandler("cite", useMockCiteHandler);
-    return () => unregisterDirectiveHandler("cite");
-  }, []);
+  // Register synchronously so the handler is available on the first render
+  // (useEffect would fire too late). Map.set is idempotent for same key.
+  // Cleanup on unmount prevents singleton collisions across test runs.
+  registerDirectiveHandler("cite", useMockCiteHandler);
+  useEffect(() => () => unregisterDirectiveHandler("cite"), []);
 
   return (
     <MemoryRouter>
