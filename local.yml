@@ -32,6 +32,12 @@ services:
     ports:
       - "8000:8000"
     command: /start
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/admin/login/\")'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   postgres:
     build:
@@ -101,6 +107,8 @@ services:
     image: opencontractserver_local_django
     container_name: celeryworker
     depends_on:
+      django:
+        condition: service_healthy
       redis:
         condition: service_healthy
       postgres:
@@ -122,6 +130,8 @@ services:
     image: opencontractserver_local_django
     container_name: celerybeat
     depends_on:
+      django:
+        condition: service_healthy
       redis:
         condition: service_healthy
       postgres:
@@ -142,9 +152,22 @@ services:
     <<: *django
     image: opencontractserver_local_flower
     container_name: flower
+    depends_on:
+      django:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     ports:
       - "5555:5555"
     command: /start-flower
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5555/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   frontend:
       build:

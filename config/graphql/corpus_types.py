@@ -194,7 +194,7 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         DocumentTypeConnection, description="Documents in this corpus via DocumentPath"
     )
 
-    def resolve_documents(self, info):
+    def resolve_documents(self, info, **kwargs):
         """
         Custom resolver for documents field that uses DocumentPath.
         Returns documents with active paths in this corpus, filtered by
@@ -204,11 +204,16 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Effective Permission = MIN(document_permission, corpus_permission).
         A private document in a public corpus is still hidden from
         users without document-level access.
+
+        CAML/markdown files are included here since this resolver serves
+        corpus views that need to display the article landing page.
         """
         from opencontractserver.documents.models import Document
 
         user = getattr(info.context, "user", None)
-        corpus_doc_ids = self.get_documents().values_list("id", flat=True)
+        corpus_doc_ids = self.get_documents(include_caml=True).values_list(
+            "id", flat=True
+        )
         return Document.objects.filter(id__in=corpus_doc_ids).visible_to_user(user)
 
     def resolve_annotations(self, info):

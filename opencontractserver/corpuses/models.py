@@ -17,6 +17,7 @@ from tree_queries.models import TreeNode
 
 from opencontractserver.constants.document_processing import (
     DEFAULT_DOCUMENT_PATH_PREFIX,
+    MARKDOWN_MIME_TYPE,
     MAX_FILENAME_LENGTH,
     MAX_PROCESSING_ERROR_LENGTH,
     MAX_PROCESSING_TRACEBACK_LENGTH,
@@ -459,7 +460,79 @@ class Corpus(TreeNode):
 
         self.modified = timezone.now()
 
-        return super().save(*args, **kwargs)
+        # Detect is_public changes so we can propagate to documents.
+        # Only check when updating an existing corpus and is_public might change.
+        #
+        # Race condition note: there is a TOCTOU window between the SELECT
+        # (old_is_public lookup) and the UPDATE (super().save()).  A concurrent
+        # save() could change is_public between these two calls, potentially
+        # causing a missed propagation.  This is acceptable because corpus
+        # visibility changes are low-frequency admin operations, and the
+        # propagation is idempotent so a retry or subsequent save corrects it.
+        _propagate_public = False
+        if self.pk:
+            update_fields = kwargs.get("update_fields")
+            if update_fields is None or "is_public" in update_fields:
+                old_is_public = (
+                    Corpus.objects.filter(pk=self.pk)
+                    .values_list("is_public", flat=True)
+                    .first()
+                )
+                if old_is_public is not None and old_is_public != self.is_public:
+                    _propagate_public = True
+
+        result = super().save(*args, **kwargs)
+
+        if _propagate_public:
+            self._propagate_public_status_to_documents()
+
+        return result
+
+    def _propagate_public_status_to_documents(self):
+        """Propagate this corpus's is_public flag to its documents.
+
+        When a corpus becomes public, all its documents become public.
+        When a corpus becomes private, documents are set private ONLY if
+        they are not in any other public corpus (preserving visibility
+        for documents shared across multiple corpora).
+
+        This maintains the permissioning guide's rule: both document AND
+        corpus must have is_public=True for anonymous access.
+        """
+        from opencontractserver.documents.models import Document, DocumentPath
+
+        doc_ids = list(
+            DocumentPath.objects.filter(
+                corpus=self, is_current=True, is_deleted=False
+            ).values_list("document_id", flat=True)
+        )
+
+        if not doc_ids:
+            return
+
+        if self.is_public:
+            # Corpus became public → all its documents become public
+            Document.objects.filter(id__in=doc_ids, is_public=False).update(
+                is_public=True
+            )
+        else:
+            # Corpus became private → revoke public only for documents
+            # NOT in any other public corpus
+            in_other_public = set(
+                DocumentPath.objects.filter(
+                    document_id__in=doc_ids,
+                    corpus__is_public=True,
+                    is_current=True,
+                    is_deleted=False,
+                )
+                .exclude(corpus=self)
+                .values_list("document_id", flat=True)
+            )
+            revoke_ids = [d for d in doc_ids if d not in in_other_public]
+            if revoke_ids:
+                Document.objects.filter(id__in=revoke_ids, is_public=True).update(
+                    is_public=False
+                )
 
     def has_documents(self) -> bool:
         """Check whether this corpus has any active documents (via DocumentPath)."""
@@ -684,7 +757,8 @@ class Corpus(TreeNode):
                 md_summary_file=document.md_summary_file,
                 page_count=document.page_count,
                 custom_meta=document.custom_meta,  # Inherit custom metadata
-                is_public=document.is_public,  # Inherit public status
+                is_public=self.is_public
+                or document.is_public,  # Public corpus → public doc
                 version_tree_id=tree_id,  # NEW isolated version tree
                 is_current=True,
                 parent=None,  # Root of NEW content tree
@@ -709,6 +783,7 @@ class Corpus(TreeNode):
                         "title",
                         "description",
                         "file_type",
+                        "is_public",
                         "structural_annotation_set",
                     ]
                 },
@@ -962,13 +1037,40 @@ class Corpus(TreeNode):
                         f"{path_record.path} from corpus {self.pk}"
                     )
 
+        # After removal, revoke is_public for documents no longer in any
+        # public corpus.  This mirrors the revocation logic in
+        # _propagate_public_status_to_documents and ensures documents
+        # don't remain publicly visible after removal.
+        if deleted_paths and self.is_public:
+            removed_doc_ids = list({dp.document_id for dp in deleted_paths})
+            still_in_public = set(
+                DocumentPath.objects.filter(
+                    document_id__in=removed_doc_ids,
+                    corpus__is_public=True,
+                    is_current=True,
+                    is_deleted=False,
+                ).values_list("document_id", flat=True)
+            )
+            revoke_ids = [d for d in removed_doc_ids if d not in still_in_public]
+            if revoke_ids:
+                from opencontractserver.documents.models import Document
+
+                Document.objects.filter(id__in=revoke_ids, is_public=True).update(
+                    is_public=False
+                )
+
         return deleted_paths
 
-    def get_documents(self):
+    def get_documents(self, include_caml=False):
         """
         Get all documents with active paths in this corpus.
 
         This method uses DocumentPath as the source of truth.
+
+        Args:
+            include_caml: If True, include CAML/markdown documents in results.
+                Defaults to False so extractors, analyzers, and other
+                internal processes skip CAML articles automatically.
 
         Returns:
             QuerySet of Document objects with active paths in this corpus
@@ -979,11 +1081,16 @@ class Corpus(TreeNode):
             corpus=self, is_current=True, is_deleted=False
         ).values_list("document_id", flat=True)
 
-        return Document.objects.filter(id__in=active_doc_ids).distinct()
+        qs = Document.objects.filter(id__in=active_doc_ids).distinct()
+        if not include_caml:
+            qs = qs.exclude(file_type=MARKDOWN_MIME_TYPE)
+        return qs
 
     def document_count(self):
         """
         Get count of documents with active paths in this corpus.
+        Excludes CAML articles (text/markdown) so the count reflects
+        only user-uploaded documents.
 
         Returns:
             Integer count of active documents
@@ -992,6 +1099,7 @@ class Corpus(TreeNode):
 
         return (
             DocumentPath.objects.filter(corpus=self, is_current=True, is_deleted=False)
+            .exclude(document__file_type=MARKDOWN_MIME_TYPE)
             .values("document_id")
             .distinct()
             .count()
