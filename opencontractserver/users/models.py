@@ -165,7 +165,11 @@ class User(AbstractUser):
         # Avoid referencing the slug column before it exists in initial migrations
         slug_column_exists = table_has_column(self._meta.db_table, "slug")
 
-        if slug_column_exists:
+        # Skip slug processing when saving unrelated fields (e.g. last_login)
+        update_fields = kwargs.get("update_fields")
+        slug_being_saved = update_fields is None or "slug" in update_fields
+
+        if slug_column_exists and slug_being_saved:
             # Ensure slug exists and is valid
             if not self.slug or not isinstance(self.slug, str) or not self.slug.strip():
                 # Generate a unique slug from username

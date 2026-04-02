@@ -9,6 +9,9 @@ from opencontractserver.corpuses.models import (
     CorpusActionTrigger,
 )
 from opencontractserver.corpuses.template_seeds import (
+    _CAML_ARTICLE_SYSTEM_INSTRUCTIONS,
+)
+from opencontractserver.corpuses.template_seeds import (
     create_default_action_templates as _create_default_action_templates,
 )
 
@@ -19,6 +22,7 @@ DEFAULT_TEMPLATE_NAMES = [
     "Document Summary Generator",
     "Key Terms Annotator",
     "Document Notes Generator",
+    "CAML Article Writer",
 ]
 
 User = get_user_model()
@@ -212,7 +216,7 @@ class DefaultTemplatesMigrationTest(TestCase):
         _create_default_action_templates(apps, None)
 
     def test_default_templates_exist(self):
-        """All 5 default templates should exist after migration."""
+        """All default templates should exist after migration."""
         for name in self.EXPECTED_NAMES:
             self.assertTrue(
                 CorpusActionTemplate.objects.filter(name=name).exists(),
@@ -235,12 +239,22 @@ class DefaultTemplatesMigrationTest(TestCase):
 
     def test_default_templates_are_active_and_enabled_on_clone(self):
         """Default templates should be active (used for new corpuses)
-        and cloned actions should start enabled."""
+        and cloned actions should start enabled, except opt-out templates."""
+        DISABLED_ON_CLONE = {"CAML Article Writer"}
         for template in CorpusActionTemplate.objects.filter(
             name__in=self.EXPECTED_NAMES
         ):
             self.assertTrue(template.is_active)
-            self.assertFalse(template.disabled_on_clone)
+            if template.name in DISABLED_ON_CLONE:
+                self.assertTrue(
+                    template.disabled_on_clone,
+                    f"'{template.name}' should be disabled on clone",
+                )
+            else:
+                self.assertFalse(
+                    template.disabled_on_clone,
+                    f"'{template.name}' should be enabled on clone",
+                )
 
     def test_default_templates_all_add_document_trigger(self):
         """All default templates should trigger on ADD_DOCUMENT."""
@@ -258,6 +272,14 @@ class DefaultTemplatesMigrationTest(TestCase):
                 len(template.pre_authorized_tools) > 0,
                 f"Template '{template.name}' has no pre-authorized tools",
             )
+
+    def test_caml_article_writer_uses_custom_system_instructions(self):
+        """CAML Article Writer agent config must use the dedicated CAML prompt."""
+        template = CorpusActionTemplate.objects.get(name="CAML Article Writer")
+        self.assertEqual(
+            template.agent_config.system_instructions,
+            _CAML_ARTICLE_SYSTEM_INSTRUCTIONS,
+        )
 
     def test_seeding_is_idempotent(self):
         """Calling create_default_action_templates twice doesn't duplicate records."""

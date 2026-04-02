@@ -20,6 +20,7 @@ from config.graphql.graphene_types import (
     DocumentPathType,
 )
 from config.graphql.ratelimits import get_user_tier_rate, graphql_ratelimit_dynamic
+from opencontractserver.constants.document_processing import MARKDOWN_MIME_TYPE
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.feedback.models import UserFeedback
@@ -44,6 +45,7 @@ def _corpus_count_subqueries():
             is_current=True,
             is_deleted=False,
         )
+        .exclude(document__file_type=MARKDOWN_MIME_TYPE)
         .values("corpus_id")
         .annotate(count=Count("document_id", distinct=True))
         .values("count")

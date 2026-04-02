@@ -509,9 +509,8 @@ export const WorkerTokensSection: React.FC<WorkerTokensSectionProps> = ({
                         {status === "active" && (
                           <Button
                             size="sm"
-                            variant="secondary"
+                            variant="danger"
                             onClick={() => setTokenToRevoke(token.id)}
-                            style={{ color: OS_LEGAL_COLORS.danger }}
                           >
                             Revoke
                           </Button>
