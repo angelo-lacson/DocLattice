@@ -193,7 +193,7 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
     with guardian checks and vector-based search.
     """
 
-    def visible_to_user(self, user, perm=None):
+    def visible_to_user(self, user, perm=None, **kwargs):
         """
         Override PermissionQuerySet.visible_to_user to include guardian
         permission checks. Without this override, chaining
@@ -201,6 +201,11 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
 
         Follows the same pattern as BaseVisibilityManager.visible_to_user
         (opencontractserver/shared/Managers.py lines 103-118).
+
+        Note: **kwargs is present for forward-compatibility so that callers
+        can pass additional keyword arguments (e.g. from manager delegation)
+        without raising TypeError.  Currently unused at the queryset level;
+        prefetch optimisation is handled by DocumentManager.
         """
         from django.contrib.auth.models import AnonymousUser
 
@@ -209,6 +214,11 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
 
         if hasattr(user, "is_superuser") and user.is_superuser:
             return self.all()
+
+        # Documents in public corpora have is_public=True auto-propagated
+        # at creation time (see Corpus.add_document, import_document, and
+        # Corpus._propagate_public_status_to_documents), so the standard
+        # is_public filter naturally covers them without subqueries.
 
         if user.is_anonymous:
             return self.filter(is_public=True).distinct()

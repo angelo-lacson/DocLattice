@@ -10,7 +10,7 @@
 
 > **⚠️ DEPRECATION WARNING**: The `resolve_oc_model_queryset` function in `opencontractserver.shared.resolvers` was DEPRECATED and replaced with `Model.objects.visible_to_user(user)` calls.
 
-> **🟡 ANONYMOUS USER SUPPORT**: Anonymous users can access public resources with read-only permissions. Document AND corpus must both be `is_public=True` for access. Applies to documents, corpuses, conversations, analyses (public only), and annotations.
+> **🟡 ANONYMOUS USER SUPPORT**: Anonymous users can access public resources with read-only permissions. Document AND corpus must both be `is_public=True` for access. Documents in public corpora **automatically inherit `is_public=True`** at creation time (see [Public Corpus Document Propagation](#public-corpus-document-propagation)). Applies to documents, corpuses, conversations, analyses (public only), and annotations.
 
 > **🟣 USER PROFILE PRIVACY**: User profiles have privacy controls via `is_profile_public`. Private profiles are visible only to users who share corpus membership with > READ permission. See `UserQueryOptimizer` in `opencontractserver/users/query_optimizer.py`.
 
@@ -361,6 +361,21 @@ This section provides a comprehensive reference for how permissions work across 
 Can Access = is_superuser OR is_creator OR has_object_permission OR (is_public AND READ)
 ```
 
+#### Public Corpus Document Propagation
+
+Documents in public corpora automatically inherit `is_public=True`, ensuring the two-flag rule is naturally satisfied without queryset-level overrides.
+
+**Propagation triggers:**
+1. **`Corpus.add_document()` / `import_document()`**: New documents created in a public corpus get `is_public=True` at creation time.
+2. **`Corpus.save()` (is_public change)**: When a corpus becomes public, all its documents are updated to `is_public=True`. When a corpus becomes private, documents are set to `is_public=False` **only if** they are not in any other public corpus.
+
+**Invariant**: `document.is_public = True` if the document is in at least one public corpus (or was explicitly marked public).
+
+**Implementation**:
+- `Corpus._propagate_public_status_to_documents()` in `opencontractserver/corpuses/models.py`
+- `import_document()` in `opencontractserver/documents/versioning.py` sets `is_public=corpus.is_public`
+- `Corpus.add_document()` sets `is_public=self.is_public or source_doc.is_public`
+
 #### DocumentRelationship (Inherited Permissions)
 
 DocumentRelationship objects inherit permissions from their source_document, target_document, and corpus (same model as annotation Relationships). User must have permission on BOTH documents AND corpus (if set).
@@ -443,7 +458,7 @@ DELETE Check:
 **Key characteristics:**
 - Requires only Document READ (not UPDATE) - user just needs to see the document
 - Corpus permission determines write access - UPDATE to edit, DELETE to remove
-- Anonymous users: READ-only access if both document and corpus are public
+- Anonymous users: READ-only access if both document and corpus are public (documents in public corpora inherit `is_public=True` automatically)
 - Superusers: Full access to all metadata
 
 **Implementation**: `MetadataQueryOptimizer.check_metadata_mutation_permission()` in `opencontractserver/extracts/query_optimizer.py`

@@ -926,7 +926,8 @@ export function CentralRouteManager() {
     if (currentDetailView !== newDetailView) {
       updates.push(() => corpusDetailView(newDetailView));
     }
-    const newPowerUserMode = modeParam === "power";
+    const newPowerUserMode =
+      modeParam === "power" && authStatus === "AUTHENTICATED";
     if (currentPowerUserMode !== newPowerUserMode) {
       updates.push(() => corpusPowerUserMode(newPowerUserMode));
     }
@@ -970,7 +971,7 @@ export function CentralRouteManager() {
 
     // Mark that we've initialized from URL - allows Phase 4 to start syncing
     hasInitializedFromUrl.current = true;
-  }, [searchParams]);
+  }, [searchParams, authStatus]);
 
   // ═══════════════════════════════════════════════════════════════
   // PHASE 3: Entity Data → Canonical Redirects
