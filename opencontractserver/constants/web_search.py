@@ -13,6 +13,7 @@ from opencontractserver.constants.tools import TOOL_SETTINGS_PREFIX
 BRAVE_PROVIDER = "brave"
 TAVILY_PROVIDER = "tavily"
 DEFAULT_WEB_SEARCH_PROVIDER = BRAVE_PROVIDER
+SUPPORTED_PROVIDERS = frozenset({BRAVE_PROVIDER, TAVILY_PROVIDER})
 
 # ---------------------------------------------------------------------------
 # PipelineSettings key for web search tool secrets/settings

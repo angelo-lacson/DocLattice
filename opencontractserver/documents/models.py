@@ -1311,7 +1311,10 @@ class PipelineSettings(django.db.models.Model):
     # =====================================================================
     # Agent tools (web search, etc.) store configuration and secrets using
     # the same encrypted_secrets infrastructure as pipeline components.
-    # Tool keys are namespaced with "tool:" prefix to avoid collisions.
+    # Tool keys are namespaced with a "tool:" prefix (see TOOL_SETTINGS_PREFIX)
+    # to avoid collisions with pipeline component paths.  Pipeline component
+    # paths use dotted Python module notation (e.g. "some.module.Class"),
+    # so accidental collision with "tool:*" keys is not possible in practice.
 
     def get_tool_settings(self, tool_key: str) -> dict:
         """
@@ -1343,8 +1346,9 @@ class PipelineSettings(django.db.models.Model):
             settings: Non-sensitive settings to store/merge.
             secrets: Sensitive values (API keys) to encrypt and store.
         """
-        # Merge non-sensitive settings
-        if settings:
+        # Merge non-sensitive settings (use ``is not None`` to allow empty
+        # dicts and dicts whose values are empty strings).
+        if settings is not None:
             current = self.component_settings or {}
             if tool_key not in current:
                 current[tool_key] = {}

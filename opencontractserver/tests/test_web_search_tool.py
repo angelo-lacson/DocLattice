@@ -33,6 +33,7 @@ from opencontractserver.llms.tools.tool_registry import (
     ToolFunctionRegistry,
 )
 from opencontractserver.llms.tools.web_search_tools import (
+    _PROVIDERS,
     SearchResult,
     WebSearchTool,
     _RateLimiter,
@@ -239,6 +240,50 @@ class TestRateLimiter:
 
         asyncio.run(_run())
 
+    def test_blocks_when_capacity_full(self):
+        """The limiter should sleep when the window is full."""
+
+        async def _run():
+            limiter = _RateLimiter(max_per_minute=2)
+            # Fill up the window
+            await limiter.acquire()
+            await limiter.acquire()
+
+            # The next acquire should trigger asyncio.sleep because the
+            # window is now full.
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                # Advance timestamps so the oldest slot expires on next check
+                limiter._timestamps[0] = limiter._timestamps[0] - 61.0
+                await limiter.acquire()
+                # sleep may or may not be called depending on timing, but the
+                # acquire should succeed.  If timestamps were not expired
+                # naturally, sleep would have been called.
+                assert len(limiter._timestamps) == 2  # old one evicted, new one added
+
+        asyncio.run(_run())
+
+    def test_blocks_and_sleeps_when_window_full(self):
+        """Verify asyncio.sleep is called when all slots are occupied."""
+
+        async def _run():
+            limiter = _RateLimiter(max_per_minute=1)
+            await limiter.acquire()
+            assert len(limiter._timestamps) == 1
+
+            # Patch sleep to simulate waiting and then expire the timestamp
+            original_sleep = asyncio.sleep
+
+            async def fake_sleep(duration):
+                # Simulate time passing by expiring the oldest timestamp
+                limiter._timestamps[0] = limiter._timestamps[0] - 61.0
+                await original_sleep(0)  # yield control
+
+            with patch("asyncio.sleep", side_effect=fake_sleep) as mock_sleep:
+                await limiter.acquire()
+                mock_sleep.assert_called_once()
+
+        asyncio.run(_run())
+
 
 # ============================================================================
 # Provider tests (mocked HTTP)
@@ -383,12 +428,7 @@ class TestAwebSearch:
             ), patch(
                 "opencontractserver.llms.tools.web_search_tools._get_limiter"
             ) as mock_limiter_fn, patch.object(
-                type(
-                    __import__(
-                        "opencontractserver.llms.tools.web_search_tools",
-                        fromlist=["_PROVIDERS"],
-                    )._PROVIDERS[BRAVE_PROVIDER]
-                ),
+                _PROVIDERS[BRAVE_PROVIDER],
                 "search",
                 new_callable=AsyncMock,
                 return_value=mock_results,
@@ -412,12 +452,7 @@ class TestAwebSearch:
             ), patch(
                 "opencontractserver.llms.tools.web_search_tools._get_limiter"
             ) as mock_limiter_fn, patch.object(
-                type(
-                    __import__(
-                        "opencontractserver.llms.tools.web_search_tools",
-                        fromlist=["_PROVIDERS"],
-                    )._PROVIDERS[BRAVE_PROVIDER]
-                ),
+                _PROVIDERS[BRAVE_PROVIDER],
                 "search",
                 new_callable=AsyncMock,
                 side_effect=ConnectionError("network error"),
@@ -440,12 +475,7 @@ class TestAwebSearch:
             ), patch(
                 "opencontractserver.llms.tools.web_search_tools._get_limiter"
             ) as mock_limiter_fn, patch.object(
-                type(
-                    __import__(
-                        "opencontractserver.llms.tools.web_search_tools",
-                        fromlist=["_PROVIDERS"],
-                    )._PROVIDERS[BRAVE_PROVIDER]
-                ),
+                _PROVIDERS[BRAVE_PROVIDER],
                 "search",
                 new_callable=AsyncMock,
                 return_value=[],
@@ -469,12 +499,7 @@ class TestAwebSearch:
             ), patch(
                 "opencontractserver.llms.tools.web_search_tools._get_limiter"
             ) as mock_limiter_fn, patch.object(
-                type(
-                    __import__(
-                        "opencontractserver.llms.tools.web_search_tools",
-                        fromlist=["_PROVIDERS"],
-                    )._PROVIDERS[BRAVE_PROVIDER]
-                ),
+                _PROVIDERS[BRAVE_PROVIDER],
                 "search",
                 new_callable=AsyncMock,
                 return_value=[],
@@ -500,12 +525,7 @@ class TestAwebSearch:
             ), patch(
                 "opencontractserver.llms.tools.web_search_tools._get_limiter"
             ) as mock_limiter_fn, patch.object(
-                type(
-                    __import__(
-                        "opencontractserver.llms.tools.web_search_tools",
-                        fromlist=["_PROVIDERS"],
-                    )._PROVIDERS[BRAVE_PROVIDER]
-                ),
+                _PROVIDERS[BRAVE_PROVIDER],
                 "search",
                 new_callable=AsyncMock,
                 return_value=[],
@@ -720,6 +740,38 @@ class TestToolSecretsMutations(TestCase):
         data = result["data"]["updateToolSecrets"]
         assert data["ok"] is False
         assert "superuser" in data["message"].lower()
+
+    @override_settings(
+        PIPELINE_SETTINGS_CACHE_TTL_SECONDS=0,
+    )
+    def test_unsupported_provider_rejected(self):
+        from graphene.test import Client
+
+        from config.graphql.schema import schema
+
+        client = Client(schema)
+        context = MagicMock()
+        context.user = self.superuser
+
+        result = client.execute(
+            """
+            mutation {
+                updateToolSecrets(
+                    toolKey: "tool:web_search"
+                    secrets: {api_key: "some-key"}
+                    settings: {provider: "duckduckgo"}
+                ) {
+                    ok
+                    message
+                }
+            }
+            """,
+            context=context,
+        )
+
+        data = result["data"]["updateToolSecrets"]
+        assert data["ok"] is False
+        assert "Unsupported provider" in data["message"]
 
     @override_settings(
         PIPELINE_SETTINGS_CACHE_TTL_SECONDS=0,

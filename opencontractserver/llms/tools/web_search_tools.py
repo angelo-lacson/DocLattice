@@ -262,6 +262,10 @@ class TavilySearchProvider(SearchProvider):
         api_key: str,
         search_type: str = "general",
     ) -> list[SearchResult]:
+        # NOTE: Tavily's API requires the key in the POST body (not a header).
+        # This differs from Brave, which uses an ``X-Subscription-Token``
+        # header.  Body-placed keys can appear in application-level request
+        # logs — make sure request logging does not capture POST bodies.
         payload: dict[str, Any] = {
             "api_key": api_key,
             "query": query,
@@ -322,6 +326,14 @@ async def aweb_search(
     Returns formatted results including titles, URLs, and content snippets.
     Useful for finding recent information, verifying facts, or researching
     topics not covered in the loaded documents.
+
+    .. note::
+
+        Rate limiting is **per-process** (one ``_RateLimiter`` instance per
+        Celery worker).  With *N* workers the effective rate is
+        ``N * WEB_SEARCH_RATE_LIMIT_PER_MINUTE``.  If the upstream provider
+        enforces account-level limits, callers may still receive 429 errors
+        under heavy parallel load.
 
     Args:
         query: The search query. Be specific for better results.
@@ -408,12 +420,17 @@ async def aweb_search(
 # ============================================================================
 
 
-def web_search(
+def _web_search_sync_for_tests(
     query: str,
     num_results: int = WEB_SEARCH_DEFAULT_NUM_RESULTS,
     search_type: str = "general",
 ) -> str:
-    """Sync test-only wrapper. Do NOT use in production."""
+    """Sync test-only wrapper. Do NOT use in production.
+
+    Uses ``asyncio.run()``, which will raise ``RuntimeError`` if an event
+    loop is already running.  This is intentionally private — callers
+    outside the test suite should use :func:`aweb_search` directly.
+    """
     import asyncio
 
     return asyncio.run(

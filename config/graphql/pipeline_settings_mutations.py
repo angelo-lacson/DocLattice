@@ -850,6 +850,26 @@ class UpdateToolSecretsMutation(graphene.Mutation):
                 tools_with_secrets=None,
             )
 
+        # Validate provider value for web_search tool
+        if settings and "provider" in settings:
+            from opencontractserver.constants.web_search import (
+                SUPPORTED_PROVIDERS,
+                WEB_SEARCH_SETTINGS_KEY,
+            )
+
+            if (
+                tool_key == WEB_SEARCH_SETTINGS_KEY
+                and settings["provider"] not in SUPPORTED_PROVIDERS
+            ):
+                return UpdateToolSecretsMutation(
+                    ok=False,
+                    message=(
+                        f"Unsupported provider '{settings['provider']}'. "
+                        f"Supported: {', '.join(sorted(SUPPORTED_PROVIDERS))}."
+                    ),
+                    tools_with_secrets=None,
+                )
+
         try:
             ps = PipelineSettings.get_instance()
 
