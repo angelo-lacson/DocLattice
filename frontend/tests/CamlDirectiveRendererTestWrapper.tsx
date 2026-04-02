@@ -7,12 +7,15 @@
  *
  * NOTE: Fixture documents are in CamlDirectiveRendererFixtures.ts.
  */
-import React from "react";
+import React, { useEffect } from "react";
 import { MemoryRouter } from "react-router-dom";
 import type { CamlDocument } from "@os-legal/caml";
 
 import { CamlDirectiveRenderer } from "../src/components/corpuses/caml/CamlDirectiveRenderer";
-import { registerDirectiveHandler } from "../src/components/corpuses/caml/directiveRegistry";
+import {
+  registerDirectiveHandler,
+  unregisterDirectiveHandler,
+} from "../src/components/corpuses/caml/directiveRegistry";
 import type { DirectiveHandlerContext } from "../src/components/corpuses/caml/directiveRegistry";
 import type { CamlInlineDirective } from "../src/components/corpuses/caml/inlineDirectives";
 import { DOCUMENT_WITH_DIRECTIVES } from "./CamlDirectiveRendererFixtures";
@@ -51,10 +54,6 @@ function useMockCiteHandler(
   };
 }
 
-// Register at module load time (same pattern as CorpusArticleView.tsx)
-// so the handler is available during the first render pass.
-registerDirectiveHandler("cite", useMockCiteHandler);
-
 export interface CamlDirectiveRendererTestWrapperProps {
   document?: CamlDocument;
 }
@@ -62,6 +61,14 @@ export interface CamlDirectiveRendererTestWrapperProps {
 export const CamlDirectiveRendererTestWrapper: React.FC<
   CamlDirectiveRendererTestWrapperProps
 > = ({ document: doc = DOCUMENT_WITH_DIRECTIVES }) => {
+  // Register mock handler inside the component to avoid module-level
+  // singleton collisions when both test and production code are loaded
+  // in the same process.
+  useEffect(() => {
+    registerDirectiveHandler("cite", useMockCiteHandler);
+    return () => unregisterDirectiveHandler("cite");
+  }, []);
+
   return (
     <MemoryRouter>
       <div

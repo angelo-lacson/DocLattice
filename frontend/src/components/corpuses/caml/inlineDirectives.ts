@@ -36,15 +36,7 @@ export interface DirectiveExtractionResult {
 // Constants
 // ---------------------------------------------------------------------------
 
-/**
- * Matches `{{@agent scope key=val key2=val2}}`.
- * Used as a literal (no `g` flag) with `String.matchAll()` to avoid
- * shared mutable `lastIndex` state.
- */
-const DIRECTIVE_PATTERN =
-  /\{\{@(\w+)\s+(sentence|paragraph|block)(?:\s+([^}]+?))?\}\}/;
-
-/** Global variant used only for `String.replace()` calls (strips all matches). */
+/** Matches `{{@agent scope key=val key2=val2}}` with the global flag. */
 const DIRECTIVE_PATTERN_GLOBAL =
   /\{\{@(\w+)\s+(sentence|paragraph|block)(?:\s+([^}]+?))?\}\}/g;
 
@@ -97,6 +89,9 @@ function resolveParagraph(text: string, offset: number): string {
   for (const para of paragraphs) {
     // Use indexOf for exact position instead of assuming a fixed separator
     // width, since /\n\s*\n/ can match separators of varying length.
+    // NOTE: indexOf could match a paragraph as a substring of an earlier one
+    // if one is a prefix of the other. This is unlikely in typical legal text
+    // and the `pos` offset mitigates most false matches.
     const paraStart = text.indexOf(para, pos);
     if (paraStart < 0 || paraStart >= offset) break;
     best = para;
@@ -173,7 +168,6 @@ export function extractInlineDirectives(
   const directives: CamlInlineDirective[] = [];
 
   // First pass: find all directives and their positions in the original text.
-  // Uses matchAll with a non-global pattern to avoid shared mutable lastIndex.
   const matches: Array<{
     fullMatch: string;
     agent: string;
@@ -182,7 +176,7 @@ export function extractInlineDirectives(
     index: number;
   }> = [];
 
-  for (const match of content.matchAll(new RegExp(DIRECTIVE_PATTERN, "g"))) {
+  for (const match of content.matchAll(DIRECTIVE_PATTERN_GLOBAL)) {
     const scope = match[2];
     if (!VALID_SCOPES.has(scope)) continue;
     matches.push({

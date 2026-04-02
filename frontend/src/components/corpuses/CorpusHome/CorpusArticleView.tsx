@@ -22,14 +22,12 @@ import { parseCaml } from "@os-legal/caml";
 import type { CamlDocument } from "@os-legal/caml";
 import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants";
 import { CamlDirectiveRenderer } from "../caml/CamlDirectiveRenderer";
-import { registerDirectiveHandler } from "../caml/directiveRegistry";
+import {
+  registerDirectiveHandler,
+  unregisterDirectiveHandler,
+} from "../caml/directiveRegistry";
 import { useCiteHandler } from "../caml/useCiteHandler";
 import { ArticleDocumentsDrawer } from "./ArticleDocumentsDrawer";
-
-// Register OC-specific directive handlers.
-// This runs once at module load — additional handlers can be registered
-// elsewhere (e.g., a plugin system, feature flags, etc.).
-registerDirectiveHandler("cite", useCiteHandler);
 
 // ---------------------------------------------------------------------------
 // Styled components
@@ -175,6 +173,18 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
   const [camlContent, setCamlContent] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  // Register the @cite directive handler for this component's lifecycle.
+  // Registered in useEffect (not at module level) so it can be gated by
+  // feature flags and properly cleaned up to avoid registry collisions in tests.
+  useEffect(() => {
+    registerDirectiveHandler("cite", useCiteHandler);
+    return () => unregisterDirectiveHandler("cite");
+  }, []);
+
+  // Memoize handler context to prevent CamlDirectiveRenderer from
+  // recreating renderMarkdown on every parent render.
+  const handlerContext = useMemo(() => ({ corpusId: corpus.id }), [corpus.id]);
+
   // Query for Readme.CAML document in this corpus
   const queryVars = useMemo<GetCorpusArticleInput>(
     () => ({
@@ -316,7 +326,7 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
 
       <CamlDirectiveRenderer
         document={parsedDocument}
-        handlerContext={{ corpusId: corpus.id }}
+        handlerContext={handlerContext}
         stats={stats}
       />
     </ArticleViewContainer>

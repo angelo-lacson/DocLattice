@@ -155,6 +155,16 @@ annotation snippet, document title, similarity score, and deep link.
 - The `renderDirective` slot is optional — if not provided, directives are invisible
 - No backend changes required — uses existing `semanticSearch` GraphQL query
 
+## Known Limitations
+
+- **One query per directive**: Each `@cite` directive fires an independent
+  `semanticSearch` GraphQL query. A document with 10 directives will issue
+  10 parallel requests. Acceptable for typical article sizes but may need
+  batching (e.g., a `semanticSearchBatch` query or client-side deduplication)
+  for documents with many citations.
+- **`mode=all` default limit**: When `mode=all` is used without an explicit
+  `limit`, the handler defaults to 5 results (`ALL_MODE_DEFAULT_LIMIT`).
+
 ## Future Extensions
 
 The `{{@agent scope}}` syntax is generic. Future agents:

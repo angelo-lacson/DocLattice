@@ -118,6 +118,12 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
 
   // Track how many times each content string has been seen during
   // rendering so we can match it to the correct positional key.
+  //
+  // ASSUMPTION: CamlArticle calls renderMarkdown in document order, exactly
+  // once per block. If CamlArticle ever renders out-of-order (e.g. Suspense
+  // batching, virtual rendering), citations will appear on the wrong blocks.
+  // TODO: Replace this workaround with the future `renderDirective` slot in
+  // @os-legal/caml-react once available.
   const renderMarkdown = useMemo(() => {
     const renderCounts = new Map<string, number>();
     return (md: string) => {

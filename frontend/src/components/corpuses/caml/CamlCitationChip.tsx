@@ -153,6 +153,10 @@ const PopoverLink = styled(Link)`
  * Build a deep link URL to view an annotation in the document viewer.
  * Centralised here so the URL scheme is in one place; if the routing
  * system later provides path helpers this is the only call site to update.
+ *
+ * TODO: Pass annotationId as a query param (e.g. `?annotation=<id>`) so the
+ * viewer can scroll to the specific annotation. Requires CentralRouteManager
+ * path helpers or a viewer URL param convention to be established first.
  */
 function buildAnnotationDeepLink(
   citation: Pick<ResolvedCitation, "corpusSlug" | "documentSlug" | "page">
@@ -177,12 +181,12 @@ export const CamlCitationChip: React.FC<CamlCitationChipProps> = ({
 
   useEffect(() => () => clearTimeout(hideTimeout.current), []);
 
-  const handleMouseEnter = () => {
+  const showPopoverNow = () => {
     clearTimeout(hideTimeout.current);
     setShowPopover(true);
   };
 
-  const handleMouseLeave = () => {
+  const hidePopoverDelayed = () => {
     hideTimeout.current = setTimeout(() => setShowPopover(false), 200);
   };
 
@@ -192,8 +196,10 @@ export const CamlCitationChip: React.FC<CamlCitationChipProps> = ({
 
   return (
     <ChipWrapper
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onMouseEnter={showPopoverNow}
+      onMouseLeave={hidePopoverDelayed}
+      onFocus={showPopoverNow}
+      onBlur={hidePopoverDelayed}
     >
       <Chip
         $color={citation.labelColor || OS_LEGAL_COLORS.accent}

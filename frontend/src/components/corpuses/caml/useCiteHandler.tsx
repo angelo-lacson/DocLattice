@@ -69,6 +69,7 @@ export function useCiteHandler(
     // synchronously before the async call to avoid race conditions from
     // React batched re-renders.
     resolvedRef.current = true;
+    let cancelled = false;
 
     searchAnnotations({
       variables: {
@@ -78,6 +79,7 @@ export function useCiteHandler(
       },
     })
       .then(({ data }) => {
+        if (cancelled) return;
         const results: ResolvedCitation[] = (data?.semanticSearch ?? []).map(
           (r) => ({
             annotationId: r.annotation.id,
@@ -95,10 +97,15 @@ export function useCiteHandler(
         setCitations(results);
       })
       .catch((err) => {
+        if (cancelled) return;
         // Clear in-flight flag so a retry is possible if context changes
         resolvedRef.current = false;
         setError(err.message ?? "Citation search failed");
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [directive.context, context.corpusId, limit, searchAnnotations]);
 
   if (error) {
