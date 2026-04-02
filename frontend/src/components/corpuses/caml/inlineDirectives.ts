@@ -36,11 +36,17 @@ export interface DirectiveExtractionResult {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Matches `{{@agent scope key=val key2=val2}}` */
-const DIRECTIVE_PATTERN =
+/** Matches `{{@agent scope key=val key2=val2}}` with the global flag. */
+const DIRECTIVE_PATTERN_GLOBAL =
   /\{\{@(\w+)\s+(sentence|paragraph|block)(?:\s+([^}]+?))?\}\}/g;
 
-/** Sentence boundary: split on ., !, ? followed by whitespace or end-of-string */
+/**
+ * Sentence boundary: split on ., !, ? followed by whitespace.
+ * NOTE: This lookbehind will incorrectly split on abbreviations like
+ * "Mr. Smith" or "et al. in the case" — a known limitation that is
+ * difficult to solve without NLP tokenisation. Legal text with heavy
+ * abbreviation use may produce degraded context for semantic search.
+ */
 const SENTENCE_BOUNDARY = /(?<=[.!?])\s+/;
 
 const VALID_SCOPES = new Set(["sentence", "paragraph", "block"]);
@@ -81,10 +87,15 @@ function resolveParagraph(text: string, offset: number): string {
   let pos = 0;
   let best = paragraphs[0] ?? text;
   for (const para of paragraphs) {
-    if (pos >= offset) break;
+    // Use indexOf for exact position instead of assuming a fixed separator
+    // width, since /\n\s*\n/ can match separators of varying length.
+    // NOTE: indexOf could match a paragraph as a substring of an earlier one
+    // if one is a prefix of the other. This is unlikely in typical legal text
+    // and the `pos` offset mitigates most false matches.
+    const paraStart = text.indexOf(para, pos);
+    if (paraStart < 0 || paraStart >= offset) break;
     best = para;
-    // +2 for the \n\n separator (approximate — actual separator may vary)
-    pos += para.length + 2;
+    pos = paraStart + para.length;
   }
   return best.trim();
 }
@@ -156,7 +167,7 @@ export function extractInlineDirectives(
 ): DirectiveExtractionResult {
   const directives: CamlInlineDirective[] = [];
 
-  // First pass: find all directives and their positions in the original text
+  // First pass: find all directives and their positions in the original text.
   const matches: Array<{
     fullMatch: string;
     agent: string;
@@ -165,10 +176,7 @@ export function extractInlineDirectives(
     index: number;
   }> = [];
 
-  let match: RegExpExecArray | null;
-  // Reset lastIndex since we reuse the regex
-  DIRECTIVE_PATTERN.lastIndex = 0;
-  while ((match = DIRECTIVE_PATTERN.exec(content)) !== null) {
+  for (const match of content.matchAll(DIRECTIVE_PATTERN_GLOBAL)) {
     const scope = match[2];
     if (!VALID_SCOPES.has(scope)) continue;
     matches.push({
@@ -176,7 +184,7 @@ export function extractInlineDirectives(
       agent: match[1],
       scope,
       argsRaw: match[3],
-      index: match.index,
+      index: match.index!,
     });
   }
 
@@ -189,7 +197,7 @@ export function extractInlineDirectives(
   for (const m of matches) {
     const context = resolveContext(content, m.index, m.scope);
     // Strip the directive marker from the context itself
-    const cleanContext = context.replace(DIRECTIVE_PATTERN, "").trim();
+    const cleanContext = context.replace(DIRECTIVE_PATTERN_GLOBAL, "").trim();
 
     directives.push({
       agent: m.agent,
@@ -201,7 +209,7 @@ export function extractInlineDirectives(
   }
 
   // Second pass: strip all directive markers from content
-  const cleanedContent = content.replace(DIRECTIVE_PATTERN, "").trim();
+  const cleanedContent = content.replace(DIRECTIVE_PATTERN_GLOBAL, "").trim();
 
   return { content: cleanedContent, directives };
 }

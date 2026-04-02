@@ -24,7 +24,11 @@ export { CamlDirectiveRenderer } from "./CamlDirectiveRenderer";
 export type { CamlDirectiveRendererProps } from "./CamlDirectiveRenderer";
 
 // Citation UI components (used by useCiteHandler, also available standalone)
-export { CamlCitationChip, CamlCitationLoading } from "./CamlCitationChip";
+export {
+  CamlCitationChip,
+  CamlCitationError,
+  CamlCitationLoading,
+} from "./CamlCitationChip";
 export type { ResolvedCitation } from "./CamlCitationChip";
 
 // OC-specific handlers
