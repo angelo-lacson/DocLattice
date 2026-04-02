@@ -465,8 +465,10 @@ class DocumentMentionPermissionTestCase(TestCase):
             "User with doc write permission should be able to mention it",
         )
 
-    def test_viewer_with_read_only_cannot_mention_private_doc(self):
-        """User with only read permission CANNOT mention private documents."""
+    def test_viewer_with_read_only_cannot_mention_private_doc_in_private_corpus(self):
+        """User with only read permission CANNOT mention private documents
+        in private corpuses, but CAN mention docs in public corpuses since
+        those inherit is_public=True."""
         from config.graphql.queries import Query
 
         query = Query()
@@ -483,12 +485,14 @@ class DocumentMentionPermissionTestCase(TestCase):
         self.assertNotIn(
             self.private_doc_in_private_corpus.id,
             doc_ids,
-            "Viewer with read-only should NOT be able to mention private doc",
+            "Viewer with read-only should NOT be able to mention private doc in private corpus",
         )
-        self.assertNotIn(
+        # Documents in public corpuses inherit is_public=True under the
+        # relaxed permission model, so they are mentionable by any user.
+        self.assertIn(
             self.private_doc_in_public_corpus.id,
             doc_ids,
-            "Viewer should NOT be able to mention private doc even in public corpus",
+            "Document in public corpus inherits is_public=True and should be mentionable",
         )
 
     def test_public_documents_mentionable_by_all(self):

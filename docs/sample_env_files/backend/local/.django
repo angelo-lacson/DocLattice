@@ -7,6 +7,7 @@ DJANGO_SUPERUSER_USERNAME=admin
 
 # General
 # ------------------------------------------------------------------------------
+DJANGO_DEBUG=True
 USE_DOCKER=yes
 IPYTHONDIR=/app/.ipython
 # IMPORTANT: Generate a unique secret key for production!
@@ -43,6 +44,11 @@ USE_AUTH0=False
 # ------------------------------------------------------------------------------
 OPENAI_API_KEY=<YourKeyHere>
 OPENAI_MODEL=gpt-4o
+
+# Microservice URLs
+# ------------------------------------------------------------------------------
+EMBEDDINGS_MICROSERVICE_URL=http://vector-embedder:8000
+DOCLING_PARSER_SERVICE_URL=http://docling-parser:8000/parse/
 
 # Docling
 # ------------------------------------------------------------------------------

@@ -34,6 +34,7 @@ import {
   GET_CORPUS_ACTIONS,
   GET_CORPUS_ENGAGEMENT_METRICS,
   GET_BADGES,
+  GET_CORPUS_ARTICLE,
 } from "../src/graphql/queries";
 import { CorpusType } from "../src/types/graphql-api";
 import { docScreenshot, releaseScreenshot } from "./utils/docScreenshot";
@@ -403,6 +404,7 @@ const createDocumentsMocks = (corpusId: string): MockedResponse[] => {
           inCorpusWithId: corpusId,
           annotateDocLabels: true,
           includeMetadata: true,
+          includeCaml: true,
         },
       },
       result: documentsResult,
@@ -415,6 +417,7 @@ const createDocumentsMocks = (corpusId: string): MockedResponse[] => {
           inFolderId: "__root__",
           annotateDocLabels: true,
           includeMetadata: true,
+          includeCaml: true,
         },
       },
       result: documentsResult,
@@ -599,6 +602,24 @@ const createCorpusActionsMock = (corpusId: string): MockedResponse => ({
   },
 });
 
+const createArticleMock = (corpusId: string): MockedResponse => ({
+  request: {
+    query: GET_CORPUS_ARTICLE,
+    variables: {
+      corpusId,
+      title: "Readme.CAML",
+    },
+  },
+  result: {
+    data: {
+      documents: {
+        edges: [],
+        __typename: "DocumentTypeConnection",
+      },
+    },
+  },
+});
+
 const createEmptyDocumentsMock = (): MockedResponse => ({
   request: {
     query: GET_DOCUMENTS,
@@ -638,6 +659,8 @@ const createAllTabMocks = (corpus: CorpusType): MockedResponse[] => [
   createCorpusActionsMock(corpus.id),
   createEngagementMetricsMock(corpus.id),
   createEmptyDocumentsMock(),
+  createArticleMock(corpus.id),
+  createArticleMock(corpus.id),
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -1398,7 +1421,7 @@ test.describe("Corpus - Power User Mode", () => {
     await docScreenshot(page, "corpus--landing--clean-view");
   });
 
-  test("should hide power user toggle for read-only users", async ({
+  test("should show power user toggle for read-only authenticated users", async ({
     mount,
     page,
   }) => {
@@ -1409,8 +1432,12 @@ test.describe("Corpus - Power User Mode", () => {
     const landing = page.getByTestId("corpus-home-landing");
     await expect(landing).toBeVisible({ timeout: 10000 });
 
-    // Mode toggle should NOT be visible (no CAN_UPDATE permission)
-    await expect(page.getByTestId("landing-mode-toggle")).toBeHidden();
+    // Mode toggle IS visible for read-only users — it controls a client-side
+    // view preference (Explore vs Manage), not a write operation.
+    const toggle = page.getByTestId("landing-mode-toggle");
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toContainText("Explore");
+    await expect(toggle).toContainText("Manage");
   });
 
   test("should show sidebar and exit button in power user mode", async ({
