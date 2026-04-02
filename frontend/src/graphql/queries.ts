@@ -198,6 +198,7 @@ export const RESOLVE_CORPUS_BY_SLUGS_FULL = gql`
       title
       description
       mdDescription
+      icon
       isPublic
       myPermissions
       allowComments
