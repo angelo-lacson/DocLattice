@@ -750,7 +750,10 @@ class ToolFunctionRegistry:
         if not entry:
             return None
 
-        # Database-level enablement gate
+        # Database-level enablement gate.
+        # NOTE: is_configured() performs sync ORM access — safe here because
+        # to_core_tool() is called during sync tool resolution, never from
+        # an async context.  See CLAUDE.md pitfall #13.
         if entry.tool_class is not None:
             try:
                 if not entry.tool_class.is_configured():
