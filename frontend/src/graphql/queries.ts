@@ -54,6 +54,7 @@ export const GET_DOCUMENTS = gql`
     $annotateDocLabels: Boolean!
     $hasAnnotationsWithIds: String
     $includeMetadata: Boolean!
+    $includeCaml: Boolean
   ) {
     documents(
       inCorpusWithId: $inCorpusWithId
@@ -61,6 +62,7 @@ export const GET_DOCUMENTS = gql`
       textSearch: $textSearch
       hasLabelWithId: $hasLabelWithId
       hasAnnotationsWithIds: $hasAnnotationsWithIds
+      includeCaml: $includeCaml
       first: $limit
       after: $cursor
     ) {
@@ -5131,7 +5133,12 @@ export const GET_CORPUS_DOCUMENTS_FOR_TOC = gql`
 
 export const GET_CORPUS_ARTICLE = gql`
   query GetCorpusArticle($corpusId: String!, $title: String!) {
-    documents(inCorpusWithId: $corpusId, title: $title, first: 1) {
+    documents(
+      inCorpusWithId: $corpusId
+      title: $title
+      includeCaml: true
+      first: 1
+    ) {
       edges {
         node {
           id

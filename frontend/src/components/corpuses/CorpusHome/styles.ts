@@ -77,6 +77,7 @@ export const LandingContent = styled.div`
   width: 100%;
   max-width: 800px;
   padding: 2rem 1.5rem;
+  box-sizing: border-box;
 
   ${mediaQuery.tablet} {
     padding: 1.25rem 1rem 2.5rem;
@@ -96,6 +97,7 @@ export const LandingHero = styled.div`
   gap: 1rem;
   padding: 2rem 1rem;
   width: 100%;
+  box-sizing: border-box;
 
   ${mediaQuery.tablet} {
     padding: 1.25rem 0.75rem;

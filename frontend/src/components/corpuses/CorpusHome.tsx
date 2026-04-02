@@ -122,7 +122,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
     [corpus.id]
   );
 
-  const { data: articleData } = useQuery<
+  const { data: articleData, loading: articleLoading } = useQuery<
     GetCorpusArticleOutput,
     GetCorpusArticleInput
   >(GET_CORPUS_ARTICLE, { variables: articleQueryVars });
@@ -201,6 +201,13 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
     );
   }
 
+  // Wait for article detection before choosing between article and landing view.
+  // Without this guard, CorpusLandingView renders momentarily then gets swapped
+  // out when the article query resolves, causing a visible flicker.
+  if (articleLoading) {
+    return null;
+  }
+
   // When a Readme.CAML exists, render the article as the default landing view
   // with floating chat and mode-toggle controls overlaid at the bottom.
   if (hasArticle) {
@@ -267,6 +274,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
     <>
       <CorpusLandingView
         corpus={corpus}
+        hasArticle={hasArticle}
         onViewDetails={handleViewDetails}
         onEditDescription={onEditDescription}
         onNavigateToCorpuses={onNavigateToCorpuses}
@@ -278,7 +286,7 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
         isPowerUserMode={isPowerUserMode}
         onViewDiscussions={handleViewDiscussions}
         onViewArticle={handleViewArticle}
-        onCreateArticle={onEditArticle}
+        onOpenArticleEditor={onEditArticle}
         onThreadClick={handleThreadClick}
         testId="corpus-home-landing"
       />
