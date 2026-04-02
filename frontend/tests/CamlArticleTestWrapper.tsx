@@ -230,6 +230,13 @@ export const SAMPLE_CAML_DOCUMENT: CamlDocument = {
         },
         {
           type: "image" as const,
+          src: "corpus://icon",
+          size: "md" as const,
+          shape: "rounded" as const,
+          caption: "Corpus Icon (alias)",
+        },
+        {
+          type: "image" as const,
           src: "https://example.com/logo.png",
           alt: "Partner logo",
           size: "sm" as const,
@@ -279,24 +286,52 @@ export const SAMPLE_CAML_DOCUMENT: CamlDocument = {
 
 const MOCK_CORPUS_ICON_URL = "https://example.com/corpus-icon.png";
 
-const defaultResolveImageSrc = (src: string): string | undefined => {
-  if (src === "corpus://current" || src === "corpus://icon") {
-    return MOCK_CORPUS_ICON_URL;
-  }
-  return undefined;
+/**
+ * Pre-defined resolver strategies. Functions cannot be serialized across the
+ * Playwright CT boundary, so we select by a string key instead.
+ *
+ * - "default"  — both corpus://current and corpus://icon map to the same URL.
+ * - "none"     — always returns undefined (all corpus:// images show placeholders).
+ * - "distinct" — corpus://current and corpus://icon map to different URLs so
+ *                tests can verify each alias is resolved independently.
+ */
+type ResolverMode = "default" | "none" | "distinct";
+
+const RESOLVERS: Record<ResolverMode, (src: string) => string | undefined> = {
+  default: (src) => {
+    if (src === "corpus://current" || src === "corpus://icon") {
+      return MOCK_CORPUS_ICON_URL;
+    }
+    return undefined;
+  },
+  none: () => undefined,
+  distinct: (src) => {
+    if (src === "corpus://current")
+      return "https://example.com/current-icon.png";
+    if (src === "corpus://icon") return "https://example.com/alias-icon.png";
+    return undefined;
+  },
 };
 
 export interface CamlArticleTestWrapperProps {
   document?: CamlDocument;
   stats?: Record<string, number | undefined>;
+  /**
+   * @deprecated Use `resolverMode` instead. Function props cannot be
+   * serialized across the Playwright CT boundary.
+   */
   resolveImageSrc?: (src: string) => string | undefined;
+  /** Select a pre-defined image resolver strategy (default: "default"). */
+  resolverMode?: ResolverMode;
 }
 
 export const CamlArticleTestWrapper: React.FC<CamlArticleTestWrapperProps> = ({
   document: doc = SAMPLE_CAML_DOCUMENT,
   stats,
-  resolveImageSrc = defaultResolveImageSrc,
+  resolveImageSrc,
+  resolverMode = "default",
 }) => {
+  const resolver = resolveImageSrc ?? RESOLVERS[resolverMode];
   return (
     <MemoryRouter>
       <div
@@ -307,7 +342,7 @@ export const CamlArticleTestWrapper: React.FC<CamlArticleTestWrapperProps> = ({
           <CamlArticle
             document={doc}
             stats={stats}
-            resolveImageSrc={resolveImageSrc}
+            resolveImageSrc={resolver}
           />
         </CamlThemeProvider>
       </div>

@@ -428,8 +428,19 @@ test.describe("CamlArticle - Image Block with resolveImageSrc", () => {
       "https://example.com/corpus-icon.png"
     );
 
+    // The corpus://icon alias should also resolve to the same URL
+    const iconAliasBlock = page.locator('[data-testid="image-block"]').nth(1);
+    const iconAliasImg = iconAliasBlock.locator(
+      '[data-testid="image-block-img"]'
+    );
+    await expect(iconAliasImg).toBeVisible();
+    await expect(iconAliasImg).toHaveAttribute(
+      "src",
+      "https://example.com/corpus-icon.png"
+    );
+
     // The external https:// image should also render as an img
-    const externalBlock = page.locator('[data-testid="image-block"]').nth(1);
+    const externalBlock = page.locator('[data-testid="image-block"]').nth(2);
     const externalImg = externalBlock.locator(
       '[data-testid="image-block-img"]'
     );
@@ -451,9 +462,8 @@ test.describe("CamlArticle - Image Block with resolveImageSrc", () => {
     mount,
     page,
   }) => {
-    const noResolver = (_src: string) => undefined;
     const component = await mount(
-      <CamlArticleTestWrapper resolveImageSrc={noResolver} />
+      <CamlArticleTestWrapper resolverMode="none" />
     );
 
     await page.getByText("Corpus Branding").scrollIntoViewIfNeeded();
@@ -461,6 +471,48 @@ test.describe("CamlArticle - Image Block with resolveImageSrc", () => {
     // corpus://current should show placeholder since resolver returns undefined
     const placeholder = page.locator('[data-testid="image-block-placeholder"]');
     await expect(placeholder.first()).toBeVisible({ timeout: 5000 });
+
+    await component.unmount();
+  });
+
+  test("should resolve corpus://icon independently from corpus://current", async ({
+    mount,
+    page,
+  }) => {
+    // The "distinct" resolver maps each alias to a different URL so we can
+    // verify both are resolved independently.
+    const component = await mount(
+      <CamlArticleTestWrapper resolverMode="distinct" />
+    );
+
+    await page.getByText("Corpus Branding").scrollIntoViewIfNeeded();
+
+    // Wait for image blocks to render
+    await expect(
+      page.locator('[data-testid="image-block"]').first()
+    ).toBeVisible({ timeout: 5000 });
+
+    // First image uses corpus://current
+    const currentImg = page
+      .locator('[data-testid="image-block"]')
+      .nth(0)
+      .locator('[data-testid="image-block-img"]');
+    await expect(currentImg).toHaveAttribute(
+      "src",
+      "https://example.com/current-icon.png",
+      { timeout: 5000 }
+    );
+
+    // Second image uses corpus://icon
+    const iconImg = page
+      .locator('[data-testid="image-block"]')
+      .nth(1)
+      .locator('[data-testid="image-block-img"]');
+    await expect(iconImg).toHaveAttribute(
+      "src",
+      "https://example.com/alias-icon.png",
+      { timeout: 5000 }
+    );
 
     await component.unmount();
   });
