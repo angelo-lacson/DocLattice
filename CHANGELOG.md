@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Web search agent tool** (PR #1174): New `aweb_search` tool for agents with pluggable provider backends (Brave Search and Tavily). Introduces `BaseTool` base class (`opencontractserver/llms/tools/base_tool.py`) for tools with database-backed settings and encrypted secrets via `PipelineSettings`. Tools declare a nested `Settings` dataclass with `PipelineSetting` metadata; `is_configured()` gates tool availability at resolution time. `ToolFunctionRegistry` supports `tool_class` entries for database-level enablement gating. New GraphQL mutations `UpdateToolSecretsMutation` and `DeleteToolSecretsMutation` (`config/graphql/pipeline_settings_mutations.py`) allow superusers to manage tool API keys. Includes per-process rate limiting, provider-specific response parsing, and comprehensive test coverage.
+
 ### Fixed
 
 - **Quickstart blockers** (PR #1179): Fixed several issues preventing first-time setup from working:
