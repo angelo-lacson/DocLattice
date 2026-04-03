@@ -193,19 +193,15 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
     with guardian checks and vector-based search.
     """
 
-    def visible_to_user(self, user, perm=None, **kwargs):
+    def visible_to_user(self, user, perm=None):
         """
         Override PermissionQuerySet.visible_to_user to include guardian
         permission checks. Without this override, chaining
         .filter().visible_to_user() would skip guardian entirely.
 
         Follows the same pattern as BaseVisibilityManager.visible_to_user
-        (opencontractserver/shared/Managers.py lines 103-118).
-
-        Note: **kwargs is present for forward-compatibility so that callers
-        can pass additional keyword arguments (e.g. from manager delegation)
-        without raising TypeError.  Currently unused at the queryset level;
-        prefetch optimisation is handled by DocumentManager.
+        (opencontractserver/shared/Managers.py). Prefetch optimisation is
+        handled by DocumentManager.
         """
         from django.contrib.auth.models import AnonymousUser
 

@@ -23,6 +23,52 @@ else:
 logger = logging.getLogger(__name__)
 
 
+def _apply_document_prefetches(queryset, user, lightweight=False):
+    """
+    Apply Document-specific select_related and prefetch_related optimizations.
+
+    Shared by BaseVisibilityManager (for generic model dispatch) and
+    DocumentManager (for custom permission filtering) to avoid duplication.
+    """
+    queryset = queryset.select_related("creator", "user_lock")
+
+    if not lightweight:
+        from opencontractserver.annotations.models import Annotation
+
+        queryset = queryset.prefetch_related(
+            Prefetch(
+                "doc_annotations",
+                queryset=Annotation.objects.select_related(
+                    "annotation_label", "corpus", "analysis", "creator"
+                ),
+                to_attr="_prefetched_doc_annotations",
+            ),
+            "rows",
+            "source_relationships",
+            "target_relationships",
+            "notes",
+        )
+
+        if user and not user.is_anonymous and not user.is_superuser:
+            from opencontractserver.documents.models import (
+                DocumentUserObjectPermission,
+            )
+
+            queryset = queryset.prefetch_related(
+                Prefetch(
+                    "documentuserobjectpermission_set",
+                    queryset=DocumentUserObjectPermission.objects.filter(
+                        user_id=user.id
+                    ).select_related("permission"),
+                    to_attr="_prefetched_user_perms",
+                ),
+                "documentgroupobjectpermission_set__permission",
+                "documentgroupobjectpermission_set__group",
+            )
+
+    return queryset
+
+
 class BaseVisibilityManager(Manager):
     """
     Base manager that implements the standard visibility logic for non-annotations and non-relationships .
@@ -138,48 +184,7 @@ class BaseVisibilityManager(Manager):
                 # Document counts are now computed via DocumentPath subqueries
             elif model_name.upper() == "DOCUMENT":
                 logger.debug("Applying Document specific optimizations")
-
-                queryset = queryset.select_related("creator", "user_lock")
-
-                if not lightweight:
-                    from opencontractserver.annotations.models import Annotation
-
-                    # Prefetch annotations to avoid N+1 when doc_annotations is
-                    # accessed. This is critical for the docAnnotations GraphQL
-                    # field but unnecessary for list/TOC queries that only need
-                    # basic document fields.
-                    queryset = queryset.prefetch_related(
-                        Prefetch(
-                            "doc_annotations",
-                            queryset=Annotation.objects.select_related(
-                                "annotation_label", "corpus", "analysis", "creator"
-                            ),
-                            to_attr="_prefetched_doc_annotations",
-                        ),
-                        "rows",
-                        "source_relationships",
-                        "target_relationships",
-                        "notes",
-                    )
-
-                    # Prefetch permission objects to avoid N+1 queries in
-                    # myPermissions resolver
-                    if user and not user.is_anonymous and not user.is_superuser:
-                        from opencontractserver.documents.models import (
-                            DocumentUserObjectPermission,
-                        )
-
-                        queryset = queryset.prefetch_related(
-                            Prefetch(
-                                "documentuserobjectpermission_set",
-                                queryset=DocumentUserObjectPermission.objects.filter(
-                                    user_id=user.id
-                                ).select_related("permission"),
-                                to_attr="_prefetched_user_perms",
-                            ),
-                            "documentgroupobjectpermission_set__permission",
-                            "documentgroupobjectpermission_set__group",
-                        )
+                queryset = _apply_document_prefetches(queryset, user, lightweight)
             # Add elif blocks here for other models needing specific optimizations
 
             # Apply distinct *after* optimizations only when necessary.
@@ -273,53 +278,15 @@ class DocumentManager(BaseVisibilityManager):
     def visible_to_user(self, user=None, lightweight=False) -> QuerySet:
         """
         Delegate permission filtering to DocumentQuerySet (which includes
-        public-corpus logic) then apply the same prefetch optimisation as
-        BaseVisibilityManager.
+        public-corpus logic) then apply the shared prefetch optimisations.
         """
         from django.contrib.auth.models import AnonymousUser
-        from django.db.models import Prefetch
 
         if user is None:
             user = AnonymousUser()
 
         queryset = self.get_queryset().visible_to_user(user)
-
-        if not lightweight:
-            queryset = queryset.select_related("creator", "user_lock")
-            from opencontractserver.annotations.models import Annotation
-
-            queryset = queryset.prefetch_related(
-                Prefetch(
-                    "doc_annotations",
-                    queryset=Annotation.objects.select_related(
-                        "annotation_label", "corpus", "analysis", "creator"
-                    ),
-                    to_attr="_prefetched_doc_annotations",
-                ),
-                "rows",
-                "source_relationships",
-                "target_relationships",
-                "notes",
-            )
-
-            if user and not user.is_anonymous and not user.is_superuser:
-                from opencontractserver.documents.models import (
-                    DocumentUserObjectPermission,
-                )
-
-                queryset = queryset.prefetch_related(
-                    Prefetch(
-                        "documentuserobjectpermission_set",
-                        queryset=DocumentUserObjectPermission.objects.filter(
-                            user_id=user.id
-                        ).select_related("permission"),
-                        to_attr="_prefetched_user_perms",
-                    ),
-                    "documentgroupobjectpermission_set__permission",
-                    "documentgroupobjectpermission_set__group",
-                )
-
-        return queryset
+        return _apply_document_prefetches(queryset, user, lightweight)
 
     def search_by_embedding(self, query_vector, embedder_path, top_k=10):
         """
