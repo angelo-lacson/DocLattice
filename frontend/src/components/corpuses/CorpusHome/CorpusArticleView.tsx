@@ -241,7 +241,7 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
   // "corpus://icon" resolves to the corpus's icon URL.
   const resolveImageSrc = useCallback(
     (src: string): string | undefined => {
-      if (src === "corpus://icon") {
+      if (src === "corpus://icon" || src === "corpus://current") {
         return corpus.icon || undefined;
       }
       return undefined;
