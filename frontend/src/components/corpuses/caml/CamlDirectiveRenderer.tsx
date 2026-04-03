@@ -13,7 +13,7 @@
  * or any specific directive. All behavior comes from registered handlers.
  */
 import React, { useMemo } from "react";
-import type { CamlDocument } from "@os-legal/caml";
+import type { CamlDocument, CamlProse } from "@os-legal/caml";
 import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
 
 import { MarkdownMessageRenderer } from "../../threads/MarkdownMessageRenderer";
@@ -85,8 +85,9 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
         ...chapter,
         blocks: chapter.blocks.map((block, bi) => {
           if (block.type !== "prose") return block;
+          const prose = block as CamlProse;
           const { content, directives } = extractInlineDirectives(
-            block.content
+            prose.content
           );
           if (directives.length > 0) {
             directiveMap.set(`${ci}-${bi}`, directives);
@@ -109,9 +110,10 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
     cleanedDocument.chapters.forEach((chapter, ci) => {
       chapter.blocks.forEach((block, bi) => {
         if (block.type !== "prose") return;
+        const prose = block as CamlProse;
         const key = `${ci}-${bi}`;
         if (positionToDirectives.has(key)) {
-          const trimmed = block.content.trim();
+          const trimmed = prose.content.trim();
           const count = counts.get(trimmed) ?? 0;
           counts.set(trimmed, count + 1);
           map.set(`${trimmed}#${count}`, key);

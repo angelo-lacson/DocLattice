@@ -367,6 +367,7 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
                         <StatusDot $color={DATACELL_STATUS_COLORS.PENDING} />
                       )}
                       <CellContent>{displayValue}</CellContent>
+                      {/* Show only the first source to keep the table compact. */}
                       {sources.length > 0 && (
                         <SourceChip
                           href={buildSourceLink(
