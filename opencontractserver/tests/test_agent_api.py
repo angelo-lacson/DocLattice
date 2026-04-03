@@ -622,22 +622,31 @@ class TestToolFunctionRegistry(TestCase):
 
     def test_all_registered_tools_are_async(self):
         """All registered tools must be async functions."""
+        from unittest.mock import patch
+
         from opencontractserver.llms.tools.tool_registry import ToolFunctionRegistry
+        from opencontractserver.llms.tools.web_search_tools import WebSearchTool
 
         registry = ToolFunctionRegistry.get()
         import asyncio
 
-        for name, entry in registry._entries.items():
-            self.assertTrue(
-                asyncio.iscoroutinefunction(entry.async_func),
-                f"Tool '{name}' async_func is not a coroutine function",
-            )
-            core = registry.to_core_tool(name)
-            self.assertIsNotNone(core, f"to_core_tool({name!r}) returned None")
-            self.assertTrue(
-                asyncio.iscoroutinefunction(core.function),
-                f"Tool '{name}' should resolve to async func but got {core.function}",
-            )
+        # Mock is_configured() for tools that require database-level
+        # enablement gating (e.g. web_search needs an API key in
+        # PipelineSettings).  Without this mock, to_core_tool() returns
+        # None for unconfigured tools, which is correct at runtime but
+        # would false-fail this structural assertion.
+        with patch.object(WebSearchTool, "is_configured", return_value=True):
+            for name, entry in registry._entries.items():
+                self.assertTrue(
+                    asyncio.iscoroutinefunction(entry.async_func),
+                    f"Tool '{name}' async_func is not a coroutine function",
+                )
+                core = registry.to_core_tool(name)
+                self.assertIsNotNone(core, f"to_core_tool({name!r}) returned None")
+                self.assertTrue(
+                    asyncio.iscoroutinefunction(core.function),
+                    f"Tool '{name}' should resolve to async func but got {core.function}",
+                )
 
     def test_alias_resolution(self):
         """Aliases resolve to the correct canonical tool."""

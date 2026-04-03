@@ -32,6 +32,7 @@ class ToolCategory(str, Enum):
     COORDINATION = "coordination"
     MODERATION = "moderation"
     IMAGE = "image"
+    WEB = "web"
 
 
 @dataclass(frozen=True)
@@ -111,6 +112,31 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
                 "search_strings",
                 "List of exact strings to find (all occurrences will be found)",
                 True,
+            ),
+        ),
+    ),
+    # -------------------------------------------------------------------------
+    # WEB TOOLS
+    # -------------------------------------------------------------------------
+    ToolDefinition(
+        name="web_search",
+        description=(
+            "Search the web for information. Useful for finding recent information, "
+            "verifying facts, or researching topics not covered in the loaded "
+            "documents. Returns titles, URLs, and content snippets."
+        ),
+        category=ToolCategory.WEB,
+        parameters=(
+            ("query", "The search query. Be specific for better results.", True),
+            (
+                "num_results",
+                "Number of results to return (1-20, default 5)",
+                False,
+            ),
+            (
+                "search_type",
+                'Type of search: "general" (default), "news", or "research"',
+                False,
             ),
         ),
     ),
@@ -655,11 +681,18 @@ class ToolRegistryEntry:
     registered here.  ``PydanticAIToolWrapper`` does NOT wrap sync
     functions in a thread pool, so a sync tool that touches the Django
     ORM will raise ``SynchronousOnlyOperation`` at runtime.
+
+    If ``tool_class`` is set to a :class:`BaseTool` subclass, the tool
+    is only available when ``tool_class.is_configured()`` returns True.
+    This enables database-level enablement gating — the tool silently
+    disappears from agents until an admin configures the required
+    secrets (API keys, etc.) in PipelineSettings.
     """
 
     definition: ToolDefinition
     async_func: Callable
     aliases: tuple[str, ...] = field(default_factory=tuple)
+    tool_class: type | None = None  # BaseTool subclass for enablement gating
 
     def __post_init__(self) -> None:
         if not inspect.iscoroutinefunction(self.async_func):
@@ -704,12 +737,37 @@ class ToolFunctionRegistry:
         return self._entries.get(canonical)
 
     def to_core_tool(self, name: str) -> CoreTool | None:  # noqa: F821
-        """Resolve *name* -> ``CoreTool`` using its async implementation."""
+        """Resolve *name* -> ``CoreTool`` using its async implementation.
+
+        If the entry has a ``tool_class`` (:class:`BaseTool` subclass), the
+        tool is only returned when ``tool_class.is_configured()`` is True.
+        This enforces database-level enablement — unconfigured tools are
+        silently skipped, just like pipeline components without credentials.
+        """
         from opencontractserver.llms.tools.tool_factory import CoreTool
 
         entry = self.resolve(name)
         if not entry:
             return None
+
+        # Database-level enablement gate.
+        # NOTE: is_configured() performs sync ORM access — safe here because
+        # to_core_tool() is called during sync tool resolution, never from
+        # an async context.  See CLAUDE.md pitfall #13.
+        if entry.tool_class is not None:
+            try:
+                if not entry.tool_class.is_configured():
+                    logger.info(
+                        "Tool '%s' skipped — not configured (missing required "
+                        "settings in PipelineSettings key '%s')",
+                        name,
+                        entry.tool_class.full_settings_key(),
+                    )
+                    return None
+            except Exception:
+                logger.debug("Tool '%s' configuration check failed — skipping", name)
+                return None
+
         return CoreTool.from_function(
             entry.async_func,
             name=entry.definition.name,
@@ -779,6 +837,10 @@ class ToolFunctionRegistry:
             aunlock_thread,
             aunpin_thread,
         )
+        from opencontractserver.llms.tools.web_search_tools import (
+            WebSearchTool,
+            aweb_search,
+        )
 
         # canonical_name -> (async_func, aliases)
         FUNCTION_MAP: dict[str, tuple[Callable, tuple[str, ...]]] = {
@@ -838,6 +900,8 @@ class ToolFunctionRegistry:
             "unpin_thread": (aunpin_thread, ()),
             # Utility tools
             "create_markdown_link": (acreate_markdown_link, ()),
+            # Web tools
+            "web_search": (aweb_search, ("search_web",)),
         }
         # NOTE: similarity_search, get_document_text_length, list_documents,
         # and ask_document are NOT in FUNCTION_MAP because they require
@@ -849,6 +913,13 @@ class ToolFunctionRegistry:
         LEGACY_ALIASES: dict[str, str] = {
             "summarize": "load_document_summary",
             "notes": "get_document_notes",
+        }
+
+        # Maps tool names to BaseTool subclasses for database-level
+        # enablement gating.  Tools without an entry here are always
+        # available (the legacy default).
+        TOOL_CLASSES: dict[str, type] = {
+            "web_search": WebSearchTool,
         }
 
         definitions_by_name = {d.name: d for d in AVAILABLE_TOOLS}
@@ -865,6 +936,7 @@ class ToolFunctionRegistry:
                     definition=defn,
                     async_func=async_fn,
                     aliases=aliases,
+                    tool_class=TOOL_CLASSES.get(name),
                 )
             )
 
