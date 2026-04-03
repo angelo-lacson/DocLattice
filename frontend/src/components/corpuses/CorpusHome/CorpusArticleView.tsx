@@ -20,9 +20,13 @@ import {
 import { CorpusType } from "../../../types/graphql-api";
 import { parseCaml } from "@os-legal/caml";
 import type { CamlDocument } from "@os-legal/caml";
-import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
-import { MarkdownMessageRenderer } from "../../threads/MarkdownMessageRenderer";
 import { CAML_ARTICLE_FILENAME } from "../../../assets/configurations/constants";
+import { CamlDirectiveRenderer } from "../caml/CamlDirectiveRenderer";
+import {
+  registerDirectiveHandler,
+  unregisterDirectiveHandler,
+} from "../caml/directiveRegistry";
+import { useCiteHandler } from "../caml/useCiteHandler";
 import { ArticleDocumentsDrawer } from "./ArticleDocumentsDrawer";
 
 // ---------------------------------------------------------------------------
@@ -169,6 +173,18 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
   const [camlContent, setCamlContent] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  // Register the @cite directive handler for this component's lifecycle.
+  // Registered in useEffect (not at module level) so it can be gated by
+  // feature flags and properly cleaned up to avoid registry collisions in tests.
+  useEffect(() => {
+    registerDirectiveHandler("cite", useCiteHandler);
+    return () => unregisterDirectiveHandler("cite");
+  }, []);
+
+  // Memoize handler context to prevent CamlDirectiveRenderer from
+  // recreating renderMarkdown on every parent render.
+  const handlerContext = useMemo(() => ({ corpusId: corpus.id }), [corpus.id]);
+
   // Query for Readme.CAML document in this corpus
   const queryVars = useMemo<GetCorpusArticleInput>(
     () => ({
@@ -308,13 +324,11 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
         />
       )}
 
-      <CamlThemeProvider>
-        <CamlArticle
-          document={parsedDocument}
-          stats={stats}
-          renderMarkdown={(md) => <MarkdownMessageRenderer content={md} />}
-        />
-      </CamlThemeProvider>
+      <CamlDirectiveRenderer
+        document={parsedDocument}
+        handlerContext={handlerContext}
+        stats={stats}
+      />
     </ArticleViewContainer>
   );
 };
