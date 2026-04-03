@@ -122,10 +122,6 @@ test.describe("CorpusChat", () => {
       />
     );
 
-    // Wait for loading to complete — the component should show the conversation
-    // list view with a "New Chat" button even when empty
-    await page.waitForTimeout(2000);
-
     // Should see the new chat button
     await expect(
       page.getByRole("button", { name: "New Chat", exact: true })
@@ -145,9 +141,6 @@ test.describe("CorpusChat", () => {
         forceNewChat
       />
     );
-
-    // In new chat mode, should see the chat input area
-    await page.waitForTimeout(2000);
 
     // The chat input should be visible (textarea or input for composing messages)
     const input = page.locator("textarea, input[type='text']").first();
