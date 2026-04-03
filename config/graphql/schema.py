@@ -7,9 +7,9 @@ from config.graphql.security import DepthLimitValidationRule, DisableIntrospecti
 
 # Build validation rules: always enforce depth limits, disable introspection
 # in production.
-_validation_rules: list = [DepthLimitValidationRule]
+validation_rules: list = [DepthLimitValidationRule]
 if not settings.DEBUG:
-    _validation_rules.append(DisableIntrospection)
+    validation_rules.append(DisableIntrospection)
 
 # Create schema with auto_camelcase for consistency
 schema = graphene.Schema(

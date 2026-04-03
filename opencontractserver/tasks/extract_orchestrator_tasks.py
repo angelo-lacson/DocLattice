@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 
 from celery import chord, group, shared_task
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
@@ -79,8 +80,6 @@ def run_extract(extract_id: Optional[str | int], user_id: str | int):
     logger.info(f"Found extract: {extract.name} (ID: {extract.id})")
 
     # Re-validate permissions at task execution time (defense-in-depth).
-    from django.contrib.auth import get_user_model
-
     User = get_user_model()
     try:
         requesting_user = User.objects.get(pk=user_id)

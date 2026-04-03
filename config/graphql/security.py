@@ -58,21 +58,44 @@ def conditional_csrf_exempt(view_func):
 GRAPHQL_MAX_QUERY_DEPTH = getattr(settings, "GRAPHQL_MAX_QUERY_DEPTH", 10)
 
 
-def _measure_depth(node, current_depth=0):
-    """Recursively measure the maximum depth of selection sets."""
+def _measure_depth(node, current_depth=0, context=None, visited_fragments=None):
+    """Recursively measure the maximum depth of selection sets.
+
+    Follows fragment spreads through the fragment registry to prevent
+    attackers from hiding depth behind named fragments.
+    """
+    if visited_fragments is None:
+        visited_fragments = set()
     if not hasattr(node, "selection_set") or node.selection_set is None:
         return current_depth
 
     max_child = current_depth
     for selection in node.selection_set.selections:
         if isinstance(selection, ast.FieldNode):
-            child_depth = _measure_depth(selection, current_depth + 1)
-            if child_depth > max_child:
-                max_child = child_depth
-        elif isinstance(selection, (ast.InlineFragmentNode, ast.FragmentSpreadNode)):
-            child_depth = _measure_depth(selection, current_depth)
-            if child_depth > max_child:
-                max_child = child_depth
+            child_depth = _measure_depth(
+                selection, current_depth + 1, context, visited_fragments
+            )
+        elif isinstance(selection, ast.InlineFragmentNode):
+            child_depth = _measure_depth(
+                selection, current_depth, context, visited_fragments
+            )
+        elif isinstance(selection, ast.FragmentSpreadNode) and context is not None:
+            frag_name = selection.name.value
+            if frag_name not in visited_fragments:
+                visited_fragments.add(frag_name)
+                fragment = context.get_fragment(frag_name)
+                if fragment:
+                    child_depth = _measure_depth(
+                        fragment, current_depth, context, visited_fragments
+                    )
+                else:
+                    child_depth = current_depth
+            else:
+                child_depth = current_depth  # cycle guard
+        else:
+            child_depth = current_depth
+        if child_depth > max_child:
+            max_child = child_depth
     return max_child
 
 
@@ -84,7 +107,7 @@ class DepthLimitValidationRule(ValidationRule):
     """
 
     def enter_operation_definition(self, node, *_args):
-        depth = _measure_depth(node)
+        depth = _measure_depth(node, context=self.context)
         if depth > GRAPHQL_MAX_QUERY_DEPTH:
             self.report_error(
                 GraphQLError(
