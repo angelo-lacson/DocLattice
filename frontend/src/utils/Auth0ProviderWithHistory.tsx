@@ -13,20 +13,22 @@ export const Auth0ProviderWithHistory: React.FC<Props> = ({
   const navigate = useNavigate();
 
   const onRedirectCallback = (appState?: { returnTo?: string }) => {
-    console.log("[Auth0ProviderWithHistory] onRedirectCallback", appState);
-    navigate(
-      appState?.returnTo || window.location.pathname + window.location.search,
-      {
-        replace: true,
-      }
-    );
+    let target =
+      appState?.returnTo || window.location.pathname + window.location.search;
+
+    // Prevent open-redirect: only allow relative paths on this origin.
+    if (!target.startsWith("/") || target.startsWith("//")) {
+      target = "/";
+    }
+
+    navigate(target, { replace: true });
   };
 
   return (
     <Auth0Provider
       {...(rest as Auth0ProviderOptions)}
       onRedirectCallback={onRedirectCallback}
-      cacheLocation="localstorage"
+      cacheLocation="memory"
     >
       {children}
     </Auth0Provider>
