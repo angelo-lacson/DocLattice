@@ -28,7 +28,7 @@ export const Auth0ProviderWithHistory: React.FC<Props> = ({
     <Auth0Provider
       {...(rest as Auth0ProviderOptions)}
       onRedirectCallback={onRedirectCallback}
-      cacheLocation="memory"
+      cacheLocation="localstorage"
     >
       {children}
     </Auth0Provider>
