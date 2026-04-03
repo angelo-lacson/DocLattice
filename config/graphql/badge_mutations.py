@@ -87,13 +87,13 @@ class CreateBadgeMutation(graphene.Mutation):
                         badge=None,
                     )
 
-                # Check if user can manage this corpus (creator or has PERMISSION-level access)
+                # Check if user can manage this corpus (creator or has UPDATE permission)
                 if not (
                     corpus.creator == user
                     or user_has_permission_for_obj(
                         user,
                         corpus,
-                        PermissionTypes.PERMISSION,
+                        PermissionTypes.UPDATE,
                         include_group_permissions=True,
                     )
                 ):
