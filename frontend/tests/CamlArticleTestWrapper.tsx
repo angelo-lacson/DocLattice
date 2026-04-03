@@ -223,17 +223,10 @@ export const SAMPLE_CAML_DOCUMENT: CamlDocument = {
       blocks: [
         {
           type: "image" as const,
-          src: "corpus://current",
+          src: "corpus://icon",
           size: "lg" as const,
           shape: "avatar" as const,
           caption: "Supply Chain Agreements",
-        },
-        {
-          type: "image" as const,
-          src: "corpus://icon",
-          size: "md" as const,
-          shape: "rounded" as const,
-          caption: "Corpus Icon (alias)",
         },
         {
           type: "image" as const,
@@ -290,35 +283,28 @@ const MOCK_CORPUS_ICON_URL = "https://example.com/corpus-icon.png";
  * Pre-defined resolver strategies. Functions cannot be serialized across the
  * Playwright CT boundary, so we select by a string key instead.
  *
- * - "default"  — both corpus://current and corpus://icon map to the same URL.
- * - "none"     — always returns undefined (all corpus:// images show placeholders).
- * - "distinct" — corpus://current and corpus://icon map to different URLs so
- *                tests can verify each alias is resolved independently.
+ * - "default" — corpus://icon maps to the mock corpus icon URL.
+ * - "none"    — always returns undefined (all corpus:// images show placeholders).
  */
-type ResolverMode = "default" | "none" | "distinct";
+type ResolverMode = "default" | "none";
 
 const RESOLVERS: Record<ResolverMode, (src: string) => string | undefined> = {
   default: (src) => {
-    if (src === "corpus://current" || src === "corpus://icon") {
+    if (src === "corpus://icon") {
       return MOCK_CORPUS_ICON_URL;
     }
     return undefined;
   },
   none: () => undefined,
-  distinct: (src) => {
-    if (src === "corpus://current")
-      return "https://example.com/current-icon.png";
-    if (src === "corpus://icon") return "https://example.com/alias-icon.png";
-    return undefined;
-  },
 };
 
 export interface CamlArticleTestWrapperProps {
   document?: CamlDocument;
   stats?: Record<string, number | undefined>;
   /**
-   * @deprecated Use `resolverMode` instead. Function props cannot be
-   * serialized across the Playwright CT boundary.
+   * Direct resolver function — only usable in non-Playwright-CT contexts.
+   * For CT tests, use `resolverMode` instead (functions can't cross the
+   * Playwright serialization boundary).
    */
   resolveImageSrc?: (src: string) => string | undefined;
   /** Select a pre-defined image resolver strategy (default: "default"). */
