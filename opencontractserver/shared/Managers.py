@@ -30,9 +30,8 @@ def _apply_document_prefetches(queryset, user, lightweight=False):
     Shared by BaseVisibilityManager (for generic model dispatch) and
     DocumentManager (for custom permission filtering) to avoid duplication.
     """
-    queryset = queryset.select_related("creator", "user_lock")
-
     if not lightweight:
+        queryset = queryset.select_related("creator", "user_lock")
         from opencontractserver.annotations.models import Annotation
 
         queryset = queryset.prefetch_related(
