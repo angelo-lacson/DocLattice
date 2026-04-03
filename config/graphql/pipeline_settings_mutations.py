@@ -753,6 +753,239 @@ class UpdateComponentSecretsMutation(graphene.Mutation):
             )
 
 
+class UpdateToolSecretsMutation(graphene.Mutation):
+    """
+    Update encrypted secrets for an agent tool (e.g. web search API keys).
+
+    Tool secrets are stored in PipelineSettings alongside component secrets,
+    under a ``tool:`` namespace prefix. Only superusers can perform this.
+
+    Arguments:
+        tool_key: Tool identifier, e.g. ``"tool:web_search"``
+        secrets: Dict of secret key-value pairs, e.g. ``{"api_key": "..."}``
+        settings: Optional non-sensitive settings, e.g. ``{"provider": "brave"}``
+        merge: If True (default), merge with existing; if False, replace.
+    """
+
+    class Arguments:
+        tool_key = graphene.String(
+            required=True,
+            description='Tool identifier, e.g. "tool:web_search".',
+        )
+        secrets = GenericScalar(
+            required=False,
+            default_value=None,
+            description="Dict of secret values to encrypt (e.g. api_key).",
+        )
+        settings = GenericScalar(
+            required=False,
+            default_value=None,
+            description="Dict of non-sensitive settings (e.g. provider).",
+        )
+        merge = graphene.Boolean(
+            required=False,
+            default_value=True,
+            description="If True, merge with existing. If False, replace.",
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    tools_with_secrets = graphene.List(
+        graphene.String,
+        description="Tool keys that have secrets stored.",
+    )
+
+    @login_required
+    @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
+    def mutate(root, info, tool_key, secrets=None, settings=None, merge=True):
+        """Update secrets and/or settings for an agent tool."""
+        from opencontractserver.constants.tools import TOOL_SETTINGS_PREFIX
+        from opencontractserver.documents.models import PipelineSettings
+
+        user = info.context.user
+
+        if not user.is_superuser:
+            return UpdateToolSecretsMutation(
+                ok=False,
+                message="Only superusers can update tool secrets.",
+                tools_with_secrets=None,
+            )
+
+        # Validate tool key format
+        if not tool_key or not tool_key.startswith(TOOL_SETTINGS_PREFIX):
+            return UpdateToolSecretsMutation(
+                ok=False,
+                message=f"Tool key must start with '{TOOL_SETTINGS_PREFIX}'.",
+                tools_with_secrets=None,
+            )
+
+        # Validate key length and characters
+        if len(tool_key) > MAX_COMPONENT_PATH_LENGTH:
+            return UpdateToolSecretsMutation(
+                ok=False,
+                message=f"Tool key exceeds maximum length of {MAX_COMPONENT_PATH_LENGTH}.",
+                tools_with_secrets=None,
+            )
+
+        if not secrets and not settings:
+            return UpdateToolSecretsMutation(
+                ok=False,
+                message="At least one of 'secrets' or 'settings' must be provided.",
+                tools_with_secrets=None,
+            )
+
+        # Validate secrets structure
+        if secrets is not None:
+            error = validate_secrets_input(secrets)
+            if error:
+                return UpdateToolSecretsMutation(
+                    ok=False, message=error, tools_with_secrets=None
+                )
+
+        # Validate settings structure
+        if settings is not None and not isinstance(settings, dict):
+            return UpdateToolSecretsMutation(
+                ok=False,
+                message="settings must be a dictionary.",
+                tools_with_secrets=None,
+            )
+
+        # Validate provider value for web_search tool
+        if settings and "provider" in settings:
+            from opencontractserver.constants.web_search import (
+                SUPPORTED_PROVIDERS,
+                WEB_SEARCH_SETTINGS_KEY,
+            )
+
+            if (
+                tool_key == WEB_SEARCH_SETTINGS_KEY
+                and settings["provider"] not in SUPPORTED_PROVIDERS
+            ):
+                return UpdateToolSecretsMutation(
+                    ok=False,
+                    message=(
+                        f"Unsupported provider '{settings['provider']}'. "
+                        f"Supported: {', '.join(sorted(SUPPORTED_PROVIDERS))}."
+                    ),
+                    tools_with_secrets=None,
+                )
+
+        try:
+            ps = PipelineSettings.get_instance()
+
+            if not merge:
+                # Replace mode: wipe all existing secrets AND settings for this
+                # tool key before writing the new values.  This guarantees that
+                # stale keys from a previous provider configuration do not
+                # linger in the encrypted store.
+                ps.delete_tool_settings(tool_key)
+
+            # Apply settings and secrets
+            ps.update_tool_settings(
+                tool_key,
+                settings=settings or {},
+                secrets=secrets,
+            )
+            ps.modified_by = user
+            ps.save()
+
+            logger.info(
+                "Tool settings updated for '%s' by %s (has_secrets=%s, has_settings=%s, merge=%s)",
+                tool_key,
+                user.username,
+                secrets is not None,
+                settings is not None,
+                merge,
+            )
+
+            return UpdateToolSecretsMutation(
+                ok=True,
+                message=f"Tool settings updated for '{tool_key}'.",
+                tools_with_secrets=ps.get_tools_with_secrets(),
+            )
+
+        except ValueError as e:
+            return UpdateToolSecretsMutation(
+                ok=False,
+                message=f"Failed to update tool settings: {e}",
+                tools_with_secrets=None,
+            )
+        except Exception:
+            logger.exception(
+                "Unexpected error updating tool settings for '%s'", tool_key
+            )
+            return UpdateToolSecretsMutation(
+                ok=False,
+                message="An unexpected error occurred.",
+                tools_with_secrets=None,
+            )
+
+
+class DeleteToolSecretsMutation(graphene.Mutation):
+    """
+    Delete all settings and secrets for an agent tool.
+
+    Only superusers can perform this operation.
+    """
+
+    class Arguments:
+        tool_key = graphene.String(
+            required=True,
+            description='Tool identifier, e.g. "tool:web_search".',
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    tools_with_secrets = graphene.List(graphene.String)
+
+    @login_required
+    @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
+    def mutate(root, info, tool_key):
+        """Delete all settings and secrets for a tool."""
+        from opencontractserver.constants.tools import TOOL_SETTINGS_PREFIX
+        from opencontractserver.documents.models import PipelineSettings
+
+        user = info.context.user
+
+        if not user.is_superuser:
+            return DeleteToolSecretsMutation(
+                ok=False,
+                message="Only superusers can delete tool secrets.",
+                tools_with_secrets=None,
+            )
+
+        if not tool_key or not tool_key.startswith(TOOL_SETTINGS_PREFIX):
+            return DeleteToolSecretsMutation(
+                ok=False,
+                message=f"Tool key must start with '{TOOL_SETTINGS_PREFIX}'.",
+                tools_with_secrets=None,
+            )
+
+        try:
+            ps = PipelineSettings.get_instance()
+            ps.delete_tool_settings(tool_key)
+            ps.modified_by = user
+            ps.save()
+
+            logger.info("Tool settings deleted for '%s' by %s", tool_key, user.username)
+
+            return DeleteToolSecretsMutation(
+                ok=True,
+                message=f"Tool settings deleted for '{tool_key}'.",
+                tools_with_secrets=ps.get_tools_with_secrets(),
+            )
+
+        except Exception:
+            logger.exception(
+                "Unexpected error deleting tool settings for '%s'", tool_key
+            )
+            return DeleteToolSecretsMutation(
+                ok=False,
+                message="An unexpected error occurred.",
+                tools_with_secrets=None,
+            )
+
+
 class DeleteComponentSecretsMutation(graphene.Mutation):
     """
     Delete all encrypted secrets for a specific pipeline component.

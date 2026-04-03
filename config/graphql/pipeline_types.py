@@ -210,6 +210,13 @@ class PipelineSettingsType(graphene.ObjectType):
         "Actual secret values are never exposed via GraphQL.",
     )
 
+    # Tool secrets indicator
+    tools_with_secrets = graphene.List(
+        graphene.String,
+        description="List of tool keys (e.g. 'tool:web_search') that have encrypted "
+        "secrets configured. Actual secret values are never exposed.",
+    )
+
     # Enabled components filter
     enabled_components = graphene.List(
         graphene.String,
