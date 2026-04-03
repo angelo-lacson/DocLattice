@@ -246,8 +246,8 @@ class DRFMutation(graphene.Mutation):
                     cls.IOSettings.graphene_model.__class__.__name__, obj.id
                 )
 
-        except Exception as e:
+        except Exception:
             logger.error(traceback.format_exc())
-            message = f"Mutation failed due to error: {e}"
+            message = "Mutation failed due to an internal error."
 
         return cls(ok=ok, message=message, obj_id=obj_id)
