@@ -1,5 +1,6 @@
 import React from "react";
 import { test, expect } from "@playwright/experimental-ct-react";
+import { docScreenshot } from "./utils/docScreenshot";
 import { ReplyForm } from "../src/components/threads/ReplyForm";
 import { MockedProvider } from "@apollo/client/testing";
 import {
@@ -155,6 +156,8 @@ test.describe("ReplyForm - Nested Reply", () => {
     await expect(page.locator(".ProseMirror")).toBeVisible();
     // Reply context shows username with @ prefix (icon replaces "Replying to" text)
     await expect(page.getByText("@testuser")).toBeVisible();
+
+    await docScreenshot(page, "threads--reply-form--nested-reply");
   });
 
   test("shows username in placeholder for nested reply", async ({
