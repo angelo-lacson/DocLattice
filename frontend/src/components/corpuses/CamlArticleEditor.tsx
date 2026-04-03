@@ -309,7 +309,14 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
   const [uploadDocument, { loading: saving }] = useMutation<
     UploadDocumentOutputProps,
     UploadDocumentInputProps
-  >(UPLOAD_DOCUMENT);
+  >(UPLOAD_DOCUMENT, {
+    refetchQueries: [
+      {
+        query: GET_CORPUS_ARTICLE,
+        variables: { corpusId, title: CAML_ARTICLE_FILENAME },
+      },
+    ],
+  });
 
   const articleDoc = data?.documents?.edges?.[0]?.node;
 
