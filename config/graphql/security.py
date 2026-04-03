@@ -48,6 +48,9 @@ def conditional_csrf_exempt(view_func):
 
         return view_func(request, *args, **kwargs)
 
+    # Tell Django's CsrfViewMiddleware to skip this view entirely.
+    # We handle CSRF enforcement manually above for session-based requests.
+    wrapped_view.csrf_exempt = True
     return wrapped_view
 
 
@@ -55,7 +58,7 @@ def conditional_csrf_exempt(view_func):
 # M1 — GraphQL query depth limiting
 # ---------------------------------------------------------------------------
 
-GRAPHQL_MAX_QUERY_DEPTH = getattr(settings, "GRAPHQL_MAX_QUERY_DEPTH", 10)
+GRAPHQL_MAX_QUERY_DEPTH = getattr(settings, "GRAPHQL_MAX_QUERY_DEPTH", 15)
 
 
 def _measure_depth(node, current_depth=0, context=None, visited_fragments=None):
