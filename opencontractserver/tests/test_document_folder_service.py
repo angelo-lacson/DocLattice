@@ -849,6 +849,13 @@ class TestDocumentInFolder_MoveOperations(DocumentFolderServiceTestBase):
             is_deleted=False,
         )
 
+    def _get_current_path(self, document=None):
+        """Helper to get the current DocumentPath for a document."""
+        doc = document or self.document
+        return DocumentPath.objects.get(
+            document=doc, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+
     def test_move_document_from_root_to_folder(self):
         """Can move document from corpus root into a folder."""
         success, error = DocumentFolderService.move_document_to_folder(
@@ -859,8 +866,13 @@ class TestDocumentInFolder_MoveOperations(DocumentFolderServiceTestBase):
         )
 
         self.assertTrue(success)
+        current = self._get_current_path()
+        self.assertEqual(current.folder, self.folder_a)
+        # Original path should no longer be current
         self.document_path.refresh_from_db()
-        self.assertEqual(self.document_path.folder, self.folder_a)
+        self.assertFalse(self.document_path.is_current)
+        # New path should be linked to original via parent
+        self.assertEqual(current.parent_id, self.document_path.id)
 
     def test_move_document_between_folders(self):
         """Can move document from one folder to another."""
@@ -881,8 +893,13 @@ class TestDocumentInFolder_MoveOperations(DocumentFolderServiceTestBase):
         )
 
         self.assertTrue(success)
-        self.document_path.refresh_from_db()
-        self.assertEqual(self.document_path.folder, self.folder_b)
+        current = self._get_current_path()
+        self.assertEqual(current.folder, self.folder_b)
+        # Should have 3 path records total (original + 2 moves)
+        total = DocumentPath.objects.filter(
+            document=self.document, corpus=self.corpus
+        ).count()
+        self.assertEqual(total, 3)
 
     def test_move_document_from_folder_to_root(self):
         """Can move document from folder back to corpus root."""
@@ -903,8 +920,55 @@ class TestDocumentInFolder_MoveOperations(DocumentFolderServiceTestBase):
         )
 
         self.assertTrue(success)
-        self.document_path.refresh_from_db()
-        self.assertIsNone(self.document_path.folder)
+        current = self._get_current_path()
+        self.assertIsNone(current.folder)
+
+    def test_move_document_path_reflects_folder(self):
+        """Moving a document updates the path string to reflect the folder."""
+        success, error = DocumentFolderService.move_document_to_folder(
+            user=self.owner,
+            document=self.document,
+            corpus=self.corpus,
+            folder=self.folder_a,
+        )
+
+        self.assertTrue(success)
+        current = self._get_current_path()
+        self.assertIn("Folder A", current.path)
+        self.assertTrue(current.path.endswith("test.pdf"))
+
+    def test_move_document_preserves_version_number(self):
+        """Moving a document does NOT increment the version number (Rule P5)."""
+        original_version = self.document_path.version_number
+
+        DocumentFolderService.move_document_to_folder(
+            user=self.owner,
+            document=self.document,
+            corpus=self.corpus,
+            folder=self.folder_a,
+        )
+
+        current = self._get_current_path()
+        self.assertEqual(current.version_number, original_version)
+
+    def test_move_to_same_folder_is_noop(self):
+        """Moving to the folder the doc is already in creates no new record."""
+        initial_count = DocumentPath.objects.filter(
+            document=self.document, corpus=self.corpus
+        ).count()
+
+        success, error = DocumentFolderService.move_document_to_folder(
+            user=self.owner,
+            document=self.document,
+            corpus=self.corpus,
+            folder=None,  # Already at root
+        )
+
+        self.assertTrue(success)
+        final_count = DocumentPath.objects.filter(
+            document=self.document, corpus=self.corpus
+        ).count()
+        self.assertEqual(initial_count, final_count)
 
     def test_bulk_move_multiple_documents(self):
         """Can bulk move multiple documents at once."""

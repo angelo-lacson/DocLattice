@@ -856,7 +856,10 @@ class DocumentFolderService:
         folder: CorpusFolder | None = None,
     ) -> tuple[bool, str]:
         """
-        Move single document to folder.
+        Move single document to folder, creating a new DocumentPath history node.
+
+        This creates a new DocumentPath record linked to the previous one via parent,
+        implementing the path tree audit trail (Rules P1, P2, P3, P5).
 
         Args:
             user: Moving user
@@ -890,12 +893,54 @@ class DocumentFolderService:
             return False, "Target folder does not belong to this corpus"
 
         with transaction.atomic():
-            DocumentPath.objects.filter(
-                document=document,
+            current = (
+                DocumentPath.objects.select_for_update()
+                .filter(
+                    document=document,
+                    corpus=corpus,
+                    is_current=True,
+                    is_deleted=False,
+                )
+                .first()
+            )
+
+            if not current:
+                return False, "No active document path found"
+
+            # Skip if already in the target folder
+            if current.folder_id == (folder.id if folder else None):
+                return True, ""
+
+            # Compute new path reflecting the folder location
+            new_path = cls._compute_moved_path(current.path, folder)
+
+            # Check for path conflicts and keep current path if needed
+            conflict = (
+                DocumentPath.objects.filter(
+                    corpus=corpus, path=new_path, is_current=True, is_deleted=False
+                )
+                .exclude(pk=current.pk)
+                .exists()
+            )
+            if conflict:
+                new_path = current.path
+
+            # Rule P3: Mark old path as not current
+            current.is_current = False
+            current.save(update_fields=["is_current"])
+
+            # Rules P1, P2: Create new node linked to previous
+            DocumentPath.objects.create(
+                document=current.document,
                 corpus=corpus,
+                folder=folder,
+                path=new_path,
+                version_number=current.version_number,  # Rule P5: no increment on move
+                parent=current,  # Rule P2: audit chain
                 is_current=True,
                 is_deleted=False,
-            ).update(folder=folder)
+                creator=user,
+            )
 
             logger.info(
                 f"Moved document {document.id} to folder {folder.id if folder else 'root'} "
@@ -912,7 +957,10 @@ class DocumentFolderService:
         folder: CorpusFolder | None = None,
     ) -> tuple[int, str]:
         """
-        Bulk move documents to folder.
+        Bulk move documents to folder, creating DocumentPath history nodes.
+
+        Each document gets a new DocumentPath record linked to its previous one,
+        implementing the path tree audit trail (Rules P1, P2, P3, P5).
 
         Args:
             user: Moving user
@@ -946,20 +994,89 @@ class DocumentFolderService:
             if not cls.check_document_in_corpus(doc, corpus):
                 return 0, f"Document {doc.id} does not belong to this corpus"
 
+        target_folder_id = folder.id if folder else None
+        moved_count = 0
+
         with transaction.atomic():
-            # Bulk update DocumentPath
-            DocumentPath.objects.filter(
-                document_id__in=document_ids,
-                corpus=corpus,
-                is_current=True,
-                is_deleted=False,
-            ).update(folder=folder)
+            # Get all current paths for these documents
+            current_paths = list(
+                DocumentPath.objects.select_for_update().filter(
+                    document_id__in=document_ids,
+                    corpus=corpus,
+                    is_current=True,
+                    is_deleted=False,
+                )
+            )
+
+            for current in current_paths:
+                # Skip if already in the target folder
+                if current.folder_id == target_folder_id:
+                    continue
+
+                new_path = cls._compute_moved_path(current.path, folder)
+
+                # Check for path conflicts and keep current path if needed
+                conflict = (
+                    DocumentPath.objects.filter(
+                        corpus=corpus, path=new_path, is_current=True, is_deleted=False
+                    )
+                    .exclude(pk=current.pk)
+                    .exists()
+                )
+                if conflict:
+                    new_path = current.path
+
+                # Rule P3: Mark old path as not current
+                current.is_current = False
+                current.save(update_fields=["is_current"])
+
+                # Rules P1, P2: Create new node linked to previous
+                DocumentPath.objects.create(
+                    document=current.document,
+                    corpus=corpus,
+                    folder=folder,
+                    path=new_path,
+                    version_number=current.version_number,  # Rule P5
+                    parent=current,  # Rule P2
+                    is_current=True,
+                    is_deleted=False,
+                    creator=user,
+                )
+                moved_count += 1
 
             logger.info(
-                f"Bulk moved {len(document_ids)} documents to folder "
+                f"Bulk moved {moved_count} documents to folder "
                 f"{folder.id if folder else 'root'} in corpus {corpus.id} by user {user.id}"
             )
-            return len(document_ids), ""
+            return moved_count, ""
+
+    @staticmethod
+    def _compute_moved_path(
+        current_path: str, target_folder: CorpusFolder | None
+    ) -> str:
+        """
+        Compute the new path string when moving a document to a different folder.
+
+        Extracts the filename from the current path and prepends the target folder's
+        path, or places at root if target_folder is None.
+
+        Args:
+            current_path: Current DocumentPath.path value (e.g. "/documents/report.pdf")
+            target_folder: Target folder (None = corpus root)
+
+        Returns:
+            New path string (e.g. "/Legal/Contracts/report.pdf" or "/report.pdf")
+        """
+        # Extract filename (last segment of path)
+        filename = (
+            current_path.rsplit("/", 1)[-1] if "/" in current_path else current_path
+        )
+
+        if target_folder:
+            folder_path = target_folder.get_path()
+            return f"/{folder_path}/{filename}"
+        else:
+            return f"/{filename}"
 
     @classmethod
     def soft_delete_document(
