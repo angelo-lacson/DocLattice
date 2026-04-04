@@ -354,6 +354,32 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         requires_write_permission=True,
         parameters=(("new_content", "Full markdown content", True),),
     ),
+    ToolDefinition(
+        name="move_document_to_corpus",
+        description=(
+            "Move a document from the current corpus to a different corpus. "
+            "Creates an isolated copy in the target corpus and removes the "
+            "document from the source corpus. Requires write permission on "
+            "both corpuses."
+        ),
+        category=ToolCategory.CORPUS,
+        requires_corpus=True,
+        requires_approval=True,
+        requires_write_permission=True,
+        parameters=(
+            (
+                "document_id",
+                "ID of the document to move (from the current corpus)",
+                True,
+            ),
+            ("target_corpus_id", "ID of the destination corpus", True),
+            (
+                "target_folder_id",
+                "Optional folder ID in the target corpus to place the document",
+                False,
+            ),
+        ),
+    ),
     # -------------------------------------------------------------------------
     # COORDINATION TOOLS (for corpus agents)
     # -------------------------------------------------------------------------
@@ -814,6 +840,7 @@ class ToolFunctionRegistry:
             aget_page_image,
             aload_document_md_summary,
             aload_document_txt_extract,
+            amove_document_to_corpus,
             asearch_document_notes,
             asearch_exact_text_as_sources,
             aupdate_corpus_description,
@@ -884,6 +911,7 @@ class ToolFunctionRegistry:
             # Corpus tools
             "get_corpus_description": (aget_corpus_description, ()),
             "update_corpus_description": (aupdate_corpus_description, ()),
+            "move_document_to_corpus": (amove_document_to_corpus, ()),
             # Image tools
             "list_document_images": (alist_document_images, ()),
             "get_document_image": (aget_document_image, ()),
