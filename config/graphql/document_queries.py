@@ -16,12 +16,17 @@ from config.graphql.graphene_types import (
     BulkDocumentUploadStatusType,
     DocumentRelationshipType,
     DocumentType,
+    IngestionSourceType,
 )
 from config.graphql.ratelimits import get_user_tier_rate, graphql_ratelimit_dynamic
 from opencontractserver.constants.annotations import (
     DOCUMENT_RELATIONSHIP_QUERY_MAX_LIMIT,
 )
-from opencontractserver.documents.models import Document, DocumentRelationship
+from opencontractserver.documents.models import (
+    Document,
+    DocumentRelationship,
+    IngestionSource,
+)
 from opencontractserver.documents.query_optimizer import (
     DocumentRelationshipQueryOptimizer,
 )
@@ -267,3 +272,34 @@ class DocumentQueryMixin:
                 completed=False,
                 errors=[f"Error checking status: {str(e)}"],
             )
+
+    # INGESTION SOURCE RESOLVERS ###########################################
+
+    ingestion_sources = graphene.List(
+        IngestionSourceType,
+        active_only=graphene.Boolean(
+            required=False,
+            default_value=False,
+            description="If true, only return active sources",
+        ),
+        description="List ingestion sources owned by the current user",
+    )
+
+    @login_required
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_ingestion_sources(self, info, active_only=False, **kwargs):
+        qs = IngestionSource.objects.filter(creator=info.context.user)
+        if active_only:
+            qs = qs.filter(active=True)
+        return qs.order_by("name")
+
+    ingestion_source = graphene.Field(
+        IngestionSourceType,
+        id=graphene.ID(required=True),
+        description="Get a single ingestion source by ID",
+    )
+
+    @login_required
+    def resolve_ingestion_source(self, info, id, **kwargs):
+        _, pk = from_global_id(id)
+        return IngestionSource.objects.get(pk=pk, creator=info.context.user)

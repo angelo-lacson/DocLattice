@@ -567,6 +567,90 @@ class DocumentRelationship(BaseOCModel):
         super().save(*args, **kwargs)
 
 
+# -------------------- IngestionSource -------------------- #
+
+
+class IngestionSourceType(models.TextChoices):
+    """Type of integration that produces documents."""
+
+    MANUAL = "manual", "Manual Upload"
+    CRAWLER = "crawler", "Web Crawler"
+    API = "api", "API Import"
+    PIPELINE = "pipeline", "Processing Pipeline"
+    SYNC = "sync", "External Sync"
+
+
+class IngestionSource(BaseOCModel):
+    """
+    A named integration, crawler, or pipeline that produces documents.
+
+    Each source represents a specific ingestion channel (e.g. "alpha_site_crawler",
+    "contract_api_sync"). Sources are scoped per creator so different users can
+    maintain their own integrations.
+
+    Used by DocumentPath to track which source produced each version of a document,
+    enabling full lineage queries like "show me all docs from crawler X".
+    """
+
+    name = django.db.models.CharField(
+        max_length=255,
+        db_index=True,
+        help_text="Human-readable name for this source (e.g. 'alpha_site_crawler')",
+    )
+    source_type = django.db.models.CharField(
+        max_length=50,
+        choices=IngestionSourceType.choices,
+        default=IngestionSourceType.MANUAL,
+        help_text="Category of ingestion source",
+    )
+    config = NullableJSONField(
+        default=jsonfield_default_value,
+        null=True,
+        blank=True,
+        help_text="Connection details, schedule, credentials reference, etc.",
+    )
+    active = django.db.models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="Whether this source is actively ingesting documents",
+    )
+
+    class Meta:
+        constraints = [
+            django.db.models.UniqueConstraint(
+                fields=["creator", "name"],
+                name="unique_ingestion_source_per_creator",
+            ),
+        ]
+        indexes = [
+            django.db.models.Index(fields=["source_type"]),
+            django.db.models.Index(fields=["active"]),
+        ]
+        permissions = (
+            ("create_ingestionsource", "create IngestionSource"),
+            ("read_ingestionsource", "read IngestionSource"),
+            ("update_ingestionsource", "update IngestionSource"),
+            ("remove_ingestionsource", "delete IngestionSource"),
+        )
+
+    def __str__(self):
+        return f"IngestionSource({self.name}, type={self.source_type}, active={self.active})"
+
+
+# Model for Django Guardian permissions
+class IngestionSourceUserObjectPermission(UserObjectPermissionBase):
+    content_object = django.db.models.ForeignKey(
+        "IngestionSource", on_delete=django.db.models.CASCADE
+    )
+
+
+# Model for Django Guardian permissions
+class IngestionSourceGroupObjectPermission(GroupObjectPermissionBase):
+    content_object = django.db.models.ForeignKey(
+        "IngestionSource", on_delete=django.db.models.CASCADE
+    )
+
+
 # -------------------- DocumentPath -------------------- #
 
 
@@ -636,6 +720,29 @@ class DocumentPath(TreeNode, BaseOCModel):
         help_text="True for current filesystem state (Rule P3)",
     )
 
+    # ---- Ingestion lineage fields ----
+    ingestion_source = django.db.models.ForeignKey(
+        "IngestionSource",
+        null=True,
+        blank=True,
+        on_delete=django.db.models.SET_NULL,
+        related_name="document_paths",
+        help_text="Source integration that produced this version (null = manual upload)",
+    )
+    external_id = django.db.models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Identifier in the external system (e.g. 'alpha:contract-123')",
+    )
+    ingestion_metadata = NullableJSONField(
+        default=jsonfield_default_value,
+        null=True,
+        blank=True,
+        help_text="Arbitrary source-specific data (URL, crawl job ID, HTTP headers, ETags, etc.)",
+    )
+
     # TreeNode provides: parent (previous state), tree_depth, tree_path, tree_ordering
 
     class Meta:
@@ -654,6 +761,7 @@ class DocumentPath(TreeNode, BaseOCModel):
             django.db.models.Index(fields=["version_number"]),
             django.db.models.Index(fields=["creator"]),
             django.db.models.Index(fields=["created"]),
+            django.db.models.Index(fields=["ingestion_source", "external_id"]),
         ]
         permissions = (
             ("create_documentpath", "create DocumentPath"),

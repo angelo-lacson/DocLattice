@@ -104,6 +104,18 @@ class UploadDocument(graphene.Mutation):
             "Defaults to False.",
         )
         slug = graphene.String(required=False)
+        ingestion_source_id = graphene.ID(
+            required=False,
+            description="Global ID of the IngestionSource that produced this document",
+        )
+        external_id = graphene.String(
+            required=False,
+            description="Identifier in the external system (e.g. 'alpha:contract-123')",
+        )
+        ingestion_metadata = GenericScalar(
+            required=False,
+            description="Arbitrary source-specific metadata (URL, crawl job ID, etc.)",
+        )
 
     ok = graphene.Boolean()
     message = graphene.String()
@@ -124,6 +136,9 @@ class UploadDocument(graphene.Mutation):
         add_to_extract_id=None,
         add_to_folder_id=None,
         slug=None,
+        ingestion_source_id=None,
+        external_id=None,
+        ingestion_metadata=None,
     ):
         if add_to_corpus_id is not None and add_to_extract_id is not None:
             return UploadDocument(
@@ -211,6 +226,32 @@ class UploadDocument(graphene.Mutation):
                 corpus = Corpus.get_or_create_personal_corpus(user)
                 folder = None
 
+            # Resolve ingestion source if provided
+            ingestion_source = None
+            if ingestion_source_id is not None:
+                from opencontractserver.documents.models import IngestionSource
+
+                try:
+                    source_pk = from_global_id(ingestion_source_id)[1]
+                    ingestion_source = IngestionSource.objects.get(
+                        pk=source_pk, creator=user
+                    )
+                except IngestionSource.DoesNotExist:
+                    return UploadDocument(
+                        message="Ingestion source not found",
+                        ok=False,
+                        document=None,
+                    )
+
+            # Build lineage kwargs for DocumentPath
+            lineage_kwargs = {}
+            if ingestion_source is not None:
+                lineage_kwargs["ingestion_source"] = ingestion_source
+            if external_id:
+                lineage_kwargs["external_id"] = external_id
+            if ingestion_metadata:
+                lineage_kwargs["ingestion_metadata"] = ingestion_metadata
+
             # Import document - import_content handles path generation
             # from filename and routes based on file_type
             try:
@@ -226,6 +267,7 @@ class UploadDocument(graphene.Mutation):
                     backend_lock=True,
                     is_public=make_public,
                     slug=slug,
+                    **lineage_kwargs,
                 )
 
                 set_permissions_for_obj_to_user(user, document, [PermissionTypes.CRUD])

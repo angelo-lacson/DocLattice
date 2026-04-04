@@ -36,16 +36,59 @@ from opencontractserver.documents.models import (
     DocumentProcessingStatus,
     DocumentRelationship,
     DocumentSummaryRevision,
+    IngestionSource,
 )
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
+# -------------------- Ingestion Source Types -------------------- #
+
+
+class IngestionSourceTypeEnum(graphene.Enum):
+    """Enum for ingestion source categories."""
+
+    MANUAL = "manual"
+    CRAWLER = "crawler"
+    API = "api"
+    PIPELINE = "pipeline"
+    SYNC = "sync"
+
+
+class IngestionSourceType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    """GraphQL type for IngestionSource - a named integration that produces documents."""
+
+    config = GenericScalar(
+        description="Source configuration (connection details, etc.)"
+    )
+
+    class Meta:
+        model = IngestionSource
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        """Only show sources owned by the current user or public ones."""
+        user = info.context.user
+        if user.is_anonymous:
+            return queryset.none()
+        if user.is_superuser:
+            return queryset
+        return queryset.filter(creator=user)
+
+
+# -------------------- Document Path Types -------------------- #
+
+
 class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     """GraphQL type for DocumentPath model - represents filesystem lifecycle events."""
 
     action = graphene.Field(PathActionEnum, description="Inferred action type")
+    ingestion_metadata = GenericScalar(
+        description="Arbitrary source-specific metadata (URL, crawl job ID, etc.)"
+    )
 
     def resolve_action(self, info):
         """Infer action type from path state."""
