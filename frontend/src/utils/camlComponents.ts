@@ -18,7 +18,7 @@
  * from this marker system to proper CAML block definitions.
  */
 
-import { ComponentType } from "react";
+import React, { ComponentType } from "react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,18 +29,21 @@ export type CamlComponentProps = Record<string, string>;
 
 /**
  * A React component that can be embedded in CAML prose.
- * Uses a permissive signature so components with optional props
- * (e.g. `{ extractId?: string; [key: string]: string | undefined }`)
- * are assignable without casts.
+ * Uses Record<string, string | undefined> to cover optional marker props
+ * while avoiding a blanket `any`.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type CamlEmbedComponent = ComponentType<any>;
+export type CamlEmbedComponent = ComponentType<
+  Record<string, string | undefined>
+>;
 
 /** Result of parsing a `[component:...]` marker. */
 export interface ParsedComponentMarker {
   type: string;
   props: CamlComponentProps;
 }
+
+/** Map of component type names to their React components. */
+export type CamlComponentRegistry = Record<string, CamlEmbedComponent>;
 
 // ---------------------------------------------------------------------------
 // Marker parser
@@ -116,4 +119,27 @@ export function buildComponentProseFence(
   props: CamlComponentProps
 ): string {
   return `\n::: prose\n${buildComponentMarker(type, props)}\n:::\n`;
+}
+
+// ---------------------------------------------------------------------------
+// Component resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a prose block for a component marker and resolve it against a registry.
+ *
+ * Returns a React element if the marker matches a registered component,
+ * or `null` if the text is not a marker or the type is unregistered.
+ * Used by both `useCamlComponentRenderer` and `CamlDirectiveRenderer` to
+ * keep parsing + lookup in a single code path.
+ */
+export function resolveComponentMarker(
+  md: string,
+  registry: CamlComponentRegistry
+): React.ReactNode | null {
+  const parsed = parseComponentMarker(md);
+  if (!parsed) return null;
+  const Component = registry[parsed.type];
+  if (!Component) return null;
+  return React.createElement(Component, parsed.props);
 }

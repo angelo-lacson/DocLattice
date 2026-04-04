@@ -10,13 +10,8 @@
  */
 import React, { useCallback } from "react";
 import { MarkdownMessageRenderer } from "../components/threads/MarkdownMessageRenderer";
-import {
-  parseComponentMarker,
-  CamlEmbedComponent,
-} from "../utils/camlComponents";
-
-/** Map of component type names to their React components. */
-export type CamlComponentRegistry = Record<string, CamlEmbedComponent>;
+import { resolveComponentMarker } from "../utils/camlComponents";
+export type { CamlComponentRegistry } from "../utils/camlComponents";
 
 /**
  * Returns a stable `renderMarkdown` callback that checks each prose block
@@ -25,18 +20,13 @@ export type CamlComponentRegistry = Record<string, CamlEmbedComponent>;
  * standard markdown renderer.
  */
 export function useCamlComponentRenderer(
-  registry: CamlComponentRegistry
+  registry: Record<string, React.ComponentType<Record<string, string | undefined>>>
 ): (md: string) => React.ReactNode {
   return useCallback(
     (md: string) => {
-      const parsed = parseComponentMarker(md);
-      if (parsed) {
-        const Component = registry[parsed.type];
-        if (Component) {
-          return <Component {...parsed.props} />;
-        }
-      }
-      return <MarkdownMessageRenderer content={md} />;
+      return resolveComponentMarker(md, registry) ?? (
+        <MarkdownMessageRenderer content={md} />
+      );
     },
     [registry]
   );

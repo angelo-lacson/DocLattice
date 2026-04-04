@@ -327,13 +327,15 @@ export function getCorpusUrl(
  * @returns Full document URL with query string, or "#" if slugs missing
  */
 export function getDocumentUrl(
-  document: Pick<DocumentType, "id" | "slug"> & {
-    creator?: Pick<UserType, "id" | "slug"> | null;
-  },
+  document: Pick<DocumentType, "slug"> &
+    Partial<Pick<DocumentType, "id">> & {
+      creator?: Pick<UserType, "slug"> & Partial<Pick<UserType, "id">> | null;
+    },
   corpus?:
-    | (Pick<CorpusType, "id" | "slug"> & {
-        creator?: Pick<UserType, "id" | "slug"> | null;
-      })
+    | (Pick<CorpusType, "slug"> &
+        Partial<Pick<CorpusType, "id">> & {
+          creator?: Pick<UserType, "slug"> & Partial<Pick<UserType, "id">> | null;
+        })
     | null,
   queryParams?: QueryParams
 ): string {
