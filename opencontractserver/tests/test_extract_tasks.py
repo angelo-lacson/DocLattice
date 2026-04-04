@@ -10,6 +10,7 @@ from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.extracts.models import Column, Datacell, Extract, Fieldset
 from opencontractserver.tasks.data_extract_tasks import doc_extract_query_task
+from opencontractserver.tasks.extract_orchestrator_tasks import run_extract
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
@@ -260,8 +261,6 @@ class ExtractOrchestrationTestCase(TransactionTestCase):
     )
     def test_run_extract_orchestration(self):
         """Test the full extract orchestration with multiple documents and columns."""
-        from opencontractserver.tasks.extract_orchestrator_tasks import run_extract
-
         # Create extract
         extract = Extract.objects.create(
             name="Test Full Extract", fieldset=self.fieldset, creator=self.user
@@ -317,8 +316,6 @@ class ExtractOrchestrationTestCase(TransactionTestCase):
             record_mode="once",  # Change to "new_episodes" to record new calls
             filter_headers=["authorization"],
         ):
-            from opencontractserver.tasks.extract_orchestrator_tasks import run_extract
-
             # Run extraction
             run_extract.si(extract.id, self.user.id).apply()
 
@@ -330,8 +327,6 @@ class ExtractOrchestrationTestCase(TransactionTestCase):
     def test_extract_completion_callback(self):
         """Test that the extract completion callback is properly called."""
         from unittest.mock import patch
-
-        from opencontractserver.tasks.extract_orchestrator_tasks import run_extract
 
         extract = Extract.objects.create(
             name="Callback Test Extract", fieldset=self.fieldset, creator=self.user
@@ -352,3 +347,38 @@ class ExtractOrchestrationTestCase(TransactionTestCase):
             # Verify the extract was started
             extract.refresh_from_db()
             assert extract.started is not None
+
+    def test_run_extract_aborts_for_nonexistent_user(self):
+        """run_extract should abort silently when user_id doesn't exist."""
+        extract = Extract.objects.create(
+            name="Abort Test Extract", fieldset=self.fieldset, creator=self.user
+        )
+        set_permissions_for_obj_to_user(self.user, extract, [PermissionTypes.ALL])
+
+        # Use an ID that doesn't exist
+        nonexistent_user_id = 999999
+
+        # Should not raise — just return early
+        run_extract.si(extract.id, nonexistent_user_id).apply()
+
+        # Extract should NOT have a started timestamp (task aborted before setting it)
+        extract.refresh_from_db()
+        self.assertIsNone(extract.started)
+
+    def test_run_extract_aborts_for_unauthorized_user(self):
+        """run_extract should abort when user lacks UPDATE permission."""
+        # Create a different user with no permissions on the extract
+        other_user = User.objects.create_user(
+            username="noperm_user", password="testpass123"
+        )
+
+        extract = Extract.objects.create(
+            name="Permission Test Extract", fieldset=self.fieldset, creator=self.user
+        )
+        # Don't grant permissions to other_user
+
+        run_extract.si(extract.id, other_user.id).apply()
+
+        # Extract should NOT have a started timestamp (task aborted)
+        extract.refresh_from_db()
+        self.assertIsNone(extract.started)
