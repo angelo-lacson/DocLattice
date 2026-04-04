@@ -24,7 +24,7 @@ if READ_DOT_ENV_FILE:
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#allowed-hosts
 ALLOWED_HOSTS = env.list(
-    "DJANGO_ALLOWED_HOSTS", default=["localhost", "0.0.0.0", "127.0.0.1"]
+    "DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "0.0.0.0"]
 )
 
 # https://docs.djangoproject.com/en/dev/ref/settings/#debug
@@ -505,6 +505,10 @@ FIXTURE_DIRS = (str(APPS_DIR / "fixtures"),)
 SESSION_COOKIE_HTTPONLY = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#csrf-cookie-httponly
 CSRF_COOKIE_HTTPONLY = True
+# https://docs.djangoproject.com/en/dev/ref/settings/#session-cookie-samesite
+SESSION_COOKIE_SAMESITE = "Lax"
+# https://docs.djangoproject.com/en/dev/ref/settings/#csrf-cookie-samesite
+CSRF_COOKIE_SAMESITE = "Lax"
 # https://docs.djangoproject.com/en/dev/ref/settings/#x-frame-options
 X_FRAME_OPTIONS = "DENY"
 
@@ -789,7 +793,7 @@ DEFAULT_PERMISSIONS_GROUP = "Public Objects Access"
 EMBEDDINGS_MICROSERVICE_URL = env(
     "EMBEDDINGS_MICROSERVICE_URL", default="http://vector-embedder:8000"
 )
-VECTOR_EMBEDDER_API_KEY = env("VECTOR_EMBEDDER_API_KEY", default="abc123")
+VECTOR_EMBEDDER_API_KEY = env("VECTOR_EMBEDDER_API_KEY", default="")
 # CLIP embedder configuration (768-dimensional vectors)
 CLIP_EMBEDDER_URL = env("CLIP_EMBEDDER_URL", default="http://vector-embedder:8000")
 CLIP_EMBEDDER_API_KEY = env("CLIP_EMBEDDER_API_KEY", default="")
