@@ -475,10 +475,11 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
   }, [content, hasChanges, isNew, corpusId, uploadDocument, refetch, onUpdate]);
 
   // Query for corpus extracts (for the insert toolbar)
-  const { data: extractsData } = useQuery<GetExtractsOutput>(GET_EXTRACTS, {
-    variables: { corpusId, corpusAction_Isnull: true },
-    skip: !isOpen,
-  });
+  const { data: extractsData, loading: extractsLoading } =
+    useQuery<GetExtractsOutput>(GET_EXTRACTS, {
+      variables: { corpusId, corpusAction_Isnull: true },
+      skip: !isOpen,
+    });
 
   const corpusExtracts = useMemo(() => {
     const edges = extractsData?.extracts?.edges ?? [];
@@ -517,10 +518,21 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
       setShowExtractPicker(false);
       const fence = buildComponentProseFence(type, props);
       const textarea = textareaRef.current;
+      const cursorPos = textarea?.selectionStart ?? 0;
+      const newCursorPos = cursorPos + fence.length;
 
       setContent((prev) => {
         const pos = textarea?.selectionStart ?? prev.length;
         return prev.slice(0, pos) + fence + prev.slice(pos);
+      });
+
+      // Restore cursor position after React re-renders the textarea
+      requestAnimationFrame(() => {
+        if (textarea) {
+          textarea.selectionStart = newCursorPos;
+          textarea.selectionEnd = newCursorPos;
+          textarea.focus();
+        }
       });
     },
     []
@@ -565,7 +577,11 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
                 </ToolbarBtn>
                 {showExtractPicker && (
                   <ExtractPickerDropdown>
-                    {corpusExtracts.length === 0 ? (
+                    {extractsLoading ? (
+                      <ExtractPickerEmpty>
+                        Loading extracts...
+                      </ExtractPickerEmpty>
+                    ) : corpusExtracts.length === 0 ? (
                       <ExtractPickerEmpty>
                         No extracts found for this corpus.
                       </ExtractPickerEmpty>

@@ -62,7 +62,7 @@ const ToolbarButton = styled.button`
   border: none;
   border-radius: 9999px;
   background: transparent;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
@@ -73,8 +73,8 @@ const ToolbarButton = styled.button`
   }
 
   &:hover {
-    background: #f1f5f9;
-    color: #334155;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 
   &:active {
@@ -89,17 +89,17 @@ const BackButtonStyled = styled(ToolbarButton)`
 `;
 
 const EditButtonStyled = styled(ToolbarButton)`
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
 
   &:hover {
-    background: #f0fdfa;
-    color: #115e59;
+    background: ${OS_LEGAL_COLORS.accentSurface};
+    color: ${OS_LEGAL_COLORS.accentHover};
   }
 `;
 
 const ToolbarTitle = styled.span`
   font-size: 0.8125rem;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   font-weight: 400;
   letter-spacing: 0.01em;
 `;

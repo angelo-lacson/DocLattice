@@ -166,7 +166,9 @@ const CenterMessage = styled.div`
 // ---------------------------------------------------------------------------
 
 /** Format a datacell value for display. */
-function formatCellValue(data: any): string {
+function formatCellValue(
+  data: string | number | boolean | Record<string, unknown> | null
+): string {
   if (data === null || data === undefined) return "\u2014";
   if (typeof data === "boolean") return data ? "Yes" : "No";
   if (typeof data === "object") return JSON.stringify(data);
