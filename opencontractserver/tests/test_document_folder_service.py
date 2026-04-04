@@ -569,7 +569,7 @@ class TestFolderDelete_BasicOperations(DocumentFolderServiceTestBase):
         self.assertEqual(grandchild.parent, parent)  # Now child of Parent
 
     def test_delete_folder_moves_documents_to_root(self):
-        """Documents in deleted folder are moved to corpus root."""
+        """Documents in deleted folder are moved to corpus root with history."""
         folder, _ = DocumentFolderService.create_folder(
             user=self.owner, corpus=self.corpus, name="Folder With Docs"
         )
@@ -578,12 +578,12 @@ class TestFolderDelete_BasicOperations(DocumentFolderServiceTestBase):
         document = Document.objects.create(
             title="Test Doc", creator=self.owner, pdf_file="test.pdf"
         )
-        DocumentPath.objects.create(
+        original_path = DocumentPath.objects.create(
             document=document,
             corpus=self.corpus,
             creator=self.owner,
             folder=folder,
-            path="/test.pdf",
+            path="/Folder With Docs/test.pdf",
             version_number=1,
             is_current=True,
             is_deleted=False,
@@ -592,11 +592,16 @@ class TestFolderDelete_BasicOperations(DocumentFolderServiceTestBase):
         # Delete the folder
         DocumentFolderService.delete_folder(user=self.owner, folder=folder)
 
-        # Document should now have no folder (at root)
-        path = DocumentPath.objects.get(
-            document=document, corpus=self.corpus, is_current=True
+        # Document should now have no folder (at root) via a new path record
+        current = DocumentPath.objects.get(
+            document=document, corpus=self.corpus, is_current=True, is_deleted=False
         )
-        self.assertIsNone(path.folder)
+        self.assertIsNone(current.folder)
+        # Should be linked to original via parent (history chain)
+        self.assertEqual(current.parent_id, original_path.id)
+        # Original should no longer be current
+        original_path.refresh_from_db()
+        self.assertFalse(original_path.is_current)
 
     def test_delete_folder_without_permission_fails(self):
         """User without DELETE permission cannot delete folder."""

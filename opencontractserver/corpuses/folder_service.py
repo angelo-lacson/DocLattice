@@ -830,11 +830,45 @@ class DocumentFolderService:
                 folder.children.update(parent=folder.parent)
             # else: cascade delete will handle children automatically
 
-            # Move documents to root (set folder=NULL)
-            DocumentPath.objects.filter(
-                folder=folder,
-                is_current=True,
-            ).update(folder=None)
+            # Move documents in folder to root with history tracking
+            affected_paths = list(
+                DocumentPath.objects.select_for_update().filter(
+                    folder=folder,
+                    is_current=True,
+                    is_deleted=False,
+                )
+            )
+            for current in affected_paths:
+                new_path = cls._compute_moved_path(current.path, None)
+
+                # Check for path conflicts and keep current path if needed
+                conflict = (
+                    DocumentPath.objects.filter(
+                        corpus=current.corpus,
+                        path=new_path,
+                        is_current=True,
+                        is_deleted=False,
+                    )
+                    .exclude(pk=current.pk)
+                    .exists()
+                )
+                if conflict:
+                    new_path = current.path
+
+                current.is_current = False
+                current.save(update_fields=["is_current"])
+
+                DocumentPath.objects.create(
+                    document=current.document,
+                    corpus=current.corpus,
+                    folder=None,  # Moved to root
+                    path=new_path,
+                    version_number=current.version_number,
+                    parent=current,
+                    is_current=True,
+                    is_deleted=False,
+                    creator=user,
+                )
 
             # Delete folder
             folder_id = folder.id
