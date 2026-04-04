@@ -361,6 +361,8 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
             "Pass target_folder_id to specify the destination folder, or omit "
             "it to move the document to the corpus root."
         ),
+        # CORPUS (not DOCUMENT) because this manipulates the corpus folder
+        # hierarchy, not the document's own content or metadata.
         category=ToolCategory.CORPUS,
         requires_corpus=True,
         requires_approval=True,

@@ -2761,7 +2761,7 @@ def move_document(
         raise ValueError(f"Move failed: {error}")
 
     destination = (
-        f"folder '{target_folder.title}' (id={target_folder.id})"
+        f"folder '{target_folder.name}' (id={target_folder.id})"
         if target_folder
         else "corpus root"
     )
@@ -2771,9 +2771,7 @@ def move_document(
         "document_id": document_id,
         "corpus_id": corpus_id,
         "target_folder_id": target_folder_id,
-        "message": (
-            f"Document {document_id} moved to {destination} " f"in corpus {corpus_id}."
-        ),
+        "message": f"Document {document_id} moved to {destination} in corpus {corpus_id}.",
     }
 
 
