@@ -17,7 +17,10 @@ import { Link } from "react-router-dom";
 import { ExternalLink, AlertCircle, Loader2, Table2 } from "lucide-react";
 import styled, { keyframes } from "styled-components";
 
-import { DATACELL_STATUS_COLORS } from "../../assets/configurations/constants";
+import {
+  DATACELL_STATUS_COLORS,
+  EXTRACT_GRID_MAX_CELL_DISPLAY_LENGTH,
+} from "../../assets/configurations/constants";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import {
   GET_EXTRACT_GRID_EMBED,
@@ -141,6 +144,19 @@ const CellContent = styled.span`
   word-break: break-word;
 `;
 
+const OverflowBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.25rem;
+  padding: 0.0625rem 0.25rem;
+  border-radius: 4px;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  font-size: 0.625rem;
+  font-weight: 600;
+  vertical-align: middle;
+`;
+
 const StatusDot = styled.span<{ $color: string }>`
   display: inline-block;
   width: 6px;
@@ -166,13 +182,19 @@ const CenterMessage = styled.div`
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Format a datacell value for display. */
+/** Format a datacell value for display, truncating long object serializations. */
 function formatCellValue(
   data: string | number | boolean | Record<string, unknown> | null | undefined
 ): string {
   if (data === null || data === undefined) return "\u2014";
   if (typeof data === "boolean") return data ? "Yes" : "No";
-  if (typeof data === "object") return JSON.stringify(data);
+  if (typeof data === "object") {
+    const json = JSON.stringify(data);
+    if (json.length > EXTRACT_GRID_MAX_CELL_DISPLAY_LENGTH) {
+      return json.slice(0, EXTRACT_GRID_MAX_CELL_DISPLAY_LENGTH) + "\u2026";
+    }
+    return json;
+  }
   return String(data);
 }
 
@@ -360,19 +382,30 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
                         <StatusDot $color={DATACELL_STATUS_COLORS.PENDING} />
                       )}
                       <CellContent>{displayValue}</CellContent>
-                      {/* Show only the first source to keep the table compact. */}
+                      {/* Show first source with +N overflow indicator. */}
                       {sources.length > 0 && (
-                        <SourceChip
-                          to={buildSourceLink(
-                            cell,
-                            sources[0].id,
-                            extract.corpus
+                        <>
+                          <SourceChip
+                            to={buildSourceLink(
+                              cell,
+                              sources[0].id,
+                              extract.corpus
+                            )}
+                            title={`View source (p.${sources[0].page + 1})`}
+                          >
+                            <ExternalLink size={10} />
+                            p.{sources[0].page + 1}
+                          </SourceChip>
+                          {sources.length > 1 && (
+                            <OverflowBadge
+                              title={`${sources.length - 1} more source${
+                                sources.length > 2 ? "s" : ""
+                              }`}
+                            >
+                              +{sources.length - 1}
+                            </OverflowBadge>
                           )}
-                          title={`View source (p.${sources[0].page + 1})`}
-                        >
-                          <ExternalLink size={10} />
-                          p.{sources[0].page + 1}
-                        </SourceChip>
+                        </>
                       )}
                     </Td>
                   );

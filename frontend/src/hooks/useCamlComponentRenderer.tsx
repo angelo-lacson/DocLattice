@@ -20,12 +20,17 @@ export type { CamlComponentRegistry } from "../utils/camlComponents";
  * standard markdown renderer.
  */
 export function useCamlComponentRenderer(
-  registry: Record<string, React.ComponentType<Record<string, string | undefined>>>
+  registry: Record<
+    string,
+    React.ComponentType<Record<string, string | undefined>>
+  >
 ): (md: string) => React.ReactNode {
   return useCallback(
     (md: string) => {
-      return resolveComponentMarker(md, registry) ?? (
-        <MarkdownMessageRenderer content={md} />
+      return (
+        resolveComponentMarker(md, registry) ?? (
+          <MarkdownMessageRenderer content={md} />
+        )
       );
     },
     [registry]

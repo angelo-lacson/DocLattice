@@ -350,6 +350,10 @@ export const DATACELL_STATUS_COLORS = {
   PENDING: "#94a3b8",
 } as const;
 
+// Maximum character length for displaying JSON object values in extract grid cells.
+// Longer serialized objects are truncated with an ellipsis.
+export const EXTRACT_GRID_MAX_CELL_DISPLAY_LENGTH = 120;
+
 // Processing failure UI colors (used in DocumentItem, ModernDocumentItem)
 export const FAILURE_COLORS = {
   ICON_BG: "#dc2626",
