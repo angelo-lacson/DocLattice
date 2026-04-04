@@ -2691,35 +2691,31 @@ async def acreate_markdown_link(
 
 
 # --------------------------------------------------------------------------- #
-# Move document to another corpus                                             #
+# Move document within corpus (folder path change)                            #
 # --------------------------------------------------------------------------- #
 
 
-def move_document_to_corpus(
+def move_document(
     document_id: int,
     corpus_id: int,
-    target_corpus_id: int,
     author_id: int,
     target_folder_id: int | None = None,
 ) -> dict[str, Any]:
     """
-    Move a document from the current corpus to a different corpus.
+    Move a document to a different folder within the current corpus.
 
-    This removes the document from the source corpus and adds a copy to the
-    target corpus. The operation requires write permission on both corpuses.
-    Because documents are corpus-isolated, this creates a new copy in the
-    target corpus (sharing file blobs) and soft-deletes from the source.
+    Updates the document's path in the corpus folder hierarchy. Pass
+    target_folder_id=None (or omit it) to move the document to the corpus root.
+    Requires write permission on the corpus.
 
     Args:
-        document_id: ID of the document to move (in the source corpus)
-        corpus_id: ID of the source corpus (current corpus context)
-        target_corpus_id: ID of the destination corpus
+        document_id: ID of the document to move
+        corpus_id: ID of the corpus the document belongs to
         author_id: ID of the user performing the move
-        target_folder_id: Optional folder ID in the target corpus to place the document
+        target_folder_id: ID of the destination folder, or None for corpus root
 
     Returns:
-        A dictionary with move results including the new document ID in the
-        target corpus
+        A dictionary describing the move result
 
     Raises:
         ValueError: If any referenced object does not exist or the move fails
@@ -2731,12 +2727,6 @@ def move_document_to_corpus(
 
     User = get_user_model()
 
-    if corpus_id == target_corpus_id:
-        raise ValueError(
-            "Source and target corpus are the same. "
-            "Use move_document_to_folder to move within a corpus."
-        )
-
     # Resolve entities
     try:
         user = User.objects.get(pk=author_id)
@@ -2744,14 +2734,9 @@ def move_document_to_corpus(
         raise ValueError(f"User with id={author_id} does not exist.")
 
     try:
-        source_corpus = Corpus.objects.get(pk=corpus_id)
+        corpus = Corpus.objects.get(pk=corpus_id)
     except Corpus.DoesNotExist:
-        raise ValueError(f"Source corpus with id={corpus_id} does not exist.")
-
-    try:
-        target_corpus = Corpus.objects.get(pk=target_corpus_id)
-    except Corpus.DoesNotExist:
-        raise ValueError(f"Target corpus with id={target_corpus_id} does not exist.")
+        raise ValueError(f"Corpus with id={corpus_id} does not exist.")
 
     try:
         document = Document.objects.get(pk=document_id)
@@ -2763,85 +2748,63 @@ def move_document_to_corpus(
         try:
             target_folder = CorpusFolder.objects.get(pk=target_folder_id)
         except CorpusFolder.DoesNotExist:
-            raise ValueError(
-                f"Target folder with id={target_folder_id} does not exist."
-            )
-        if target_folder.corpus_id != target_corpus.id:
-            raise ValueError(
-                f"Target folder {target_folder_id} does not belong to "
-                f"target corpus {target_corpus_id}."
-            )
+            raise ValueError(f"Folder with id={target_folder_id} does not exist.")
 
-    # Step 1: Add document to target corpus (creates isolated copy)
-    new_doc, status, add_error = DocumentFolderService.add_document_to_corpus(
+    success, error = DocumentFolderService.move_document_to_folder(
         user=user,
         document=document,
-        corpus=target_corpus,
+        corpus=corpus,
         folder=target_folder,
     )
-    if add_error:
-        raise ValueError(f"Failed to add document to target corpus: {add_error}")
 
-    # Step 2: Remove document from source corpus (soft delete)
-    removed, remove_error = DocumentFolderService.remove_document_from_corpus(
-        user=user,
-        document=document,
-        corpus=source_corpus,
+    if not success:
+        raise ValueError(f"Move failed: {error}")
+
+    destination = (
+        f"folder '{target_folder.title}' (id={target_folder.id})"
+        if target_folder
+        else "corpus root"
     )
-    if remove_error:
-        raise ValueError(
-            f"Document was added to target corpus (id={new_doc.id}) but "
-            f"removal from source corpus failed: {remove_error}"
-        )
 
     return {
         "status": "moved",
-        "source_corpus_id": corpus_id,
-        "target_corpus_id": target_corpus_id,
-        "original_document_id": document_id,
-        "new_document_id": new_doc.id,
-        "new_document_title": new_doc.title or "",
+        "document_id": document_id,
+        "corpus_id": corpus_id,
         "target_folder_id": target_folder_id,
         "message": (
-            f"Document '{new_doc.title}' moved from corpus {corpus_id} "
-            f"to corpus {target_corpus_id} (new copy id={new_doc.id})."
+            f"Document {document_id} moved to {destination} " f"in corpus {corpus_id}."
         ),
     }
 
 
-async def amove_document_to_corpus(
+async def amove_document(
     document_id: int,
     corpus_id: int,
-    target_corpus_id: int,
     author_id: int,
     target_folder_id: int | None = None,
 ) -> dict[str, Any]:
     """
-    Move a document from the current corpus to a different corpus.
+    Move a document to a different folder within the current corpus.
 
-    This removes the document from the source corpus and adds a copy to the
-    target corpus. The operation requires write permission on both corpuses.
-    Because documents are corpus-isolated, this creates a new copy in the
-    target corpus (sharing file blobs) and soft-deletes from the source.
+    Updates the document's path in the corpus folder hierarchy. Pass
+    target_folder_id=None (or omit it) to move the document to the corpus root.
+    Requires write permission on the corpus.
 
     Args:
-        document_id: ID of the document to move (in the source corpus)
-        corpus_id: ID of the source corpus (current corpus context)
-        target_corpus_id: ID of the destination corpus
+        document_id: ID of the document to move
+        corpus_id: ID of the corpus the document belongs to
         author_id: ID of the user performing the move
-        target_folder_id: Optional folder ID in the target corpus to place the document
+        target_folder_id: ID of the destination folder, or None for corpus root
 
     Returns:
-        A dictionary with move results including the new document ID in the
-        target corpus
+        A dictionary describing the move result
 
     Raises:
         ValueError: If any referenced object does not exist or the move fails
     """
-    return await _db_sync_to_async(move_document_to_corpus)(
+    return await _db_sync_to_async(move_document)(
         document_id=document_id,
         corpus_id=corpus_id,
-        target_corpus_id=target_corpus_id,
         author_id=author_id,
         target_folder_id=target_folder_id,
     )

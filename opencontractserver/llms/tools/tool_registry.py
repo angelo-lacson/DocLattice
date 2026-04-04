@@ -355,12 +355,11 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         parameters=(("new_content", "Full markdown content", True),),
     ),
     ToolDefinition(
-        name="move_document_to_corpus",
+        name="move_document",
         description=(
-            "Move a document from the current corpus to a different corpus. "
-            "Creates an isolated copy in the target corpus and removes the "
-            "document from the source corpus. Requires write permission on "
-            "both corpuses."
+            "Move a document to a different folder within the current corpus. "
+            "Pass target_folder_id to specify the destination folder, or omit "
+            "it to move the document to the corpus root."
         ),
         category=ToolCategory.CORPUS,
         requires_corpus=True,
@@ -369,13 +368,12 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         parameters=(
             (
                 "document_id",
-                "ID of the document to move (from the current corpus)",
+                "ID of the document to move",
                 True,
             ),
-            ("target_corpus_id", "ID of the destination corpus", True),
             (
                 "target_folder_id",
-                "Optional folder ID in the target corpus to place the document",
+                "ID of the destination folder, or omit for corpus root",
                 False,
             ),
         ),
@@ -840,7 +838,7 @@ class ToolFunctionRegistry:
             aget_page_image,
             aload_document_md_summary,
             aload_document_txt_extract,
-            amove_document_to_corpus,
+            amove_document,
             asearch_document_notes,
             asearch_exact_text_as_sources,
             aupdate_corpus_description,
@@ -911,7 +909,7 @@ class ToolFunctionRegistry:
             # Corpus tools
             "get_corpus_description": (aget_corpus_description, ()),
             "update_corpus_description": (aupdate_corpus_description, ()),
-            "move_document_to_corpus": (amove_document_to_corpus, ()),
+            "move_document": (amove_document, ()),
             # Image tools
             "list_document_images": (alist_document_images, ()),
             "get_document_image": (aget_document_image, ()),
