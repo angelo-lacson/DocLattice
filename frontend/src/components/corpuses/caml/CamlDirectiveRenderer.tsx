@@ -46,6 +46,8 @@ export interface CamlDirectiveRendererProps {
   };
   /** Optional registry of embedded component types (e.g. extract-grid). */
   componentRegistry?: CamlComponentRegistry;
+  /** Optional callback to resolve protocol URIs (e.g. corpus://icon) to image URLs */
+  resolveImageSrc?: (src: string) => string | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +74,7 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
   handlerContext,
   stats,
   componentRegistry,
+  resolveImageSrc,
 }) => {
   // Single pass: extract directives and build cleaned document simultaneously.
   // Each prose block is parsed once via extractInlineDirectives, producing both
@@ -85,9 +88,9 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
         ...chapter,
         blocks: chapter.blocks.map((block, bi) => {
           if (block.type !== "prose") return block;
-          const prose = block as CamlProse;
+          const proseBlock = block as CamlProse;
           const { content, directives } = extractInlineDirectives(
-            prose.content
+            proseBlock.content
           );
           if (directives.length > 0) {
             directiveMap.set(`${ci}-${bi}`, directives);
@@ -113,7 +116,7 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
         const prose = block as CamlProse;
         const key = `${ci}-${bi}`;
         if (positionToDirectives.has(key)) {
-          const trimmed = prose.content.trim();
+          const trimmed = (block as CamlProse).content.trim();
           const count = counts.get(trimmed) ?? 0;
           counts.set(trimmed, count + 1);
           map.set(`${trimmed}#${count}`, key);
@@ -179,6 +182,7 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
         document={cleanedDocument}
         stats={stats}
         renderMarkdown={renderMarkdown}
+        resolveImageSrc={resolveImageSrc}
       />
     </CamlThemeProvider>
   );
