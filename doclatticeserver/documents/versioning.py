@@ -159,6 +159,9 @@ def import_document(
         txt_file: Optional Django file object for text files
         **doc_kwargs: Additional keyword arguments for Document creation
             - file_type: MIME type (determines storage field)
+            - ingestion_source: IngestionSource instance (stored on DocumentPath)
+            - external_id: External system identifier (stored on DocumentPath)
+            - ingestion_metadata: Arbitrary source metadata dict (stored on DocumentPath)
 
     Returns:
         Tuple of (document, status, path_record) where status is one of:
@@ -168,6 +171,12 @@ def import_document(
     Note: No content-based deduplication is performed. Each upload creates
     a new document regardless of content hash.
     """
+    # Extract path-level lineage kwargs before they hit Document.objects.create()
+    path_kwargs = {}
+    for key in ("ingestion_source", "external_id", "ingestion_metadata"):
+        if key in doc_kwargs:
+            path_kwargs[key] = doc_kwargs.pop(key)
+
     content_hash = compute_sha256(content)
     # Handle file_type - use default if None or missing
     file_type = doc_kwargs.get("file_type") or "application/pdf"
@@ -269,6 +278,7 @@ def import_document(
                 is_current=True,  # Rule P3
                 is_deleted=False,
                 creator=user,
+                **path_kwargs,
             )
 
             logger.info(
@@ -364,6 +374,7 @@ def import_document(
                 is_current=True,
                 is_deleted=False,
                 creator=user,
+                **path_kwargs,
             )
 
             # Trigger corpus actions if document is ready (not still processing)
