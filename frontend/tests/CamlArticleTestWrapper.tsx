@@ -230,6 +230,13 @@ export const SAMPLE_CAML_DOCUMENT: CamlDocument = {
         },
         {
           type: "image" as const,
+          src: "corpus://current",
+          size: "md" as const,
+          shape: "rounded" as const,
+          caption: "Current corpus badge",
+        },
+        {
+          type: "image" as const,
           src: "https://example.com/logo.png",
           alt: "Partner logo",
           size: "sm" as const,
@@ -283,14 +290,14 @@ const MOCK_CORPUS_ICON_URL = "https://example.com/corpus-icon.png";
  * Pre-defined resolver strategies. Functions cannot be serialized across the
  * Playwright CT boundary, so we select by a string key instead.
  *
- * - "default" — corpus://icon maps to the mock corpus icon URL.
+ * - "default" — corpus://icon and corpus://current both map to the mock corpus icon URL.
  * - "none"    — always returns undefined (all corpus:// images show placeholders).
  */
 type ResolverMode = "default" | "none";
 
 const RESOLVERS: Record<ResolverMode, (src: string) => string | undefined> = {
   default: (src) => {
-    if (src === "corpus://icon") {
+    if (src === "corpus://icon" || src === "corpus://current") {
       return MOCK_CORPUS_ICON_URL;
     }
     return undefined;
