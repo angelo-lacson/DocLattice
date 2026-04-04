@@ -10,6 +10,8 @@ from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.extracts.models import Column, Datacell, Extract, Fieldset
 from opencontractserver.tasks.data_extract_tasks import doc_extract_query_task
+from opencontractserver.types.enums import PermissionTypes
+from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()
 
@@ -264,6 +266,7 @@ class ExtractOrchestrationTestCase(TransactionTestCase):
         extract = Extract.objects.create(
             name="Test Full Extract", fieldset=self.fieldset, creator=self.user
         )
+        set_permissions_for_obj_to_user(self.user, extract, [PermissionTypes.ALL])
 
         # Add all documents
         extract.documents.add(self.doc1, self.doc2, self.doc3)
@@ -306,6 +309,7 @@ class ExtractOrchestrationTestCase(TransactionTestCase):
         extract = Extract.objects.create(
             name="VCR Test Extract", fieldset=self.fieldset, creator=self.user
         )
+        set_permissions_for_obj_to_user(self.user, extract, [PermissionTypes.ALL])
         extract.documents.add(self.doc1)  # Just one doc for VCR test
 
         with vcr.use_cassette(
@@ -332,6 +336,7 @@ class ExtractOrchestrationTestCase(TransactionTestCase):
         extract = Extract.objects.create(
             name="Callback Test Extract", fieldset=self.fieldset, creator=self.user
         )
+        set_permissions_for_obj_to_user(self.user, extract, [PermissionTypes.ALL])
         extract.documents.add(self.doc1)
 
         # In eager mode (test environment), mark_extract_complete is called directly.
