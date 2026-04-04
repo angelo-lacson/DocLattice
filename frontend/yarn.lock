@@ -1282,17 +1282,17 @@
     "@nodelib/fs.scandir" "2.1.5"
     fastq "^1.6.0"
 
-"@os-legal/caml-react@^0.0.3":
-  version "0.0.3"
-  resolved "https://registry.yarnpkg.com/@os-legal/caml-react/-/caml-react-0.0.3.tgz#8d1c716d58f9767335b3094f6bd6464ddec58ac9"
-  integrity sha512-LA1rT9JMUJlm72nan/BCARv1Co6YHm1ySyUMtT/JgKp2lgfEeIbAERG1cb6zfemc/ppg6I7vsq2NZQ7/MPcG6Q==
+"@os-legal/caml-react@^0.1.0":
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/@os-legal/caml-react/-/caml-react-0.1.0.tgz#5ea0116e43c440c683a37faefe2c4422ea6ae763"
+  integrity sha512-VS8Gg0+gnU2xmkvphN3XCbcQ2T2sGTpHqQwsmT6xHqTqr/P6mVzUlrI+msYXljgy7NcliaFKRJCJjKo1/AKpmQ==
   dependencies:
-    "@os-legal/caml" "^0.0.1"
+    "@os-legal/caml" "workspace:*"
 
-"@os-legal/caml@^0.0.1", "@os-legal/caml@^0.0.3":
-  version "0.0.3"
-  resolved "https://registry.yarnpkg.com/@os-legal/caml/-/caml-0.0.3.tgz#794f15be0bf5710d2ff707ed15285ad19e5c39ee"
-  integrity sha512-L0zVycKnZHEmmQIFTiyp5zxzhPHmUEz6Pk3S6ZuHj47usiUGnNCesBdIRX1wi+m7GqvB//2tCpO4Wa2IVLQJSw==
+"@os-legal/caml@^0.1.0", "@os-legal/caml@workspace:*":
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/@os-legal/caml/-/caml-0.1.0.tgz#c5254b010ddce55d279fb45ac146e78bc4a88751"
+  integrity sha512-K5zcqUl8TaRlH0/2kYbKPmqVq7O1S+jBR5weCHnaB9PXykIRJEakzeYygQu32eaNk2P4jrCfZ0KSJ0JBUpd5/Q==
 
 "@os-legal/ui@0.1.16":
   version "0.1.16"
@@ -5208,10 +5208,10 @@ listr2@^4.0.5:
     through "^2.3.8"
     wrap-ansi "^7.0.0"
 
-lodash-es@4.17.23, lodash-es@^4.17.21:
-  version "4.17.23"
-  resolved "https://registry.yarnpkg.com/lodash-es/-/lodash-es-4.17.23.tgz#58c4360fd1b5d33afc6c0bbd3d1149349b1138e0"
-  integrity sha512-kVI48u3PZr38HdYz98UmfPnXl2DXrpdctLrFLCd3kOx1xUkOmpFPx7gCWWM5MPkL/fD8zb+Ph0QzjGFs4+hHWg==
+lodash-es@>=4.18.0, lodash-es@^4.17.21:
+  version "4.18.1"
+  resolved "https://registry.yarnpkg.com/lodash-es/-/lodash-es-4.18.1.tgz#b962eeb80d9d983a900bf342961fb7418ca10b1d"
+  integrity sha512-J8xewKD/Gk22OZbhpOVSwcs60zhd95ESDwezOFuA3/099925PdHJ7OFHNTGtajL3AlZkykD32HykiMo+BIBI8A==
 
 lodash.curry@^4.0.1:
   version "4.1.1"
@@ -5233,15 +5233,10 @@ lodash.uniqueid@^4.0.1:
   resolved "https://registry.yarnpkg.com/lodash.uniqueid/-/lodash.uniqueid-4.0.1.tgz#3268f26a7c88e4f4b1758d679271814e31fa5b26"
   integrity sha512-GQQWaIeGlL6DIIr06kj1j6sSmBxyNMwI8kaX9aKpHR/XsMTiaXDVPNPAkiboOTK9OJpTJF/dXT3xYoFQnj386Q==
 
-lodash@>=4.17.21, lodash@^4.17.20, lodash@^4.17.21, lodash@^4.17.4, lodash@^4.18.1:
+lodash@>=4.17.21, lodash@>=4.18.0, lodash@^4.17.20, lodash@^4.17.21, lodash@^4.17.4, lodash@^4.18.1, lodash@~4.17.0:
   version "4.18.1"
   resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.18.1.tgz#ff2b66c1f6326d59513de2407bf881439812771c"
   integrity sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==
-
-lodash@~4.17.0:
-  version "4.17.23"
-  resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.23.tgz#f113b0378386103be4f6893388c73d0bde7f2c5a"
-  integrity sha512-LgVTMpQtIopCi79SJeDiP0TfWi5CNEc/L/aRdTh3yIvmZXTnheWpKjSZhnvMl8iXbC1tFg9gdHHDMLoV7CnG+w==
 
 log-symbols@^4.0.0, log-symbols@^4.1.0:
   version "4.1.0"
