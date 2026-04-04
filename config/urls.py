@@ -6,10 +6,11 @@ from django.contrib import admin
 from django.http import HttpResponseRedirect, JsonResponse
 from django.urls import include, path
 from django.views import defaults as default_views
-from django.views.decorators.csrf import csrf_exempt
 from graphene_django.views import GraphQLView
 
 from config.admin_auth.views import Auth0AdminLoginView, Auth0AdminLogoutView
+from config.graphql.schema import validation_rules
+from config.graphql.security import conditional_csrf_exempt
 from opencontractserver.analyzer.views import AnalysisCallbackView
 from opencontractserver.annotations.views import AnnotationImagesView
 
@@ -53,7 +54,15 @@ urlpatterns = [
     path("admin/login/", Auth0AdminLoginView.as_view(), name="admin_auth0_login"),
     path("admin/logout/", Auth0AdminLogoutView.as_view(), name="admin_auth0_logout"),
     path(settings.ADMIN_URL, admin.site.urls),
-    path("graphql/", csrf_exempt(GraphQLView.as_view(graphiql=settings.DEBUG))),
+    path(
+        "graphql/",
+        conditional_csrf_exempt(
+            GraphQLView.as_view(
+                graphiql=settings.DEBUG,
+                validation_rules=validation_rules,
+            )
+        ),
+    ),
     path(
         "api/annotations/<int:annotation_id>/images/",
         AnnotationImagesView.as_view(),
