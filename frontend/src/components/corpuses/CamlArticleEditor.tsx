@@ -543,6 +543,8 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
         }
       });
     },
+    // setContent (from useState) is guaranteed stable; textareaRef.current is
+    // read at call-time through the ref object, not captured at creation time.
     []
   );
 

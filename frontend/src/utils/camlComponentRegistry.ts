@@ -7,7 +7,7 @@
  * in both the editor preview and the published article view.
  */
 import { ExtractGridEmbed } from "../components/extracts/ExtractGridEmbed";
-import type { CamlComponentRegistry } from "../hooks/useCamlComponentRenderer";
+import type { CamlComponentRegistry } from "./camlComponents";
 
 export const CAML_COMPONENTS: CamlComponentRegistry = {
   "extract-grid": ExtractGridEmbed,

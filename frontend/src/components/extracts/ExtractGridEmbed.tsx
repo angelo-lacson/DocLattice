@@ -182,18 +182,14 @@ function buildSourceLink(
   sourceId: string,
   corpus: { slug: string; creator: { slug: string } }
 ): string {
-  // getDocumentUrl only uses slug fields for URL construction; id is unused
-  // but required by the type signature, so we pass empty strings.
   const docUrl = getDocumentUrl(
     {
-      id: cell.document.id,
       slug: cell.document.slug,
-      creator: { id: "", slug: cell.document.creator.slug },
+      creator: { slug: cell.document.creator.slug },
     },
     {
-      id: "",
       slug: corpus.slug,
-      creator: { id: "", slug: corpus.creator.slug },
+      creator: { slug: corpus.creator.slug },
     }
   );
   const query = buildQueryParams({ annotationIds: [sourceId] });
@@ -291,8 +287,8 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
     );
   }
 
-  // --- Empty state ---
-  if (rows.length === 0) {
+  // --- Empty state (check raw datacell list, not derived rows) ---
+  if (extract.fullDatacellList.length === 0) {
     return (
       <EmbedWrapper>
         <EmbedHeader>
@@ -328,20 +324,12 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
                   <DocLink
                     to={getDocumentUrl(
                       {
-                        id: row.document.id,
                         slug: row.document.slug,
-                        creator: {
-                          id: "",
-                          slug: row.document.creator.slug,
-                        },
+                        creator: { slug: row.document.creator.slug },
                       },
                       {
-                        id: "",
                         slug: extract.corpus.slug,
-                        creator: {
-                          id: "",
-                          slug: extract.corpus.creator.slug,
-                        },
+                        creator: { slug: extract.corpus.creator.slug },
                       }
                     )}
                   >

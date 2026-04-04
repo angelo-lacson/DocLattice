@@ -3,6 +3,7 @@ import {
   parseComponentMarker,
   buildComponentMarker,
   buildComponentProseFence,
+  resolveComponentMarker,
 } from "../camlComponents";
 
 describe("parseComponentMarker()", () => {
@@ -145,5 +146,28 @@ describe("buildComponentProseFence()", () => {
     expect(result).toBe(
       "\n::: prose\n[component:extract-grid extractId=abc]\n:::\n"
     );
+  });
+});
+
+describe("resolveComponentMarker()", () => {
+  const FakeComponent = () => null;
+  const registry = { "extract-grid": FakeComponent };
+
+  it("returns null for regular markdown (not a marker)", () => {
+    expect(resolveComponentMarker("# Hello World", registry)).toBeNull();
+  });
+
+  it("returns null for a valid marker with an unrecognized type", () => {
+    expect(
+      resolveComponentMarker("[component:unknown-widget foo=bar]", registry)
+    ).toBeNull();
+  });
+
+  it("returns a React element for a registered component type", () => {
+    const result = resolveComponentMarker(
+      "[component:extract-grid extractId=abc]",
+      registry
+    );
+    expect(result).not.toBeNull();
   });
 });

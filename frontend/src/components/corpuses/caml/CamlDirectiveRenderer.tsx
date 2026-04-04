@@ -25,8 +25,10 @@ import {
   getDirectiveHandler,
   DirectiveHandlerContext,
 } from "./directiveRegistry";
-import { parseComponentMarker } from "../../../utils/camlComponents";
-import type { CamlComponentRegistry } from "../../../hooks/useCamlComponentRenderer";
+import {
+  resolveComponentMarker,
+  type CamlComponentRegistry,
+} from "../../../utils/camlComponents";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -144,13 +146,8 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
 
       // Check for embedded component markers (e.g. [component:extract-grid ...])
       if (componentRegistry) {
-        const parsed = parseComponentMarker(md);
-        if (parsed) {
-          const Component = componentRegistry[parsed.type];
-          if (Component) {
-            return <Component {...parsed.props} />;
-          }
-        }
+        const resolved = resolveComponentMarker(md, componentRegistry);
+        if (resolved) return resolved;
       }
 
       return (
