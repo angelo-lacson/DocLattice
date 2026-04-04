@@ -43,7 +43,12 @@ class DocumentFolderServiceTestBase(TransactionTestCase):
     `disable_document_processing_signals` - no need to disconnect/reconnect here.
     """
 
-    pass
+    def _get_current_path(self, document=None):
+        """Helper to get the current active DocumentPath for a document."""
+        doc = document or self.document
+        return DocumentPath.objects.get(
+            document=doc, corpus=self.corpus, is_current=True, is_deleted=False
+        )
 
 
 # =============================================================================
@@ -854,13 +859,6 @@ class TestDocumentInFolder_MoveOperations(DocumentFolderServiceTestBase):
             is_deleted=False,
         )
 
-    def _get_current_path(self, document=None):
-        """Helper to get the current DocumentPath for a document."""
-        doc = document or self.document
-        return DocumentPath.objects.get(
-            document=doc, corpus=self.corpus, is_current=True, is_deleted=False
-        )
-
     def test_move_document_from_root_to_folder(self):
         """Can move document from corpus root into a folder."""
         success, error = DocumentFolderService.move_document_to_folder(
@@ -927,6 +925,15 @@ class TestDocumentInFolder_MoveOperations(DocumentFolderServiceTestBase):
         self.assertTrue(success)
         current = self._get_current_path()
         self.assertIsNone(current.folder)
+
+        # Verify full parent chain: root(original) -> folder_a -> root(current)
+        self.assertIsNotNone(current.parent)
+        mid = current.parent
+        self.assertEqual(mid.folder, self.folder_a)
+        self.assertIsNotNone(mid.parent)
+        original = mid.parent
+        self.assertIsNone(original.folder)
+        self.assertIsNone(original.parent)
 
     def test_move_document_path_reflects_folder(self):
         """Moving a document updates the path string to reflect the folder."""
@@ -1904,12 +1911,6 @@ class TestDocumentPathHistory_MoveTracking(DocumentFolderServiceTestBase):
             is_deleted=False,
         )
 
-    def _get_current_path(self, document=None):
-        doc = document or self.document
-        return DocumentPath.objects.get(
-            document=doc, corpus=self.corpus, is_current=True, is_deleted=False
-        )
-
     def test_single_move_creates_two_path_records(self):
         """One move should produce the original + one new record."""
         DocumentFolderService.move_document_to_folder(
@@ -2089,8 +2090,8 @@ class TestDocumentPathHistory_PathConflicts(DocumentFolderServiceTestBase):
             user=self.owner, corpus=self.corpus, name="Target"
         )
 
-    def test_move_with_path_conflict_preserves_original_path(self):
-        """When computed path conflicts, keep original path but still update folder."""
+    def test_move_with_path_conflict_disambiguates_path(self):
+        """When computed path conflicts, a numeric suffix is appended."""
         # Create two documents
         doc1 = Document.objects.create(
             title="First", creator=self.owner, pdf_file="same.pdf"
@@ -2099,7 +2100,7 @@ class TestDocumentPathHistory_PathConflicts(DocumentFolderServiceTestBase):
             title="Second", creator=self.owner, pdf_file="same.pdf"
         )
 
-        # Both at root but with paths that would conflict if moved to same folder
+        # doc1 is already at /Target/same.pdf
         DocumentPath.objects.create(
             document=doc1,
             corpus=self.corpus,
@@ -2135,10 +2136,110 @@ class TestDocumentPathHistory_PathConflicts(DocumentFolderServiceTestBase):
         )
         # Folder is updated
         self.assertEqual(current.folder, self.folder)
-        # Path kept original to avoid conflict
-        self.assertEqual(current.path, "/same.pdf")
+        # Path is disambiguated with _1 suffix
+        self.assertEqual(current.path, "/Target/same_1.pdf")
         # History node still created
         self.assertIsNotNone(current.parent)
+
+    def test_multiple_conflicts_increment_suffix(self):
+        """Successive conflicts produce _1, _2, etc."""
+        docs = []
+        for i in range(3):
+            d = Document.objects.create(
+                title=f"Doc {i}", creator=self.owner, pdf_file="dup.pdf"
+            )
+            docs.append(d)
+
+        # Place first doc in the folder at the canonical path
+        DocumentPath.objects.create(
+            document=docs[0],
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=self.folder,
+            path="/Target/dup.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Create two more docs at root, each with same filename
+        for idx, doc in enumerate(docs[1:], start=1):
+            DocumentPath.objects.create(
+                document=doc,
+                corpus=self.corpus,
+                creator=self.owner,
+                folder=None,
+                path=f"/dup_{idx}.pdf",
+                version_number=1,
+                is_current=True,
+                is_deleted=False,
+            )
+
+        # Move both to the same folder
+        for doc in docs[1:]:
+            DocumentFolderService.move_document_to_folder(
+                user=self.owner,
+                document=doc,
+                corpus=self.corpus,
+                folder=self.folder,
+            )
+
+        # Collect the new paths (excluding the original doc[0])
+        new_paths = sorted(
+            DocumentPath.objects.filter(
+                document__in=docs[1:],
+                corpus=self.corpus,
+                is_current=True,
+                is_deleted=False,
+            ).values_list("path", flat=True)
+        )
+        self.assertIn("/Target/dup_1.pdf", new_paths)
+        self.assertIn("/Target/dup_2.pdf", new_paths)
+
+    def test_pre_existing_path_triggers_disambiguation(self):
+        """Pre-creating a DocumentPath at the target triggers the fallback."""
+        doc = Document.objects.create(
+            title="Mover", creator=self.owner, pdf_file="report.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/report.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Pre-create a path at the would-be target
+        blocker = Document.objects.create(
+            title="Blocker", creator=self.owner, pdf_file="report.pdf"
+        )
+        DocumentPath.objects.create(
+            document=blocker,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=self.folder,
+            path="/Target/report.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        success, _ = DocumentFolderService.move_document_to_folder(
+            user=self.owner,
+            document=doc,
+            corpus=self.corpus,
+            folder=self.folder,
+        )
+        self.assertTrue(success)
+
+        current = DocumentPath.objects.get(
+            document=doc, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+        self.assertEqual(current.path, "/Target/report_1.pdf")
+        self.assertEqual(current.folder, self.folder)
 
 
 class TestDocumentPathHistory_DeleteFolderTracking(DocumentFolderServiceTestBase):
@@ -2402,9 +2503,12 @@ class TestDocumentPathHistory_FullLifecycleIntegration(DocumentFolderServiceTest
             user=self.owner, document=doc, corpus=self.corpus
         )
 
-        # Restore
+        # Restore — find the current deleted path and pass it
+        deleted_path = DocumentPath.objects.get(
+            document=doc, corpus=self.corpus, is_current=True, is_deleted=True
+        )
         DocumentFolderService.restore_document(
-            user=self.owner, document=doc, corpus=self.corpus
+            user=self.owner, document_path=deleted_path
         )
 
         # Get final current path and check history
@@ -2519,3 +2623,49 @@ class TestDocumentPathHistory_FullLifecycleIntegration(DocumentFolderServiceTest
         self.assertEqual(history[0]["action"], "CREATED")
         self.assertEqual(history[1]["action"], "MOVED")
         self.assertIsNone(history[1]["folder_id"])
+
+    def test_folder_only_move_detected_as_moved(self):
+        """A move that changes folder_id but keeps the same path is MOVED, not UNKNOWN."""
+        from opencontractserver.documents.versioning import get_path_history
+
+        doc = Document.objects.create(
+            title="Folder-Only Move", creator=self.owner, pdf_file="fo.pdf"
+        )
+        # Manually create an initial path inside folder_a
+        initial = DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=self.folder_a,
+            path="/shared_name/fo.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Manually create a second node with the SAME path but a different folder,
+        # simulating a move where the path string is unchanged.
+        initial.is_current = False
+        initial.save(update_fields=["is_current"])
+
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=self.folder_b,
+            path="/shared_name/fo.pdf",  # Same path string
+            version_number=1,
+            parent=initial,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        current = DocumentPath.objects.get(
+            document=doc, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+        history = get_path_history(current)
+
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0]["action"], "CREATED")
+        self.assertEqual(history[1]["action"], "MOVED")
+        self.assertEqual(history[1]["folder_id"], self.folder_b.id)

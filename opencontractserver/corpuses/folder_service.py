@@ -840,20 +840,9 @@ class DocumentFolderService:
             )
             for current in affected_paths:
                 new_path = cls._compute_moved_path(current.path, None)
-
-                # Check for path conflicts and keep current path if needed
-                conflict = (
-                    DocumentPath.objects.filter(
-                        corpus=current.corpus,
-                        path=new_path,
-                        is_current=True,
-                        is_deleted=False,
-                    )
-                    .exclude(pk=current.pk)
-                    .exists()
+                new_path = cls._disambiguate_path(
+                    new_path, current.corpus, exclude_pk=current.pk
                 )
-                if conflict:
-                    new_path = current.path
 
                 current.is_current = False
                 current.save(update_fields=["is_current"])
@@ -892,8 +881,13 @@ class DocumentFolderService:
         """
         Move single document to folder, creating a new DocumentPath history node.
 
-        This creates a new DocumentPath record linked to the previous one via parent,
-        implementing the path tree audit trail (Rules P1, P2, P3, P5).
+        This creates a new DocumentPath record linked to the previous one via
+        ``parent``, implementing the path tree audit trail:
+
+        - Every lifecycle event creates a new node (immutable history).
+        - Each new node links to its predecessor via ``parent`` for traversal.
+        - The old node is marked ``is_current=False`` so only one node is active.
+        - ``version_number`` is preserved (moves do not bump the version).
 
         Args:
             user: Moving user
@@ -945,32 +939,23 @@ class DocumentFolderService:
             if current.folder_id == (folder.id if folder else None):
                 return True, ""
 
-            # Compute new path reflecting the folder location
+            # Compute new path reflecting the folder location,
+            # disambiguating with a numeric suffix if there is a conflict.
             new_path = cls._compute_moved_path(current.path, folder)
+            new_path = cls._disambiguate_path(new_path, corpus, exclude_pk=current.pk)
 
-            # Check for path conflicts and keep current path if needed
-            conflict = (
-                DocumentPath.objects.filter(
-                    corpus=corpus, path=new_path, is_current=True, is_deleted=False
-                )
-                .exclude(pk=current.pk)
-                .exists()
-            )
-            if conflict:
-                new_path = current.path
-
-            # Rule P3: Mark old path as not current
+            # Mark old path as not current
             current.is_current = False
             current.save(update_fields=["is_current"])
 
-            # Rules P1, P2: Create new node linked to previous
+            # Create new node linked to previous (audit chain)
             DocumentPath.objects.create(
                 document=current.document,
                 corpus=corpus,
                 folder=folder,
                 path=new_path,
-                version_number=current.version_number,  # Rule P5: no increment on move
-                parent=current,  # Rule P2: audit chain
+                version_number=current.version_number,  # no increment on move
+                parent=current,
                 is_current=True,
                 is_deleted=False,
                 creator=user,
@@ -994,7 +979,8 @@ class DocumentFolderService:
         Bulk move documents to folder, creating DocumentPath history nodes.
 
         Each document gets a new DocumentPath record linked to its previous one,
-        implementing the path tree audit trail (Rules P1, P2, P3, P5).
+        implementing the path tree audit trail (see ``move_document_to_folder``
+        for design rationale).
 
         Args:
             user: Moving user
@@ -1048,30 +1034,22 @@ class DocumentFolderService:
                     continue
 
                 new_path = cls._compute_moved_path(current.path, folder)
-
-                # Check for path conflicts and keep current path if needed
-                conflict = (
-                    DocumentPath.objects.filter(
-                        corpus=corpus, path=new_path, is_current=True, is_deleted=False
-                    )
-                    .exclude(pk=current.pk)
-                    .exists()
+                new_path = cls._disambiguate_path(
+                    new_path, corpus, exclude_pk=current.pk
                 )
-                if conflict:
-                    new_path = current.path
 
-                # Rule P3: Mark old path as not current
+                # Mark old path as not current
                 current.is_current = False
                 current.save(update_fields=["is_current"])
 
-                # Rules P1, P2: Create new node linked to previous
+                # Create new node linked to previous (audit chain)
                 DocumentPath.objects.create(
                     document=current.document,
                     corpus=corpus,
                     folder=folder,
                     path=new_path,
-                    version_number=current.version_number,  # Rule P5
-                    parent=current,  # Rule P2
+                    version_number=current.version_number,
+                    parent=current,
                     is_current=True,
                     is_deleted=False,
                     creator=user,
@@ -1106,11 +1084,66 @@ class DocumentFolderService:
             current_path.rsplit("/", 1)[-1] if "/" in current_path else current_path
         )
 
+        # Guard against empty or root-only paths where filename would be empty
+        if not filename:
+            filename = current_path.strip("/") or "unnamed"
+
         if target_folder:
             folder_path = target_folder.get_path()
             return f"/{folder_path}/{filename}"
         else:
             return f"/{filename}"
+
+    @staticmethod
+    def _disambiguate_path(
+        base_path: str,
+        corpus: Corpus,
+        exclude_pk: int | None = None,
+    ) -> str:
+        """
+        Generate a unique path by appending numeric suffixes when a conflict exists.
+
+        Given a base path like ``/Target/report.pdf``, this checks for existing
+        active (``is_current=True, is_deleted=False``) DocumentPath records in the
+        same corpus. If the base path is taken it tries ``/Target/report_1.pdf``,
+        ``/Target/report_2.pdf``, etc. until an unused path is found.
+
+        Args:
+            base_path: The ideal path string to use.
+            corpus: Corpus to check for conflicts in.
+            exclude_pk: Optional DocumentPath PK to exclude from conflict check
+                        (the record being superseded).
+
+        Returns:
+            A path string guaranteed to be unique among active paths in the corpus.
+        """
+        from opencontractserver.documents.models import DocumentPath
+
+        def _is_taken(path: str) -> bool:
+            qs = DocumentPath.objects.filter(
+                corpus=corpus, path=path, is_current=True, is_deleted=False
+            )
+            if exclude_pk is not None:
+                qs = qs.exclude(pk=exclude_pk)
+            return qs.exists()
+
+        if not _is_taken(base_path):
+            return base_path
+
+        # Split into stem and extension for suffix insertion
+        if "." in base_path.rsplit("/", 1)[-1]:
+            stem, ext = base_path.rsplit(".", 1)
+            ext = f".{ext}"
+        else:
+            stem = base_path
+            ext = ""
+
+        counter = 1
+        while True:
+            candidate = f"{stem}_{counter}{ext}"
+            if not _is_taken(candidate):
+                return candidate
+            counter += 1
 
     @classmethod
     def soft_delete_document(
@@ -1122,8 +1155,8 @@ class DocumentFolderService:
         """
         Soft-delete document (move to trash).
 
-        Creates new DocumentPath with is_deleted=True following Rule P1
-        (every lifecycle event creates new node).
+        Creates a new DocumentPath with ``is_deleted=True`` (every lifecycle
+        event creates an immutable history node).
 
         Args:
             user: Deleting user
@@ -1165,7 +1198,7 @@ class DocumentFolderService:
             current_path.is_current = False
             current_path.save()
 
-            # Create new deleted path (Rule P1)
+            # Create new deleted path (immutable history node)
             DocumentPath.objects.create(
                 document=document,
                 corpus=corpus,
@@ -1192,7 +1225,7 @@ class DocumentFolderService:
         """
         Restore soft-deleted document.
 
-        Creates new DocumentPath with is_deleted=False following Rule P1.
+        Creates a new DocumentPath with ``is_deleted=False`` (immutable history node).
 
         Args:
             user: Restoring user
@@ -1225,7 +1258,7 @@ class DocumentFolderService:
             document_path.is_current = False
             document_path.save()
 
-            # Create new restored path (Rule P1)
+            # Create new restored path (immutable history node)
             DocumentPath.objects.create(
                 document=document_path.document,
                 corpus=document_path.corpus,
