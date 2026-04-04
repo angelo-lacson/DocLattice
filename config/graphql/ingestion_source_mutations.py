@@ -10,7 +10,10 @@ from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
 from config.graphql.document_types import IngestionSourceType, IngestionSourceTypeEnum
-from opencontractserver.documents.models import IngestionSource
+from opencontractserver.documents.models import (
+    IngestionSource,
+    IngestionSourceCategory,
+)
 from opencontractserver.utils.permissioning import (
     PermissionTypes,
     set_permissions_for_obj_to_user,
@@ -52,9 +55,17 @@ class CreateIngestionSourceMutation(graphene.Mutation):
                 ingestion_source=None,
             )
 
+        # Coerce graphene Enum to its string value so the in-memory object
+        # holds a plain string that graphene-django can serialize.
+        resolved_type = (
+            source_type.value
+            if hasattr(source_type, "value")
+            else IngestionSourceCategory.MANUAL
+        )
+
         source = IngestionSource.objects.create(
             name=name,
-            source_type=source_type or "manual",
+            source_type=resolved_type,
             config=config or {},
             creator=user,
         )
@@ -105,6 +116,13 @@ class UpdateIngestionSourceMutation(graphene.Mutation):
                     ingestion_source=None,
                 )
 
+        # Coerce graphene Enum to its string value for source_type
+        if "source_type" in kwargs and kwargs["source_type"] is not None:
+            st = kwargs["source_type"]
+            kwargs["source_type"] = st.value if hasattr(st, "value") else st
+
+        # Note: the `is not None` guard means callers cannot set config to None.
+        # To clear config, pass config={} (empty dict) instead.
         update_fields = []
         for field in ("name", "source_type", "config", "active"):
             if field in kwargs and kwargs[field] is not None:

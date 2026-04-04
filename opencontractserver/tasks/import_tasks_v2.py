@@ -23,7 +23,11 @@ from opencontractserver.annotations.models import (
     StructuralAnnotationSet,
 )
 from opencontractserver.corpuses.models import TemporaryFileHandle
-from opencontractserver.documents.models import Document, IngestionSource
+from opencontractserver.documents.models import (
+    Document,
+    IngestionSource,
+    IngestionSourceCategory,
+)
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.import_v2 import (
     import_agent_config,
@@ -438,7 +442,7 @@ def _import_ingestion_sources(
             creator=user_obj,
             name=name,
             defaults={
-                "source_type": src.get("source_type", "manual"),
+                "source_type": src.get("source_type", IngestionSourceCategory.MANUAL),
                 "config": src.get("config") or {},
                 "active": src.get("active", True),
             },

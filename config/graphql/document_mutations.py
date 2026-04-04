@@ -36,7 +36,7 @@ from config.graphql.serializers import DocumentSerializer
 from config.telemetry import record_event
 from opencontractserver.constants.zip_import import ZIP_MAX_TOTAL_SIZE_BYTES
 from opencontractserver.corpuses.models import Corpus, CorpusFolder, TemporaryFileHandle
-from opencontractserver.documents.models import Document, DocumentPath
+from opencontractserver.documents.models import Document, DocumentPath, IngestionSource
 from opencontractserver.extracts.models import Extract
 from opencontractserver.pipeline.registry import get_allowed_mime_types
 from opencontractserver.tasks import (
@@ -229,8 +229,6 @@ class UploadDocument(graphene.Mutation):
             # Resolve ingestion source if provided
             ingestion_source = None
             if ingestion_source_id is not None:
-                from opencontractserver.documents.models import IngestionSource
-
                 try:
                     source_pk = from_global_id(ingestion_source_id)[1]
                     ingestion_source = IngestionSource.objects.get(

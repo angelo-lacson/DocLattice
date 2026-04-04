@@ -300,6 +300,10 @@ class DocumentQueryMixin:
     )
 
     @login_required
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_ingestion_source(self, info, id, **kwargs):
         _, pk = from_global_id(id)
-        return IngestionSource.objects.get(pk=pk, creator=info.context.user)
+        try:
+            return IngestionSource.objects.get(pk=pk, creator=info.context.user)
+        except IngestionSource.DoesNotExist:
+            return None

@@ -570,8 +570,12 @@ class DocumentRelationship(BaseOCModel):
 # -------------------- IngestionSource -------------------- #
 
 
-class IngestionSourceType(models.TextChoices):
-    """Type of integration that produces documents."""
+class IngestionSourceCategory(models.TextChoices):
+    """Category of integration that produces documents.
+
+    Named 'Category' to avoid confusion with the GraphQL IngestionSourceType
+    (DjangoObjectType) defined in config/graphql/document_types.py.
+    """
 
     MANUAL = "manual", "Manual Upload"
     CRAWLER = "crawler", "Web Crawler"
@@ -599,8 +603,8 @@ class IngestionSource(BaseOCModel):
     )
     source_type = django.db.models.CharField(
         max_length=50,
-        choices=IngestionSourceType.choices,
-        default=IngestionSourceType.MANUAL,
+        choices=IngestionSourceCategory.choices,
+        default=IngestionSourceCategory.MANUAL,
         help_text="Category of ingestion source",
     )
     config = NullableJSONField(
