@@ -2151,8 +2151,8 @@ export interface ExtractGridEmbedCell {
     slug: string;
     creator: { slug: string };
   };
-  data: any;
-  correctedData: any;
+  data: string | number | boolean | Record<string, unknown> | null;
+  correctedData: string | number | boolean | Record<string, unknown> | null;
   completed: string | null;
   failed: string | null;
   fullSourceList: ExtractGridEmbedSource[];

@@ -52,7 +52,7 @@ const populatedExtractMock: MockedResponse = {
             correctedData: null,
             completed: "2024-03-01T12:00:00Z",
             failed: null,
-            fullSourceList: [{ id: "src-1", page: 2, rawText: "January 15" }],
+            fullSourceList: [{ id: "src-1", page: 2 }],
           },
           {
             id: "cell-2",
@@ -67,7 +67,7 @@ const populatedExtractMock: MockedResponse = {
             correctedData: null,
             completed: "2024-03-01T12:00:00Z",
             failed: null,
-            fullSourceList: [{ id: "src-2", page: 5, rawText: "Delaware" }],
+            fullSourceList: [{ id: "src-2", page: 5 }],
           },
           {
             id: "cell-3",
