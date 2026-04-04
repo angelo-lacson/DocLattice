@@ -809,10 +809,13 @@ class Corpus(TreeNode):
                     lambda ss=ss_id, c=c_id: ensure_embeddings_for_corpus.delay(ss, c)
                 )
 
-            # Check if path is occupied
-            occupied_path = DocumentPath.objects.filter(
-                corpus=self, path=path, is_current=True, is_deleted=False
-            ).first()
+            # Check if path is occupied — use select_for_update to prevent
+            # TOCTOU race conditions under concurrent requests.
+            occupied_path = (
+                DocumentPath.objects.select_for_update()
+                .filter(corpus=self, path=path, is_current=True, is_deleted=False)
+                .first()
+            )
 
             if occupied_path:
                 # Path exists with different document - mark as not current
