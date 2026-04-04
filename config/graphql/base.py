@@ -9,6 +9,7 @@ from graphene.relay import Node
 from graphene_django import DjangoObjectType
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id, to_global_id
+from rest_framework import serializers
 
 from config.graphql.ratelimits import RateLimits, graphql_ratelimit
 from opencontractserver.types.enums import PermissionTypes
@@ -246,6 +247,21 @@ class DRFMutation(graphene.Mutation):
                     cls.IOSettings.graphene_model.__class__.__name__, obj.id
                 )
 
+        except serializers.ValidationError as ve:
+            logger.warning(f"Validation error in mutation: {ve.detail}")
+            # Surface validation errors with clean formatting — str(ValidationError)
+            # renders as [ErrorDetail(string='...', code='invalid')] which leaks
+            # internal structure.
+            if isinstance(ve.detail, dict):
+                errors = "; ".join(
+                    f"{field}: {', '.join(str(e) for e in errs)}"
+                    for field, errs in ve.detail.items()
+                )
+            elif isinstance(ve.detail, list):
+                errors = "; ".join(str(e) for e in ve.detail)
+            else:
+                errors = str(ve.detail)
+            message = f"Mutation failed due to error: {errors}"
         except Exception:
             logger.error(traceback.format_exc())
             message = "Mutation failed due to an internal error."
