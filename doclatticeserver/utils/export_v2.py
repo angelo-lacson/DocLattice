@@ -284,7 +284,10 @@ def package_ingestion_sources(corpus: Corpus) -> list[IngestionSourceExport]:
         {
             "name": source.name,
             "source_type": source.source_type,
-            "config": source.config or {},
+            # Config is intentionally omitted from exports because it may
+            # contain credentials (API keys, tokens, connection strings).
+            # Importers should reconfigure sources after import.
+            "config": {},
             "active": source.active,
         }
         for source in sources

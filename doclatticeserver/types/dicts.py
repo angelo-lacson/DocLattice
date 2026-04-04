@@ -519,11 +519,14 @@ class DocumentPathExport(TypedDict):
 class IngestionSourceExport(TypedDict):
     """
     Export format for IngestionSource - a named integration that produces documents.
+
+    Note: config is always exported as an empty dict ``{}`` because it may
+    contain credentials. Importers should reconfigure sources after import.
     """
 
     name: str
     source_type: str
-    config: Optional[dict]
+    config: dict
     active: bool
 
 
