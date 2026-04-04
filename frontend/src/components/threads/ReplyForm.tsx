@@ -246,9 +246,8 @@ export function ReplyForm({
 
   // Extract plain text from HTML/markdown content for preview
   const getPlainText = (content: string) => {
-    const div = document.createElement("div");
-    div.innerHTML = content;
-    return div.textContent || div.innerText || "";
+    const doc = new DOMParser().parseFromString(content, "text/html");
+    return doc.body.textContent || "";
   };
 
   const previewText = parentMessageContent
