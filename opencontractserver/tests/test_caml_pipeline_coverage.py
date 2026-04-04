@@ -123,10 +123,11 @@ class CamlIngestDocSkipTest(TestCase):
             file_type=MARKDOWN_MIME_TYPE,
         )
 
-        # Call the task function directly (not via Celery)
+        # Call the task function directly (not via Celery).
+        # ingest_doc uses bind=True so .run() passes the task instance as self.
         from opencontractserver.tasks.doc_tasks import ingest_doc
 
-        result = ingest_doc(self.user.id, doc.id)
+        result = ingest_doc.run(self.user.id, doc.id)
         self.assertEqual(result["status"], "success")
 
         doc.refresh_from_db()
