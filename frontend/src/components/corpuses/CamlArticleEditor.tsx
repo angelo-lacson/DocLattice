@@ -525,23 +525,25 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
       setShowExtractPicker(false);
       const fence = buildComponentProseFence(type, props);
       const textarea = textareaRef.current;
-      const cursorPos = textarea?.selectionStart ?? content.length;
-      const newCursorPos = cursorPos + fence.length;
+      const cursorPos = textarea?.selectionStart ?? -1;
 
-      setContent(
-        (prev) => prev.slice(0, cursorPos) + fence + prev.slice(cursorPos)
-      );
+      setContent((prev) => {
+        const pos = cursorPos >= 0 ? cursorPos : prev.length;
+        return prev.slice(0, pos) + fence + prev.slice(pos);
+      });
 
       // Restore cursor position after React re-renders the textarea
       requestAnimationFrame(() => {
         if (textarea) {
-          textarea.selectionStart = newCursorPos;
-          textarea.selectionEnd = newCursorPos;
+          const pos =
+            cursorPos >= 0 ? cursorPos + fence.length : textarea.value.length;
+          textarea.selectionStart = pos;
+          textarea.selectionEnd = pos;
           textarea.focus();
         }
       });
     },
-    [content]
+    []
   );
 
   // Markdown renderer with generic component marker interception

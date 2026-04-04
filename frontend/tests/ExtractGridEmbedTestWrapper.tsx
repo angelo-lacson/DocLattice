@@ -24,59 +24,84 @@ const populatedExtractMock: MockedResponse = {
   result: {
     data: {
       extract: {
+        __typename: "ExtractType",
         id: TEST_EXTRACT_ID,
         name: "Contract Key Terms",
         corpus: {
+          __typename: "CorpusType",
           id: "Q29ycHVzVHlwZTox",
           slug: "supply-chain-analysis",
-          creator: { slug: "test-user" },
+          creator: { __typename: "UserType", slug: "test-user" },
         },
         fieldset: {
+          __typename: "FieldsetType",
           id: "fieldset-1",
           fullColumnList: [
-            { id: "col-1", name: "Effective Date" },
-            { id: "col-2", name: "Governing Law" },
+            { __typename: "ColumnType", id: "col-1", name: "Effective Date" },
+            { __typename: "ColumnType", id: "col-2", name: "Governing Law" },
           ],
         },
         fullDatacellList: [
           {
+            __typename: "DatacellType",
             id: "cell-1",
-            column: { id: "col-1", name: "Effective Date" },
+            column: {
+              __typename: "ColumnType",
+              id: "col-1",
+              name: "Effective Date",
+            },
             document: {
+              __typename: "DocumentType",
               id: "doc-1",
               title: "Master Services Agreement",
               slug: "master-services-agreement",
-              creator: { slug: "test-user" },
+              creator: { __typename: "UserType", slug: "test-user" },
             },
             data: "2024-01-15",
             correctedData: null,
             completed: "2024-03-01T12:00:00Z",
             failed: null,
-            fullSourceList: [{ id: "src-1", page: 2 }],
+            fullSourceList: [
+              { __typename: "AnnotationType", id: "src-1", page: 2 },
+            ],
           },
           {
+            __typename: "DatacellType",
             id: "cell-2",
-            column: { id: "col-2", name: "Governing Law" },
+            column: {
+              __typename: "ColumnType",
+              id: "col-2",
+              name: "Governing Law",
+            },
             document: {
+              __typename: "DocumentType",
               id: "doc-1",
               title: "Master Services Agreement",
               slug: "master-services-agreement",
-              creator: { slug: "test-user" },
+              creator: { __typename: "UserType", slug: "test-user" },
             },
             data: "State of Delaware",
             correctedData: null,
             completed: "2024-03-01T12:00:00Z",
             failed: null,
-            fullSourceList: [{ id: "src-2", page: 5 }],
+            fullSourceList: [
+              { __typename: "AnnotationType", id: "src-2", page: 5 },
+            ],
           },
           {
+            __typename: "DatacellType",
             id: "cell-3",
-            column: { id: "col-1", name: "Effective Date" },
+            column: {
+              __typename: "ColumnType",
+              id: "col-1",
+              name: "Effective Date",
+            },
             document: {
+              __typename: "DocumentType",
               id: "doc-2",
               title: "NDA - Acme Corp",
               slug: "nda-acme-corp",
-              creator: { slug: "test-user" },
+              creator: { __typename: "UserType", slug: "test-user" },
             },
             data: "2023-11-01",
             correctedData: "2023-11-02",
@@ -85,13 +110,19 @@ const populatedExtractMock: MockedResponse = {
             fullSourceList: [],
           },
           {
+            __typename: "DatacellType",
             id: "cell-4",
-            column: { id: "col-2", name: "Governing Law" },
+            column: {
+              __typename: "ColumnType",
+              id: "col-2",
+              name: "Governing Law",
+            },
             document: {
+              __typename: "DocumentType",
               id: "doc-2",
               title: "NDA - Acme Corp",
               slug: "nda-acme-corp",
-              creator: { slug: "test-user" },
+              creator: { __typename: "UserType", slug: "test-user" },
             },
             data: null,
             correctedData: null,
@@ -114,16 +145,21 @@ const emptyExtractMock: MockedResponse = {
   result: {
     data: {
       extract: {
+        __typename: "ExtractType",
         id: TEST_EXTRACT_ID,
         name: "Empty Extract",
         corpus: {
+          __typename: "CorpusType",
           id: "Q29ycHVzVHlwZTox",
           slug: "supply-chain-analysis",
-          creator: { slug: "test-user" },
+          creator: { __typename: "UserType", slug: "test-user" },
         },
         fieldset: {
+          __typename: "FieldsetType",
           id: "fieldset-1",
-          fullColumnList: [{ id: "col-1", name: "Term" }],
+          fullColumnList: [
+            { __typename: "ColumnType", id: "col-1", name: "Term" },
+          ],
         },
         fullDatacellList: [],
       },

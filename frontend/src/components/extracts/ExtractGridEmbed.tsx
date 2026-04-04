@@ -4,15 +4,16 @@
  * Renders a compact, styled table: rows = documents, columns = fieldset columns,
  * cells = datacell values with links to source annotations in the document viewer.
  *
- * Usage in CAML prose blocks via the marker syntax:
- *   [extract-grid:EXTRACT_RELAY_ID]
+ * Usage in CAML prose blocks via the component marker syntax:
+ *   [component:extract-grid extractId=EXTRACT_RELAY_ID]
  *
- * Detected by the custom renderMarkdown function in CorpusArticleView and replaced
- * with this component. Will migrate to a proper `customBlocks` prop once upstream
+ * Detected by the useCamlComponentRenderer hook and rendered in place of the
+ * marker text. Will migrate to a proper `customBlocks` prop once upstream
  * @os-legal/caml-react supports it (see issue #1172).
  */
 import React, { useMemo } from "react";
 import { useQuery } from "@apollo/client";
+import { Link } from "react-router-dom";
 import { ExternalLink, AlertCircle, Loader2, Table2 } from "lucide-react";
 import styled, { keyframes } from "styled-components";
 
@@ -106,7 +107,7 @@ const Tr = styled.tr`
   }
 `;
 
-const DocLink = styled.a`
+const DocLink = styled(Link)`
   color: ${OS_LEGAL_COLORS.accent};
   text-decoration: none;
   font-weight: 500;
@@ -115,7 +116,7 @@ const DocLink = styled.a`
   }
 `;
 
-const SourceChip = styled.a`
+const SourceChip = styled(Link)`
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -181,6 +182,8 @@ function buildSourceLink(
   sourceId: string,
   corpus: { slug: string; creator: { slug: string } }
 ): string {
+  // getDocumentUrl only uses slug fields for URL construction; id is unused
+  // but required by the type signature, so we pass empty strings.
   const docUrl = getDocumentUrl(
     {
       id: cell.document.id,
@@ -323,7 +326,7 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
               <Tr key={row.document.id}>
                 <Td>
                   <DocLink
-                    href={getDocumentUrl(
+                    to={getDocumentUrl(
                       {
                         id: row.document.id,
                         slug: row.document.slug,
@@ -372,7 +375,7 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
                       {/* Show only the first source to keep the table compact. */}
                       {sources.length > 0 && (
                         <SourceChip
-                          href={buildSourceLink(
+                          to={buildSourceLink(
                             cell,
                             sources[0].id,
                             extract.corpus
