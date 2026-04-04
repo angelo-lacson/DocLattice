@@ -7,6 +7,8 @@ from config.graphql.security import DepthLimitValidationRule, DisableIntrospecti
 
 # Build validation rules: always enforce depth limits, disable introspection
 # in production.
+# NOTE: This list is built at import time. Tests that override settings.DEBUG
+# after import must use graphql-core's validate() directly with the rule classes.
 validation_rules: list = [DepthLimitValidationRule]
 if not settings.DEBUG:
     validation_rules.append(DisableIntrospection)
