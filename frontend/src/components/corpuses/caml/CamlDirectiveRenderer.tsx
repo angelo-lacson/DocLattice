@@ -113,7 +113,6 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
     cleanedDocument.chapters.forEach((chapter, ci) => {
       chapter.blocks.forEach((block, bi) => {
         if (block.type !== "prose") return;
-        const prose = block as CamlProse;
         const key = `${ci}-${bi}`;
         if (positionToDirectives.has(key)) {
           const trimmed = (block as CamlProse).content.trim();
