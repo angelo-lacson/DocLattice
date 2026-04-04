@@ -1862,3 +1862,660 @@ class TestValidateFileType(DocumentFolderServiceTestBase):
         mime_type, error = DocumentFolderService.validate_file_type(gif_bytes)
         self.assertIsNone(mime_type)
         self.assertIn("Unallowed filetype", error)
+
+
+# =============================================================================
+# 9. DOCUMENT PATH HISTORY TRACKING SCENARIOS
+# =============================================================================
+
+
+class TestDocumentPathHistory_MoveTracking(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: Document moves create auditable history via DocumentPath tree.
+
+    BUSINESS RULE: Every folder move creates a new DocumentPath node linked
+    to the previous one, enabling full lifecycle traversal.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+        self.folder_a, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Folder A"
+        )
+        self.folder_b, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Folder B"
+        )
+        self.document = Document.objects.create(
+            title="Test Document", creator=self.owner, pdf_file="test.pdf"
+        )
+        self.document_path = DocumentPath.objects.create(
+            document=self.document,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/test.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+    def _get_current_path(self, document=None):
+        doc = document or self.document
+        return DocumentPath.objects.get(
+            document=doc, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+
+    def test_single_move_creates_two_path_records(self):
+        """One move should produce the original + one new record."""
+        DocumentFolderService.move_document_to_folder(
+            user=self.owner,
+            document=self.document,
+            corpus=self.corpus,
+            folder=self.folder_a,
+        )
+
+        total = DocumentPath.objects.filter(
+            document=self.document, corpus=self.corpus
+        ).count()
+        self.assertEqual(total, 2)
+
+    def test_multi_move_chain_creates_correct_record_count(self):
+        """Three moves should produce 4 records total (original + 3)."""
+        for folder in [self.folder_a, self.folder_b, None]:
+            DocumentFolderService.move_document_to_folder(
+                user=self.owner,
+                document=self.document,
+                corpus=self.corpus,
+                folder=folder,
+            )
+
+        total = DocumentPath.objects.filter(
+            document=self.document, corpus=self.corpus
+        ).count()
+        self.assertEqual(total, 4)
+
+    def test_multi_move_chain_parent_links(self):
+        """Each move's parent should point to the immediately previous path."""
+        DocumentFolderService.move_document_to_folder(
+            user=self.owner,
+            document=self.document,
+            corpus=self.corpus,
+            folder=self.folder_a,
+        )
+        DocumentFolderService.move_document_to_folder(
+            user=self.owner,
+            document=self.document,
+            corpus=self.corpus,
+            folder=self.folder_b,
+        )
+
+        # Walk from current back to root
+        current = self._get_current_path()
+        self.assertEqual(current.folder, self.folder_b)
+        self.assertIsNotNone(current.parent)
+        self.assertEqual(current.parent.folder, self.folder_a)
+        self.assertIsNotNone(current.parent.parent)
+        self.assertIsNone(current.parent.parent.folder)  # Original at root
+        self.assertIsNone(current.parent.parent.parent)  # Root of chain
+
+    def test_only_one_current_path_after_multiple_moves(self):
+        """Only the latest path record should have is_current=True."""
+        DocumentFolderService.move_document_to_folder(
+            user=self.owner,
+            document=self.document,
+            corpus=self.corpus,
+            folder=self.folder_a,
+        )
+        DocumentFolderService.move_document_to_folder(
+            user=self.owner,
+            document=self.document,
+            corpus=self.corpus,
+            folder=self.folder_b,
+        )
+
+        current_count = DocumentPath.objects.filter(
+            document=self.document,
+            corpus=self.corpus,
+            is_current=True,
+            is_deleted=False,
+        ).count()
+        self.assertEqual(current_count, 1)
+
+    def test_move_does_not_change_document_content(self):
+        """Moving only affects the path — document FK stays the same."""
+        DocumentFolderService.move_document_to_folder(
+            user=self.owner,
+            document=self.document,
+            corpus=self.corpus,
+            folder=self.folder_a,
+        )
+
+        current = self._get_current_path()
+        self.assertEqual(current.document_id, self.document.id)
+
+    def test_move_no_active_path_returns_error(self):
+        """If the document has no active path, the move should fail gracefully."""
+        self.document_path.is_current = False
+        self.document_path.save(update_fields=["is_current"])
+
+        success, error = DocumentFolderService.move_document_to_folder(
+            user=self.owner,
+            document=self.document,
+            corpus=self.corpus,
+            folder=self.folder_a,
+        )
+
+        self.assertFalse(success)
+        self.assertIn("No active document path found", error)
+
+
+class TestDocumentPathHistory_ComputeMovedPath(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: _compute_moved_path() correctly builds new path strings.
+
+    BUSINESS RULE: When moving, the path should reflect the target folder
+    hierarchy while preserving the document filename.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+
+    def test_move_to_root_strips_folder_prefix(self):
+        """Moving to root produces /<filename>."""
+        result = DocumentFolderService._compute_moved_path(
+            "/some/deep/path/report.pdf", None
+        )
+        self.assertEqual(result, "/report.pdf")
+
+    def test_move_to_folder_prepends_folder_path(self):
+        """Moving to a folder produces /<folder_path>/<filename>."""
+        folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Legal"
+        )
+        result = DocumentFolderService._compute_moved_path("/report.pdf", folder)
+        self.assertEqual(result, "/Legal/report.pdf")
+
+    def test_move_to_nested_folder(self):
+        """Moving to a nested folder produces the full ancestor path."""
+        parent, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Legal"
+        )
+        child, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Contracts", parent=parent
+        )
+        result = DocumentFolderService._compute_moved_path("/report.pdf", child)
+        self.assertEqual(result, "/Legal/Contracts/report.pdf")
+
+    def test_preserves_filename_with_special_characters(self):
+        """Filenames with dots, hyphens, underscores are preserved."""
+        result = DocumentFolderService._compute_moved_path(
+            "/old-folder/my_report.v2.final.pdf", None
+        )
+        self.assertEqual(result, "/my_report.v2.final.pdf")
+
+    def test_handles_path_without_leading_slash(self):
+        """Even if the existing path lacks a leading slash, filename is extracted."""
+        result = DocumentFolderService._compute_moved_path("documents/report.pdf", None)
+        self.assertEqual(result, "/report.pdf")
+
+
+class TestDocumentPathHistory_PathConflicts(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: Move operations handle path conflicts gracefully.
+
+    BUSINESS RULE: If the computed path is already occupied by another
+    active document, the original path string is preserved while still
+    creating a proper history node with the new folder assignment.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+        self.folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Target"
+        )
+
+    def test_move_with_path_conflict_preserves_original_path(self):
+        """When computed path conflicts, keep original path but still update folder."""
+        # Create two documents
+        doc1 = Document.objects.create(
+            title="First", creator=self.owner, pdf_file="same.pdf"
+        )
+        doc2 = Document.objects.create(
+            title="Second", creator=self.owner, pdf_file="same.pdf"
+        )
+
+        # Both at root but with paths that would conflict if moved to same folder
+        DocumentPath.objects.create(
+            document=doc1,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=self.folder,
+            path="/Target/same.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        DocumentPath.objects.create(
+            document=doc2,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/same.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Move doc2 to same folder as doc1 — computed path /Target/same.pdf conflicts
+        success, error = DocumentFolderService.move_document_to_folder(
+            user=self.owner,
+            document=doc2,
+            corpus=self.corpus,
+            folder=self.folder,
+        )
+
+        self.assertTrue(success)
+        current = DocumentPath.objects.get(
+            document=doc2, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+        # Folder is updated
+        self.assertEqual(current.folder, self.folder)
+        # Path kept original to avoid conflict
+        self.assertEqual(current.path, "/same.pdf")
+        # History node still created
+        self.assertIsNotNone(current.parent)
+
+
+class TestDocumentPathHistory_DeleteFolderTracking(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: Deleting a folder creates history nodes for displaced documents.
+
+    BUSINESS RULE: When a folder is deleted, documents are moved to root
+    with proper audit trail, not silent in-place updates.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+
+    def test_delete_folder_creates_history_for_each_document(self):
+        """Each document in a deleted folder gets its own history node."""
+        folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Doomed"
+        )
+        docs = []
+        for i in range(3):
+            doc = Document.objects.create(
+                title=f"Doc {i}", creator=self.owner, pdf_file=f"doc{i}.pdf"
+            )
+            DocumentPath.objects.create(
+                document=doc,
+                corpus=self.corpus,
+                creator=self.owner,
+                folder=folder,
+                path=f"/Doomed/doc{i}.pdf",
+                version_number=1,
+                is_current=True,
+                is_deleted=False,
+            )
+            docs.append(doc)
+
+        DocumentFolderService.delete_folder(user=self.owner, folder=folder)
+
+        # Each document should have 2 records (original + moved-to-root)
+        for doc in docs:
+            total = DocumentPath.objects.filter(
+                document=doc, corpus=self.corpus
+            ).count()
+            self.assertEqual(total, 2, f"Doc {doc.title} should have 2 path records")
+
+            current = DocumentPath.objects.get(
+                document=doc, corpus=self.corpus, is_current=True, is_deleted=False
+            )
+            self.assertIsNone(current.folder)
+            self.assertIsNotNone(current.parent)
+
+    def test_delete_folder_preserves_version_number(self):
+        """Folder deletion does not increment version (Rule P5)."""
+        folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="TempFolder"
+        )
+        doc = Document.objects.create(
+            title="Test Doc", creator=self.owner, pdf_file="doc.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=folder,
+            path="/TempFolder/doc.pdf",
+            version_number=3,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        DocumentFolderService.delete_folder(user=self.owner, folder=folder)
+
+        current = DocumentPath.objects.get(
+            document=doc, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+        self.assertEqual(current.version_number, 3)
+
+    def test_delete_folder_updates_path_to_root(self):
+        """Documents displaced by folder deletion get root-relative paths."""
+        folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Reports"
+        )
+        doc = Document.objects.create(
+            title="Test Doc", creator=self.owner, pdf_file="summary.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=folder,
+            path="/Reports/summary.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        DocumentFolderService.delete_folder(user=self.owner, folder=folder)
+
+        current = DocumentPath.objects.get(
+            document=doc, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+        self.assertEqual(current.path, "/summary.pdf")
+
+
+class TestDocumentPathHistory_BulkMoveTracking(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: Bulk move operations create per-document history nodes.
+
+    BUSINESS RULE: Each document in a bulk move gets its own history entry
+    rather than a shared batch update.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+        self.folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Archive"
+        )
+
+    def _create_doc_at_root(self, title, filename):
+        doc = Document.objects.create(
+            title=title, creator=self.owner, pdf_file=filename
+        )
+        path = DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path=f"/{filename}",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        return doc, path
+
+    def test_bulk_move_creates_individual_history_nodes(self):
+        """Each document in a bulk move gets its own new DocumentPath record."""
+        doc1, _ = self._create_doc_at_root("Doc 1", "doc1.pdf")
+        doc2, _ = self._create_doc_at_root("Doc 2", "doc2.pdf")
+
+        moved_count, error = DocumentFolderService.move_documents_to_folder(
+            user=self.owner,
+            document_ids=[doc1.id, doc2.id],
+            corpus=self.corpus,
+            folder=self.folder,
+        )
+
+        self.assertEqual(moved_count, 2)
+
+        # Each doc should have 2 path records
+        for doc in [doc1, doc2]:
+            total = DocumentPath.objects.filter(
+                document=doc, corpus=self.corpus
+            ).count()
+            self.assertEqual(total, 2)
+
+    def test_bulk_move_with_parent_chain(self):
+        """Bulk-moved documents have proper parent links."""
+        doc1, original_path = self._create_doc_at_root("Doc 1", "doc1.pdf")
+
+        DocumentFolderService.move_documents_to_folder(
+            user=self.owner,
+            document_ids=[doc1.id],
+            corpus=self.corpus,
+            folder=self.folder,
+        )
+
+        current = DocumentPath.objects.get(
+            document=doc1, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+        self.assertEqual(current.parent_id, original_path.id)
+
+    def test_bulk_move_skips_docs_already_in_target(self):
+        """Documents already in the target folder are not moved again."""
+        doc1, _ = self._create_doc_at_root("Doc 1", "doc1.pdf")
+        doc2 = Document.objects.create(
+            title="Doc 2", creator=self.owner, pdf_file="doc2.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc2,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=self.folder,  # Already in target
+            path="/Archive/doc2.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        moved_count, error = DocumentFolderService.move_documents_to_folder(
+            user=self.owner,
+            document_ids=[doc1.id, doc2.id],
+            corpus=self.corpus,
+            folder=self.folder,
+        )
+
+        # Only doc1 should be moved
+        self.assertEqual(moved_count, 1)
+        # doc2 should still have only 1 path record
+        self.assertEqual(
+            DocumentPath.objects.filter(document=doc2, corpus=self.corpus).count(), 1
+        )
+
+
+class TestDocumentPathHistory_FullLifecycleIntegration(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: Full lifecycle integration — move, delete, restore, move again.
+
+    BUSINESS RULE: All lifecycle events are traversable via get_path_history()
+    regardless of whether they were triggered through folder_service or
+    versioning module.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+        self.folder_a, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Active"
+        )
+        self.folder_b, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Archive"
+        )
+
+    def test_move_then_soft_delete_then_restore_history(self):
+        """Complete lifecycle: create -> move -> delete -> restore."""
+        from opencontractserver.documents.versioning import get_path_history
+
+        doc = Document.objects.create(
+            title="Lifecycle Doc", creator=self.owner, pdf_file="lifecycle.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/lifecycle.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Move to folder A
+        DocumentFolderService.move_document_to_folder(
+            user=self.owner, document=doc, corpus=self.corpus, folder=self.folder_a
+        )
+
+        # Soft delete
+        DocumentFolderService.soft_delete_document(
+            user=self.owner, document=doc, corpus=self.corpus
+        )
+
+        # Restore
+        DocumentFolderService.restore_document(
+            user=self.owner, document=doc, corpus=self.corpus
+        )
+
+        # Get final current path and check history
+        current = DocumentPath.objects.get(
+            document=doc, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+        history = get_path_history(current)
+
+        self.assertEqual(len(history), 4)
+        self.assertEqual(history[0]["action"], "CREATED")
+        self.assertEqual(history[1]["action"], "MOVED")
+        self.assertEqual(history[2]["action"], "DELETED")
+        self.assertEqual(history[3]["action"], "RESTORED")
+
+    def test_move_history_includes_folder_id(self):
+        """get_path_history entries include folder_id for move tracking."""
+        from opencontractserver.documents.versioning import get_path_history
+
+        doc = Document.objects.create(
+            title="Folder Track Doc", creator=self.owner, pdf_file="track.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/track.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        DocumentFolderService.move_document_to_folder(
+            user=self.owner, document=doc, corpus=self.corpus, folder=self.folder_a
+        )
+        DocumentFolderService.move_document_to_folder(
+            user=self.owner, document=doc, corpus=self.corpus, folder=self.folder_b
+        )
+
+        current = DocumentPath.objects.get(
+            document=doc, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+        history = get_path_history(current)
+
+        self.assertEqual(len(history), 3)
+        # Verify folder_id in each entry
+        self.assertIsNone(history[0]["folder_id"])  # Root
+        self.assertEqual(history[1]["folder_id"], self.folder_a.id)
+        self.assertEqual(history[2]["folder_id"], self.folder_b.id)
+
+    def test_multiple_moves_all_detectable_as_moved(self):
+        """Every move shows action=MOVED in history, not UNKNOWN."""
+        from opencontractserver.documents.versioning import get_path_history
+
+        doc = Document.objects.create(
+            title="Multi Move", creator=self.owner, pdf_file="multi.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/multi.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Move through 3 folders
+        for folder in [self.folder_a, self.folder_b, None]:
+            DocumentFolderService.move_document_to_folder(
+                user=self.owner, document=doc, corpus=self.corpus, folder=folder
+            )
+
+        current = DocumentPath.objects.get(
+            document=doc, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+        history = get_path_history(current)
+        actions = [h["action"] for h in history]
+
+        self.assertEqual(actions, ["CREATED", "MOVED", "MOVED", "MOVED"])
+
+    def test_delete_folder_creates_moved_event_in_history(self):
+        """Documents displaced by folder deletion show MOVED in history."""
+        from opencontractserver.documents.versioning import get_path_history
+
+        folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Temporary"
+        )
+        doc = Document.objects.create(
+            title="Displaced Doc", creator=self.owner, pdf_file="displaced.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=folder,
+            path="/Temporary/displaced.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        DocumentFolderService.delete_folder(user=self.owner, folder=folder)
+
+        current = DocumentPath.objects.get(
+            document=doc, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+        history = get_path_history(current)
+
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0]["action"], "CREATED")
+        self.assertEqual(history[1]["action"], "MOVED")
+        self.assertIsNone(history[1]["folder_id"])
