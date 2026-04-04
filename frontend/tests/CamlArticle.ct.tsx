@@ -428,8 +428,9 @@ test.describe("CamlArticle - Image Block with resolveImageSrc", () => {
       "https://example.com/corpus-icon.png"
     );
 
-    // The external https:// image should also render as an img
-    const externalBlock = page.locator('[data-testid="image-block"]').nth(1);
+    // The external https:// image should also render as an img (3rd image block,
+    // after corpus://icon and corpus://current)
+    const externalBlock = page.locator('[data-testid="image-block"]').nth(2);
     const externalImg = externalBlock.locator(
       '[data-testid="image-block-img"]'
     );
@@ -443,6 +444,29 @@ test.describe("CamlArticle - Image Block with resolveImageSrc", () => {
     await expect(page.getByTestId("image-block-caption").first()).toBeVisible();
 
     await docScreenshot(page, "caml--image-block--corpus-resolved");
+
+    await component.unmount();
+  });
+
+  test("should resolve corpus://current alias identically to corpus://icon", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(<CamlArticleTestWrapper />);
+
+    // Scroll to the branding chapter
+    await page.getByText("Corpus Branding").scrollIntoViewIfNeeded();
+
+    // The corpus://current image is the second image block (after corpus://icon)
+    const currentBlock = page.locator('[data-testid="image-block"]').nth(1);
+    await expect(currentBlock).toBeVisible({ timeout: 5000 });
+
+    const currentImg = currentBlock.locator('[data-testid="image-block-img"]');
+    await expect(currentImg).toBeVisible();
+    await expect(currentImg).toHaveAttribute(
+      "src",
+      "https://example.com/corpus-icon.png"
+    );
 
     await component.unmount();
   });

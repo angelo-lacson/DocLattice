@@ -109,6 +109,8 @@ test.describe("CorpusChat", () => {
     await expect(page.getByText("Second Conversation")).toBeVisible();
 
     await docScreenshot(page, "corpus--chat--conversation-list");
+
+    await component.unmount();
   });
 
   test("renders empty state when no conversations exist", async ({
@@ -128,6 +130,8 @@ test.describe("CorpusChat", () => {
     ).toBeVisible({ timeout: 10000 });
 
     await docScreenshot(page, "corpus--chat--empty");
+
+    await component.unmount();
   });
 
   test("renders new chat input when forceNewChat is true", async ({
@@ -147,5 +151,7 @@ test.describe("CorpusChat", () => {
     await expect(input).toBeVisible({ timeout: 10000 });
 
     await docScreenshot(page, "corpus--chat--new-chat");
+
+    await component.unmount();
   });
 });
