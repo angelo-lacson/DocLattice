@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 
 from celery import chord, group, shared_task
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
@@ -16,7 +17,10 @@ from opencontractserver.notifications.signals import (
 )
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.celery_tasks import get_task_by_name
-from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
+from opencontractserver.utils.permissioning import (
+    set_permissions_for_obj_to_user,
+    user_has_permission_for_obj,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +78,22 @@ def run_extract(extract_id: Optional[str | int], user_id: str | int):
     logger.info(f"Fetching extract with ID: {extract_id}")
     extract = Extract.objects.get(pk=extract_id)
     logger.info(f"Found extract: {extract.name} (ID: {extract.id})")
+
+    # Re-validate permissions at task execution time (defense-in-depth).
+    User = get_user_model()
+    try:
+        requesting_user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        logger.error(f"User {user_id} not found — aborting extract {extract_id}")
+        return
+
+    if not user_has_permission_for_obj(
+        requesting_user, extract, PermissionTypes.UPDATE, include_group_permissions=True
+    ):
+        logger.error(
+            f"User {user_id} lacks permission for extract {extract_id} — aborting"
+        )
+        return
 
     logger.info(f"Setting started timestamp for extract {extract.id}")
     with transaction.atomic():
