@@ -26,12 +26,13 @@ from opencontractserver.corpuses.models import (
     Corpus,
     CorpusDescriptionRevision,
 )
-from opencontractserver.documents.models import DocumentPath
+from opencontractserver.documents.models import DocumentPath, IngestionSource
 from opencontractserver.types.dicts import (
     AgentConfigExport,
     CorpusFolderExport,
     DescriptionRevisionExport,
     DocumentPathExport,
+    IngestionSourceExport,
     OpenContractsRelationshipPythonType,
     StructuralAnnotationSetExport,
 )
@@ -186,6 +187,7 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
     Package DocumentPath version trees for export.
 
     Exports complete version history including deleted versions.
+    Includes ingestion lineage fields when present.
 
     Args:
         corpus: Corpus instance
@@ -197,8 +199,11 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
 
     try:
         # Get all DocumentPath records for this corpus (including non-current)
-        all_paths = DocumentPath.objects.filter(corpus=corpus).order_by(
-            "path", "version_number"
+        # select_related on ingestion_source to avoid N+1 queries
+        all_paths = (
+            DocumentPath.objects.filter(corpus=corpus)
+            .select_related("ingestion_source")
+            .order_by("path", "version_number")
         )
 
         for doc_path in all_paths:
@@ -223,23 +228,67 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
             else:
                 document_ref = str(doc_path.document.id)
 
-            paths_export.append(
-                {
-                    "document_ref": document_ref,
-                    "folder_path": folder_path,
-                    "path": doc_path.path,
-                    "version_number": doc_path.version_number,
-                    "parent_version_number": parent_version_number,
-                    "is_current": doc_path.is_current,
-                    "is_deleted": doc_path.is_deleted,
-                    "created": doc_path.created.isoformat(),
-                }
-            )
+            entry: DocumentPathExport = {
+                "document_ref": document_ref,
+                "folder_path": folder_path,
+                "path": doc_path.path,
+                "version_number": doc_path.version_number,
+                "parent_version_number": parent_version_number,
+                "is_current": doc_path.is_current,
+                "is_deleted": doc_path.is_deleted,
+                "created": doc_path.created.isoformat(),
+            }
+
+            # Include ingestion lineage fields when present
+            if doc_path.ingestion_source_id:
+                entry["ingestion_source_name"] = doc_path.ingestion_source.name
+            if doc_path.external_id:
+                entry["external_id"] = doc_path.external_id
+            if doc_path.ingestion_metadata:
+                entry["ingestion_metadata"] = doc_path.ingestion_metadata
+
+            paths_export.append(entry)
 
     except Exception as e:
         logger.error(f"Error packaging document paths for corpus {corpus.id}: {e}")
 
     return paths_export
+
+
+def package_ingestion_sources(corpus: Corpus) -> list[IngestionSourceExport]:
+    """
+    Package IngestionSource records referenced by this corpus's DocumentPaths.
+
+    Only exports sources that are actually used by at least one DocumentPath
+    in this corpus (not all sources owned by the creator).
+
+    Args:
+        corpus: Corpus instance
+
+    Returns:
+        List of IngestionSourceExport dicts
+    """
+    # Find all distinct IngestionSources referenced by this corpus's paths
+    source_ids = (
+        DocumentPath.objects.filter(corpus=corpus)
+        .exclude(ingestion_source__isnull=True)
+        .values_list("ingestion_source_id", flat=True)
+        .distinct()
+    )
+
+    if not source_ids:
+        return []
+
+    sources = IngestionSource.objects.filter(pk__in=source_ids)
+    return [
+        {
+            "name": source.name,
+            "source_type": source.source_type,
+            "config": source.config or {},
+            "active": source.active,
+        }
+        for source in sources
+    ]
 
 
 def package_relationships(

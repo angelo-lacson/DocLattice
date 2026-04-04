@@ -35,6 +35,7 @@ from opencontractserver.utils.export_v2 import (
     package_conversations,
     package_corpus_folders,
     package_document_paths,
+    package_ingestion_sources,
     package_md_description_revisions,
     package_relationships,
     package_structural_annotation_set,
@@ -159,8 +160,9 @@ def package_corpus_export_v2(
         # ===== PART 4: Export Folders =====
         folders_export = package_corpus_folders(corpus)
 
-        # ===== PART 5: Export DocumentPath Trees =====
+        # ===== PART 5: Export DocumentPath Trees & Ingestion Sources =====
         document_paths_export = package_document_paths(corpus)
+        ingestion_sources_export = package_ingestion_sources(corpus)
 
         # ===== PART 6: Export Relationships =====
         relationships_export = package_relationships(corpus, document_ids)
@@ -213,6 +215,7 @@ def package_corpus_export_v2(
             "md_description": md_description,
             "md_description_revisions": md_revisions,
             "post_processors": corpus.post_processors or [],
+            "ingestion_sources": ingestion_sources_export,
         }
 
         # Add conversations if requested

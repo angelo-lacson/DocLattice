@@ -23,7 +23,7 @@ from opencontractserver.annotations.models import (
     StructuralAnnotationSet,
 )
 from opencontractserver.corpuses.models import TemporaryFileHandle
-from opencontractserver.documents.models import Document
+from opencontractserver.documents.models import Document, IngestionSource
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.import_v2 import (
     import_agent_config,
@@ -296,13 +296,19 @@ def _import_corpus(
             folders_data = data_json.get("folders", [])
             import_corpus_folders(folders_data, corpus_obj, user_obj)
 
-            # Reconstruct DocumentPaths from exported version trees
+            # Import ingestion sources and reconstruct DocumentPaths
+            ingestion_sources_data = data_json.get("ingestion_sources", [])
+            source_name_map = _import_ingestion_sources(
+                ingestion_sources_data, user_obj
+            )
+
             document_paths_data = data_json.get("document_paths", [])
             if document_paths_data:
                 _reconstruct_document_paths(
                     document_paths_data,
                     corpus_obj,
                     doc_hash_to_corpus_doc,
+                    source_name_map,
                 )
 
             # Import relationships (corpus-level, non-structural)
@@ -404,14 +410,59 @@ def _import_v2_relationships(
             set_permissions_for_obj_to_user(user_obj, rel, [PermissionTypes.ALL])
 
 
+def _import_ingestion_sources(
+    sources_data: list[dict],
+    user_obj,
+) -> dict[str, IngestionSource]:
+    """
+    Import or get-or-create IngestionSource records from exported data.
+
+    Uses get_or_create keyed on (creator, name) so re-importing the same
+    corpus doesn't duplicate sources.
+
+    Args:
+        sources_data: List of IngestionSourceExport dicts from data.json.
+        user_obj: The importing user (becomes creator of new sources).
+
+    Returns:
+        Mapping of source name -> IngestionSource instance.
+    """
+    source_map: dict[str, IngestionSource] = {}
+
+    for src in sources_data:
+        name = src.get("name")
+        if not name:
+            continue
+
+        source, created = IngestionSource.objects.get_or_create(
+            creator=user_obj,
+            name=name,
+            defaults={
+                "source_type": src.get("source_type", "manual"),
+                "config": src.get("config") or {},
+                "active": src.get("active", True),
+            },
+        )
+        source_map[name] = source
+
+        if created:
+            set_permissions_for_obj_to_user(user_obj, source, [PermissionTypes.CRUD])
+            logger.debug(f"Created IngestionSource '{name}' for user {user_obj.id}")
+        else:
+            logger.debug(f"Reusing existing IngestionSource '{name}'")
+
+    return source_map
+
+
 def _reconstruct_document_paths(
     document_paths_data: list[dict],
     corpus_obj,
     doc_hash_to_corpus_doc: dict[str, Document],
+    source_name_map: dict[str, IngestionSource] | None = None,
 ) -> None:
     """
     Update DocumentPaths created by corpus.add_document() to match the exported
-    path, version_number, and folder assignments.
+    path, version_number, folder assignments, and ingestion lineage.
 
     Only current, non-deleted paths from the export are applied since historical
     versions don't have file content in the export. This ensures the document
@@ -422,9 +473,14 @@ def _reconstruct_document_paths(
         corpus_obj: The target corpus.
         doc_hash_to_corpus_doc: Mapping of document_ref (hash or old ID) to
             the imported corpus-isolated Document.
+        source_name_map: Mapping of source name -> IngestionSource instance
+            (from _import_ingestion_sources).
     """
     from opencontractserver.corpuses.models import CorpusFolder
     from opencontractserver.documents.models import DocumentPath
+
+    if source_name_map is None:
+        source_name_map = {}
 
     # Pre-build a folder path lookup to avoid repeated DB queries + linear
     # scans inside the loop.
@@ -467,6 +523,19 @@ def _reconstruct_document_paths(
             folder = folder_path_map.get(folder_path)
             if folder:
                 updates["folder"] = folder
+
+        # Restore ingestion lineage fields
+        source_name = path_data.get("ingestion_source_name")
+        if source_name and source_name in source_name_map:
+            updates["ingestion_source"] = source_name_map[source_name]
+
+        external_id = path_data.get("external_id")
+        if external_id:
+            updates["external_id"] = external_id
+
+        ingestion_metadata = path_data.get("ingestion_metadata")
+        if ingestion_metadata:
+            updates["ingestion_metadata"] = ingestion_metadata
 
         if updates:
             for key, value in updates.items():

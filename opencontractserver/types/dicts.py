@@ -510,6 +510,22 @@ class DocumentPathExport(TypedDict):
     is_deleted: bool
     created: str  # ISO format timestamp
 
+    # Ingestion lineage (optional - not present in older exports)
+    ingestion_source_name: NotRequired[Optional[str]]  # IngestionSource.name reference
+    external_id: NotRequired[str]
+    ingestion_metadata: NotRequired[Optional[dict]]
+
+
+class IngestionSourceExport(TypedDict):
+    """
+    Export format for IngestionSource - a named integration that produces documents.
+    """
+
+    name: str
+    source_type: str
+    config: Optional[dict]
+    active: bool
+
 
 class AgentConfigExport(TypedDict):
     """
@@ -680,6 +696,9 @@ class OpenContractsExportDataJsonV2Type(TypedDict):
 
     # Post-processors configuration
     post_processors: list[str]
+
+    # Ingestion sources (lineage tracking)
+    ingestion_sources: NotRequired[list[IngestionSourceExport]]
 
     # ===== OPTIONAL V2 FIELDS (based on export flags) =====
 
