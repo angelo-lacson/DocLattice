@@ -22,10 +22,10 @@ class TestMoveDocument(TestCase):
 
         # Create folders
         self.folder_a = CorpusFolder.objects.create(
-            title="Folder A", corpus=self.corpus, creator=self.user
+            name="Folder A", corpus=self.corpus, creator=self.user
         )
         self.folder_b = CorpusFolder.objects.create(
-            title="Folder B", corpus=self.corpus, creator=self.user
+            name="Folder B", corpus=self.corpus, creator=self.user
         )
 
         # Create a document and add it to the corpus (in folder_a)
@@ -38,11 +38,16 @@ class TestMoveDocument(TestCase):
             "test.txt", ContentFile(b"Test content")
         )
 
-        self.corpus_doc, _status, _path = self.corpus.add_document(
+        self.corpus_doc, *_ = self.corpus.add_document(
             document=self.original_doc,
             user=self.user,
             folder=self.folder_a,
         )
+        # NOTE: Document-level permission grant is not what's being tested here.
+        # move_document delegates to DocumentFolderService.move_document_to_folder,
+        # which checks corpus-level write permission.  self.user passes that check
+        # because they are the corpus creator.  We still grant document CRUD for
+        # completeness, but the move succeeds due to corpus ownership.
         set_permissions_for_obj_to_user(
             self.user, self.corpus_doc, [PermissionTypes.CRUD]
         )
@@ -115,7 +120,7 @@ class TestMoveDocument(TestCase):
         """Moving to a folder in a different corpus raises ValueError."""
         other_corpus = Corpus.objects.create(title="Other Corpus", creator=self.user)
         wrong_folder = CorpusFolder.objects.create(
-            title="Wrong Folder", corpus=other_corpus, creator=self.user
+            name="Wrong Folder", corpus=other_corpus, creator=self.user
         )
 
         with self.assertRaises(ValueError) as ctx:
@@ -128,8 +133,13 @@ class TestMoveDocument(TestCase):
         # DocumentFolderService returns error: folder doesn't belong to corpus
         self.assertIn("Move failed", str(ctx.exception))
 
-    def test_move_no_write_permission_raises(self):
-        """User without write permission on the corpus gets error."""
+    def test_move_to_corpus_where_doc_not_member_raises(self):
+        """Moving a document into a corpus it doesn't belong to fails.
+
+        The document is a member of self.corpus but not private_corpus,
+        so DocumentFolderService rejects the move at the membership check
+        before reaching the permission check.
+        """
         private_corpus = Corpus.objects.create(
             title="Private Corpus", creator=self.other_user
         )

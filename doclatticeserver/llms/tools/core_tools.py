@@ -2698,6 +2698,9 @@ async def acreate_markdown_link(
 def move_document(
     document_id: int,
     corpus_id: int,
+    # author_id is always injected from agent context (never LLM-provided),
+    # so it is required (int) rather than the int | None = None convention
+    # used by tools where the parameter may be absent.
     author_id: int,
     target_folder_id: int | None = None,
 ) -> dict[str, Any]:
@@ -2761,7 +2764,7 @@ def move_document(
         raise ValueError(f"Move failed: {error}")
 
     destination = (
-        f"folder '{target_folder.title}' (id={target_folder.id})"
+        f"folder '{target_folder.name}' (id={target_folder.id})"
         if target_folder
         else "corpus root"
     )
@@ -2771,15 +2774,14 @@ def move_document(
         "document_id": document_id,
         "corpus_id": corpus_id,
         "target_folder_id": target_folder_id,
-        "message": (
-            f"Document {document_id} moved to {destination} " f"in corpus {corpus_id}."
-        ),
+        "message": f"Document {document_id} moved to {destination} in corpus {corpus_id}.",
     }
 
 
 async def amove_document(
     document_id: int,
     corpus_id: int,
+    # See move_document() for why author_id is int (not int | None = None).
     author_id: int,
     target_folder_id: int | None = None,
 ) -> dict[str, Any]:
