@@ -11,8 +11,8 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@floating-ui/dom": "^1.6.0",
     "@hello-pangea/dnd": "^18.0.1",
-    "@os-legal/caml": "^0.0.3",
-    "@os-legal/caml-react": "^0.0.3",
+    "@os-legal/caml": "^0.1.0",
+    "@os-legal/caml-react": "^0.1.0",
     "@os-legal/ui": "0.1.16",
     "@rjsf/core": "^5.24.12",
     "@rjsf/utils": "^5.24.1",
@@ -126,12 +126,13 @@
     "**/*": "prettier --write --ignore-unknown"
   },
   "resolutions": {
-    "@os-legal/caml": "^0.0.3",
+    "@os-legal/caml": "^0.1.0",
     "@rjsf/validator-ajv8/ajv": "8.18.0",
     "ajv-formats/ajv": "8.18.0",
     "glob": "10.5.0",
     "js-yaml": "4.1.1",
-    "lodash-es": "4.17.23",
+    "lodash": ">=4.18.0",
+    "lodash-es": ">=4.18.0",
     "mdast-util-to-hast": "13.2.1",
     "rollup": "^4.59.0",
     "immutable": ">=3.8.3"
