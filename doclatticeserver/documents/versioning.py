@@ -558,7 +558,7 @@ def get_path_history(document_path: DocumentPath):
             return "DELETED"
         if not current.is_deleted and previous.is_deleted:
             return "RESTORED"
-        if current.path != previous.path:
+        if current.path != previous.path or current.folder_id != previous.folder_id:
             return "MOVED"
         if current.document_id != previous.document_id:
             return "UPDATED"
@@ -572,6 +572,7 @@ def get_path_history(document_path: DocumentPath):
                 "id": current.id,
                 "timestamp": current.created,
                 "path": current.path,
+                "folder_id": current.folder_id,
                 "version": current.version_number,
                 "deleted": current.is_deleted,
                 "document_id": current.document_id,
