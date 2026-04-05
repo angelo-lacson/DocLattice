@@ -230,11 +230,13 @@ class UploadDocument(graphene.Mutation):
             ingestion_source = None
             if ingestion_source_id is not None:
                 try:
-                    source_pk = from_global_id(ingestion_source_id)[1]
+                    type_name, source_pk = from_global_id(ingestion_source_id)
+                    if type_name != "IngestionSourceType":
+                        raise IngestionSource.DoesNotExist
                     ingestion_source = IngestionSource.objects.get(
                         pk=source_pk, creator=user
                     )
-                except IngestionSource.DoesNotExist:
+                except (IngestionSource.DoesNotExist, ValueError):
                     return UploadDocument(
                         message="Ingestion source not found",
                         ok=False,

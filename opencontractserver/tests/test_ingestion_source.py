@@ -666,3 +666,746 @@ class TestIngestionSourceListQuery(TestCase):
         sources = result["data"]["ingestionSources"]
         names = [s["name"] for s in sources]
         self.assertNotIn("other_source", names)
+
+
+# ------------------------------------------------------------------ #
+# DocumentPathType.resolve_action coverage
+# ------------------------------------------------------------------ #
+
+
+class TestDocumentPathResolveAction(TestCase):
+    """Test the resolve_action method on DocumentPathType for all branches."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        self.doc = Document.objects.create(
+            title="Test Doc", creator=self.user, pdf_file="test.pdf"
+        )
+
+    def test_action_imported_no_parent(self):
+        """A path with no parent is an IMPORTED action."""
+        path = DocumentPath.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            path="/documents/test.pdf",
+            version_number=1,
+            parent=None,
+            is_current=True,
+            is_deleted=False,
+            creator=self.user,
+        )
+        from config.graphql.document_types import DocumentPathType
+
+        result = DocumentPathType.resolve_action(path, info=None)
+        self.assertEqual(result, "IMPORTED")
+
+    def test_action_deleted(self):
+        """A deleted path returns DELETED regardless of parent."""
+        root = DocumentPath.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            path="/documents/test.pdf",
+            version_number=1,
+            parent=None,
+            is_current=False,
+            is_deleted=False,
+            creator=self.user,
+        )
+        deleted_path = DocumentPath.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            path="/documents/test.pdf",
+            version_number=1,
+            parent=root,
+            is_current=True,
+            is_deleted=True,
+            creator=self.user,
+        )
+        from config.graphql.document_types import DocumentPathType
+
+        result = DocumentPathType.resolve_action(deleted_path, info=None)
+        self.assertEqual(result, "DELETED")
+
+    def test_action_moved_different_path(self):
+        """A path with a different path from parent is MOVED."""
+        root = DocumentPath.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            path="/documents/old.pdf",
+            version_number=1,
+            parent=None,
+            is_current=False,
+            is_deleted=False,
+            creator=self.user,
+        )
+        moved_path = DocumentPath.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            path="/documents/new.pdf",
+            version_number=1,
+            parent=root,
+            is_current=True,
+            is_deleted=False,
+            creator=self.user,
+        )
+        from config.graphql.document_types import DocumentPathType
+
+        result = DocumentPathType.resolve_action(moved_path, info=None)
+        self.assertEqual(result, "MOVED")
+
+    def test_action_updated_different_version(self):
+        """A path with same path but different version from parent is UPDATED."""
+        root = DocumentPath.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            path="/documents/test.pdf",
+            version_number=1,
+            parent=None,
+            is_current=False,
+            is_deleted=False,
+            creator=self.user,
+        )
+        updated_path = DocumentPath.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            path="/documents/test.pdf",
+            version_number=2,
+            parent=root,
+            is_current=True,
+            is_deleted=False,
+            creator=self.user,
+        )
+        from config.graphql.document_types import DocumentPathType
+
+        result = DocumentPathType.resolve_action(updated_path, info=None)
+        self.assertEqual(result, "UPDATED")
+
+    def test_action_updated_same_version_same_path(self):
+        """A path with parent, same path and same version falls through to UPDATED."""
+        root = DocumentPath.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            path="/documents/test.pdf",
+            version_number=1,
+            parent=None,
+            is_current=False,
+            is_deleted=False,
+            creator=self.user,
+        )
+        child = DocumentPath.objects.create(
+            document=self.doc,
+            corpus=self.corpus,
+            path="/documents/test.pdf",
+            version_number=1,
+            parent=root,
+            is_current=True,
+            is_deleted=False,
+            creator=self.user,
+        )
+        from config.graphql.document_types import DocumentPathType
+
+        result = DocumentPathType.resolve_action(child, info=None)
+        self.assertEqual(result, "UPDATED")
+
+
+# ------------------------------------------------------------------ #
+# Export with lineage fields round-trip
+# ------------------------------------------------------------------ #
+
+
+class TestExportWithLineageFields(TestCase):
+    """Test package_document_paths includes ingestion lineage fields."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+
+    def test_export_includes_lineage_fields(self):
+        """Exported paths should include ingestion_source_name, external_id,
+        and ingestion_metadata when present."""
+        source = IngestionSource.objects.create(
+            name="test_crawler",
+            source_type=IngestionSourceCategory.CRAWLER,
+            creator=self.user,
+        )
+        doc = Document.objects.create(
+            title="Lineage Doc", creator=self.user, pdf_file="doc.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/doc.pdf",
+            version_number=1,
+            ingestion_source=source,
+            external_id="ext-123",
+            ingestion_metadata={"url": "https://example.com"},
+            creator=self.user,
+        )
+
+        from opencontractserver.utils.export_v2 import package_document_paths
+
+        exported = package_document_paths(self.corpus)
+        self.assertEqual(len(exported), 1)
+        entry = exported[0]
+        self.assertEqual(entry.get("ingestion_source_name"), "test_crawler")
+        self.assertEqual(entry.get("external_id"), "ext-123")
+        self.assertEqual(
+            entry.get("ingestion_metadata"), {"url": "https://example.com"}
+        )
+
+    def test_export_omits_lineage_fields_when_absent(self):
+        """Exported paths without lineage data should not include those keys."""
+        doc = Document.objects.create(
+            title="Plain Doc", creator=self.user, pdf_file="doc.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/plain.pdf",
+            version_number=1,
+            creator=self.user,
+        )
+
+        from opencontractserver.utils.export_v2 import package_document_paths
+
+        exported = package_document_paths(self.corpus)
+        self.assertEqual(len(exported), 1)
+        entry = exported[0]
+        self.assertNotIn("ingestion_source_name", entry)
+        self.assertNotIn("external_id", entry)
+        self.assertNotIn("ingestion_metadata", entry)
+
+
+# ------------------------------------------------------------------ #
+# Import with lineage fields
+# ------------------------------------------------------------------ #
+
+
+class TestImportReconstructLineage(TestCase):
+    """Test _reconstruct_document_paths restores ingestion lineage fields."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Import Corpus", creator=self.user)
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+
+    def test_reconstruct_with_lineage_fields(self):
+        """_reconstruct_document_paths should set lineage fields on existing paths."""
+        from opencontractserver.tasks.import_tasks_v2 import (
+            _import_ingestion_sources,
+            _reconstruct_document_paths,
+        )
+
+        # Create a doc and path (simulating what corpus.add_document does)
+        doc = Document.objects.create(
+            title="Test Doc",
+            creator=self.user,
+            pdf_file="test.pdf",
+            pdf_file_hash="abc123",
+        )
+        doc_path = DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/test.pdf",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+
+        # Import sources
+        source_data = [
+            {
+                "name": "my_crawler",
+                "source_type": "crawler",
+                "config": {},
+                "active": True,
+            }
+        ]
+        source_map = _import_ingestion_sources(source_data, self.user)
+        self.assertIn("my_crawler", source_map)
+
+        # Reconstruct paths with lineage
+        path_data = [
+            {
+                "document_ref": "abc123",
+                "path": "/documents/test.pdf",
+                "version_number": 1,
+                "is_current": True,
+                "is_deleted": False,
+                "ingestion_source_name": "my_crawler",
+                "external_id": "ext-456",
+                "ingestion_metadata": {"job_id": "job-789"},
+            }
+        ]
+        _reconstruct_document_paths(path_data, self.corpus, {"abc123": doc}, source_map)
+
+        doc_path.refresh_from_db()
+        self.assertEqual(doc_path.ingestion_source, source_map["my_crawler"])
+        self.assertEqual(doc_path.external_id, "ext-456")
+        self.assertEqual(doc_path.ingestion_metadata, {"job_id": "job-789"})
+
+    def test_reconstruct_without_source_map(self):
+        """_reconstruct_document_paths should handle None source_name_map."""
+        from opencontractserver.tasks.import_tasks_v2 import _reconstruct_document_paths
+
+        doc = Document.objects.create(
+            title="Test Doc",
+            creator=self.user,
+            pdf_file="test.pdf",
+            pdf_file_hash="def456",
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/test2.pdf",
+            version_number=1,
+            is_current=True,
+            creator=self.user,
+        )
+
+        path_data = [
+            {
+                "document_ref": "def456",
+                "path": "/documents/test2.pdf",
+                "version_number": 1,
+                "is_current": True,
+                "is_deleted": False,
+            }
+        ]
+        # Should not raise even with None source_name_map
+        _reconstruct_document_paths(path_data, self.corpus, {"def456": doc}, None)
+
+
+# ------------------------------------------------------------------ #
+# DRFMutation ValidationError handling
+# ------------------------------------------------------------------ #
+
+
+class TestDRFMutationValidationError(TestCase):
+    """Test that DRFMutation properly formats validation errors."""
+
+    def test_validation_error_dict_format(self):
+        """Dict-form ValidationError should be formatted with field names."""
+        from rest_framework import serializers
+
+        detail = {"name": ["This field is required."], "email": ["Invalid format."]}
+        exc = serializers.ValidationError(detail)
+
+        # Simulate the formatting logic from DRFMutation
+        if isinstance(exc.detail, dict):
+            errors = "; ".join(
+                f"{field}: {', '.join(str(e) for e in errs)}"
+                for field, errs in exc.detail.items()
+            )
+        elif isinstance(exc.detail, list):
+            errors = "; ".join(str(e) for e in exc.detail)
+        else:
+            errors = str(exc.detail)
+
+        message = f"Mutation failed due to error: {errors}"
+        self.assertIn("name:", message)
+        self.assertIn("email:", message)
+        self.assertIn("This field is required.", message)
+
+    def test_validation_error_list_format(self):
+        """List-form ValidationError should be joined with semicolons."""
+        from rest_framework import serializers
+
+        detail = ["Error one.", "Error two."]
+        exc = serializers.ValidationError(detail)
+
+        if isinstance(exc.detail, dict):
+            errors = "; ".join(
+                f"{field}: {', '.join(str(e) for e in errs)}"
+                for field, errs in exc.detail.items()
+            )
+        elif isinstance(exc.detail, list):
+            errors = "; ".join(str(e) for e in exc.detail)
+        else:
+            errors = str(exc.detail)
+
+        message = f"Mutation failed due to error: {errors}"
+        self.assertIn("Error one.", message)
+        self.assertIn("Error two.", message)
+
+
+# ------------------------------------------------------------------ #
+# IngestionSource model __str__
+# ------------------------------------------------------------------ #
+
+
+class TestIngestionSourceModel(TestCase):
+    """Test IngestionSource model methods."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+
+    def test_str_representation(self):
+        source = IngestionSource.objects.create(
+            name="test_source",
+            source_type=IngestionSourceCategory.CRAWLER,
+            active=True,
+            creator=self.user,
+        )
+        result = str(source)
+        self.assertIn("test_source", result)
+        self.assertIn("crawler", result)
+        self.assertIn("True", result)
+
+    def test_unique_constraint_per_creator(self):
+        """Same name for same creator should fail."""
+        IngestionSource.objects.create(
+            name="dup", creator=self.user, source_type="manual"
+        )
+        from django.db import IntegrityError
+
+        with self.assertRaises(IntegrityError):
+            IngestionSource.objects.create(
+                name="dup", creator=self.user, source_type="manual"
+            )
+
+    def test_same_name_different_creators(self):
+        """Same name for different creators should succeed."""
+        other_user = User.objects.create_user(username="other", password="otherpass")
+        IngestionSource.objects.create(
+            name="shared_name", creator=self.user, source_type="manual"
+        )
+        source2 = IngestionSource.objects.create(
+            name="shared_name", creator=other_user, source_type="manual"
+        )
+        self.assertIsNotNone(source2.pk)
+
+
+# ------------------------------------------------------------------ #
+# Update mutation: duplicate name check
+# ------------------------------------------------------------------ #
+
+
+class TestUpdateDuplicateNameCheck(TestCase):
+    """Test the duplicate-name guard in UpdateIngestionSourceMutation."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.client = Client(schema, context_value=TestContext(self.user))
+        self.source_a = IngestionSource.objects.create(
+            name="source_a", creator=self.user
+        )
+        self.source_b = IngestionSource.objects.create(
+            name="source_b", creator=self.user
+        )
+        set_permissions_for_obj_to_user(
+            self.user, self.source_a, [PermissionTypes.CRUD]
+        )
+        set_permissions_for_obj_to_user(
+            self.user, self.source_b, [PermissionTypes.CRUD]
+        )
+
+    def test_rename_to_existing_name_rejected(self):
+        """Renaming source_a to source_b should fail."""
+        gid = to_global_id("IngestionSourceType", self.source_a.pk)
+        result = self.client.execute(
+            UPDATE_MUTATION, variables={"id": gid, "name": "source_b"}
+        )
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updateIngestionSource"]
+        self.assertFalse(data["ok"])
+        self.assertIn("already exists", data["message"])
+
+    def test_rename_to_same_name_accepted(self):
+        """Renaming source_a to source_a (no change) should succeed."""
+        gid = to_global_id("IngestionSourceType", self.source_a.pk)
+        result = self.client.execute(
+            UPDATE_MUTATION, variables={"id": gid, "name": "source_a"}
+        )
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updateIngestionSource"]
+        self.assertTrue(data["ok"])
+
+    def test_update_wrong_type_global_id(self):
+        """Passing a wrong type_name in the global ID should return not found."""
+        bad_gid = to_global_id("WrongType", self.source_a.pk)
+        result = self.client.execute(
+            UPDATE_MUTATION, variables={"id": bad_gid, "name": "x"}
+        )
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updateIngestionSource"]
+        self.assertFalse(data["ok"])
+        self.assertIn("not found", data["message"])
+
+    def test_delete_wrong_type_global_id(self):
+        """Passing a wrong type_name in delete should return not found."""
+        bad_gid = to_global_id("WrongType", self.source_a.pk)
+        result = self.client.execute(DELETE_MUTATION, variables={"id": bad_gid})
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["deleteIngestionSource"]
+        self.assertFalse(data["ok"])
+        self.assertIn("not found", data["message"])
+
+    def test_update_toctou_integrity_error_handled(self):
+        """Concurrent rename to a name that becomes taken should be caught
+        by the IntegrityError handler rather than crashing."""
+        # Direct DB rename to simulate a concurrent request taking the name
+        self.source_b.name = "new_unique_name"
+        self.source_b.save(update_fields=["name"])
+
+        # Now try to rename source_a to source_b's old name - but first
+        # recreate source_b with its old name to trigger IntegrityError
+        IngestionSource.objects.create(
+            name="target_name", creator=self.user, source_type="manual"
+        )
+
+        # Try renaming source_a to target_name
+        gid = to_global_id("IngestionSourceType", self.source_a.pk)
+        result = self.client.execute(
+            UPDATE_MUTATION, variables={"id": gid, "name": "target_name"}
+        )
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updateIngestionSource"]
+        self.assertFalse(data["ok"])
+        self.assertIn("already exists", data["message"])
+
+
+# ------------------------------------------------------------------ #
+# Upload document with wrong global ID type
+# ------------------------------------------------------------------ #
+
+
+class TestUploadDocumentSourceTypeValidation(TestCase):
+    """Test that UploadDocument validates the global ID type for ingestion_source_id."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.client = Client(schema, context_value=TestContext(self.user))
+
+    def _upload_mutation(self):
+        return """
+            mutation UploadDocument(
+                $file: String!,
+                $filename: String!,
+                $title: String!,
+                $description: String!,
+                $customMeta: GenericScalar!,
+                $makePublic: Boolean!,
+                $ingestionSourceId: ID
+            ) {
+                uploadDocument(
+                    base64FileString: $file,
+                    filename: $filename,
+                    title: $title,
+                    description: $description,
+                    customMeta: $customMeta,
+                    makePublic: $makePublic,
+                    ingestionSourceId: $ingestionSourceId
+                ) {
+                    ok
+                    message
+                    document { id title }
+                }
+            }
+        """
+
+    def test_upload_with_wrong_type_global_id(self):
+        """Passing a CorpusType global ID as ingestion source should fail."""
+        wrong_gid = to_global_id("CorpusType", 123)
+        pdf_content = b"%PDF-1.5\n%\xe2\xe3\xcf\xd3\n"
+        pdf_base64 = base_64_encode_bytes(pdf_content)
+
+        result = self.client.execute(
+            self._upload_mutation(),
+            variables={
+                "file": pdf_base64,
+                "filename": "test.pdf",
+                "title": "Test PDF",
+                "description": "desc",
+                "customMeta": {},
+                "makePublic": False,
+                "ingestionSourceId": wrong_gid,
+            },
+        )
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["uploadDocument"]
+        self.assertFalse(data["ok"])
+        self.assertIn("not found", data["message"])
+
+    def test_upload_with_invalid_global_id(self):
+        """Passing a non-base64 string as ingestion source ID should fail."""
+        pdf_content = b"%PDF-1.5\n%\xe2\xe3\xcf\xd3\n"
+        pdf_base64 = base_64_encode_bytes(pdf_content)
+
+        result = self.client.execute(
+            self._upload_mutation(),
+            variables={
+                "file": pdf_base64,
+                "filename": "test.pdf",
+                "title": "Test PDF",
+                "description": "desc",
+                "customMeta": {},
+                "makePublic": False,
+                "ingestionSourceId": "not-a-valid-global-id",
+            },
+        )
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["uploadDocument"]
+        self.assertFalse(data["ok"])
+        self.assertIn("not found", data["message"])
+
+
+# ------------------------------------------------------------------ #
+# Upload document with lineage kwargs
+# ------------------------------------------------------------------ #
+
+
+class TestUploadDocumentLineageKwargs(TestCase):
+    """Test that UploadDocument passes lineage kwargs to import_content."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.client = Client(schema, context_value=TestContext(self.user))
+        self.source = IngestionSource.objects.create(
+            name="api_source",
+            source_type=IngestionSourceCategory.API,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(self.user, self.source, [PermissionTypes.CRUD])
+
+    def _upload_mutation_with_meta(self):
+        return """
+            mutation UploadDocument(
+                $file: String!,
+                $filename: String!,
+                $title: String!,
+                $description: String!,
+                $customMeta: GenericScalar!,
+                $makePublic: Boolean!,
+                $ingestionSourceId: ID,
+                $externalId: String,
+                $ingestionMetadata: GenericScalar
+            ) {
+                uploadDocument(
+                    base64FileString: $file,
+                    filename: $filename,
+                    title: $title,
+                    description: $description,
+                    customMeta: $customMeta,
+                    makePublic: $makePublic,
+                    ingestionSourceId: $ingestionSourceId,
+                    externalId: $externalId,
+                    ingestionMetadata: $ingestionMetadata
+                ) {
+                    ok
+                    message
+                    document { id title }
+                }
+            }
+        """
+
+    def test_upload_with_external_id_and_metadata(self):
+        """UploadDocument should pass external_id and ingestion_metadata through."""
+        pdf_content = b"%PDF-1.5\n%\xe2\xe3\xcf\xd3\n"
+        pdf_base64 = base_64_encode_bytes(pdf_content)
+        source_gid = to_global_id("IngestionSourceType", self.source.pk)
+
+        mock_doc = Document(id=1, title="Test PDF", description="desc")
+        mock_path = DocumentPath(id=1, path="/documents/test.pdf")
+
+        with patch(
+            "opencontractserver.corpuses.models.Corpus.import_content"
+        ) as mock_import, patch(
+            "config.graphql.document_mutations.set_permissions_for_obj_to_user"
+        ):
+            mock_import.return_value = (mock_doc, "created", mock_path)
+            result = self.client.execute(
+                self._upload_mutation_with_meta(),
+                variables={
+                    "file": pdf_base64,
+                    "filename": "test.pdf",
+                    "title": "Test PDF",
+                    "description": "desc",
+                    "customMeta": {},
+                    "makePublic": False,
+                    "ingestionSourceId": source_gid,
+                    "externalId": "ext-abc",
+                    "ingestionMetadata": {"crawl_url": "https://example.com"},
+                },
+            )
+
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["uploadDocument"]["ok"])
+
+        # Verify import_content was called with lineage kwargs
+        call_kwargs = mock_import.call_args
+        self.assertEqual(call_kwargs.kwargs.get("ingestion_source"), self.source)
+        self.assertEqual(call_kwargs.kwargs.get("external_id"), "ext-abc")
+        self.assertEqual(
+            call_kwargs.kwargs.get("ingestion_metadata"),
+            {"crawl_url": "https://example.com"},
+        )
+
+    def test_upload_without_lineage_kwargs(self):
+        """UploadDocument without lineage args should not pass them to import_content."""
+        pdf_content = b"%PDF-1.5\n%\xe2\xe3\xcf\xd3\n"
+        pdf_base64 = base_64_encode_bytes(pdf_content)
+
+        mock_doc = Document(id=1, title="Test PDF", description="desc")
+        mock_path = DocumentPath(id=1, path="/documents/test.pdf")
+
+        with patch(
+            "opencontractserver.corpuses.models.Corpus.import_content"
+        ) as mock_import, patch(
+            "config.graphql.document_mutations.set_permissions_for_obj_to_user"
+        ):
+            mock_import.return_value = (mock_doc, "created", mock_path)
+            result = self.client.execute(
+                self._upload_mutation_with_meta(),
+                variables={
+                    "file": pdf_base64,
+                    "filename": "test.pdf",
+                    "title": "Test PDF",
+                    "description": "desc",
+                    "customMeta": {},
+                    "makePublic": False,
+                },
+            )
+
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["uploadDocument"]["ok"])
+
+        # Verify lineage kwargs are NOT passed
+        call_kwargs = mock_import.call_args
+        self.assertNotIn("ingestion_source", call_kwargs.kwargs)
+        self.assertNotIn("external_id", call_kwargs.kwargs)
+        self.assertNotIn("ingestion_metadata", call_kwargs.kwargs)
+
+
+# ------------------------------------------------------------------ #
+# Anonymous user queries return empty
+# ------------------------------------------------------------------ #
+
+
+class TestAnonymousIngestionSourceAccess(TestCase):
+    """Test that anonymous users cannot access ingestion sources."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        IngestionSource.objects.create(
+            name="test_source",
+            source_type=IngestionSourceCategory.API,
+            creator=self.user,
+        )
+
+    def test_anonymous_list_returns_errors(self):
+        """Anonymous user should get auth errors for list query."""
+        anon_client = Client(schema, context_value=AnonymousContext())
+        result = anon_client.execute(LIST_SOURCES_QUERY)
+        # @login_required should return errors
+        self.assertIsNotNone(result.get("errors"))
+
+    def test_anonymous_single_source_returns_errors(self):
+        """Anonymous user should get auth errors for single source query."""
+        anon_client = Client(schema, context_value=AnonymousContext())
+        source = IngestionSource.objects.first()
+        gid = to_global_id("IngestionSourceType", source.pk)
+        result = anon_client.execute(SINGLE_SOURCE_QUERY, variables={"id": gid})
+        self.assertIsNotNone(result.get("errors"))

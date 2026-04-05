@@ -118,23 +118,14 @@ class UpdateIngestionSourceMutation(graphene.Mutation):
                 ingestion_source=None,
             )
 
-        # Check name uniqueness if being changed
-        new_name = kwargs.get("name")
-        if new_name and new_name != source.name:
-            if IngestionSource.objects.filter(creator=user, name=new_name).exists():
-                return UpdateIngestionSourceMutation(
-                    ok=False,
-                    message=f"An ingestion source named '{new_name}' already exists",
-                    ingestion_source=None,
-                )
-
         # Coerce graphene Enum to its string value for source_type
         if "source_type" in kwargs and kwargs["source_type"] is not None:
             st = kwargs["source_type"]
             kwargs["source_type"] = st.value if hasattr(st, "value") else st
 
-        # Note: the `is not None` guard means callers cannot set config to None.
-        # To clear config, pass config={} (empty dict) instead.
+        # Note: the `is not None` guard means callers cannot set config to
+        # None (to clear config, pass config={} instead).  Boolean fields
+        # like `active` work correctly because `False is not None` is True.
         update_fields = []
         for field in ("name", "source_type", "config", "active"):
             if field in kwargs and kwargs[field] is not None:
@@ -142,7 +133,18 @@ class UpdateIngestionSourceMutation(graphene.Mutation):
                 update_fields.append(field)
 
         if update_fields:
-            source.save(update_fields=update_fields)
+            # Use try/except around save() instead of a pre-flight exists()
+            # check to avoid TOCTOU race on the unique (creator, name)
+            # constraint — consistent with CreateIngestionSourceMutation.
+            try:
+                source.save(update_fields=update_fields)
+            except IntegrityError:
+                new_name = kwargs.get("name", source.name)
+                return UpdateIngestionSourceMutation(
+                    ok=False,
+                    message=f"An ingestion source named '{new_name}' already exists",
+                    ingestion_source=None,
+                )
 
         return UpdateIngestionSourceMutation(
             ok=True,
