@@ -946,8 +946,7 @@ class TestDocumentInFolder_MoveOperations(DocumentFolderServiceTestBase):
 
         self.assertTrue(success)
         current = self._get_current_path()
-        self.assertIn("Folder A", current.path)
-        self.assertTrue(current.path.endswith("test.pdf"))
+        self.assertEqual(current.path, "/Folder A/test.pdf")
 
     def test_move_document_preserves_version_number(self):
         """Moving a document does NOT increment the version number.

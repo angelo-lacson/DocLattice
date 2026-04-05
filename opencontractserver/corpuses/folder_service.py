@@ -42,6 +42,9 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Q, QuerySet
 
+from opencontractserver.constants.document_processing import (
+    MAX_PATH_DISAMBIGUATION_SUFFIX,
+)
 from opencontractserver.pipeline.registry import get_allowed_mime_types
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import (
@@ -1207,9 +1210,6 @@ class DocumentFolderService:
         """
         # Nested import to avoid circular dependency:
         # folder_service -> documents.models -> corpuses.models -> folder_service
-        from opencontractserver.constants.document_processing import (
-            MAX_PATH_DISAMBIGUATION_SUFFIX,
-        )
         from opencontractserver.documents.models import DocumentPath
 
         def _is_taken(path: str) -> bool:
