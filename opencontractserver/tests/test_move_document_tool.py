@@ -114,7 +114,30 @@ class TestMoveDocument(TestCase):
                 author_id=self.user.id,
                 target_folder_id=999999,
             )
-        self.assertIn("does not exist", str(ctx.exception))
+        self.assertIn("does not exist or is not accessible", str(ctx.exception))
+
+    def test_move_inaccessible_folder_raises(self):
+        """Moving to a folder the user cannot see raises the same error as not-found.
+
+        IDOR prevention: a folder in another user's private corpus produces
+        the same "does not exist or is not accessible" message as a truly
+        nonexistent folder, preventing enumeration of folder IDs.
+        """
+        private_corpus = Corpus.objects.create(
+            title="Private Corpus", creator=self.other_user
+        )
+        hidden_folder = CorpusFolder.objects.create(
+            name="Hidden Folder", corpus=private_corpus, creator=self.other_user
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            move_document(
+                document_id=self.corpus_doc.id,
+                corpus_id=self.corpus.id,
+                author_id=self.user.id,
+                target_folder_id=hidden_folder.id,
+            )
+        self.assertIn("does not exist or is not accessible", str(ctx.exception))
 
     def test_move_folder_wrong_corpus_raises(self):
         """Moving to a folder in a different corpus raises ValueError."""

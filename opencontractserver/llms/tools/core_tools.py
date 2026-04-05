@@ -2726,7 +2726,6 @@ def move_document(
     from django.contrib.auth import get_user_model
 
     from opencontractserver.corpuses.folder_service import DocumentFolderService
-    from opencontractserver.corpuses.models import CorpusFolder
 
     User = get_user_model()
 
@@ -2753,10 +2752,12 @@ def move_document(
 
     target_folder = None
     if target_folder_id is not None:
-        try:
-            target_folder = CorpusFolder.objects.get(pk=target_folder_id)
-        except CorpusFolder.DoesNotExist:
-            raise ValueError(f"Folder with id={target_folder_id} does not exist.")
+        target_folder = DocumentFolderService.get_folder_by_id(user, target_folder_id)
+        if target_folder is None:
+            raise ValueError(
+                f"Folder with id={target_folder_id} does not exist "
+                "or is not accessible."
+            )
 
     success, error = DocumentFolderService.move_document_to_folder(
         user=user,
