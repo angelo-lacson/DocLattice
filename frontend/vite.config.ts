@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react-swc";
+import istanbul from "vite-plugin-istanbul";
 import fs from "fs";
 import path from "path";
 
@@ -72,7 +73,27 @@ const docxodusWasmPlugin = () => {
 // https://vitejs.dev/config/
 export default defineConfig({
   base: "/",
-  plugins: [react(), assetPlugin(), docxodusWasmPlugin()],
+  plugins: [
+    react(),
+    assetPlugin(),
+    docxodusWasmPlugin(),
+    // Instrument source code with Istanbul when collecting Playwright CT coverage
+    ...(process.env.COVERAGE
+      ? [
+          istanbul({
+            include: "src/**/*.{ts,tsx}",
+            exclude: [
+              "node_modules",
+              "src/**/*.test.{ts,tsx}",
+              "src/setupTests.ts",
+            ],
+            extension: [".ts", ".tsx"],
+            requireEnv: true,
+            forceBuildInstrument: true,
+          }),
+        ]
+      : []),
+  ],
   server: {
     proxy: {
       // Proxy WebSocket connections to Django backend
@@ -162,7 +183,9 @@ export default defineConfig({
       ),
     },
     coverage: {
-      reporter: ["text", "json", "html"],
+      provider: "v8",
+      reporter: ["text", "json", "html", "lcov"],
+      reportsDirectory: "./coverage/unit",
       // Adjust coverage include/exclude if needed, based on the new test patterns
       include: ["src/**/*.{ts,tsx}"], // Keep covering src
       exclude: [
