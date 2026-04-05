@@ -39,7 +39,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q, QuerySet
 
 from opencontractserver.pipeline.registry import get_allowed_mime_types
@@ -841,32 +841,49 @@ class DocumentFolderService:
                     is_deleted=False,
                 )
             )
+            failed_docs: list[str] = []
             for current in affected_paths:
-                new_path = cls._compute_moved_path(current.path, None)
-                new_path = cls._disambiguate_path(
-                    new_path, current.corpus, exclude_pk=current.pk
-                )
+                try:
+                    new_path = cls._compute_moved_path(current.path, None)
+                    new_path = cls._disambiguate_path(
+                        new_path, current.corpus, exclude_pk=current.pk
+                    )
 
-                current.is_current = False
-                current.save(update_fields=["is_current"])
+                    current.is_current = False
+                    current.save(update_fields=["is_current"])
 
-                DocumentPath.objects.create(
-                    document=current.document,
-                    corpus=current.corpus,
-                    folder=None,  # Moved to root
-                    path=new_path,
-                    version_number=current.version_number,
-                    parent=current,
-                    is_current=True,
-                    is_deleted=False,
-                    creator=user,
-                )
+                    DocumentPath.objects.create(
+                        document=current.document,
+                        corpus=current.corpus,
+                        folder=None,  # Moved to root
+                        path=new_path,
+                        version_number=current.version_number,
+                        parent=current,
+                        is_current=True,
+                        is_deleted=False,
+                        creator=user,
+                    )
+                except (ValueError, IntegrityError) as exc:
+                    logger.warning(
+                        "Failed to relocate document %s (path %r) during "
+                        "folder %s deletion: %s",
+                        current.document_id,
+                        current.path,
+                        folder.id,
+                        exc,
+                    )
+                    failed_docs.append(f"document {current.document_id}: {exc}")
 
             # Delete folder
             folder_id = folder.id
             folder.delete()
 
             logger.info(f"Deleted folder {folder_id} by user {user.id}")
+            if failed_docs:
+                return True, (
+                    f"Folder deleted but {len(failed_docs)} document(s) could "
+                    f"not be relocated: {'; '.join(failed_docs)}"
+                )
             return True, ""
 
     # =========================================================================
@@ -945,24 +962,40 @@ class DocumentFolderService:
             # Compute new path reflecting the folder location,
             # disambiguating with a numeric suffix if there is a conflict.
             new_path = cls._compute_moved_path(current.path, folder)
-            new_path = cls._disambiguate_path(new_path, corpus, exclude_pk=current.pk)
+            try:
+                new_path = cls._disambiguate_path(
+                    new_path, corpus, exclude_pk=current.pk
+                )
+            except ValueError as exc:
+                return False, str(exc)
 
             # Mark old path as not current
             current.is_current = False
             current.save(update_fields=["is_current"])
 
             # Create new node linked to previous (audit chain)
-            DocumentPath.objects.create(
-                document=current.document,
-                corpus=corpus,
-                folder=folder,
-                path=new_path,
-                version_number=current.version_number,  # no increment on move
-                parent=current,
-                is_current=True,
-                is_deleted=False,
-                creator=user,
-            )
+            try:
+                DocumentPath.objects.create(
+                    document=current.document,
+                    corpus=corpus,
+                    folder=folder,
+                    path=new_path,
+                    version_number=current.version_number,  # no increment on move
+                    parent=current,
+                    is_current=True,
+                    is_deleted=False,
+                    creator=user,
+                )
+            except IntegrityError as exc:
+                logger.warning(
+                    "IntegrityError creating path %r for document %s in "
+                    "corpus %s — concurrent path conflict: %s",
+                    new_path,
+                    document.id,
+                    corpus.id,
+                    exc,
+                )
+                return False, f"Path conflict, please retry: {exc}"
 
             logger.info(
                 f"Moved document {document.id} to folder {folder.id if folder else 'root'} "
@@ -1036,38 +1069,56 @@ class DocumentFolderService:
             # TODO(perf): O(N) queries — consider bulk_update/bulk_create for
             # large batches. Blocked on per-document disambiguation and parent
             # link assignment which require sequential processing today.
+            failed_docs: list[str] = []
             for current in current_paths:
                 # Skip if already in the target folder
                 if current.folder_id == target_folder_id:
                     continue
 
-                new_path = cls._compute_moved_path(current.path, folder)
-                new_path = cls._disambiguate_path(
-                    new_path, corpus, exclude_pk=current.pk
-                )
+                try:
+                    new_path = cls._compute_moved_path(current.path, folder)
+                    new_path = cls._disambiguate_path(
+                        new_path, corpus, exclude_pk=current.pk
+                    )
 
-                # Mark old path as not current
-                current.is_current = False
-                current.save(update_fields=["is_current"])
+                    # Mark old path as not current
+                    current.is_current = False
+                    current.save(update_fields=["is_current"])
 
-                # Create new node linked to previous (audit chain)
-                DocumentPath.objects.create(
-                    document=current.document,
-                    corpus=corpus,
-                    folder=folder,
-                    path=new_path,
-                    version_number=current.version_number,
-                    parent=current,
-                    is_current=True,
-                    is_deleted=False,
-                    creator=user,
-                )
-                moved_count += 1
+                    # Create new node linked to previous (audit chain)
+                    DocumentPath.objects.create(
+                        document=current.document,
+                        corpus=corpus,
+                        folder=folder,
+                        path=new_path,
+                        version_number=current.version_number,
+                        parent=current,
+                        is_current=True,
+                        is_deleted=False,
+                        creator=user,
+                    )
+                    moved_count += 1
+                except (ValueError, IntegrityError) as exc:
+                    logger.warning(
+                        "Failed to move document %s (path %r) to folder "
+                        "%s in corpus %s: %s",
+                        current.document_id,
+                        current.path,
+                        folder.id if folder else "root",
+                        corpus.id,
+                        exc,
+                    )
+                    failed_docs.append(f"document {current.document_id}: {exc}")
 
             logger.info(
                 f"Bulk moved {moved_count} documents to folder "
                 f"{folder.id if folder else 'root'} in corpus {corpus.id} by user {user.id}"
             )
+            if failed_docs:
+                return moved_count, (
+                    f"{len(failed_docs)} document(s) could not be moved: "
+                    f"{'; '.join(failed_docs)}"
+                )
             return moved_count, ""
 
     @staticmethod
