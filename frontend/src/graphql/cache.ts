@@ -61,7 +61,7 @@ const ContextAwareRelayStylePaginationKeyArgsFunction = (
     fieldName: string;
     field: FieldNode | null;
     variables?: Record<string, any>;
-  }
+  },
 ): KeySpecifier | false | ReturnType<IdGetter> => {
   return `${context.field?.alias || context.fieldName}`;
 };
@@ -125,7 +125,7 @@ export const cache = new InMemoryCache({
         annotationSet: relayStylePagination(),
         docLabelAnnotations: relayStylePagination(),
         metadataAnnotations: relayStylePagination(),
-        conversations: relayStylePagination(),
+        conversations: relayStylePagination(["corpusId", "conversationType"]),
         chatMessages: relayStylePagination(),
       },
     },
@@ -256,7 +256,7 @@ export const cache = new InMemoryCache({
     Query: {
       fields: {
         annotations: relayStylePagination(
-          ContextAwareRelayStylePaginationKeyArgsFunction
+          ContextAwareRelayStylePaginationKeyArgsFunction,
         ),
         userFeedback: relayStylePagination(),
         pageAnnotations: {
@@ -360,7 +360,7 @@ export const showSelectedAnnotationOnly = makeVar<boolean>(true);
 export const showAnnotationBoundingBoxes = makeVar<boolean>(false);
 // Show Labels toggle (if false, don't show labels)
 export const showAnnotationLabels = makeVar<LabelDisplayBehavior>(
-  LabelDisplayBehavior.ON_HOVER
+  LabelDisplayBehavior.ON_HOVER,
 );
 export const pagesVisible = makeVar<Record<number, string>>({});
 export const showDeleteExtractModal = makeVar<boolean>(false);
