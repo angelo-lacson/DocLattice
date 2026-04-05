@@ -14,8 +14,11 @@ This test suite is organized into human-readable scenario groups:
 Each test is named descriptively to serve as documentation of expected behavior.
 """
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from django.db import IntegrityError
 from django.test import TransactionTestCase
 
 from opencontractserver.corpuses.folder_service import DocumentFolderService
@@ -2756,3 +2759,251 @@ class TestDocumentPathHistory_FullLifecycleIntegration(DocumentFolderServiceTest
         self.assertEqual(history[0]["action"], "CREATED")
         self.assertEqual(history[1]["action"], "MOVED")
         self.assertEqual(history[1]["folder_id"], self.folder_b.id)
+
+
+# =============================================================================
+# 9. ERROR PATH COVERAGE — exercises exception handlers and edge cases
+# =============================================================================
+
+
+class TestErrorPaths_ComputeMovedPathEdgeCases(TransactionTestCase):
+    """
+    SCENARIO: _compute_moved_path raises on malformed input.
+
+    BUSINESS RULE: Root-only or empty paths have no filename to extract
+    and should raise ValueError rather than silently produce bad data.
+    """
+
+    def test_root_only_path_raises_value_error(self):
+        """Path '/' has no filename segment — must raise."""
+        with self.assertRaises(ValueError) as ctx:
+            DocumentFolderService._compute_moved_path("/", None)
+        self.assertIn("empty or root-only", str(ctx.exception))
+
+    def test_empty_path_raises_value_error(self):
+        """Empty string has no filename — must raise."""
+        with self.assertRaises(ValueError) as ctx:
+            DocumentFolderService._compute_moved_path("", None)
+        self.assertIn("empty or root-only", str(ctx.exception))
+
+
+class TestErrorPaths_DisambiguateExtensionless(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: _disambiguate_path handles files without extensions.
+
+    BUSINESS RULE: Files like 'Makefile' or 'LICENSE' that lack a dot
+    extension get suffixed as 'Makefile_1', 'LICENSE_1', etc.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+
+    def test_extensionless_file_disambiguates_with_suffix(self):
+        """Extensionless file gets _1 appended directly to name."""
+        doc = Document.objects.create(
+            title="Makefile Doc", creator=self.owner, pdf_file="Makefile"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/Makefile",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        result = DocumentFolderService._disambiguate_path("/Makefile", self.corpus)
+        self.assertEqual(result, "/Makefile_1")
+
+
+class TestErrorPaths_DeleteFolderPartialFailure(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: delete_folder reports partial failures when documents
+    cannot be relocated.
+
+    BUSINESS RULE: The folder is still deleted, but the caller is
+    informed which documents could not be moved to root.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+
+    def test_delete_folder_reports_failed_relocations(self):
+        """When _disambiguate_path raises, the failure is reported but folder is deleted."""
+        folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Doomed"
+        )
+        doc = Document.objects.create(
+            title="Stuck Doc", creator=self.owner, pdf_file="stuck.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=folder,
+            path="/Doomed/stuck.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        with patch.object(
+            DocumentFolderService,
+            "_disambiguate_path",
+            side_effect=ValueError("all suffixes exhausted"),
+        ):
+            success, error = DocumentFolderService.delete_folder(
+                user=self.owner, folder=folder
+            )
+
+        self.assertTrue(success)
+        self.assertIn("could not be relocated", error)
+        self.assertIn(str(doc.id), error)
+        # Folder should still be deleted
+        self.assertFalse(CorpusFolder.objects.filter(pk=folder.pk).exists())
+
+
+class TestErrorPaths_MoveDocumentIntegrityError(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: move_document_to_folder handles concurrent path conflicts.
+
+    BUSINESS RULE: An IntegrityError from a race condition returns a
+    descriptive error instead of crashing.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+        self.folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Target"
+        )
+        self.document = Document.objects.create(
+            title="Race Doc", creator=self.owner, pdf_file="race.pdf"
+        )
+        self.document_path = DocumentPath.objects.create(
+            document=self.document,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/race.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+    def test_integrity_error_returns_conflict_message(self):
+        """IntegrityError during create is caught and surfaced cleanly."""
+        original_create = DocumentPath.objects.create
+
+        def failing_create(**kwargs):
+            if kwargs.get("parent") is not None:
+                raise IntegrityError("unique_active_path_per_corpus")
+            return original_create(**kwargs)
+
+        with patch.object(DocumentPath.objects, "create", side_effect=failing_create):
+            success, error = DocumentFolderService.move_document_to_folder(
+                user=self.owner,
+                document=self.document,
+                corpus=self.corpus,
+                folder=self.folder,
+            )
+
+        self.assertFalse(success)
+        self.assertIn("Path conflict", error)
+
+    def test_disambiguate_exhaustion_returns_error(self):
+        """ValueError from _disambiguate_path is surfaced as a user-facing error."""
+        with patch.object(
+            DocumentFolderService,
+            "_disambiguate_path",
+            side_effect=ValueError("all suffixes exhausted"),
+        ):
+            success, error = DocumentFolderService.move_document_to_folder(
+                user=self.owner,
+                document=self.document,
+                corpus=self.corpus,
+                folder=self.folder,
+            )
+
+        self.assertFalse(success)
+        self.assertIn("all suffixes exhausted", error)
+
+
+class TestErrorPaths_BulkMovePartialFailure(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: move_documents_to_folder reports per-document failures.
+
+    BUSINESS RULE: If some documents fail to move (e.g. path disambiguation
+    exhausted), the successfully moved ones are committed and the caller
+    gets a count plus failure details.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+        self.folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Target"
+        )
+
+    def test_bulk_move_reports_partial_failures(self):
+        """Some docs move successfully, others fail — both are reported."""
+        docs = []
+        for i in range(3):
+            doc = Document.objects.create(
+                title=f"Doc {i}", creator=self.owner, pdf_file=f"doc{i}.pdf"
+            )
+            DocumentPath.objects.create(
+                document=doc,
+                corpus=self.corpus,
+                creator=self.owner,
+                folder=None,
+                path=f"/doc{i}.pdf",
+                version_number=1,
+                is_current=True,
+                is_deleted=False,
+            )
+            docs.append(doc)
+
+        original_disambiguate = DocumentFolderService._disambiguate_path
+        call_count = 0
+
+        def selective_fail(base_path, corpus, exclude_pk=None):
+            nonlocal call_count
+            call_count += 1
+            # Fail on the second document only
+            if call_count == 2:
+                raise ValueError("suffix exhausted")
+            return original_disambiguate(base_path, corpus, exclude_pk=exclude_pk)
+
+        with patch.object(
+            DocumentFolderService, "_disambiguate_path", staticmethod(selective_fail)
+        ):
+            moved_count, error = DocumentFolderService.move_documents_to_folder(
+                user=self.owner,
+                document_ids=[d.id for d in docs],
+                corpus=self.corpus,
+                folder=self.folder,
+            )
+
+        self.assertEqual(moved_count, 2)
+        self.assertIn("1 document(s) could not be moved", error)
