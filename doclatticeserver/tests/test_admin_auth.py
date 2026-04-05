@@ -781,6 +781,27 @@ class TestAdminLoginView(TestCase):
         self.assertNotIn("evil.com", response.url)
         self.assertIn("admin", response.url)
 
+    def test_open_redirect_blocked_backslash(self):
+        """Backslash-prefixed URL in next parameter should be blocked.
+
+        Browsers normalize ``\\evil.com`` to ``//evil.com``, which can bypass
+        protocol-relative URL checks.
+        """
+        response = self.client.post(
+            "/admin/login/",
+            {
+                "username": "admin_test",
+                "password": "testpass123",
+                "next": "\\evil.com/steal-cookies",
+            },
+            follow=False,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        # Should redirect to admin, not evil.com
+        self.assertNotIn("evil.com", response.url)
+        self.assertIn("admin", response.url)
+
     def test_valid_internal_redirect_allowed(self):
         """Valid internal URL in next parameter should be allowed."""
         response = self.client.post(
