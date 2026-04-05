@@ -38,7 +38,7 @@ class TestMoveDocument(TestCase):
             "test.txt", ContentFile(b"Test content")
         )
 
-        self.corpus_doc, *_ = self.corpus.add_document(
+        self.doc, *_ = self.corpus.add_document(
             document=self.original_doc,
             user=self.user,
             folder=self.folder_a,
@@ -48,26 +48,24 @@ class TestMoveDocument(TestCase):
         # which checks corpus-level write permission.  self.user passes that check
         # because they are the corpus creator.  We still grant document CRUD for
         # completeness, but the move succeeds due to corpus ownership.
-        set_permissions_for_obj_to_user(
-            self.user, self.corpus_doc, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.user, self.doc, [PermissionTypes.CRUD])
 
     def test_move_to_folder(self):
         """Moving a document to another folder updates its path."""
         result = move_document(
-            document_id=self.corpus_doc.id,
+            document_id=self.doc.id,
             corpus_id=self.corpus.id,
             author_id=self.user.id,
             target_folder_id=self.folder_b.id,
         )
 
         self.assertEqual(result["status"], "moved")
-        self.assertEqual(result["document_id"], self.corpus_doc.id)
+        self.assertEqual(result["document_id"], self.doc.id)
         self.assertEqual(result["target_folder_id"], self.folder_b.id)
 
         # Verify the path was updated
         path = DocumentPath.objects.get(
-            document=self.corpus_doc,
+            document=self.doc,
             corpus=self.corpus,
             is_current=True,
             is_deleted=False,
@@ -77,7 +75,7 @@ class TestMoveDocument(TestCase):
     def test_move_to_root(self):
         """Moving a document with target_folder_id=None goes to corpus root."""
         result = move_document(
-            document_id=self.corpus_doc.id,
+            document_id=self.doc.id,
             corpus_id=self.corpus.id,
             author_id=self.user.id,
             target_folder_id=None,
@@ -87,7 +85,7 @@ class TestMoveDocument(TestCase):
         self.assertIsNone(result["target_folder_id"])
 
         path = DocumentPath.objects.get(
-            document=self.corpus_doc,
+            document=self.doc,
             corpus=self.corpus,
             is_current=True,
             is_deleted=False,
@@ -109,7 +107,7 @@ class TestMoveDocument(TestCase):
         """Moving to a nonexistent folder raises ValueError."""
         with self.assertRaises(ValueError) as ctx:
             move_document(
-                document_id=self.corpus_doc.id,
+                document_id=self.doc.id,
                 corpus_id=self.corpus.id,
                 author_id=self.user.id,
                 target_folder_id=999999,
@@ -132,7 +130,7 @@ class TestMoveDocument(TestCase):
 
         with self.assertRaises(ValueError) as ctx:
             move_document(
-                document_id=self.corpus_doc.id,
+                document_id=self.doc.id,
                 corpus_id=self.corpus.id,
                 author_id=self.user.id,
                 target_folder_id=hidden_folder.id,
@@ -148,7 +146,7 @@ class TestMoveDocument(TestCase):
 
         with self.assertRaises(ValueError) as ctx:
             move_document(
-                document_id=self.corpus_doc.id,
+                document_id=self.doc.id,
                 corpus_id=self.corpus.id,
                 author_id=self.user.id,
                 target_folder_id=wrong_folder.id,
@@ -171,7 +169,7 @@ class TestMoveDocument(TestCase):
 
         with self.assertRaises(ValueError) as ctx:
             move_document(
-                document_id=self.corpus_doc.id,
+                document_id=self.doc.id,
                 corpus_id=private_corpus.id,
                 author_id=self.user.id,
                 target_folder_id=None,
@@ -184,12 +182,23 @@ class TestMoveDocument(TestCase):
 
         with self.assertRaises(ValueError) as ctx:
             move_document(
-                document_id=self.corpus_doc.id,
+                document_id=self.doc.id,
                 corpus_id=other_corpus.id,
                 author_id=self.user.id,
                 target_folder_id=None,
             )
         self.assertIn("Move failed", str(ctx.exception))
+
+    def test_invalid_author_id_raises(self):
+        """Passing a nonexistent user ID raises ValueError."""
+        with self.assertRaises(ValueError) as ctx:
+            move_document(
+                document_id=self.doc.id,
+                corpus_id=self.corpus.id,
+                author_id=999999,
+                target_folder_id=None,
+            )
+        self.assertIn("does not exist", str(ctx.exception))
 
     def test_move_no_write_permission_raises(self):
         """A user with read-only corpus access cannot move documents.
@@ -205,12 +214,12 @@ class TestMoveDocument(TestCase):
             self.other_user, self.corpus, [PermissionTypes.READ]
         )
         set_permissions_for_obj_to_user(
-            self.other_user, self.corpus_doc, [PermissionTypes.READ]
+            self.other_user, self.doc, [PermissionTypes.READ]
         )
 
         with self.assertRaises(ValueError) as ctx:
             move_document(
-                document_id=self.corpus_doc.id,
+                document_id=self.doc.id,
                 corpus_id=self.corpus.id,
                 author_id=self.other_user.id,
                 target_folder_id=self.folder_b.id,
