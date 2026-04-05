@@ -362,7 +362,9 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
             "it to move the document to the corpus root."
         ),
         # CORPUS (not DOCUMENT) because this manipulates the corpus folder
-        # hierarchy, not the document's own content or metadata.
+        # hierarchy, not the document's own content or metadata.  It is only
+        # available to corpus-level agents where the LLM picks which document
+        # to move; document-scoped agents operate on a single fixed document.
         category=ToolCategory.CORPUS,
         requires_corpus=True,
         requires_approval=True,

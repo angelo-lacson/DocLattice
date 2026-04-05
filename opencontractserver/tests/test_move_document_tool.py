@@ -38,11 +38,16 @@ class TestMoveDocument(TestCase):
             "test.txt", ContentFile(b"Test content")
         )
 
-        self.corpus_doc, _status, _path = self.corpus.add_document(
+        self.corpus_doc, *_ = self.corpus.add_document(
             document=self.original_doc,
             user=self.user,
             folder=self.folder_a,
         )
+        # NOTE: Document-level permission grant is not what's being tested here.
+        # move_document delegates to DocumentFolderService.move_document_to_folder,
+        # which checks corpus-level write permission.  self.user passes that check
+        # because they are the corpus creator.  We still grant document CRUD for
+        # completeness, but the move succeeds due to corpus ownership.
         set_permissions_for_obj_to_user(
             self.user, self.corpus_doc, [PermissionTypes.CRUD]
         )
