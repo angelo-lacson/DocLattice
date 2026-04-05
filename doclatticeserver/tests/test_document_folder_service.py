@@ -2254,6 +2254,53 @@ class TestDocumentPathHistory_PathConflicts(DocumentFolderServiceTestBase):
         self.assertEqual(current.path, "/Target/report_1.pdf")
         self.assertEqual(current.folder, self.folder)
 
+    def test_dotfile_disambiguation_preserves_leading_dot(self):
+        """Dotfiles like .gitignore get suffix appended, not split on the dot."""
+        doc1 = Document.objects.create(
+            title="Config1", creator=self.owner, pdf_file=".gitignore"
+        )
+        doc2 = Document.objects.create(
+            title="Config2", creator=self.owner, pdf_file=".gitignore"
+        )
+
+        # doc1 already occupies /Target/.gitignore
+        DocumentPath.objects.create(
+            document=doc1,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=self.folder,
+            path="/Target/.gitignore",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        DocumentPath.objects.create(
+            document=doc2,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/.gitignore",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Move doc2 into the same folder — should disambiguate correctly
+        success, error = DocumentFolderService.move_document_to_folder(
+            user=self.owner,
+            document=doc2,
+            corpus=self.corpus,
+            folder=self.folder,
+        )
+
+        self.assertTrue(success)
+        current = DocumentPath.objects.get(
+            document=doc2, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+        # The leading dot must be preserved and the suffix appended to the
+        # filename stem, not inserted before the dot.
+        self.assertEqual(current.path, "/Target/.gitignore_1")
+
     def test_disambiguate_path_raises_after_max_suffix(self):
         """_disambiguate_path raises ValueError when suffix cap is exhausted."""
         from unittest.mock import patch
