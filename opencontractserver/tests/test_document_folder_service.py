@@ -2075,8 +2075,9 @@ class TestDocumentPathHistory_PathConflicts(DocumentFolderServiceTestBase):
     SCENARIO: Move operations handle path conflicts gracefully.
 
     BUSINESS RULE: If the computed path is already occupied by another
-    active document, the original path string is preserved while still
-    creating a proper history node with the new folder assignment.
+    active document, the path is disambiguated with a numeric suffix
+    (e.g. ``report_1.pdf``) while still creating a proper history node
+    with the new folder assignment.
     """
 
     def setUp(self):

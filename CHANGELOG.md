@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Document path history tracking** (PR #1195): Document moves via `DocumentFolderService.move_document_to_folder()`, `move_documents_to_folder()`, and `delete_folder()` now create immutable `DocumentPath` history nodes instead of silent in-place updates. Each move produces a new `DocumentPath` record linked to the previous one via `parent`, enabling full audit trail traversal. Path conflicts are resolved by appending numeric suffixes (e.g. `report_1.pdf`). `versioning.py` `determine_action()` now detects folder-only moves (same path string, different `folder_id`). Comprehensive test coverage in `test_document_folder_service.py` for move tracking, path conflicts, bulk moves, delete-folder tracking, and full lifecycle integration.
+
+### Changed
+
+- **`move_documents_to_folder()` return value semantics** (PR #1195): The returned `moved_count` now reflects only documents that were actually relocated; documents already in the target folder are skipped and not counted. Previously returned `len(document_ids)` unconditionally.
+
 - **Web search agent tool** (PR #1174): New `aweb_search` tool for agents with pluggable provider backends (Brave Search and Tavily). Introduces `BaseTool` base class (`opencontractserver/llms/tools/base_tool.py`) for tools with database-backed settings and encrypted secrets via `PipelineSettings`. Tools declare a nested `Settings` dataclass with `PipelineSetting` metadata; `is_configured()` gates tool availability at resolution time. `ToolFunctionRegistry` supports `tool_class` entries for database-level enablement gating. New GraphQL mutations `UpdateToolSecretsMutation` and `DeleteToolSecretsMutation` (`config/graphql/pipeline_settings_mutations.py`) allow superusers to manage tool API keys. Includes per-process rate limiting, provider-specific response parsing, and comprehensive test coverage.
 
 ### Fixed

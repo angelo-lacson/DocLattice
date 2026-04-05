@@ -989,7 +989,9 @@ class DocumentFolderService:
             folder: Target folder (None = move to root)
 
         Returns:
-            (moved_count, error_message)
+            (moved_count, error_message) — ``moved_count`` reflects only
+            documents that were actually relocated (documents already in the
+            target folder are skipped and not counted).
 
         Validations:
             - User has corpus UPDATE permission
@@ -1108,6 +1110,9 @@ class DocumentFolderService:
         same corpus. If the base path is taken it tries ``/Target/report_1.pdf``,
         ``/Target/report_2.pdf``, etc. until an unused path is found.
 
+        A hard cap (``MAX_PATH_DISAMBIGUATION_SUFFIX``) prevents unbounded loops
+        if many documents share the same filename in the same folder.
+
         Args:
             base_path: The ideal path string to use.
             corpus: Corpus to check for conflicts in.
@@ -1116,7 +1121,15 @@ class DocumentFolderService:
 
         Returns:
             A path string guaranteed to be unique among active paths in the corpus.
+
+        Raises:
+            ValueError: If no unique path can be found within the suffix limit.
         """
+        # Nested import to avoid circular dependency:
+        # folder_service -> documents.models -> corpuses.models -> folder_service
+        from opencontractserver.constants.document_processing import (
+            MAX_PATH_DISAMBIGUATION_SUFFIX,
+        )
         from opencontractserver.documents.models import DocumentPath
 
         def _is_taken(path: str) -> bool:
@@ -1138,12 +1151,21 @@ class DocumentFolderService:
             stem = base_path
             ext = ""
 
-        counter = 1
-        while True:
+        for counter in range(1, MAX_PATH_DISAMBIGUATION_SUFFIX + 1):
             candidate = f"{stem}_{counter}{ext}"
             if not _is_taken(candidate):
+                logger.warning(
+                    "Path conflict for %r in corpus %s — disambiguated to %r",
+                    base_path,
+                    corpus.id,
+                    candidate,
+                )
                 return candidate
-            counter += 1
+
+        raise ValueError(
+            f"Cannot find a unique path for {base_path!r} in corpus {corpus.id} "
+            f"after {MAX_PATH_DISAMBIGUATION_SUFFIX} attempts"
+        )
 
     @classmethod
     def soft_delete_document(
