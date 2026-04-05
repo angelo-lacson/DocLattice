@@ -490,10 +490,15 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
 
   const corpusExtracts = useMemo(() => {
     const edges = extractsData?.extracts?.edges ?? [];
-    return edges
-      .map((e) => e?.node)
-      .filter((e): e is NonNullable<typeof e> => Boolean(e))
-      .filter((e) => e.finished || (e.fullDocumentList?.length ?? 0) > 0);
+    return (
+      edges
+        .map((e) => e?.node)
+        .filter((e): e is NonNullable<typeof e> => Boolean(e))
+        // Only show extracts that have either completed processing or have
+        // associated documents. This hides newly-created extracts that haven't
+        // started yet and would produce empty grid embeds.
+        .filter((e) => e.finished || (e.fullDocumentList?.length ?? 0) > 0)
+    );
   }, [extractsData]);
 
   // Close extract picker when clicking outside

@@ -66,10 +66,10 @@ const COMPONENT_MARKER_RE = /^\[component:([a-zA-Z0-9-]+)(?:\s+(.*))?\]$/;
 
 /**
  * Regex for individual `key=value` pairs. Values may be:
- *   - Quoted:   key="some value with spaces"
+ *   - Quoted:   key="some value with spaces" (supports \" and \\ escapes)
  *   - Unquoted: key=simple_value
  */
-const PROP_RE = /([a-zA-Z_]\w*)=(?:"([^"]*)"|(\S+))/g;
+const PROP_RE = /([a-zA-Z_]\w*)=(?:"((?:[^"\\]|\\.)*)"|(\S+))/g;
 
 /**
  * Try to parse a prose block's text content as a component marker.
@@ -92,7 +92,10 @@ export function parseComponentMarker(
   PROP_RE.lastIndex = 0;
   while ((propMatch = PROP_RE.exec(rest)) !== null) {
     const key = propMatch[1];
-    const value = propMatch[2] ?? propMatch[3]; // quoted or unquoted
+    const quoted = propMatch[2];
+    // Unescape \" and \\ inside quoted values
+    const value =
+      quoted !== undefined ? quoted.replace(/\\(.)/g, "$1") : propMatch[3];
     props[key] = value;
   }
 
@@ -103,15 +106,21 @@ export function parseComponentMarker(
  * Build a `[component:...]` marker string from type and props.
  *
  * Used by the editor to insert markers at the cursor. Values containing
- * spaces are automatically quoted.
+ * whitespace or double-quotes are automatically quoted, with internal
+ * double-quotes escaped as `\"`.
  */
 export function buildComponentMarker(
   type: string,
   props: CamlComponentProps
 ): string {
-  const pairs = Object.entries(props).map(([k, v]) =>
-    /\s/.test(v) ? `${k}="${v}"` : `${k}=${v}`
-  );
+  const pairs = Object.entries(props).map(([k, v]) => {
+    const needsQuoting = /[\s"]/.test(v);
+    if (needsQuoting) {
+      const escaped = v.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      return `${k}="${escaped}"`;
+    }
+    return `${k}=${v}`;
+  });
   const suffix = pairs.length > 0 ? " " + pairs.join(" ") : "";
   return `[component:${type}${suffix}]`;
 }
@@ -138,14 +147,19 @@ export function buildComponentProseFence(
  * or `null` if the text is not a marker or the type is unregistered.
  * Used by both `useCamlComponentRenderer` and `CamlDirectiveRenderer` to
  * keep parsing + lookup in a single code path.
+ *
+ * @param key - Optional React key for the created element (useful when
+ *   rendering multiple markers in a list to satisfy React reconciliation).
  */
 export function resolveComponentMarker(
   md: string,
-  registry: CamlComponentRegistry
+  registry: CamlComponentRegistry,
+  key?: string
 ): React.ReactElement | null {
   const parsed = parseComponentMarker(md);
   if (!parsed) return null;
   const Component = registry[parsed.type];
   if (!Component) return null;
-  return React.createElement(Component, parsed.props);
+  const props = key !== undefined ? { ...parsed.props, key } : parsed.props;
+  return React.createElement(Component, props);
 }

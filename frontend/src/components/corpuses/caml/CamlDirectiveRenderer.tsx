@@ -76,7 +76,7 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
   handlerContext,
   stats,
   componentRegistry,
-  resolveImageSrc,
+  resolveImageSrc: _resolveImageSrc,
 }) => {
   // Single pass: extract directives and build cleaned document simultaneously.
   // Each prose block is parsed once via extractInlineDirectives, producing both
@@ -172,11 +172,10 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
     componentRegistry,
   ]);
 
-  // NOTE: resolveImageSrc is accepted by this component for forward
+  // NOTE: _resolveImageSrc is accepted by this component for forward
   // compatibility but @os-legal/caml-react@0.0.3 does not yet expose
   // that prop on CamlArticle. Pass it through once a future version adds
   // `resolveImageSrc` to CamlArticleProps.
-  void resolveImageSrc;
 
   return (
     <CamlThemeProvider>
