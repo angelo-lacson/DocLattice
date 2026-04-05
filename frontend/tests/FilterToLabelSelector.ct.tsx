@@ -3,7 +3,7 @@ import {
   test,
   expect,
   type MountResult,
-} from "@playwright/experimental-ct-react";
+} from "./utils/coverage";
 import { docScreenshot } from "./utils/docScreenshot";
 import { FilterToLabelSelector } from "../src/components/widgets/model-filters/FilterToLabelSelector";
 import { LabelType } from "../src/types/graphql-api";

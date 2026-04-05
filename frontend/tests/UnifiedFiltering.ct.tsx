@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import React from "react";
 import { UnifiedContentFeedTestWrapper } from "./UnifiedContentFeedTestWrapper";
 import { ServerTokenAnnotation } from "../src/components/annotator/types/annotations";

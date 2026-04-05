@@ -1,6 +1,6 @@
 // Playwright Component Test for ContextMenu widget
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { ContextMenuItem } from "../src/components/widgets/context-menu/ContextMenu";
 import { ContextMenuHarness } from "./ContextMenuTestWrapper";
 import { docScreenshot } from "./utils/docScreenshot";

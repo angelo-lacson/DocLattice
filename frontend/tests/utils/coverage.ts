@@ -1,7 +1,11 @@
-import { test as baseTest, expect } from "@playwright/experimental-ct-react";
+import { test as baseTest } from "@playwright/experimental-ct-react";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+
+// Re-export everything from the original module so test files
+// can import types like MountResult alongside test/expect.
+export { expect, type MountResult } from "@playwright/experimental-ct-react";
 
 const COVERAGE_DIR = path.resolve(__dirname, "../../coverage/ct/.nyc_output");
 
@@ -9,9 +13,7 @@ const COVERAGE_DIR = path.resolve(__dirname, "../../coverage/ct/.nyc_output");
  * Extended Playwright CT test fixture that collects Istanbul coverage
  * from the browser after each test. Enable by setting COVERAGE=true.
  *
- * Usage in test files:
- *   import { test, expect } from "../utils/coverage";
- *   // ... use test/expect as usual
+ * Drop-in replacement for the @playwright/experimental-ct-react import.
  */
 export const test = baseTest.extend({
   page: async ({ page }, use) => {
@@ -36,5 +38,3 @@ export const test = baseTest.extend({
     }
   },
 });
-
-export { expect };

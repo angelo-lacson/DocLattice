@@ -1,6 +1,6 @@
 // Playwright Component Tests for Landing Page Components
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { CompactLeaderboard } from "../src/components/landing/CompactLeaderboard";
 import { CallToAction } from "../src/components/landing/CallToAction";
 import { DiscoveryLanding } from "../src/views/DiscoveryLanding";
