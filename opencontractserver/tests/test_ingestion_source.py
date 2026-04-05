@@ -120,9 +120,7 @@ DELETE_MUTATION = """
 
 class TestCreateIngestionSourceMutation(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="testuser", password="testpass"
-        )
+        self.user = User.objects.create_user(username="testuser", password="testpass")
         self.client = Client(schema, context_value=TestContext(self.user))
 
     def test_create_happy_path(self):
@@ -186,18 +184,14 @@ class TestCreateIngestionSourceMutation(TestCase):
 
 class TestUpdateIngestionSourceMutation(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="testuser", password="testpass"
-        )
+        self.user = User.objects.create_user(username="testuser", password="testpass")
         self.source = IngestionSource.objects.create(
             name="original_name",
             source_type=IngestionSourceCategory.MANUAL,
             creator=self.user,
             config={"key": "value"},
         )
-        set_permissions_for_obj_to_user(
-            self.user, self.source, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.user, self.source, [PermissionTypes.CRUD])
         self.global_id = to_global_id("IngestionSourceType", self.source.pk)
         self.client = Client(schema, context_value=TestContext(self.user))
 
@@ -229,6 +223,29 @@ class TestUpdateIngestionSourceMutation(TestCase):
         self.source.refresh_from_db()
         self.assertFalse(self.source.active)
 
+    def test_update_active_reactivation(self):
+        """Deactivate then re-activate a source."""
+        # First deactivate
+        self.client.execute(
+            UPDATE_MUTATION,
+            variables={"id": self.global_id, "active": False},
+        )
+        self.source.refresh_from_db()
+        self.assertFalse(self.source.active)
+
+        # Now re-activate
+        result = self.client.execute(
+            UPDATE_MUTATION,
+            variables={"id": self.global_id, "active": True},
+        )
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["updateIngestionSource"]
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["ingestionSource"]["active"])
+
+        self.source.refresh_from_db()
+        self.assertTrue(self.source.active)
+
     def test_update_not_found(self):
         bad_id = to_global_id("IngestionSourceType", 999999)
         result = self.client.execute(
@@ -241,9 +258,7 @@ class TestUpdateIngestionSourceMutation(TestCase):
         self.assertIn("not found", data["message"])
 
     def test_update_other_users_source(self):
-        other_user = User.objects.create_user(
-            username="other", password="otherpass"
-        )
+        other_user = User.objects.create_user(username="other", password="otherpass")
         other_source = IngestionSource.objects.create(
             name="other_source", creator=other_user
         )
@@ -266,23 +281,15 @@ class TestUpdateIngestionSourceMutation(TestCase):
 
 class TestDeleteIngestionSourceMutation(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="testuser", password="testpass"
-        )
+        self.user = User.objects.create_user(username="testuser", password="testpass")
         self.client = Client(schema, context_value=TestContext(self.user))
 
     def test_delete_happy_path(self):
-        source = IngestionSource.objects.create(
-            name="to_delete", creator=self.user
-        )
-        set_permissions_for_obj_to_user(
-            self.user, source, [PermissionTypes.CRUD]
-        )
+        source = IngestionSource.objects.create(name="to_delete", creator=self.user)
+        set_permissions_for_obj_to_user(self.user, source, [PermissionTypes.CRUD])
         global_id = to_global_id("IngestionSourceType", source.pk)
 
-        result = self.client.execute(
-            DELETE_MUTATION, variables={"id": global_id}
-        )
+        result = self.client.execute(DELETE_MUTATION, variables={"id": global_id})
         self.assertIsNone(result.get("errors"))
         data = result["data"]["deleteIngestionSource"]
         self.assertTrue(data["ok"])
@@ -290,9 +297,7 @@ class TestDeleteIngestionSourceMutation(TestCase):
 
     def test_delete_not_found(self):
         bad_id = to_global_id("IngestionSourceType", 999999)
-        result = self.client.execute(
-            DELETE_MUTATION, variables={"id": bad_id}
-        )
+        result = self.client.execute(DELETE_MUTATION, variables={"id": bad_id})
         self.assertIsNone(result.get("errors"))
         data = result["data"]["deleteIngestionSource"]
         self.assertFalse(data["ok"])
@@ -303,9 +308,7 @@ class TestDeleteIngestionSourceMutation(TestCase):
         source = IngestionSource.objects.create(
             name="source_with_paths", creator=self.user
         )
-        set_permissions_for_obj_to_user(
-            self.user, source, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.user, source, [PermissionTypes.CRUD])
 
         corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
         doc = Document.objects.create(
@@ -321,9 +324,7 @@ class TestDeleteIngestionSourceMutation(TestCase):
         )
 
         global_id = to_global_id("IngestionSourceType", source.pk)
-        result = self.client.execute(
-            DELETE_MUTATION, variables={"id": global_id}
-        )
+        result = self.client.execute(DELETE_MUTATION, variables={"id": global_id})
         self.assertTrue(result["data"]["deleteIngestionSource"]["ok"])
 
         doc_path.refresh_from_db()
@@ -337,18 +338,14 @@ class TestDeleteIngestionSourceMutation(TestCase):
 
 class TestUploadDocumentWithIngestionSource(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="testuser", password="testpass"
-        )
+        self.user = User.objects.create_user(username="testuser", password="testpass")
         self.client = Client(schema, context_value=TestContext(self.user))
         self.source = IngestionSource.objects.create(
             name="upload_source",
             source_type=IngestionSourceCategory.API,
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(
-            self.user, self.source, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.user, self.source, [PermissionTypes.CRUD])
 
     def _upload_mutation(self):
         return """
@@ -409,9 +406,7 @@ class TestUploadDocumentWithIngestionSource(TestCase):
 
     def test_upload_with_other_users_source(self):
         """Source belonging to another user should be rejected."""
-        other_user = User.objects.create_user(
-            username="other", password="otherpass"
-        )
+        other_user = User.objects.create_user(username="other", password="otherpass")
         other_source = IngestionSource.objects.create(
             name="other_source", creator=other_user
         )
@@ -446,15 +441,11 @@ class TestUploadDocumentWithIngestionSource(TestCase):
 
 class TestIngestionSourceExportImport(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="testuser", password="testpass"
-        )
+        self.user = User.objects.create_user(username="testuser", password="testpass")
         self.corpus = Corpus.objects.create(
             title="Export Test Corpus", creator=self.user
         )
-        set_permissions_for_obj_to_user(
-            self.user, self.corpus, [PermissionTypes.ALL]
-        )
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
 
     def test_package_ingestion_sources_strips_config(self):
         """Config must not leak credentials in exports."""
@@ -514,9 +505,7 @@ class TestIngestionSourceExportImport(TestCase):
         self.assertEqual(len(exported), 1)
 
         # Import as a different user
-        importer = User.objects.create_user(
-            username="importer", password="importpass"
-        )
+        importer = User.objects.create_user(username="importer", password="importpass")
         source_map = _import_ingestion_sources(exported, importer)
 
         self.assertIn("roundtrip_source", source_map)
@@ -568,24 +557,18 @@ SINGLE_SOURCE_QUERY = """
 
 class TestIngestionSourceQuery(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="testuser", password="testpass"
-        )
+        self.user = User.objects.create_user(username="testuser", password="testpass")
         self.client = Client(schema, context_value=TestContext(self.user))
         self.source = IngestionSource.objects.create(
             name="query_source",
             source_type=IngestionSourceCategory.CRAWLER,
             creator=self.user,
         )
-        set_permissions_for_obj_to_user(
-            self.user, self.source, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.user, self.source, [PermissionTypes.CRUD])
 
     def test_resolve_existing_source(self):
         gid = to_global_id("IngestionSourceType", self.source.pk)
-        result = self.client.execute(
-            SINGLE_SOURCE_QUERY, variables={"id": gid}
-        )
+        result = self.client.execute(SINGLE_SOURCE_QUERY, variables={"id": gid})
         self.assertIsNone(result.get("errors"))
         data = result["data"]["ingestionSource"]
         self.assertIsNotNone(data)
@@ -595,24 +578,91 @@ class TestIngestionSourceQuery(TestCase):
     def test_resolve_not_found_returns_none(self):
         """Should return None rather than 500 on missing source."""
         bad_id = to_global_id("IngestionSourceType", 999999)
-        result = self.client.execute(
-            SINGLE_SOURCE_QUERY, variables={"id": bad_id}
-        )
+        result = self.client.execute(SINGLE_SOURCE_QUERY, variables={"id": bad_id})
         # Should not have GraphQL errors (no 500)
         self.assertIsNone(result.get("errors"))
         self.assertIsNone(result["data"]["ingestionSource"])
 
     def test_resolve_other_users_source_returns_none(self):
         """Source owned by a different user should not be visible."""
-        other_user = User.objects.create_user(
-            username="other", password="otherpass"
-        )
+        other_user = User.objects.create_user(username="other", password="otherpass")
         other_source = IngestionSource.objects.create(
             name="private_source", creator=other_user
         )
         gid = to_global_id("IngestionSourceType", other_source.pk)
-        result = self.client.execute(
-            SINGLE_SOURCE_QUERY, variables={"id": gid}
-        )
+        result = self.client.execute(SINGLE_SOURCE_QUERY, variables={"id": gid})
         self.assertIsNone(result.get("errors"))
         self.assertIsNone(result["data"]["ingestionSource"])
+
+
+# ------------------------------------------------------------------ #
+# ingestionSources list query
+# ------------------------------------------------------------------ #
+
+LIST_SOURCES_QUERY = """
+    query ListIngestionSources($activeOnly: Boolean) {
+        ingestionSources(activeOnly: $activeOnly) {
+            id
+            name
+            sourceType
+            active
+        }
+    }
+"""
+
+
+class TestIngestionSourceListQuery(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.client = Client(schema, context_value=TestContext(self.user))
+
+        self.active_source = IngestionSource.objects.create(
+            name="active_crawler",
+            source_type=IngestionSourceCategory.CRAWLER,
+            active=True,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, self.active_source, [PermissionTypes.CRUD]
+        )
+
+        self.inactive_source = IngestionSource.objects.create(
+            name="inactive_api",
+            source_type=IngestionSourceCategory.API,
+            active=False,
+            creator=self.user,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, self.inactive_source, [PermissionTypes.CRUD]
+        )
+
+    def test_list_all_sources(self):
+        """Default query returns both active and inactive sources."""
+        result = self.client.execute(LIST_SOURCES_QUERY)
+        self.assertIsNone(result.get("errors"))
+        sources = result["data"]["ingestionSources"]
+        names = [s["name"] for s in sources]
+        self.assertIn("active_crawler", names)
+        self.assertIn("inactive_api", names)
+
+    def test_list_active_only(self):
+        """active_only=True filters out inactive sources."""
+        result = self.client.execute(LIST_SOURCES_QUERY, variables={"activeOnly": True})
+        self.assertIsNone(result.get("errors"))
+        sources = result["data"]["ingestionSources"]
+        names = [s["name"] for s in sources]
+        self.assertIn("active_crawler", names)
+        self.assertNotIn("inactive_api", names)
+
+    def test_list_excludes_other_users_sources(self):
+        """Sources from other users should not appear in the list."""
+        other_user = User.objects.create_user(username="other", password="otherpass")
+        IngestionSource.objects.create(
+            name="other_source", creator=other_user, active=True
+        )
+
+        result = self.client.execute(LIST_SOURCES_QUERY)
+        self.assertIsNone(result.get("errors"))
+        sources = result["data"]["ingestionSources"]
+        names = [s["name"] for s in sources]
+        self.assertNotIn("other_source", names)

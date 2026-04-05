@@ -5,6 +5,7 @@ GraphQL mutations for IngestionSource CRUD operations.
 import logging
 
 import graphene
+from django.db import IntegrityError
 from graphene.types.generic import GenericScalar
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
@@ -20,6 +21,8 @@ from opencontractserver.utils.permissioning import (
 )
 
 logger = logging.getLogger(__name__)
+
+EXPECTED_GLOBAL_ID_TYPE = "IngestionSourceType"
 
 
 class CreateIngestionSourceMutation(graphene.Mutation):
@@ -47,14 +50,6 @@ class CreateIngestionSourceMutation(graphene.Mutation):
     def mutate(root, info, name, source_type=None, config=None):
         user = info.context.user
 
-        # Check for duplicate name
-        if IngestionSource.objects.filter(creator=user, name=name).exists():
-            return CreateIngestionSourceMutation(
-                ok=False,
-                message=f"An ingestion source named '{name}' already exists",
-                ingestion_source=None,
-            )
-
         # Coerce graphene Enum to its string value so the in-memory object
         # holds a plain string that graphene-django can serialize.
         resolved_type = (
@@ -63,12 +58,22 @@ class CreateIngestionSourceMutation(graphene.Mutation):
             else IngestionSourceCategory.MANUAL
         )
 
-        source = IngestionSource.objects.create(
-            name=name,
-            source_type=resolved_type,
-            config=config or {},
-            creator=user,
-        )
+        # Use try/except around create() instead of exists() + create()
+        # to avoid TOCTOU race condition with the unique constraint.
+        try:
+            source = IngestionSource.objects.create(
+                name=name,
+                source_type=resolved_type,
+                config=config or {},
+                creator=user,
+            )
+        except IntegrityError:
+            return CreateIngestionSourceMutation(
+                ok=False,
+                message=f"An ingestion source named '{name}' already exists",
+                ingestion_source=None,
+            )
+
         set_permissions_for_obj_to_user(user, source, [PermissionTypes.CRUD])
 
         return CreateIngestionSourceMutation(
@@ -95,7 +100,14 @@ class UpdateIngestionSourceMutation(graphene.Mutation):
     @login_required
     def mutate(root, info, id, **kwargs):
         user = info.context.user
-        _, pk = from_global_id(id)
+        type_name, pk = from_global_id(id)
+
+        if type_name != EXPECTED_GLOBAL_ID_TYPE:
+            return UpdateIngestionSourceMutation(
+                ok=False,
+                message="Ingestion source not found",
+                ingestion_source=None,
+            )
 
         try:
             source = IngestionSource.objects.get(pk=pk, creator=user)
@@ -151,7 +163,13 @@ class DeleteIngestionSourceMutation(graphene.Mutation):
     @login_required
     def mutate(root, info, id):
         user = info.context.user
-        _, pk = from_global_id(id)
+        type_name, pk = from_global_id(id)
+
+        if type_name != EXPECTED_GLOBAL_ID_TYPE:
+            return DeleteIngestionSourceMutation(
+                ok=False,
+                message="Ingestion source not found",
+            )
 
         try:
             source = IngestionSource.objects.get(pk=pk, creator=user)

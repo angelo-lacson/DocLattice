@@ -288,7 +288,7 @@ class DocumentQueryMixin:
     @login_required
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_ingestion_sources(self, info, active_only=False, **kwargs):
-        qs = IngestionSource.objects.filter(creator=info.context.user)
+        qs = IngestionSource.objects.visible_to_user(info.context.user)
         if active_only:
             qs = qs.filter(active=True)
         return qs.order_by("name")
@@ -304,6 +304,6 @@ class DocumentQueryMixin:
     def resolve_ingestion_source(self, info, id, **kwargs):
         _, pk = from_global_id(id)
         try:
-            return IngestionSource.objects.get(pk=pk, creator=info.context.user)
+            return IngestionSource.objects.visible_to_user(info.context.user).get(pk=pk)
         except IngestionSource.DoesNotExist:
             return None
