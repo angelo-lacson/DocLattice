@@ -2197,7 +2197,7 @@ export const GET_EXTRACT_GRID_EMBED = gql`
       }
       # NOTE: fullDatacellList is unbounded — for extracts with many documents and
       # columns this could return thousands of cells. Consider adding server-side
-      # pagination if this is used on large extracts (see PR #1177 review).
+      # pagination if this is used on large extracts (see #1204).
       fullDatacellList {
         id
         column {

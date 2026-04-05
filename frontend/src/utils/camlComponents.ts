@@ -31,6 +31,12 @@ export type CamlComponentProps = Record<string, string>;
  * A React component that can be embedded in CAML prose.
  * Uses Record<string, string | undefined> to cover optional marker props
  * while avoiding a blanket `any`.
+ *
+ * **Security note**: All prop values originate from user-authored CAML content
+ * and should be treated as untrusted input. Components must never use props in
+ * dangerous sinks (e.g. `dangerouslySetInnerHTML`, `eval`, or unescaped URLs).
+ * Passing a prop as a GraphQL variable (e.g. `extractId`) is safe because the
+ * server validates the ID against the user's permissions.
  */
 export type CamlEmbedComponent = ComponentType<
   Record<string, string | undefined>
@@ -136,7 +142,7 @@ export function buildComponentProseFence(
 export function resolveComponentMarker(
   md: string,
   registry: CamlComponentRegistry
-): React.ReactNode | null {
+): React.ReactElement | null {
   const parsed = parseComponentMarker(md);
   if (!parsed) return null;
   const Component = registry[parsed.type];
