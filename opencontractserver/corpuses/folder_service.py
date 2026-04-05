@@ -831,10 +831,9 @@ class DocumentFolderService:
             # else: cascade delete will handle children automatically
 
             # Move documents in folder to root with history tracking.
-            # TODO(perf): This loop issues O(N) UPDATE + INSERT queries.
-            # For large folders, consider bulk_update() for deactivation
-            # and bulk_create() for new nodes. Requires careful handling
-            # of per-document disambiguation and parent links.
+            # TODO(perf): O(N) queries — consider bulk_update/bulk_create for
+            # large batches. Blocked on per-document disambiguation and parent
+            # link assignment which require sequential processing today.
             affected_paths = list(
                 DocumentPath.objects.select_for_update().filter(
                     folder=folder,
@@ -1034,10 +1033,9 @@ class DocumentFolderService:
                 )
             )
 
-            # TODO(perf): This loop issues O(N) UPDATE + INSERT queries.
-            # For large batches, consider bulk_update() for deactivation
-            # and bulk_create() for new nodes. Requires careful handling
-            # of per-document disambiguation and parent links.
+            # TODO(perf): O(N) queries — consider bulk_update/bulk_create for
+            # large batches. Blocked on per-document disambiguation and parent
+            # link assignment which require sequential processing today.
             for current in current_paths:
                 # Skip if already in the target folder
                 if current.folder_id == target_folder_id:
@@ -1097,6 +1095,11 @@ class DocumentFolderService:
         # Guard against empty or root-only paths where filename would be empty
         if not filename:
             filename = current_path.strip("/") or "unnamed"
+            logger.warning(
+                "Empty filename extracted from path %r — falling back to %r",
+                current_path,
+                filename,
+            )
 
         if target_folder:
             folder_path = target_folder.get_path()
@@ -1162,12 +1165,30 @@ class DocumentFolderService:
         if not _is_taken(base_path):
             return base_path
 
-        # Split into stem and extension for suffix insertion
-        if "." in base_path.rsplit("/", 1)[-1]:
-            stem, ext = base_path.rsplit(".", 1)
-            ext = f".{ext}"
+        # Split into stem and extension for suffix insertion.
+        # We must split the *filename* segment, not the full path, so that
+        # dotfiles like ".gitignore" are handled correctly (the leading dot
+        # is NOT an extension separator).
+        if "/" in base_path:
+            dir_part, filename = base_path.rsplit("/", 1)
         else:
-            stem = base_path
+            dir_part, filename = None, base_path
+
+        # Determine whether the filename has a true extension.
+        # A leading dot (e.g. ".gitignore") is not an extension separator;
+        # strip it before checking, then re-prepend after the split.
+        bare = filename.lstrip(".")
+        leading_dots = filename[: len(filename) - len(bare)]
+
+        def _join_stem(name_part: str) -> str:
+            return f"{dir_part}/{name_part}" if dir_part is not None else name_part
+
+        if "." in bare:
+            name_stem, name_ext = bare.rsplit(".", 1)
+            stem = _join_stem(f"{leading_dots}{name_stem}")
+            ext = f".{name_ext}"
+        else:
+            stem = _join_stem(filename)
             ext = ""
 
         for counter in range(1, MAX_PATH_DISAMBIGUATION_SUFFIX + 1):
