@@ -2726,32 +2726,38 @@ def move_document(
     from django.contrib.auth import get_user_model
 
     from doclatticeserver.corpuses.folder_service import DocumentFolderService
-    from doclatticeserver.corpuses.models import CorpusFolder
 
     User = get_user_model()
 
-    # Resolve entities
+    # Resolve entities — resolve user first so we can scope subsequent lookups
+    # to objects visible to that user (IDOR prevention per CLAUDE.md).
     try:
         user = User.objects.get(pk=author_id)
     except User.DoesNotExist:
         raise ValueError(f"User with id={author_id} does not exist.")
 
     try:
-        corpus = Corpus.objects.get(pk=corpus_id)
+        corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_id)
     except Corpus.DoesNotExist:
-        raise ValueError(f"Corpus with id={corpus_id} does not exist.")
+        raise ValueError(
+            f"Corpus with id={corpus_id} does not exist or is not accessible."
+        )
 
     try:
-        document = Document.objects.get(pk=document_id)
+        document = Document.objects.visible_to_user(user).get(pk=document_id)
     except Document.DoesNotExist:
-        raise ValueError(f"Document with id={document_id} does not exist.")
+        raise ValueError(
+            f"Document with id={document_id} does not exist or is not accessible."
+        )
 
     target_folder = None
     if target_folder_id is not None:
-        try:
-            target_folder = CorpusFolder.objects.get(pk=target_folder_id)
-        except CorpusFolder.DoesNotExist:
-            raise ValueError(f"Folder with id={target_folder_id} does not exist.")
+        target_folder = DocumentFolderService.get_folder_by_id(user, target_folder_id)
+        if target_folder is None:
+            raise ValueError(
+                f"Folder with id={target_folder_id} does not exist "
+                "or is not accessible."
+            )
 
     success, error = DocumentFolderService.move_document_to_folder(
         user=user,

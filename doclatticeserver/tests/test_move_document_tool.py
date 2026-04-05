@@ -103,7 +103,7 @@ class TestMoveDocument(TestCase):
                 author_id=self.user.id,
                 target_folder_id=self.folder_b.id,
             )
-        self.assertIn("does not exist", str(ctx.exception))
+        self.assertIn("does not exist or is not accessible", str(ctx.exception))
 
     def test_move_nonexistent_folder_raises(self):
         """Moving to a nonexistent folder raises ValueError."""
@@ -114,7 +114,30 @@ class TestMoveDocument(TestCase):
                 author_id=self.user.id,
                 target_folder_id=999999,
             )
-        self.assertIn("does not exist", str(ctx.exception))
+        self.assertIn("does not exist or is not accessible", str(ctx.exception))
+
+    def test_move_inaccessible_folder_raises(self):
+        """Moving to a folder the user cannot see raises the same error as not-found.
+
+        IDOR prevention: a folder in another user's private corpus produces
+        the same "does not exist or is not accessible" message as a truly
+        nonexistent folder, preventing enumeration of folder IDs.
+        """
+        private_corpus = Corpus.objects.create(
+            title="Private Corpus", creator=self.other_user
+        )
+        hidden_folder = CorpusFolder.objects.create(
+            name="Hidden Folder", corpus=private_corpus, creator=self.other_user
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            move_document(
+                document_id=self.corpus_doc.id,
+                corpus_id=self.corpus.id,
+                author_id=self.user.id,
+                target_folder_id=hidden_folder.id,
+            )
+        self.assertIn("does not exist or is not accessible", str(ctx.exception))
 
     def test_move_folder_wrong_corpus_raises(self):
         """Moving to a folder in a different corpus raises ValueError."""
@@ -136,9 +159,11 @@ class TestMoveDocument(TestCase):
     def test_move_to_corpus_where_doc_not_member_raises(self):
         """Moving a document into a corpus it doesn't belong to fails.
 
-        The document is a member of self.corpus but not private_corpus,
-        so DocumentFolderService rejects the move at the membership check
-        before reaching the permission check.
+        private_corpus is owned by other_user, so self.user cannot see it
+        via visible_to_user(). The tool rejects the request at the corpus
+        lookup stage with a generic "does not exist or is not accessible"
+        message (IDOR prevention — same error whether the corpus truly
+        doesn't exist or is simply not visible to the caller).
         """
         private_corpus = Corpus.objects.create(
             title="Private Corpus", creator=self.other_user
@@ -151,7 +176,7 @@ class TestMoveDocument(TestCase):
                 author_id=self.user.id,
                 target_folder_id=None,
             )
-        self.assertIn("Move failed", str(ctx.exception))
+        self.assertIn("does not exist or is not accessible", str(ctx.exception))
 
     def test_move_document_not_in_corpus_raises(self):
         """Moving a document that isn't in the corpus raises ValueError."""
@@ -165,3 +190,30 @@ class TestMoveDocument(TestCase):
                 target_folder_id=None,
             )
         self.assertIn("Move failed", str(ctx.exception))
+
+    def test_move_no_write_permission_raises(self):
+        """A user with read-only corpus access cannot move documents.
+
+        Grants other_user READ permission on both the corpus and the document
+        so visibility checks pass, but does NOT grant corpus write permission.
+        DocumentFolderService.move_document_to_folder rejects the move because
+        other_user is not the corpus creator, not a superuser, and has no
+        explicit UPDATE/CRUD permission on the corpus.
+        """
+        # Grant read-only access so visible_to_user() includes these objects
+        set_permissions_for_obj_to_user(
+            self.other_user, self.corpus, [PermissionTypes.READ]
+        )
+        set_permissions_for_obj_to_user(
+            self.other_user, self.corpus_doc, [PermissionTypes.READ]
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            move_document(
+                document_id=self.corpus_doc.id,
+                corpus_id=self.corpus.id,
+                author_id=self.other_user.id,
+                target_folder_id=self.folder_b.id,
+            )
+        self.assertIn("Move failed", str(ctx.exception))
+        self.assertIn("Permission denied", str(ctx.exception))
