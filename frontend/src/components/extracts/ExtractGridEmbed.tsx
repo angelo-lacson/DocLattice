@@ -144,6 +144,19 @@ const CellContent = styled.span`
   word-break: break-word;
 `;
 
+const OverflowBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.25rem;
+  padding: 0.0625rem 0.25rem;
+  border-radius: 4px;
+  background: ${OS_LEGAL_COLORS.surfaceHover};
+  color: ${OS_LEGAL_COLORS.textSecondary};
+  font-size: 0.625rem;
+  font-weight: 600;
+  vertical-align: middle;
+`;
+
 const StatusDot = styled.span<{ $color: string }>`
   display: inline-block;
   width: 6px;
@@ -154,19 +167,6 @@ const StatusDot = styled.span<{ $color: string }>`
   vertical-align: middle;
 `;
 
-const OverflowBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  margin-left: 0.25rem;
-  padding: 0.125rem 0.375rem;
-  border-radius: 4px;
-  background: ${OS_LEGAL_COLORS.surfaceHover};
-  color: ${OS_LEGAL_COLORS.textSecondary};
-  font-size: 0.6875rem;
-  font-weight: 500;
-  white-space: nowrap;
-  vertical-align: middle;
-`;
 
 const CenterMessage = styled.div`
   display: flex;
@@ -390,24 +390,28 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
                         {displayValue}
                       </CellContent>
                       {sources.length > 0 && (
-                        <SourceChip
-                          to={buildSourceLink(
-                            cell,
-                            sources[0].id,
-                            extract.corpus
+                        <>
+                          <SourceChip
+                            to={buildSourceLink(
+                              cell,
+                              sources[0].id,
+                              extract.corpus
+                            )}
+                            title={`View source (p.${sources[0].page + 1})`}
+                          >
+                            <ExternalLink size={10} />
+                            p.{sources[0].page + 1}
+                          </SourceChip>
+                          {sources.length > 1 && (
+                            <OverflowBadge
+                              title={`${sources.length - 1} more source${
+                                sources.length > 2 ? "s" : ""
+                              }`}
+                            >
+                              +{sources.length - 1}
+                            </OverflowBadge>
                           )}
-                          title={`View source (p.${sources[0].page + 1})`}
-                        >
-                          <ExternalLink size={10} />
-                          p.{sources[0].page + 1}
-                        </SourceChip>
-                      )}
-                      {sources.length > 1 && (
-                        <OverflowBadge
-                          title={`${sources.length} total sources`}
-                        >
-                          +{sources.length - 1}
-                        </OverflowBadge>
+                        </>
                       )}
                     </Td>
                   );
