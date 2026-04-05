@@ -136,6 +136,33 @@ describe("buildComponentMarker()", () => {
     const parsed = parseComponentMarker(marker);
     expect(parsed).toEqual(original);
   });
+
+  it("escapes double quotes inside values", () => {
+    const marker = buildComponentMarker("widget", {
+      label: 'Say "hello"',
+    });
+    expect(marker).toBe('[component:widget label="Say \\"hello\\""]');
+  });
+
+  it("round-trips values containing double quotes", () => {
+    const original = {
+      type: "widget",
+      props: { label: 'Say "hello"' },
+    };
+    const marker = buildComponentMarker(original.type, original.props);
+    const parsed = parseComponentMarker(marker);
+    expect(parsed).toEqual(original);
+  });
+
+  it("escapes backslashes inside values", () => {
+    const original = {
+      type: "widget",
+      props: { path: "C:\\Users\\test" },
+    };
+    const marker = buildComponentMarker(original.type, original.props);
+    const parsed = parseComponentMarker(marker);
+    expect(parsed).toEqual(original);
+  });
 });
 
 describe("buildComponentProseFence()", () => {

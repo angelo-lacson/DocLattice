@@ -6,7 +6,8 @@
  * 2. Empty state (no datacells)
  * 3. Not-found state (extract null)
  * 4. Error state (GraphQL error)
- * 5. Missing extractId prop
+ * 5. Loading state (spinner while fetching)
+ * 6. Missing extractId prop
  */
 import { test, expect } from "@playwright/experimental-ct-react";
 import { docScreenshot } from "./utils/docScreenshot";
@@ -108,6 +109,26 @@ test.describe("ExtractGridEmbed - Error", () => {
     });
 
     await docScreenshot(page, "caml--extract-grid-embed--error");
+
+    await component.unmount();
+  });
+});
+
+test.describe("ExtractGridEmbed - Loading", () => {
+  test("should show loading spinner while data is being fetched", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <ExtractGridEmbedTestWrapper state="loading" />
+    );
+
+    // Loading message should be visible
+    await expect(page.getByText("Loading extract data...")).toBeVisible({
+      timeout: 10000,
+    });
+
+    await docScreenshot(page, "caml--extract-grid-embed--loading");
 
     await component.unmount();
   });

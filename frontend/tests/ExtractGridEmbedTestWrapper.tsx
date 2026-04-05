@@ -180,6 +180,20 @@ const notFoundExtractMock: MockedResponse = {
   },
 };
 
+/** Mock: delayed response to test loading state (100s delay so it never resolves during test) */
+const loadingExtractMock: MockedResponse = {
+  request: {
+    query: GET_EXTRACT_GRID_EMBED,
+    variables: { extractId: TEST_EXTRACT_ID },
+  },
+  delay: 100_000,
+  result: {
+    data: {
+      extract: null,
+    },
+  },
+};
+
 /** Mock: GraphQL error */
 const errorExtractMock: MockedResponse = {
   request: {
@@ -202,7 +216,8 @@ export type ExtractGridEmbedState =
   | "empty"
   | "not-found"
   | "error"
-  | "missing-id";
+  | "missing-id"
+  | "loading";
 
 export interface ExtractGridEmbedTestWrapperProps {
   state?: ExtractGridEmbedState;
@@ -219,6 +234,7 @@ export const ExtractGridEmbedTestWrapper: React.FC<
     empty: emptyExtractMock,
     "not-found": notFoundExtractMock,
     error: errorExtractMock,
+    loading: loadingExtractMock,
   };
 
   const extractId = state === "missing-id" ? undefined : TEST_EXTRACT_ID;
