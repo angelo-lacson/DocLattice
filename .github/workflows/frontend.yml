@@ -87,14 +87,13 @@ jobs:
 
       - name: Upload CT Coverage to Codecov
         if: always()
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: frontend/coverage/ct/lcov.info
           flags: frontend-component
           name: frontend-ct-coverage
           fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   build:
     name: Build
@@ -141,14 +140,13 @@ jobs:
         run: yarn run test:coverage:unit
       - name: Upload Unit Coverage to Codecov
         if: always()
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: frontend/coverage/unit/lcov.info
           flags: frontend-unit
           name: frontend-unit-coverage
           fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   docker-build:
     name: Build Docker Image

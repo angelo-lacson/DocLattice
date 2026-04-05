@@ -11,6 +11,20 @@ coverage:
     patch: true
     changes: false
 
+flags:
+  backend:
+    paths:
+      - opencontractserver/
+    carryforward: true
+  frontend-unit:
+    paths:
+      - frontend/src/
+    carryforward: true
+  frontend-component:
+    paths:
+      - frontend/src/
+    carryforward: true
+
 parsers:
   gcov:
     branch_detection:
@@ -31,3 +45,5 @@ ignore:
   - "opencontractserver/**/migrations/*.py"
   - "opencontractserver/*/migrations/*.py"
   - "config/settings/test*.py"
+  - "frontend/src/**/*.test.{ts,tsx}"
+  - "frontend/src/setupTests.ts"
