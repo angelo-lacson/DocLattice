@@ -950,7 +950,11 @@ class TestDocumentInFolder_MoveOperations(DocumentFolderServiceTestBase):
         self.assertTrue(current.path.endswith("test.pdf"))
 
     def test_move_document_preserves_version_number(self):
-        """Moving a document does NOT increment the version number (Rule P5)."""
+        """Moving a document does NOT increment the version number.
+
+        Per path tree rule P5 (see versioning.py), version_number increments
+        only on content changes, not folder moves.
+        """
         original_version = self.document_path.version_number
 
         DocumentFolderService.move_document_to_folder(
@@ -1088,8 +1092,9 @@ class TestVersioning_SoftDeleteCreatesNewPath(DocumentFolderServiceTestBase):
     """
     SCENARIO: Soft delete creates new DocumentPath with is_deleted=True.
 
-    BUSINESS RULE: Every lifecycle event creates a new DocumentPath node (Rule P1).
-    This maintains complete history and enables undo/restore.
+    BUSINESS RULE: Every lifecycle event creates a new DocumentPath node
+    (path tree rule P1, see versioning.py). This maintains complete
+    history and enables undo/restore.
     """
 
     def setUp(self):
@@ -2143,7 +2148,12 @@ class TestDocumentPathHistory_PathConflicts(DocumentFolderServiceTestBase):
         self.assertIsNotNone(current.parent)
 
     def test_multiple_conflicts_increment_suffix(self):
-        """Successive conflicts produce _1, _2, etc."""
+        """Successive conflicts produce _1, _2, etc.
+
+        All documents share the same filename (dup.pdf) so that moving them
+        into a folder that already has /Target/dup.pdf forces actual
+        disambiguation via numeric suffixes.
+        """
         docs = []
         for i in range(3):
             d = Document.objects.create(
@@ -2163,14 +2173,16 @@ class TestDocumentPathHistory_PathConflicts(DocumentFolderServiceTestBase):
             is_deleted=False,
         )
 
-        # Create two more docs at root, each with same filename
+        # Create two more docs in different source folders — all share the
+        # filename "dup.pdf" so _compute_moved_path produces /Target/dup.pdf
+        # for each, triggering disambiguation.
         for idx, doc in enumerate(docs[1:], start=1):
             DocumentPath.objects.create(
                 document=doc,
                 corpus=self.corpus,
                 creator=self.owner,
                 folder=None,
-                path=f"/dup_{idx}.pdf",
+                path=f"/source{idx}/dup.pdf",
                 version_number=1,
                 is_current=True,
                 is_deleted=False,
@@ -2242,6 +2254,30 @@ class TestDocumentPathHistory_PathConflicts(DocumentFolderServiceTestBase):
         self.assertEqual(current.path, "/Target/report_1.pdf")
         self.assertEqual(current.folder, self.folder)
 
+    def test_disambiguate_path_raises_after_max_suffix(self):
+        """_disambiguate_path raises ValueError when suffix cap is exhausted."""
+        from unittest.mock import patch
+
+        from opencontractserver.constants.document_processing import (
+            MAX_PATH_DISAMBIGUATION_SUFFIX,
+        )
+
+        # Make _is_taken always return True so every suffix is "taken"
+        with patch(
+            "opencontractserver.documents.models.DocumentPath.objects"
+        ) as mock_mgr:
+            # The inner _is_taken() calls .filter(...).exists()
+            mock_qs = mock_mgr.filter.return_value
+            mock_qs.exclude.return_value = mock_qs
+            mock_qs.exists.return_value = True
+
+            with self.assertRaises(ValueError) as ctx:
+                DocumentFolderService._disambiguate_path(
+                    "/Target/report.pdf", self.corpus
+                )
+
+            self.assertIn(str(MAX_PATH_DISAMBIGUATION_SUFFIX), str(ctx.exception))
+
 
 class TestDocumentPathHistory_DeleteFolderTracking(DocumentFolderServiceTestBase):
     """
@@ -2297,7 +2333,11 @@ class TestDocumentPathHistory_DeleteFolderTracking(DocumentFolderServiceTestBase
             self.assertIsNotNone(current.parent)
 
     def test_delete_folder_preserves_version_number(self):
-        """Folder deletion does not increment version (Rule P5)."""
+        """Folder deletion does not increment version.
+
+        Per path tree rule P5 (see versioning.py), version_number
+        increments only on content changes.
+        """
         folder, _ = DocumentFolderService.create_folder(
             user=self.owner, corpus=self.corpus, name="TempFolder"
         )

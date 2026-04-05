@@ -830,7 +830,11 @@ class DocumentFolderService:
                 folder.children.update(parent=folder.parent)
             # else: cascade delete will handle children automatically
 
-            # Move documents in folder to root with history tracking
+            # Move documents in folder to root with history tracking.
+            # TODO(perf): This loop issues O(N) UPDATE + INSERT queries.
+            # For large folders, consider bulk_update() for deactivation
+            # and bulk_create() for new nodes. Requires careful handling
+            # of per-document disambiguation and parent links.
             affected_paths = list(
                 DocumentPath.objects.select_for_update().filter(
                     folder=folder,
@@ -1030,6 +1034,10 @@ class DocumentFolderService:
                 )
             )
 
+            # TODO(perf): This loop issues O(N) UPDATE + INSERT queries.
+            # For large batches, consider bulk_update() for deactivation
+            # and bulk_create() for new nodes. Requires careful handling
+            # of per-document disambiguation and parent links.
             for current in current_paths:
                 # Skip if already in the target folder
                 if current.folder_id == target_folder_id:
@@ -1112,6 +1120,17 @@ class DocumentFolderService:
 
         A hard cap (``MAX_PATH_DISAMBIGUATION_SUFFIX``) prevents unbounded loops
         if many documents share the same filename in the same folder.
+
+        **Performance note**: Each candidate suffix issues a separate EXISTS query
+        (O(N) worst case where N = number of conflicting paths). For corpuses with
+        very high collision counts, consider pre-fetching the set of conflicting
+        paths with a single ``LIKE`` query.
+
+        **Concurrency note**: The caller must hold ``select_for_update()`` on the
+        relevant DocumentPath rows to prevent TOCTOU races. Without that lock,
+        two concurrent moves to the same path could both see the path as free and
+        violate the ``unique_active_path_per_corpus`` constraint. If that occurs,
+        the database constraint will raise ``IntegrityError``.
 
         Args:
             base_path: The ideal path string to use.
