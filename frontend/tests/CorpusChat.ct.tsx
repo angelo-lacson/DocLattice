@@ -99,7 +99,7 @@ test.describe("CorpusChat", () => {
       <CorpusChatTestWrapper
         mocks={[conversationsWithDataMock, conversationsWithDataMock]}
         corpusId={TEST_CORPUS_ID}
-      />,
+      />
     );
 
     // Wait for conversations to load and render
@@ -121,12 +121,12 @@ test.describe("CorpusChat", () => {
       <CorpusChatTestWrapper
         mocks={[emptyConversationsMock, emptyConversationsMock]}
         corpusId={TEST_CORPUS_ID}
-      />,
+      />
     );
 
     // Should see the new chat button
     await expect(
-      page.getByRole("button", { name: "New Chat", exact: true }),
+      page.getByRole("button", { name: "New Chat", exact: true })
     ).toBeVisible({ timeout: 20000 });
 
     await docScreenshot(page, "corpus--chat--empty");
@@ -143,7 +143,7 @@ test.describe("CorpusChat", () => {
         mocks={[emptyConversationsMock, emptyConversationsMock]}
         corpusId={TEST_CORPUS_ID}
         forceNewChat
-      />,
+      />
     );
 
     // The chat input should be visible (textarea or input for composing messages)

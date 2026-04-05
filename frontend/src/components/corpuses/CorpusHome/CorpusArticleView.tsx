@@ -191,7 +191,7 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
       corpusId: corpus.id,
       title: CAML_ARTICLE_FILENAME,
     }),
-    [corpus.id],
+    [corpus.id]
   );
 
   const { data, loading } = useQuery<
@@ -249,7 +249,7 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
       }
       return undefined;
     },
-    [corpus.icon],
+    [corpus.icon]
   );
 
   if (loading) {
