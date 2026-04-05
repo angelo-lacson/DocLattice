@@ -47,7 +47,7 @@ class CreateIngestionSourceMutation(graphene.Mutation):
     ingestion_source = graphene.Field(IngestionSourceType)
 
     @login_required
-    def mutate(root, info, name, source_type=None, config=None):
+    def mutate(_root, info, name, source_type=None, config=None):
         user = info.context.user
 
         # Coerce graphene Enum to its string value so the in-memory object
@@ -98,7 +98,7 @@ class UpdateIngestionSourceMutation(graphene.Mutation):
     ingestion_source = graphene.Field(IngestionSourceType)
 
     @login_required
-    def mutate(root, info, id, **kwargs):
+    def mutate(_root, info, id, **kwargs):
         user = info.context.user
         type_name, pk = from_global_id(id)
 
@@ -123,9 +123,9 @@ class UpdateIngestionSourceMutation(graphene.Mutation):
             st = kwargs["source_type"]
             kwargs["source_type"] = st.value if hasattr(st, "value") else st
 
-        # Note: the `is not None` guard means callers cannot set config to
-        # None (to clear config, pass config={} instead).  Boolean fields
-        # like `active` work correctly because `False is not None` is True.
+        # Note: the `is not None` guard prevents nulling JSON fields like
+        # `config` (to clear it, pass config={} instead).  Boolean fields
+        # like `active` are unaffected because `False is not None` is True.
         update_fields = []
         for field in ("name", "source_type", "config", "active"):
             if field in kwargs and kwargs[field] is not None:
@@ -163,7 +163,7 @@ class DeleteIngestionSourceMutation(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(root, info, id):
+    def mutate(_root, info, id):
         user = info.context.user
         type_name, pk = from_global_id(id)
 

@@ -70,13 +70,13 @@ class IngestionSourceType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     @classmethod
     def get_queryset(cls, queryset, info):
-        """Only show sources owned by the current user or public ones."""
+        """Only show sources owned by the current user, shared, or public."""
         user = info.context.user
         if user.is_anonymous:
-            return queryset.none()
+            return queryset.filter(is_public=True)
         if user.is_superuser:
             return queryset
-        return queryset.filter(creator=user)
+        return IngestionSource.objects.visible_to_user(user).filter(pk__in=queryset)
 
 
 # -------------------- Document Path Types -------------------- #

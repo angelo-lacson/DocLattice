@@ -75,7 +75,7 @@ def import_corpus_v2(
         Corpus ID on success, None on failure
     """
     try:
-        logger.info(f"import_corpus_v2() - for user_id: {user_id}")
+        logger.info("import_corpus_v2() - for user_id: %s", user_id)
 
         temporary_file_handle = TemporaryFileHandle.objects.get(
             id=temporary_file_handle_id
@@ -86,7 +86,7 @@ def import_corpus_v2(
             import_file, mode="r"
         ) as import_zip:
             files = import_zip.namelist()
-            logger.info(f"import_corpus_v2() - Files in ZIP: {len(files)}")
+            logger.info("import_corpus_v2() - Files in ZIP: %s", len(files))
 
             if "data.json" not in files:
                 logger.error("import_corpus_v2() - data.json not found in ZIP")
@@ -98,14 +98,14 @@ def import_corpus_v2(
 
             # Detect version - both share the unified import path
             version = data_json.get("version", "1.0")
-            logger.info(f"Detected export format version: {version}")
+            logger.info("Detected export format version: %s", version)
 
             return _import_corpus(
                 data_json, import_zip, user_obj, seed_corpus_id, version
             )
 
     except Exception as e:
-        logger.error(f"import_corpus_v2() - Exception: {e}", exc_info=True)
+        logger.error("import_corpus_v2() - Exception: %s", e, exc_info=True)
         return None
 
 
@@ -124,7 +124,7 @@ def _setup_corpus_and_labels(
     label_set_data.pop("id", None)
 
     labelset_obj = unpack_label_set_from_export(label_set_data, user_obj)
-    logger.info(f"LabelSet created: {labelset_obj}")
+    logger.info("LabelSet created: %s", labelset_obj)
 
     corpus_data = {**data_json["corpus"]}
     corpus_data.pop("id", None)
@@ -135,7 +135,7 @@ def _setup_corpus_and_labels(
         label_set_id=labelset_obj.id,
         corpus_id=seed_corpus_id if seed_corpus_id else None,
     )
-    logger.info(f"Created corpus: {corpus_obj}")
+    logger.info("Created corpus: %s", corpus_obj)
 
     label_lookup, doc_label_lookup = prepare_import_labels(
         data_json, user_obj.id, labelset_obj
@@ -219,7 +219,7 @@ def _import_document_with_annotations(
             return corpus_doc, annot_id_map
 
     except Exception as e:
-        logger.error(f"Error importing document {doc_filename}: {e}")
+        logger.error("Error importing document %s: %s", doc_filename, e)
         return None, {}
 
 
@@ -238,7 +238,7 @@ def _import_corpus(
     agent config, markdown descriptions, and conversations.
     """
     is_v2 = version == "2.0"
-    logger.info(f"Using {'V2' if is_v2 else 'V1'} import format")
+    logger.info("Using %s import format", "V2" if is_v2 else "V1")
 
     try:
         # ===== Shared: Setup corpus, labelset, and labels =====
@@ -264,7 +264,7 @@ def _import_corpus(
                 )
                 if struct_set:
                     structural_sets[content_hash] = struct_set
-            logger.info(f"Imported {len(structural_sets)} structural annotation sets")
+            logger.info("Imported %s structural annotation sets", len(structural_sets))
 
         # ===== Shared: Import documents =====
         all_annot_id_maps = {}  # aggregated old_id -> new_id across all docs
@@ -272,7 +272,7 @@ def _import_corpus(
         doc_hash_to_corpus_doc: dict[str, Document] = {}
 
         for doc_filename, doc_data in data_json["annotated_docs"].items():
-            logger.info(f"Importing document: {doc_filename}")
+            logger.info("Importing document: %s", doc_filename)
             corpus_doc, annot_id_map = _import_document_with_annotations(
                 doc_filename=doc_filename,
                 doc_data=doc_data,
@@ -353,11 +353,11 @@ def _import_corpus(
                     doc_hash_to_doc=doc_hash_to_corpus_doc,
                 )
 
-        logger.info(f"Import completed successfully for corpus {corpus_obj.id}")
+        logger.info("Import completed successfully for corpus %s", corpus_obj.id)
         return corpus_obj.id
 
     except Exception as e:
-        logger.error(f"Import failed: {e}", exc_info=True)
+        logger.error("Import failed: %s", e, exc_info=True)
         return None
 
 
@@ -382,7 +382,7 @@ def _import_v2_relationships(
         label_text = rel_data.get("relationshipLabel", "")
         label_obj = label_lookup.get((label_text, RELATIONSHIP_LABEL))
         if not label_obj:
-            logger.warning(f"Relationship label '{label_text}' not found")
+            logger.warning("Relationship label '%s' not found", label_text)
             continue
 
         # Map annotation IDs
@@ -451,9 +451,9 @@ def _import_ingestion_sources(
 
         if created:
             set_permissions_for_obj_to_user(user_obj, source, [PermissionTypes.CRUD])
-            logger.debug(f"Created IngestionSource '{name}' for user {user_obj.id}")
+            logger.debug("Created IngestionSource '%s' for user %s", name, user_obj.id)
         else:
-            logger.debug(f"Reusing existing IngestionSource '{name}'")
+            logger.debug("Reusing existing IngestionSource '%s'", name)
 
     return source_map
 
@@ -500,7 +500,7 @@ def _reconstruct_document_paths(
         corpus_doc = doc_hash_to_corpus_doc.get(doc_ref)
         if not corpus_doc:
             logger.debug(
-                f"DocumentPath reconstruction: no matching doc for ref {doc_ref}"
+                "DocumentPath reconstruction: no matching doc for ref %s", doc_ref
             )
             continue
 
@@ -545,4 +545,4 @@ def _reconstruct_document_paths(
             for key, value in updates.items():
                 setattr(existing_path, key, value)
             existing_path.save(update_fields=list(updates.keys()))
-            logger.debug(f"Updated DocumentPath for doc {corpus_doc.id}: {updates}")
+            logger.debug("Updated DocumentPath for doc %s: %s", corpus_doc.id, updates)
