@@ -2730,21 +2730,26 @@ def move_document(
 
     User = get_user_model()
 
-    # Resolve entities
+    # Resolve entities — resolve user first so we can scope subsequent lookups
+    # to objects visible to that user (IDOR prevention per CLAUDE.md).
     try:
         user = User.objects.get(pk=author_id)
     except User.DoesNotExist:
         raise ValueError(f"User with id={author_id} does not exist.")
 
     try:
-        corpus = Corpus.objects.get(pk=corpus_id)
+        corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_id)
     except Corpus.DoesNotExist:
-        raise ValueError(f"Corpus with id={corpus_id} does not exist.")
+        raise ValueError(
+            f"Corpus with id={corpus_id} does not exist or is not accessible."
+        )
 
     try:
-        document = Document.objects.get(pk=document_id)
+        document = Document.objects.visible_to_user(user).get(pk=document_id)
     except Document.DoesNotExist:
-        raise ValueError(f"Document with id={document_id} does not exist.")
+        raise ValueError(
+            f"Document with id={document_id} does not exist or is not accessible."
+        )
 
     target_folder = None
     if target_folder_id is not None:
