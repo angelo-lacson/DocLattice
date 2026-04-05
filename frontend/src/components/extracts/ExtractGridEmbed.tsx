@@ -167,7 +167,6 @@ const StatusDot = styled.span<{ $color: string }>`
   vertical-align: middle;
 `;
 
-
 const CenterMessage = styled.div`
   display: flex;
   flex-direction: column;
@@ -255,6 +254,8 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
 
   // Build row-major grid: group datacells by document
   // NOTE: This hook must remain above all early returns (Rules of Hooks).
+  // TODO(#1204): fullDatacellList is unbounded — add server-side pagination
+  // for extracts with many documents/columns.
   const { columns, rows } = useMemo(() => {
     if (!extract)
       return { columns: [] as ExtractGridEmbedColumn[], rows: [] as GridRow[] };
