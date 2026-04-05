@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { FloatingAnalysesPanelTestWrapper } from "./FloatingAnalysesPanelTestWrapper";
 import { AnalysisType } from "../src/types/graphql-api";
 

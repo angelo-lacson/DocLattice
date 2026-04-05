@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { DocumentAnnotationIndexTestWrapper } from "./DocumentAnnotationIndexTestWrapper";
 import { docScreenshot } from "./utils/docScreenshot";
 

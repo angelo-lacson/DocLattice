@@ -1,7 +1,7 @@
 // Playwright Component Test for ChatMessage Tool Usage Popover
 // Tests the ToolUsageIndicator component and captures documentation screenshots.
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { ChatMessage } from "../src/components/widgets/chat/ChatMessage";
 import { ChatMessageTestWrapper } from "./ChatMessageTestWrapper";
 import { docScreenshot } from "./utils/docScreenshot";

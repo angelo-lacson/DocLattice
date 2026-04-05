@@ -99,6 +99,10 @@
     "test:unit": "vitest",
     "test:e2e": "playwright test",
     "test:coverage": "vitest run --coverage --watch=false",
+    "test:coverage:unit": "vitest run --coverage --watch=false",
+    "test:coverage:ct": "COVERAGE=true playwright test -c playwright-ct.config.ts --reporter=list && nyc report --reporter=lcov --reporter=text --report-dir=coverage/ct --temp-dir=coverage/ct/.nyc_output",
+    "test:coverage:all": "yarn test:coverage:unit && yarn test:coverage:ct && yarn test:coverage:merge",
+    "test:coverage:merge": "mkdir -p coverage/merged && cp coverage/unit/lcov.info coverage/merged/lcov-unit.info && cp coverage/ct/lcov.info coverage/merged/lcov-ct.info",
     "lint": "prettier . --check --ignore-unknown",
     "fix-styles": "prettier . --check --write --ignore-unknown",
     "prepare": "cd .. && husky install frontend/.husky",
@@ -152,7 +156,21 @@
     "fake-indexeddb": "^6.2.2",
     "husky": "^8.0.1",
     "jsdom": "^26.1.0",
+    "nyc": "^18.0.0",
     "prettier": "^2.7.1",
+    "vite-plugin-istanbul": "^8.0.0",
     "vitest": "^3.1.2"
+  },
+  "nyc": {
+    "include": [
+      "src/**/*.{ts,tsx}"
+    ],
+    "exclude": [
+      "src/**/*.test.{ts,tsx}",
+      "src/setupTests.ts",
+      "src/main.tsx"
+    ],
+    "sourceMap": true,
+    "instrument": false
   }
 }
