@@ -42,6 +42,9 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Q, QuerySet
 
+from doclatticeserver.constants.document_processing import (
+    MAX_PATH_DISAMBIGUATION_SUFFIX,
+)
 from doclatticeserver.pipeline.registry import get_allowed_mime_types
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.permissioning import (
@@ -844,25 +847,29 @@ class DocumentFolderService:
             failed_docs: list[str] = []
             for current in affected_paths:
                 try:
-                    new_path = cls._compute_moved_path(current.path, None)
-                    new_path = cls._disambiguate_path(
-                        new_path, current.corpus, exclude_pk=current.pk
-                    )
+                    # Savepoint per document: an IntegrityError aborts the
+                    # PostgreSQL transaction; a nested atomic() creates a
+                    # savepoint so only this iteration is rolled back.
+                    with transaction.atomic():
+                        new_path = cls._compute_moved_path(current.path, None)
+                        new_path = cls._disambiguate_path(
+                            new_path, current.corpus, exclude_pk=current.pk
+                        )
 
-                    current.is_current = False
-                    current.save(update_fields=["is_current"])
+                        current.is_current = False
+                        current.save(update_fields=["is_current"])
 
-                    DocumentPath.objects.create(
-                        document=current.document,
-                        corpus=current.corpus,
-                        folder=None,  # Moved to root
-                        path=new_path,
-                        version_number=current.version_number,
-                        parent=current,
-                        is_current=True,
-                        is_deleted=False,
-                        creator=user,
-                    )
+                        DocumentPath.objects.create(
+                            document=current.document,
+                            corpus=current.corpus,
+                            folder=None,  # Moved to root
+                            path=new_path,
+                            version_number=current.version_number,
+                            parent=current,
+                            is_current=True,
+                            is_deleted=False,
+                            creator=user,
+                        )
                 except (ValueError, IntegrityError) as exc:
                     logger.warning(
                         "Failed to relocate document %s (path %r) during "
@@ -1076,28 +1083,32 @@ class DocumentFolderService:
                     continue
 
                 try:
-                    new_path = cls._compute_moved_path(current.path, folder)
-                    new_path = cls._disambiguate_path(
-                        new_path, corpus, exclude_pk=current.pk
-                    )
+                    # Savepoint per document: an IntegrityError aborts the
+                    # PostgreSQL transaction; a nested atomic() creates a
+                    # savepoint so only this iteration is rolled back.
+                    with transaction.atomic():
+                        new_path = cls._compute_moved_path(current.path, folder)
+                        new_path = cls._disambiguate_path(
+                            new_path, corpus, exclude_pk=current.pk
+                        )
 
-                    # Mark old path as not current
-                    current.is_current = False
-                    current.save(update_fields=["is_current"])
+                        # Mark old path as not current
+                        current.is_current = False
+                        current.save(update_fields=["is_current"])
 
-                    # Create new node linked to previous (audit chain)
-                    DocumentPath.objects.create(
-                        document=current.document,
-                        corpus=corpus,
-                        folder=folder,
-                        path=new_path,
-                        version_number=current.version_number,
-                        parent=current,
-                        is_current=True,
-                        is_deleted=False,
-                        creator=user,
-                    )
-                    moved_count += 1
+                        # Create new node linked to previous (audit chain)
+                        DocumentPath.objects.create(
+                            document=current.document,
+                            corpus=corpus,
+                            folder=folder,
+                            path=new_path,
+                            version_number=current.version_number,
+                            parent=current,
+                            is_current=True,
+                            is_deleted=False,
+                            creator=user,
+                        )
+                        moved_count += 1
                 except (ValueError, IntegrityError) as exc:
                     logger.warning(
                         "Failed to move document %s (path %r) to folder "
@@ -1143,13 +1154,12 @@ class DocumentFolderService:
             current_path.rsplit("/", 1)[-1] if "/" in current_path else current_path
         )
 
-        # Guard against empty or root-only paths where filename would be empty
+        # Guard against empty or root-only paths where filename would be empty.
+        # This indicates a data quality issue that should be surfaced, not masked.
         if not filename:
-            filename = current_path.strip("/") or "unnamed"
-            logger.warning(
-                "Empty filename extracted from path %r — falling back to %r",
-                current_path,
-                filename,
+            raise ValueError(
+                f"Cannot extract filename from path {current_path!r} — "
+                f"empty or root-only paths are not supported"
             )
 
         if target_folder:
@@ -1200,9 +1210,6 @@ class DocumentFolderService:
         """
         # Nested import to avoid circular dependency:
         # folder_service -> documents.models -> corpuses.models -> folder_service
-        from doclatticeserver.constants.document_processing import (
-            MAX_PATH_DISAMBIGUATION_SUFFIX,
-        )
         from doclatticeserver.documents.models import DocumentPath
 
         def _is_taken(path: str) -> bool:
