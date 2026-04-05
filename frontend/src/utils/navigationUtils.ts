@@ -329,12 +329,14 @@ export function getCorpusUrl(
 export function getDocumentUrl(
   document: Pick<DocumentType, "slug"> &
     Partial<Pick<DocumentType, "id">> & {
-      creator?: Pick<UserType, "slug"> & Partial<Pick<UserType, "id">> | null;
+      creator?: (Pick<UserType, "slug"> & Partial<Pick<UserType, "id">>) | null;
     },
   corpus?:
     | (Pick<CorpusType, "slug"> &
         Partial<Pick<CorpusType, "id">> & {
-          creator?: Pick<UserType, "slug"> & Partial<Pick<UserType, "id">> | null;
+          creator?:
+            | (Pick<UserType, "slug"> & Partial<Pick<UserType, "id">>)
+            | null;
         })
     | null,
   queryParams?: QueryParams

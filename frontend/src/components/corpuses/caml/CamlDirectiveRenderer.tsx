@@ -172,13 +172,18 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
     componentRegistry,
   ]);
 
+  // NOTE: resolveImageSrc is accepted by this component for forward
+  // compatibility but @os-legal/caml-react@0.0.3 does not yet expose
+  // that prop on CamlArticle. Pass it through once a future version adds
+  // `resolveImageSrc` to CamlArticleProps.
+  void resolveImageSrc;
+
   return (
     <CamlThemeProvider>
       <CamlArticle
         document={cleanedDocument}
         stats={stats}
         renderMarkdown={renderMarkdown}
-        resolveImageSrc={resolveImageSrc}
       />
     </CamlThemeProvider>
   );
