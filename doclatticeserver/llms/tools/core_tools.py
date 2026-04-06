@@ -2753,7 +2753,7 @@ def move_document(
     target_folder = None
     if target_folder_id is not None:
         target_folder = DocumentFolderService.get_folder_by_id(user, target_folder_id)
-        if target_folder is None:
+        if target_folder is None or target_folder.corpus_id != corpus.id:
             raise ValueError(
                 f"Folder with id={target_folder_id} does not exist "
                 "or is not accessible."
@@ -2791,25 +2791,7 @@ async def amove_document(
     author_id: int,
     target_folder_id: int | None = None,
 ) -> dict[str, Any]:
-    """
-    Move a document to a different folder within the current corpus.
-
-    Updates the document's path in the corpus folder hierarchy. Pass
-    target_folder_id=None (or omit it) to move the document to the corpus root.
-    Requires write permission on the corpus.
-
-    Args:
-        document_id: ID of the document to move
-        corpus_id: ID of the corpus the document belongs to
-        author_id: ID of the user performing the move
-        target_folder_id: ID of the destination folder, or None for corpus root
-
-    Returns:
-        A dictionary describing the move result
-
-    Raises:
-        ValueError: If any referenced object does not exist or the move fails
-    """
+    """Async wrapper around :func:`move_document`."""
     return await _db_sync_to_async(move_document)(
         document_id=document_id,
         corpus_id=corpus_id,
