@@ -151,8 +151,9 @@ class TestMoveDocument(TestCase):
                 author_id=self.user.id,
                 target_folder_id=wrong_folder.id,
             )
-        # DocumentFolderService returns error: folder doesn't belong to corpus
-        self.assertIn("Move failed", str(ctx.exception))
+        # Early cross-corpus check rejects with the same generic message
+        # used for non-existent/inaccessible folders (IDOR prevention).
+        self.assertIn("does not exist or is not accessible", str(ctx.exception))
 
     def test_move_to_corpus_where_doc_not_member_raises(self):
         """Moving a document into a corpus it doesn't belong to fails.
