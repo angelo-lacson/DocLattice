@@ -276,9 +276,6 @@ def package_ingestion_sources(corpus: Corpus) -> list[IngestionSourceExport]:
         .distinct()
     )
 
-    if not source_ids:
-        return []
-
     sources = IngestionSource.objects.filter(pk__in=source_ids)
     return [
         {

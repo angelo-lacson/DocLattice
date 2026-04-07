@@ -11,6 +11,7 @@ from django.test import TestCase
 from graphene.test import Client
 from graphql_relay import to_global_id
 
+from config.graphql.document_types import DocumentPathType
 from config.graphql.schema import schema
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import (
@@ -378,8 +379,8 @@ class TestUploadDocumentWithIngestionSource(TestCase):
         pdf_base64 = base_64_encode_bytes(pdf_content)
         source_gid = to_global_id("IngestionSourceType", self.source.pk)
 
-        mock_doc = Document(id=1, title="Test PDF", description="desc")
-        mock_path = DocumentPath(id=1, path="/documents/test.pdf")
+        mock_doc = Document(id=999999, title="Test PDF", description="desc")
+        mock_path = DocumentPath(id=999999, path="/documents/test.pdf")
 
         with patch(
             "opencontractserver.corpuses.models.Corpus.import_content"
@@ -694,8 +695,6 @@ class TestDocumentPathResolveAction(TestCase):
             is_deleted=False,
             creator=self.user,
         )
-        from config.graphql.document_types import DocumentPathType
-
         result = DocumentPathType.resolve_action(path, info=None)
         self.assertEqual(result, "IMPORTED")
 
@@ -721,8 +720,6 @@ class TestDocumentPathResolveAction(TestCase):
             is_deleted=True,
             creator=self.user,
         )
-        from config.graphql.document_types import DocumentPathType
-
         result = DocumentPathType.resolve_action(deleted_path, info=None)
         self.assertEqual(result, "DELETED")
 
@@ -748,8 +745,6 @@ class TestDocumentPathResolveAction(TestCase):
             is_deleted=False,
             creator=self.user,
         )
-        from config.graphql.document_types import DocumentPathType
-
         result = DocumentPathType.resolve_action(moved_path, info=None)
         self.assertEqual(result, "MOVED")
 
@@ -775,8 +770,6 @@ class TestDocumentPathResolveAction(TestCase):
             is_deleted=False,
             creator=self.user,
         )
-        from config.graphql.document_types import DocumentPathType
-
         result = DocumentPathType.resolve_action(updated_path, info=None)
         self.assertEqual(result, "UPDATED")
 
@@ -802,8 +795,6 @@ class TestDocumentPathResolveAction(TestCase):
             is_deleted=False,
             creator=self.user,
         )
-        from config.graphql.document_types import DocumentPathType
-
         result = DocumentPathType.resolve_action(child, info=None)
         self.assertEqual(result, "UPDATED")
 
@@ -1226,8 +1217,8 @@ class TestUploadDocumentLineageKwargs(TestCase):
         pdf_base64 = base_64_encode_bytes(pdf_content)
         source_gid = to_global_id("IngestionSourceType", self.source.pk)
 
-        mock_doc = Document(id=1, title="Test PDF", description="desc")
-        mock_path = DocumentPath(id=1, path="/documents/test.pdf")
+        mock_doc = Document(id=999999, title="Test PDF", description="desc")
+        mock_path = DocumentPath(id=999999, path="/documents/test.pdf")
 
         with patch(
             "opencontractserver.corpuses.models.Corpus.import_content"
@@ -1267,8 +1258,8 @@ class TestUploadDocumentLineageKwargs(TestCase):
         pdf_content = b"%PDF-1.5\n%\xe2\xe3\xcf\xd3\n"
         pdf_base64 = base_64_encode_bytes(pdf_content)
 
-        mock_doc = Document(id=1, title="Test PDF", description="desc")
-        mock_path = DocumentPath(id=1, path="/documents/test.pdf")
+        mock_doc = Document(id=999999, title="Test PDF", description="desc")
+        mock_path = DocumentPath(id=999999, path="/documents/test.pdf")
 
         with patch(
             "opencontractserver.corpuses.models.Corpus.import_content"

@@ -60,7 +60,12 @@ class IngestionSourceType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     """GraphQL type for IngestionSource - a named integration that produces documents."""
 
     config = GenericScalar(
-        description="Source configuration (connection details, etc.)"
+        description=(
+            "Source configuration (connection details, etc.). "
+            "WARNING: This field is returned to the owning user verbatim. "
+            "Store secret-manager key paths or references here, never raw "
+            "credentials (API keys, tokens, passwords)."
+        )
     )
 
     class Meta:
@@ -76,7 +81,7 @@ class IngestionSourceType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             return queryset.filter(is_public=True)
         if user.is_superuser:
             return queryset
-        return IngestionSource.objects.visible_to_user(user).filter(pk__in=queryset)
+        return queryset.filter(pk__in=IngestionSource.objects.visible_to_user(user))
 
 
 # -------------------- Document Path Types -------------------- #
