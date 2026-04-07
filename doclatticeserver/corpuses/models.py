@@ -197,6 +197,23 @@ class Corpus(TreeNode):
         ),
     )
 
+    # Agent memory
+    memory_enabled = django.db.models.BooleanField(
+        default=False,
+        help_text=(
+            "Enable agent memory system for this corpus. When enabled, agents "
+            "accumulate reusable insights from conversations into a memory document."
+        ),
+    )
+    memory_document = django.db.models.OneToOneField(
+        "documents.Document",
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="memory_for_corpus",
+        help_text="The Document storing accumulated agent memory for this corpus.",
+    )
+
     # Licensing
     license = django.db.models.CharField(
         max_length=LICENSE_SPDX_MAX_LENGTH,
