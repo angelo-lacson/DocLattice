@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **GraphQL security hardening cleanup** (Issue #1198):
+  - Corrected misleading `DisableIntrospection` docstring that claimed the class checks DEBUG, when it unconditionally blocks introspection (`config/graphql/security.py`)
+  - Rewrote `test_introspection_allowed_in_debug` to use graphql-core's `validate()` directly, as graphene's test Client does not apply validation rules (`opencontractserver/tests/test_security_hardening.py`)
+  - Added backslash-prefix check to `_get_safe_redirect_url()` to prevent open-redirect bypass via browser backslash-to-slash normalization (`config/admin_auth/views.py`)
+
 ### Added
 
 - **Move-document agent tool** (PR #1196): New `move_document` / `amove_document` tool that moves a document between folders within the same corpus. Delegates to `DocumentFolderService.move_document_to_folder` for permission checks and path updates. Categorized as `ToolCategory.CORPUS` (corpus-level agents only), requires write permission and approval. Pass `target_folder_id` for a specific folder or omit for corpus root. Uses `visible_to_user()` for document and corpus lookups to prevent IDOR enumeration (`opencontractserver/llms/tools/core_tools.py`, `opencontractserver/llms/tools/tool_registry.py`).
