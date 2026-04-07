@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **GraphQL security hardening cleanup** (Issue #1198):
+  - Corrected misleading `DisableIntrospection` docstring that claimed the class checks DEBUG, when it unconditionally blocks introspection (`config/graphql/security.py`)
+  - Rewrote `test_introspection_allowed_in_debug` to use graphql-core's `validate()` directly, as graphene's test Client does not apply validation rules (`opencontractserver/tests/test_security_hardening.py`)
+  - Added backslash-prefix check to `_get_safe_redirect_url()` to prevent open-redirect bypass via browser backslash-to-slash normalization (`config/admin_auth/views.py`)
+
 ### Added
 
 - **Document path history tracking** (PR #1195): Document moves via `DocumentFolderService.move_document_to_folder()`, `move_documents_to_folder()`, and `delete_folder()` now create immutable `DocumentPath` history nodes instead of silent in-place updates. Each move produces a new `DocumentPath` record linked to the previous one via `parent`, enabling full audit trail traversal. Path conflicts are resolved by appending numeric suffixes (e.g. `report_1.pdf`). `versioning.py` `determine_action()` now detects folder-only moves (same path string, different `folder_id`). Comprehensive test coverage in `test_document_folder_service.py` for move tracking, path conflicts, bulk moves, delete-folder tracking, and full lifecycle integration.
