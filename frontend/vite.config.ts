@@ -83,7 +83,10 @@ async function loadIstanbulPlugins() {
       include: "src/**/*.{ts,tsx}",
       exclude: ["node_modules", "src/**/*.test.{ts,tsx}", "src/setupTests.ts"],
       extension: [".ts", ".tsx"],
-      requireEnv: true,
+      // requireEnv is false because loadIstanbulPlugins() already gates on
+      // process.env.COVERAGE; setting requireEnv: true would require a
+      // VITE_COVERAGE env var (from .env files) which the CI script doesn't set.
+      requireEnv: false,
       forceBuildInstrument: true,
     }),
   ];
