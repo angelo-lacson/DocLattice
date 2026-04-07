@@ -1,10 +1,11 @@
+from asgiref.sync import async_to_sync
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 
 from opencontractserver.corpuses.models import Corpus, CorpusFolder
 from opencontractserver.documents.models import Document, DocumentPath
-from opencontractserver.llms.tools.core_tools import move_document
+from opencontractserver.llms.tools.core_tools import amove_document, move_document
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
@@ -227,3 +228,66 @@ class TestMoveDocument(TestCase):
             )
         self.assertIn("Move failed", str(ctx.exception))
         self.assertIn("Permission denied", str(ctx.exception))
+
+
+class TestMoveDocumentAsync(TransactionTestCase):
+    """Async smoke test for amove_document.
+
+    Uses TransactionTestCase because async_to_sync runs the coroutine in a
+    separate thread that cannot see uncommitted data from TestCase's
+    in-transaction wrapper.
+    """
+
+    def setUp(self):
+        # Disconnect the document processing signal for the entire setUp.
+        # TransactionTestCase commits data, so on_commit callbacks fire
+        # synchronously — the celery tasks fail because there's no real
+        # PDF/media to process.  We reconnect in finally.
+        from django.db.models.signals import post_save
+
+        from opencontractserver.documents.signals import (
+            DOC_CREATE_UID,
+            process_doc_on_create_atomic,
+        )
+
+        post_save.disconnect(
+            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
+        )
+        try:
+            self.user = User.objects.create_user(username="async_mover", password="pw")
+            self.corpus = Corpus.objects.create(title="Async Corpus", creator=self.user)
+            self.folder_a = CorpusFolder.objects.create(
+                name="Folder A", corpus=self.corpus, creator=self.user
+            )
+            self.folder_b = CorpusFolder.objects.create(
+                name="Folder B", corpus=self.corpus, creator=self.user
+            )
+
+            original_doc = Document.objects.create(
+                title="Async Doc", description="async test", creator=self.user
+            )
+            original_doc.txt_extract_file.save("test.txt", ContentFile(b"content"))
+
+            self.doc, *_ = self.corpus.add_document(
+                document=original_doc, user=self.user, folder=self.folder_a
+            )
+            set_permissions_for_obj_to_user(self.user, self.doc, [PermissionTypes.CRUD])
+        finally:
+            post_save.connect(
+                process_doc_on_create_atomic,
+                sender=Document,
+                dispatch_uid=DOC_CREATE_UID,
+            )
+
+    def test_amove_document_async_wrapper(self):
+        """Smoke test: amove_document (async) produces the same result as the sync version."""
+        result = async_to_sync(amove_document)(
+            document_id=self.doc.id,
+            corpus_id=self.corpus.id,
+            author_id=self.user.id,
+            target_folder_id=self.folder_b.id,
+        )
+
+        self.assertEqual(result["status"], "moved")
+        self.assertEqual(result["document_id"], self.doc.id)
+        self.assertEqual(result["target_folder_id"], self.folder_b.id)
