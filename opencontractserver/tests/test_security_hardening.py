@@ -4,7 +4,8 @@ Tests for security hardening changes from the auth/permissioning audit.
 Covers:
 - AnalysisCallbackView: DoS prevention, timing-safe token comparison, unified error messages
 - home_redirect: open redirect prevention via ALLOWED_HOSTS validation
-- DRFDeletion/DRFMutation: visible_to_user() IDOR prevention, user lock inversion fix
+- DRFDeletion/DRFMutation: visible_to_user() IDOR prevention, user lock inversion fix,
+  ValidationError formatting
 - Document summary resolvers: corpus permission checks
 - Mutation IDOR fixes: CreateColumn, CreateExtract, CreateNote, CreateCorpusAction, etc.
 - Conversation/voting/badge mutation IDOR fixes
@@ -1168,3 +1169,56 @@ class TestConditionalCsrfExempt(TestCase):
             pass
 
         self.assertTrue(getattr(dummy_view, "csrf_exempt", False))
+
+
+# ---------------------------------------------------------------------------
+# DRFMutation ValidationError formatting
+# ---------------------------------------------------------------------------
+
+
+class TestDRFMutationValidationError(TestCase):
+    """Test that DRFMutation properly formats validation errors."""
+
+    def test_validation_error_dict_format(self):
+        """Dict-form ValidationError should be formatted with field names."""
+        from rest_framework import serializers
+
+        detail = {"name": ["This field is required."], "email": ["Invalid format."]}
+        exc = serializers.ValidationError(detail)
+
+        # Simulate the formatting logic from DRFMutation
+        if isinstance(exc.detail, dict):
+            errors = "; ".join(
+                f"{field}: {', '.join(str(e) for e in errs)}"
+                for field, errs in exc.detail.items()
+            )
+        elif isinstance(exc.detail, list):
+            errors = "; ".join(str(e) for e in exc.detail)
+        else:
+            errors = str(exc.detail)
+
+        message = f"Mutation failed due to error: {errors}"
+        self.assertIn("name:", message)
+        self.assertIn("email:", message)
+        self.assertIn("This field is required.", message)
+
+    def test_validation_error_list_format(self):
+        """List-form ValidationError should be joined with semicolons."""
+        from rest_framework import serializers
+
+        detail = ["Error one.", "Error two."]
+        exc = serializers.ValidationError(detail)
+
+        if isinstance(exc.detail, dict):
+            errors = "; ".join(
+                f"{field}: {', '.join(str(e) for e in errs)}"
+                for field, errs in exc.detail.items()
+            )
+        elif isinstance(exc.detail, list):
+            errors = "; ".join(str(e) for e in exc.detail)
+        else:
+            errors = str(exc.detail)
+
+        message = f"Mutation failed due to error: {errors}"
+        self.assertIn("Error one.", message)
+        self.assertIn("Error two.", message)

@@ -13,6 +13,7 @@ import logging
 import zipfile
 
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError
 
 from config import celery_app
 from opencontractserver.annotations.models import (
@@ -438,15 +439,21 @@ def _import_ingestion_sources(
         if not name:
             continue
 
-        source, created = IngestionSource.objects.get_or_create(
-            creator=user_obj,
-            name=name,
-            defaults={
-                "source_type": src.get("source_type", IngestionSourceCategory.MANUAL),
-                "config": src.get("config") or {},
-                "active": src.get("active", True),
-            },
-        )
+        try:
+            source, created = IngestionSource.objects.get_or_create(
+                creator=user_obj,
+                name=name,
+                defaults={
+                    "source_type": src.get(
+                        "source_type", IngestionSourceCategory.MANUAL
+                    ),
+                    "config": src.get("config") or {},
+                    "active": src.get("active", True),
+                },
+            )
+        except IntegrityError:
+            source = IngestionSource.objects.get(creator=user_obj, name=name)
+            created = False
         source_map[name] = source
 
         if created:

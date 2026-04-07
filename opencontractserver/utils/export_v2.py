@@ -250,7 +250,7 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
             paths_export.append(entry)
 
     except Exception as e:
-        logger.error(f"Error packaging document paths for corpus {corpus.id}: {e}")
+        logger.error("Error packaging document paths for corpus %s: %s", corpus.id, e)
 
     return paths_export
 
