@@ -1044,25 +1044,29 @@ class TestDisableIntrospection(TestCase):
         )
         self.gql_client = Client(schema)
 
-    def test_introspection_allowed_in_debug(self):
-        """When DEBUG=True, introspection queries should work."""
-        # The default test settings have DEBUG=True, and schema.py only adds
-        # DisableIntrospection when DEBUG=False. So introspection should work.
-        query = """
-            query {
-                __schema {
-                    types {
-                        name
-                    }
-                }
-            }
+    def test_introspection_allowed_without_rule(self):
+        """Without DisableIntrospection in validation rules, introspection works.
+
+        This validates that introspection is permitted when the rule is absent
+        (the production condition when DEBUG=True in schema.py). We use
+        graphql-core's validate() directly because graphene's test Client
+        does not apply validation rules.
         """
-        result = _gql(self.gql_client, query, self.user)
-        errors = result.get("errors", [])
+        from graphql import build_ast_schema, parse, validate
+
+        schema_ast = parse("""
+            type Query {
+                hello: String
+            }
+        """)
+        test_schema = build_ast_schema(schema_ast)
+
+        introspection_query = parse("{ __schema { types { name } } }")
+        # Validate with an empty rules list (no DisableIntrospection)
+        errors = validate(test_schema, introspection_query, [])
         introspection_errors = [
-            e for e in errors if "introspection" in e.get("message", "").lower()
+            e for e in errors if "introspection" in e.message.lower()
         ]
-        # In DEBUG mode, the DisableIntrospection rule is not in validation_rules
         self.assertEqual(len(introspection_errors), 0)
 
     def test_introspection_blocked_with_rule(self):

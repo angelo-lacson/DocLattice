@@ -85,6 +85,12 @@ def _get_safe_redirect_url(request, url=None, default=None):
     if not url:
         return default
 
+    # Block backslash-prefixed URLs: browsers normalize "\evil.com" to
+    # "//evil.com", which can bypass protocol-relative URL checks.
+    if url.startswith("\\"):
+        logger.warning("Blocked backslash-prefixed redirect URL: %s", url)
+        return default
+
     # Validate the URL is safe (same host or in ALLOWED_HOSTS)
     if url_has_allowed_host_and_scheme(
         url,
