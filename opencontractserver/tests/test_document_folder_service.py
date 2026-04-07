@@ -2305,21 +2305,21 @@ class TestDocumentPathHistory_PathConflicts(DocumentFolderServiceTestBase):
 
     def test_disambiguate_path_raises_after_max_suffix(self):
         """_disambiguate_path raises ValueError when suffix cap is exhausted."""
-        from unittest.mock import patch
+        from unittest.mock import MagicMock, patch
 
         from opencontractserver.constants.document_processing import (
             MAX_PATH_DISAMBIGUATION_SUFFIX,
         )
 
-        # Make _is_taken always return True so every suffix is "taken"
-        with patch(
-            "opencontractserver.documents.models.DocumentPath.objects"
-        ) as mock_mgr:
-            # The inner _is_taken() calls .filter(...).exists()
-            mock_qs = mock_mgr.filter.return_value
-            mock_qs.exclude.return_value = mock_qs
-            mock_qs.exists.return_value = True
+        # Patch the manager on the DocumentPath class directly rather than
+        # through a string path, so the mock is resilient to internal import
+        # restructuring inside _disambiguate_path.
+        mock_mgr = MagicMock()
+        mock_qs = mock_mgr.filter.return_value
+        mock_qs.exclude.return_value = mock_qs
+        mock_qs.exists.return_value = True  # every candidate is "taken"
 
+        with patch.object(DocumentPath, "objects", mock_mgr):
             with self.assertRaises(ValueError) as ctx:
                 DocumentFolderService._disambiguate_path(
                     "/Target/report.pdf", self.corpus
