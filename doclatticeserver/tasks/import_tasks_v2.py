@@ -13,6 +13,7 @@ import logging
 import zipfile
 
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError
 
 from config import celery_app
 from doclatticeserver.annotations.models import (
@@ -424,6 +425,14 @@ def _import_ingestion_sources(
     Uses get_or_create keyed on (creator, name) so re-importing the same
     corpus doesn't duplicate sources.
 
+    Note: ``get_or_create`` only applies ``source_type``, ``config``, and
+    ``active`` on *creation*.  If a source with the same (creator, name)
+    already exists locally, its current field values are preserved — the
+    export's values are intentionally not applied ("don't clobber local
+    changes").  This avoids surprises when a re-import would silently
+    reactivate a source the user deactivated, or overwrite a config they
+    customised after the initial import.
+
     Args:
         sources_data: List of IngestionSourceExport dicts from data.json.
         user_obj: The importing user (becomes creator of new sources).
@@ -438,15 +447,21 @@ def _import_ingestion_sources(
         if not name:
             continue
 
-        source, created = IngestionSource.objects.get_or_create(
-            creator=user_obj,
-            name=name,
-            defaults={
-                "source_type": src.get("source_type", IngestionSourceCategory.MANUAL),
-                "config": src.get("config") or {},
-                "active": src.get("active", True),
-            },
-        )
+        try:
+            source, created = IngestionSource.objects.get_or_create(
+                creator=user_obj,
+                name=name,
+                defaults={
+                    "source_type": src.get(
+                        "source_type", IngestionSourceCategory.MANUAL
+                    ),
+                    "config": src.get("config") or {},
+                    "active": src.get("active", True),
+                },
+            )
+        except IntegrityError:
+            source = IngestionSource.objects.get(creator=user_obj, name=name)
+            created = False
         source_map[name] = source
 
         if created:

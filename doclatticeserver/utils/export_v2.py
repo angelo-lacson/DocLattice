@@ -250,7 +250,7 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
             paths_export.append(entry)
 
     except Exception as e:
-        logger.error(f"Error packaging document paths for corpus {corpus.id}: {e}")
+        logger.error("Error packaging document paths for corpus %s: %s", corpus.id, e)
 
     return paths_export
 
@@ -275,9 +275,6 @@ def package_ingestion_sources(corpus: Corpus) -> list[IngestionSourceExport]:
         .values_list("ingestion_source_id", flat=True)
         .distinct()
     )
-
-    if not source_ids:
-        return []
 
     sources = IngestionSource.objects.filter(pk__in=source_ids)
     return [

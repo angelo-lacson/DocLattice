@@ -11,6 +11,7 @@ from django.test import TestCase
 from graphene.test import Client
 from graphql_relay import to_global_id
 
+from config.graphql.document_types import DocumentPathType
 from config.graphql.schema import schema
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import (
@@ -108,6 +109,32 @@ DELETE_MUTATION = """
         deleteIngestionSource(id: $id) {
             ok
             message
+        }
+    }
+"""
+
+UPLOAD_DOCUMENT_MUTATION = """
+    mutation UploadDocument(
+        $file: String!,
+        $filename: String!,
+        $title: String!,
+        $description: String!,
+        $customMeta: GenericScalar!,
+        $makePublic: Boolean!,
+        $ingestionSourceId: ID
+    ) {
+        uploadDocument(
+            base64FileString: $file,
+            filename: $filename,
+            title: $title,
+            description: $description,
+            customMeta: $customMeta,
+            makePublic: $makePublic,
+            ingestionSourceId: $ingestionSourceId
+        ) {
+            ok
+            message
+            document { id title }
         }
     }
 """
@@ -347,40 +374,13 @@ class TestUploadDocumentWithIngestionSource(TestCase):
         )
         set_permissions_for_obj_to_user(self.user, self.source, [PermissionTypes.CRUD])
 
-    def _upload_mutation(self):
-        return """
-            mutation UploadDocument(
-                $file: String!,
-                $filename: String!,
-                $title: String!,
-                $description: String!,
-                $customMeta: GenericScalar!,
-                $makePublic: Boolean!,
-                $ingestionSourceId: ID
-            ) {
-                uploadDocument(
-                    base64FileString: $file,
-                    filename: $filename,
-                    title: $title,
-                    description: $description,
-                    customMeta: $customMeta,
-                    makePublic: $makePublic,
-                    ingestionSourceId: $ingestionSourceId
-                ) {
-                    ok
-                    message
-                    document { id title }
-                }
-            }
-        """  # noqa
-
     def test_upload_with_valid_source(self):
         pdf_content = b"%PDF-1.5\n%\xe2\xe3\xcf\xd3\n"
         pdf_base64 = base_64_encode_bytes(pdf_content)
         source_gid = to_global_id("IngestionSourceType", self.source.pk)
 
-        mock_doc = Document(id=1, title="Test PDF", description="desc")
-        mock_path = DocumentPath(id=1, path="/documents/test.pdf")
+        mock_doc = Document(id=999999, title="Test PDF", description="desc")
+        mock_path = DocumentPath(id=999999, path="/documents/test.pdf")
 
         with patch(
             "doclatticeserver.corpuses.models.Corpus.import_content"
@@ -389,7 +389,7 @@ class TestUploadDocumentWithIngestionSource(TestCase):
         ):
             mock_import.return_value = (mock_doc, "created", mock_path)
             result = self.client.execute(
-                self._upload_mutation(),
+                UPLOAD_DOCUMENT_MUTATION,
                 variables={
                     "file": pdf_base64,
                     "filename": "test.pdf",
@@ -416,7 +416,7 @@ class TestUploadDocumentWithIngestionSource(TestCase):
         pdf_base64 = base_64_encode_bytes(pdf_content)
 
         result = self.client.execute(
-            self._upload_mutation(),
+            UPLOAD_DOCUMENT_MUTATION,
             variables={
                 "file": pdf_base64,
                 "filename": "test.pdf",
@@ -695,8 +695,6 @@ class TestDocumentPathResolveAction(TestCase):
             is_deleted=False,
             creator=self.user,
         )
-        from config.graphql.document_types import DocumentPathType
-
         result = DocumentPathType.resolve_action(path, info=None)
         self.assertEqual(result, "IMPORTED")
 
@@ -722,8 +720,6 @@ class TestDocumentPathResolveAction(TestCase):
             is_deleted=True,
             creator=self.user,
         )
-        from config.graphql.document_types import DocumentPathType
-
         result = DocumentPathType.resolve_action(deleted_path, info=None)
         self.assertEqual(result, "DELETED")
 
@@ -749,8 +745,6 @@ class TestDocumentPathResolveAction(TestCase):
             is_deleted=False,
             creator=self.user,
         )
-        from config.graphql.document_types import DocumentPathType
-
         result = DocumentPathType.resolve_action(moved_path, info=None)
         self.assertEqual(result, "MOVED")
 
@@ -776,8 +770,6 @@ class TestDocumentPathResolveAction(TestCase):
             is_deleted=False,
             creator=self.user,
         )
-        from config.graphql.document_types import DocumentPathType
-
         result = DocumentPathType.resolve_action(updated_path, info=None)
         self.assertEqual(result, "UPDATED")
 
@@ -803,8 +795,6 @@ class TestDocumentPathResolveAction(TestCase):
             is_deleted=False,
             creator=self.user,
         )
-        from config.graphql.document_types import DocumentPathType
-
         result = DocumentPathType.resolve_action(child, info=None)
         self.assertEqual(result, "UPDATED")
 
@@ -979,59 +969,6 @@ class TestImportReconstructLineage(TestCase):
 
 
 # ------------------------------------------------------------------ #
-# DRFMutation ValidationError handling
-# ------------------------------------------------------------------ #
-
-
-class TestDRFMutationValidationError(TestCase):
-    """Test that DRFMutation properly formats validation errors."""
-
-    def test_validation_error_dict_format(self):
-        """Dict-form ValidationError should be formatted with field names."""
-        from rest_framework import serializers
-
-        detail = {"name": ["This field is required."], "email": ["Invalid format."]}
-        exc = serializers.ValidationError(detail)
-
-        # Simulate the formatting logic from DRFMutation
-        if isinstance(exc.detail, dict):
-            errors = "; ".join(
-                f"{field}: {', '.join(str(e) for e in errs)}"
-                for field, errs in exc.detail.items()
-            )
-        elif isinstance(exc.detail, list):
-            errors = "; ".join(str(e) for e in exc.detail)
-        else:
-            errors = str(exc.detail)
-
-        message = f"Mutation failed due to error: {errors}"
-        self.assertIn("name:", message)
-        self.assertIn("email:", message)
-        self.assertIn("This field is required.", message)
-
-    def test_validation_error_list_format(self):
-        """List-form ValidationError should be joined with semicolons."""
-        from rest_framework import serializers
-
-        detail = ["Error one.", "Error two."]
-        exc = serializers.ValidationError(detail)
-
-        if isinstance(exc.detail, dict):
-            errors = "; ".join(
-                f"{field}: {', '.join(str(e) for e in errs)}"
-                for field, errs in exc.detail.items()
-            )
-        elif isinstance(exc.detail, list):
-            errors = "; ".join(str(e) for e in exc.detail)
-        else:
-            errors = str(exc.detail)
-
-        message = f"Mutation failed due to error: {errors}"
-        self.assertIn("Error one.", message)
-        self.assertIn("Error two.", message)
-
-
-# ------------------------------------------------------------------ #
 # IngestionSource model __str__
 # ------------------------------------------------------------------ #
 
@@ -1179,33 +1116,6 @@ class TestUploadDocumentSourceTypeValidation(TestCase):
         self.user = User.objects.create_user(username="testuser", password="testpass")
         self.client = Client(schema, context_value=TestContext(self.user))
 
-    def _upload_mutation(self):
-        return """
-            mutation UploadDocument(
-                $file: String!,
-                $filename: String!,
-                $title: String!,
-                $description: String!,
-                $customMeta: GenericScalar!,
-                $makePublic: Boolean!,
-                $ingestionSourceId: ID
-            ) {
-                uploadDocument(
-                    base64FileString: $file,
-                    filename: $filename,
-                    title: $title,
-                    description: $description,
-                    customMeta: $customMeta,
-                    makePublic: $makePublic,
-                    ingestionSourceId: $ingestionSourceId
-                ) {
-                    ok
-                    message
-                    document { id title }
-                }
-            }
-        """
-
     def test_upload_with_wrong_type_global_id(self):
         """Passing a CorpusType global ID as ingestion source should fail."""
         wrong_gid = to_global_id("CorpusType", 123)
@@ -1213,7 +1123,7 @@ class TestUploadDocumentSourceTypeValidation(TestCase):
         pdf_base64 = base_64_encode_bytes(pdf_content)
 
         result = self.client.execute(
-            self._upload_mutation(),
+            UPLOAD_DOCUMENT_MUTATION,
             variables={
                 "file": pdf_base64,
                 "filename": "test.pdf",
@@ -1235,7 +1145,7 @@ class TestUploadDocumentSourceTypeValidation(TestCase):
         pdf_base64 = base_64_encode_bytes(pdf_content)
 
         result = self.client.execute(
-            self._upload_mutation(),
+            UPLOAD_DOCUMENT_MUTATION,
             variables={
                 "file": pdf_base64,
                 "filename": "test.pdf",
@@ -1307,8 +1217,8 @@ class TestUploadDocumentLineageKwargs(TestCase):
         pdf_base64 = base_64_encode_bytes(pdf_content)
         source_gid = to_global_id("IngestionSourceType", self.source.pk)
 
-        mock_doc = Document(id=1, title="Test PDF", description="desc")
-        mock_path = DocumentPath(id=1, path="/documents/test.pdf")
+        mock_doc = Document(id=999999, title="Test PDF", description="desc")
+        mock_path = DocumentPath(id=999999, path="/documents/test.pdf")
 
         with patch(
             "doclatticeserver.corpuses.models.Corpus.import_content"
@@ -1348,8 +1258,8 @@ class TestUploadDocumentLineageKwargs(TestCase):
         pdf_content = b"%PDF-1.5\n%\xe2\xe3\xcf\xd3\n"
         pdf_base64 = base_64_encode_bytes(pdf_content)
 
-        mock_doc = Document(id=1, title="Test PDF", description="desc")
-        mock_path = DocumentPath(id=1, path="/documents/test.pdf")
+        mock_doc = Document(id=999999, title="Test PDF", description="desc")
+        mock_path = DocumentPath(id=999999, path="/documents/test.pdf")
 
         with patch(
             "doclatticeserver.corpuses.models.Corpus.import_content"

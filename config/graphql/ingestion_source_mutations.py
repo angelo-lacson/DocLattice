@@ -109,6 +109,9 @@ class UpdateIngestionSourceMutation(graphene.Mutation):
                 ingestion_source=None,
             )
 
+        # Intentionally scoped to creator even for superusers: ingestion
+        # sources may hold credential references, so admin cross-user
+        # management is out of scope.
         try:
             source = IngestionSource.objects.get(pk=pk, creator=user)
         except IngestionSource.DoesNotExist:
@@ -173,6 +176,8 @@ class DeleteIngestionSourceMutation(graphene.Mutation):
                 message="Ingestion source not found",
             )
 
+        # Intentionally scoped to creator even for superusers — see
+        # UpdateIngestionSourceMutation for rationale.
         try:
             source = IngestionSource.objects.get(pk=pk, creator=user)
         except IngestionSource.DoesNotExist:
