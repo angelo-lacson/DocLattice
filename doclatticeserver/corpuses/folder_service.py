@@ -976,16 +976,17 @@ class DocumentFolderService:
             except ValueError as exc:
                 return False, str(exc)
 
-            # Mark old path as not current
-            current.is_current = False
-            current.save(update_fields=["is_current"])
-
-            # Create new node linked to previous (audit chain).
-            # Savepoint: an IntegrityError aborts the PostgreSQL
-            # transaction; a nested atomic() creates a savepoint so
-            # the outer transaction can still commit/rollback cleanly.
+            # Savepoint: both the old-path deactivation and the new-path
+            # creation must be inside the same savepoint so that an
+            # IntegrityError on create rolls back the save too —
+            # otherwise the document is left with no active path.
             try:
                 with transaction.atomic():
+                    # Mark old path as not current
+                    current.is_current = False
+                    current.save(update_fields=["is_current"])
+
+                    # Create new node linked to previous (audit chain)
                     DocumentPath.objects.create(
                         document=current.document,
                         corpus=corpus,
@@ -1143,17 +1144,26 @@ class DocumentFolderService:
         """
         Compute the new path string when moving a document to a different folder.
 
-        Extracts the **filename only** (last segment) from the current path and
-        prepends the target folder's path, or places at root if target_folder is
-        None.  Intermediate path segments from the original path are dropped —
-        the new path is derived entirely from the target folder's tree position.
+        Extracts the **filename only** (last segment after the final ``/``) from
+        the current path and prepends the target folder's path, or places at root
+        if ``target_folder`` is ``None``.  All intermediate directory segments
+        from the original path are intentionally dropped — the new path is
+        derived entirely from the target folder's tree position.
+
+        Examples::
+
+            _compute_moved_path("/old/dir/report.pdf", folder_with_path_Legal)
+            # => "/Legal/report.pdf"  (intermediate "old/dir" dropped)
+
+            _compute_moved_path("/report.pdf", None)
+            # => "/report.pdf"  (root placement)
 
         Args:
             current_path: Current DocumentPath.path value (e.g. "/documents/report.pdf")
             target_folder: Target folder (None = corpus root)
 
         Returns:
-            New path string (e.g. "/Legal/Contracts/report.pdf" or "/report.pdf")
+            New path string (e.g. "/Legal/report.pdf" or "/report.pdf")
         """
         # Extract filename (last segment of path)
         filename = (
