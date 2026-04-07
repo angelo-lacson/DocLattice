@@ -288,7 +288,7 @@ class TestCurationEligibility(TestCase):
         # The check_conversations_for_curation task checks message count
         # indirectly via the curate task itself; here we just verify the
         # conversation is created correctly
-        self.assertEqual(conv.messages.count(), MEMORY_CURATION_MIN_MESSAGES - 1)
+        self.assertEqual(conv.chat_messages.count(), MEMORY_CURATION_MIN_MESSAGES - 1)
 
     def test_memory_disabled_corpus_ignored(self):
         """Conversations in non-memory corpuses should not be curated."""

@@ -121,7 +121,7 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
     # 2. Load messages and check minimum threshold
     messages = await database_sync_to_async(
         lambda: list(
-            conversation.messages.filter(deleted_at__isnull=True)
+            conversation.chat_messages.filter(deleted_at__isnull=True)
             .order_by("created_at")
             .values_list("msg_type", "content", named=True)
         )
