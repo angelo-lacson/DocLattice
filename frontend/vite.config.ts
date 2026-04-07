@@ -87,6 +87,8 @@ async function loadIstanbulPlugins() {
       // process.env.COVERAGE; setting requireEnv: true would require a
       // VITE_COVERAGE env var (from .env files) which the CI script doesn't set.
       requireEnv: false,
+      // forceBuildInstrument is required because Playwright CT runs in
+      // build mode; without it the instrumentation is skipped.
       forceBuildInstrument: true,
     }),
   ];
