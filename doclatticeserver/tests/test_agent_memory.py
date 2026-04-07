@@ -217,16 +217,19 @@ class TestBuildCurationPrompt(TestCase):
         )
         self.assertIn("memory curator", system)
         self.assertIn("GENERALIZABLE", system)
-        self.assertIn("existing", system)
+        # Conversation text and existing memory are in the user prompt
+        # (not system prompt) to prevent prompt injection
+        self.assertIn("existing", user)
+        self.assertIn("How do I find X?", user)
         self.assertIn("JSON", user)
 
     def test_empty_memory_shows_placeholder(self):
-        system, _ = build_curation_prompt(
+        _, user = build_curation_prompt(
             current_memory="",
             conversation_text="conversation",
             max_insights=3,
         )
-        self.assertIn("empty", system)
+        self.assertIn("empty", user)
 
     def test_max_insights_in_prompt(self):
         system, _ = build_curation_prompt(
@@ -288,7 +291,7 @@ class TestCurationEligibility(TestCase):
         # The check_conversations_for_curation task checks message count
         # indirectly via the curate task itself; here we just verify the
         # conversation is created correctly
-        self.assertEqual(conv.messages.count(), MEMORY_CURATION_MIN_MESSAGES - 1)
+        self.assertEqual(conv.chat_messages.count(), MEMORY_CURATION_MIN_MESSAGES - 1)
 
     def test_memory_disabled_corpus_ignored(self):
         """Conversations in non-memory corpuses should not be curated."""

@@ -1454,7 +1454,7 @@ class ToggleCorpusMemory(graphene.Mutation):
         try:
             corpus_pk = from_global_id(corpus_id)[1]
             corpus = Corpus.objects.get(pk=corpus_pk)
-        except (Corpus.DoesNotExist, Exception):
+        except (Corpus.DoesNotExist, ValueError, IndexError):
             return ToggleCorpusMemory(ok=False, message="Corpus not found", corpus=None)
 
         if not user_has_permission_for_obj(user, corpus, PermissionTypes.CRUD):
