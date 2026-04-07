@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **GraphQL security hardening cleanup** (Issue #1198):
+  - Corrected misleading `DisableIntrospection` docstring that claimed the class checks DEBUG, when it unconditionally blocks introspection (`config/graphql/security.py`)
+  - Rewrote `test_introspection_allowed_in_debug` to use graphql-core's `validate()` directly, as graphene's test Client does not apply validation rules (`opencontractserver/tests/test_security_hardening.py`)
+  - Added backslash-prefix check to `_get_safe_redirect_url()` to prevent open-redirect bypass via browser backslash-to-slash normalization (`config/admin_auth/views.py`)
+
 ### Added
 
 - **Document lineage tracking** (IngestionSource + DocumentPath enrichment): New `IngestionSource` model (`opencontractserver/documents/models.py`) registers named integrations/crawlers/pipelines that produce documents. Three new fields on `DocumentPath` — `ingestion_source` (FK), `external_id` (indexed CharField), and `ingestion_metadata` (JSON) — record which source produced each version of a document and with what context. Lineage kwargs flow through `import_document()` (`opencontractserver/documents/versioning.py`), `Corpus.add_document()` (`opencontractserver/corpuses/models.py`), and the `UploadDocument` GraphQL mutation. New GraphQL types (`IngestionSourceType`, `IngestionSourceTypeEnum`), queries (`ingestionSources`, `ingestionSource`), and CRUD mutations (`createIngestionSource`, `updateIngestionSource`, `deleteIngestionSource`) in `config/graphql/`. Migration: `0036_add_ingestion_source_and_lineage_fields`.
