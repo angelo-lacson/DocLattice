@@ -87,7 +87,7 @@
     "unified": "^11.0.5",
     "use-debounce": "^10.0.3",
     "uuid": "^8.3.2",
-    "vite": "^6.4.2",
+    "vite": "^7.3.2",
     "vite-plugin-svgr": "^4.3.0",
     "vite-tsconfig-paths": "^5.1.4",
     "web-vitals": "^2.1.2"
