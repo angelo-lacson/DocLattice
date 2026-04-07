@@ -128,7 +128,10 @@ class DepthLimitValidationRule(ValidationRule):
 
 class DisableIntrospection(ValidationRule):
     """
-    Block __schema and __type introspection queries when DEBUG is False.
+    Unconditionally block __schema and __type introspection queries.
+
+    This rule is added to the schema's validation_rules list conditionally
+    in schema.py (only when settings.DEBUG is False).
     """
 
     def enter_field(self, node, *_args):
