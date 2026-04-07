@@ -48,7 +48,12 @@ export interface CamlDirectiveRendererProps {
   };
   /** Optional registry of embedded component types (e.g. extract-grid). */
   componentRegistry?: CamlComponentRegistry;
-  /** Optional callback to resolve protocol URIs (e.g. corpus://icon) to image URLs */
+  /**
+   * Optional callback to resolve protocol URIs (e.g. corpus://icon) to image URLs.
+   * @deprecated Currently a no-op. @os-legal/caml-react does not yet expose
+   * resolveImageSrc on CamlArticleProps (see issue #1172). Pass-through will be
+   * re-enabled once the upstream version ships.
+   */
   resolveImageSrc?: (src: string) => string | undefined;
 }
 
