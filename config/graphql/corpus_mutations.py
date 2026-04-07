@@ -1448,7 +1448,7 @@ class ToggleCorpusMemory(graphene.Mutation):
     corpus = graphene.Field(CorpusType)
 
     @login_required
-    @graphql_ratelimit(RateLimits.MUTATIONS)
+    @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
     def mutate(self, info, corpus_id, enabled):
         user = info.context.user
         try:
