@@ -2753,6 +2753,12 @@ def move_document(
     target_folder = None
     if target_folder_id is not None:
         target_folder = DocumentFolderService.get_folder_by_id(user, target_folder_id)
+        # Early cross-corpus check: reject folders from other corpuses with
+        # the same generic error as not-found/inaccessible (IDOR prevention).
+        # Note: move_document_to_folder also validates this, but we check here
+        # first to keep the error surface consistent — without this guard a
+        # readable-but-wrong-corpus folder would produce a different error
+        # message than an inaccessible one, leaking information.
         if target_folder is None or target_folder.corpus_id != corpus.id:
             raise ValueError(
                 f"Folder with id={target_folder_id} does not exist "
