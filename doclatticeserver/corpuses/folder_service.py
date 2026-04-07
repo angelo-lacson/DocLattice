@@ -980,19 +980,23 @@ class DocumentFolderService:
             current.is_current = False
             current.save(update_fields=["is_current"])
 
-            # Create new node linked to previous (audit chain)
+            # Create new node linked to previous (audit chain).
+            # Savepoint: an IntegrityError aborts the PostgreSQL
+            # transaction; a nested atomic() creates a savepoint so
+            # the outer transaction can still commit/rollback cleanly.
             try:
-                DocumentPath.objects.create(
-                    document=current.document,
-                    corpus=corpus,
-                    folder=folder,
-                    path=new_path,
-                    version_number=current.version_number,  # no increment on move
-                    parent=current,
-                    is_current=True,
-                    is_deleted=False,
-                    creator=user,
-                )
+                with transaction.atomic():
+                    DocumentPath.objects.create(
+                        document=current.document,
+                        corpus=corpus,
+                        folder=folder,
+                        path=new_path,
+                        version_number=current.version_number,  # no increment on move
+                        parent=current,
+                        is_current=True,
+                        is_deleted=False,
+                        creator=user,
+                    )
             except IntegrityError as exc:
                 logger.warning(
                     "IntegrityError creating path %r for document %s in "
@@ -1139,8 +1143,10 @@ class DocumentFolderService:
         """
         Compute the new path string when moving a document to a different folder.
 
-        Extracts the filename from the current path and prepends the target folder's
-        path, or places at root if target_folder is None.
+        Extracts the **filename only** (last segment) from the current path and
+        prepends the target folder's path, or places at root if target_folder is
+        None.  Intermediate path segments from the original path are dropped —
+        the new path is derived entirely from the target folder's tree position.
 
         Args:
             current_path: Current DocumentPath.path value (e.g. "/documents/report.pdf")
