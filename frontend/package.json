@@ -99,7 +99,7 @@
     "test:unit": "vitest",
     "test:e2e": "playwright test",
     "test:coverage:unit": "vitest run --coverage --watch=false",
-    "test:coverage:ct": "COVERAGE=true playwright test -c playwright-ct.config.ts --reporter=list && mkdir -p coverage/ct/.nyc_output && nyc report --reporter=lcov --reporter=text --report-dir=coverage/ct --temp-dir=coverage/ct/.nyc_output",
+    "test:coverage:ct": "COVERAGE=true playwright test -c playwright-ct.config.ts --reporter=list; mkdir -p coverage/ct/.nyc_output && nyc report --reporter=lcov --reporter=text --report-dir=coverage/ct --temp-dir=coverage/ct/.nyc_output",
     "test:coverage": "vitest run --coverage --watch=false",
     "test:coverage:all": "yarn test:coverage:unit && yarn test:coverage:ct && yarn test:coverage:copy",
     "test:coverage:copy": "mkdir -p coverage/merged && cp coverage/unit/lcov.info coverage/merged/lcov-unit.info && cp coverage/ct/lcov.info coverage/merged/lcov-ct.info",
