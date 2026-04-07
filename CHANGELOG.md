@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **GraphQL security hardening cleanup** (Issue #1198):
+  - Corrected misleading `DisableIntrospection` docstring that claimed the class checks DEBUG, when it unconditionally blocks introspection (`config/graphql/security.py`)
+  - Rewrote `test_introspection_allowed_in_debug` to use graphql-core's `validate()` directly, as graphene's test Client does not apply validation rules (`opencontractserver/tests/test_security_hardening.py`)
+  - Added backslash-prefix check to `_get_safe_redirect_url()` to prevent open-redirect bypass via browser backslash-to-slash normalization (`config/admin_auth/views.py`)
+
 ### Added
 
 - **Web search agent tool** (PR #1174): New `aweb_search` tool for agents with pluggable provider backends (Brave Search and Tavily). Introduces `BaseTool` base class (`opencontractserver/llms/tools/base_tool.py`) for tools with database-backed settings and encrypted secrets via `PipelineSettings`. Tools declare a nested `Settings` dataclass with `PipelineSetting` metadata; `is_configured()` gates tool availability at resolution time. `ToolFunctionRegistry` supports `tool_class` entries for database-level enablement gating. New GraphQL mutations `UpdateToolSecretsMutation` and `DeleteToolSecretsMutation` (`config/graphql/pipeline_settings_mutations.py`) allow superusers to manage tool API keys. Includes per-process rate limiting, provider-specific response parsing, and comprehensive test coverage.
