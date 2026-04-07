@@ -76,6 +76,9 @@ async def get_or_create_memory_document(corpus: Corpus, user) -> Document:
     Otherwise, create a new markdown Document via the corpus's import
     pipeline and link it back to ``corpus.memory_document``.
 
+    Uses ``select_for_update`` to prevent concurrent callers from both
+    creating a memory document (which would leave an orphan).
+
     Args:
         corpus: The Corpus to get/create memory for.
         user: The user to attribute the document to.
@@ -83,35 +86,56 @@ async def get_or_create_memory_document(corpus: Corpus, user) -> Document:
     Returns:
         The memory Document instance.
     """
-    # Check if memory_document already exists and is valid
-    if corpus.memory_document_id:
-        try:
-            doc = await database_sync_to_async(lambda: corpus.memory_document)()
-            if doc is not None:
-                return doc
-        except Exception:
-            logger.warning(
-                "memory_document FK on corpus %s is stale, recreating",
-                corpus.id,
-            )
+    from django.db import IntegrityError, transaction
 
-    # Create a new memory document
-    content = _build_empty_memory(corpus.id).encode("utf-8")
-    doc, _status, _path = await database_sync_to_async(corpus.import_content)(
-        content=content,
-        user=user,
-        filename=f"{MEMORY_DOCUMENT_TITLE}.md",
-        file_type=MARKDOWN_MIME_TYPE,
-        title=MEMORY_DOCUMENT_TITLE,
-        description="Accumulated agent insights for this corpus.",
-    )
+    from opencontractserver.corpuses.models import Corpus as CorpusModel
 
-    # Link back to corpus
-    corpus.memory_document = doc
-    await database_sync_to_async(corpus.save)(update_fields=["memory_document"])
+    def _get_or_create_sync():
+        with transaction.atomic():
+            # Lock the corpus row to prevent concurrent creation
+            locked = CorpusModel.objects.select_for_update().get(pk=corpus.pk)
 
-    logger.info("Created memory document %s for corpus %s", doc.id, corpus.id)
-    return doc
+            if locked.memory_document_id:
+                try:
+                    doc = locked.memory_document
+                    if doc is not None:
+                        return doc
+                except Exception:
+                    logger.warning(
+                        "memory_document FK on corpus %s is stale, recreating",
+                        corpus.id,
+                    )
+
+            # Create a new memory document
+            content = _build_empty_memory(corpus.id).encode("utf-8")
+            try:
+                doc, _status, _path = corpus.import_content(
+                    content=content,
+                    user=user,
+                    filename=f"{MEMORY_DOCUMENT_TITLE}.md",
+                    file_type=MARKDOWN_MIME_TYPE,
+                    title=MEMORY_DOCUMENT_TITLE,
+                    description="Accumulated agent insights for this corpus.",
+                )
+            except IntegrityError:
+                # Another transaction created it concurrently; re-read
+                locked.refresh_from_db()
+                if locked.memory_document_id:
+                    return locked.memory_document
+                raise
+
+            # Link back to corpus
+            locked.memory_document = doc
+            locked.save(update_fields=["memory_document"])
+
+            # Keep the in-memory corpus in sync
+            corpus.memory_document = doc
+            corpus.memory_document_id = doc.pk
+
+            logger.info("Created memory document %s for corpus %s", doc.id, corpus.id)
+            return doc
+
+    return await database_sync_to_async(_get_or_create_sync)()
 
 
 async def read_memory_content(corpus: Corpus) -> str:
@@ -151,6 +175,10 @@ async def update_memory_content(corpus: Corpus, new_content: str, user) -> Docum
     Creates the memory document if it doesn't exist.  Overwrites the
     ``txt_extract_file`` field and updates the frontmatter timestamp.
 
+    Uses ``select_for_update`` on the document row so that concurrent
+    curation tasks targeting the same corpus are serialised at write
+    time (the second writer will block until the first commits).
+
     Args:
         corpus: The Corpus whose memory to update.
         new_content: The full new markdown content.
@@ -159,14 +187,21 @@ async def update_memory_content(corpus: Corpus, new_content: str, user) -> Docum
     Returns:
         The updated Document instance.
     """
+    from opencontractserver.documents.models import Document as DocumentModel
+
     doc = await get_or_create_memory_document(corpus, user)
 
     def _update():
-        doc.txt_extract_file.save(
-            f"{MEMORY_DOCUMENT_TITLE}.md",
-            ContentFile(new_content.encode("utf-8")),
-            save=True,
-        )
+        from django.db import transaction
+
+        with transaction.atomic():
+            # Lock the document row to serialise concurrent writers
+            DocumentModel.objects.select_for_update().filter(pk=doc.pk).exists()
+            doc.txt_extract_file.save(
+                f"{MEMORY_DOCUMENT_TITLE}.md",
+                ContentFile(new_content.encode("utf-8")),
+                save=True,
+            )
         return doc
 
     await database_sync_to_async(_update)()
@@ -297,16 +332,15 @@ domain-specific knowledge discovered during the conversation.
 5. Be concise: each insight should be 1-2 sentences with a bold title prefix.
 6. Maximum {max_insights} new insights per curation run.
 
-Format each insight as: - **Title**: Description
+Format each insight as: - **Title**: Description"""
 
+_CURATION_USER_PROMPT = """\
 EXISTING MEMORY:
 {current_memory}
 
 CONVERSATION TO REFLECT ON:
 {conversation}
-"""
 
-_CURATION_USER_PROMPT = """\
 Based on the conversation above, output ONLY a JSON object (no markdown fences) with:
 {{
   "collection_patterns": ["- **Title**: insight", ...],
@@ -336,12 +370,12 @@ def build_curation_prompt(
     Returns:
         Tuple of (system_prompt, user_prompt).
     """
-    system = _CURATION_SYSTEM_PROMPT.format(
-        max_insights=max_insights,
-        current_memory=current_memory or "(empty — no existing memory)",
+    system = _CURATION_SYSTEM_PROMPT.format(max_insights=max_insights)
+    user = _CURATION_USER_PROMPT.format(
+        current_memory=current_memory or "(empty -- no existing memory)",
         conversation=conversation_text,
     )
-    return system, _CURATION_USER_PROMPT
+    return system, user
 
 
 def merge_curation_into_memory(
@@ -375,7 +409,7 @@ def merge_curation_into_memory(
         old = ref.get("existing", "")
         new = ref.get("refined", "")
         if old and new and old in result:
-            result = result.replace(old, new)
+            result = result.replace(old, new, 1)
 
     # Append new collection patterns
     if collection_patterns:

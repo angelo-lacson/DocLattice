@@ -76,9 +76,7 @@ def curate_corpus_memory(
     Returns:
         Dict with curation outcome metadata.
     """
-    return asyncio.get_event_loop().run_until_complete(
-        _curate_corpus_memory_async(conversation_id)
-    )
+    return asyncio.run(_curate_corpus_memory_async(conversation_id))
 
 
 async def _curate_corpus_memory_async(conversation_id: int) -> dict:
@@ -118,6 +116,16 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
     if conversation.conversation_type != ConversationTypeChoices.CHAT:
         return {"status": "skipped", "reason": "not_chat_type"}
 
+    # Atomically claim this conversation to prevent duplicate dispatches.
+    # If another task already set memory_curated=True, updated will be 0.
+    updated = await database_sync_to_async(
+        lambda: Conversation.objects.filter(
+            pk=conversation.pk, memory_curated=False
+        ).update(memory_curated=True)
+    )()
+    if not updated:
+        return {"status": "skipped", "reason": "already_claimed"}
+
     # 2. Load messages and check minimum threshold
     messages = await database_sync_to_async(
         lambda: list(
@@ -128,11 +136,7 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
     )()
 
     if len(messages) < MEMORY_CURATION_MIN_MESSAGES:
-        # Mark as curated to avoid re-checking
-        conversation.memory_curated = True
-        await database_sync_to_async(conversation.save)(
-            update_fields=["memory_curated"]
-        )
+        # Already marked as curated by the atomic claim above
         return {"status": "skipped", "reason": "too_few_messages"}
 
     # 3. Build conversation text (truncated to budget)
@@ -168,6 +172,15 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
         model=model_name,
         instructions=_SUMMARISE_SYSTEM_PROMPT,
     )
+
+    # Helper to release the claim on error so the task can be retried
+    async def _release_claim():
+        await database_sync_to_async(
+            lambda: Conversation.objects.filter(pk=conversation.pk).update(
+                memory_curated=False
+            )
+        )()
+
     try:
         summary_result = await summarise_agent.run(
             _SUMMARISE_USER_PROMPT.format(conversation_text=conversation_text)
@@ -179,6 +192,7 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
             conversation_id,
             exc_info=True,
         )
+        await _release_claim()
         return {"status": "error", "reason": "summarisation_failed"}
 
     # 5. Stage 2: Read current memory and curate
@@ -202,6 +216,7 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
             conversation_id,
             exc_info=True,
         )
+        await _release_claim()
         return {"status": "error", "reason": "curation_llm_failed"}
 
     # 6. Parse curation output and merge into memory
@@ -224,15 +239,12 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
             "skipping merge",
             conversation_id,
         )
+        await _release_claim()
         return {"status": "error", "reason": "invalid_curation_output"}
 
     # 7. Write updated memory
     user = conversation.creator
     await update_memory_content(corpus, updated_content, user)
-
-    # 8. Mark conversation as curated
-    conversation.memory_curated = True
-    await database_sync_to_async(conversation.save)(update_fields=["memory_curated"])
 
     logger.info(
         "Curated memory for corpus %s from conversation %s: "
