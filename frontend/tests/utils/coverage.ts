@@ -22,19 +22,23 @@ export const test = baseTest.extend({
     // Only collect coverage when COVERAGE env var is set
     if (!process.env.COVERAGE) return;
 
-    // Extract Istanbul's __coverage__ object from the page
-    const coverage = await page.evaluate(() => {
-      return (window as unknown as { __coverage__?: unknown }).__coverage__;
-    });
+    try {
+      // Extract Istanbul's __coverage__ object from the page
+      const coverage = await page.evaluate(() => {
+        return (window as unknown as { __coverage__?: unknown }).__coverage__;
+      });
 
-    if (coverage) {
-      // Ensure output directory exists
-      fs.mkdirSync(COVERAGE_DIR, { recursive: true });
+      if (coverage) {
+        // Ensure output directory exists
+        fs.mkdirSync(COVERAGE_DIR, { recursive: true });
 
-      // Write coverage data with a unique filename
-      const id = crypto.randomUUID();
-      const filePath = path.join(COVERAGE_DIR, `coverage-${id}.json`);
-      fs.writeFileSync(filePath, JSON.stringify(coverage));
+        // Write coverage data with a unique filename
+        const id = crypto.randomUUID();
+        const filePath = path.join(COVERAGE_DIR, `coverage-${id}.json`);
+        fs.writeFileSync(filePath, JSON.stringify(coverage));
+      }
+    } catch {
+      // Coverage collection is best-effort; do not fail the test
     }
   },
 });
