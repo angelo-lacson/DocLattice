@@ -2681,6 +2681,53 @@ class TestDocumentPathHistory_FullLifecycleIntegration(DocumentFolderServiceTest
 
         self.assertEqual(actions, ["CREATED", "MOVED", "MOVED", "MOVED"])
 
+    def test_folder_only_move_detected_as_moved_in_history(self):
+        """A folder change with an identical path string still shows MOVED.
+
+        Regression guard for the versioning.py change that detects
+        folder_id changes in determine_action(), not just path string
+        differences.
+        """
+        from opencontractserver.documents.versioning import get_path_history
+
+        doc = Document.objects.create(
+            title="Same Path Doc", creator=self.owner, pdf_file="same.pdf"
+        )
+        original_path = DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/same.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Directly create a history node that changes only the folder_id
+        # but keeps the same path string — simulates a move where the
+        # path string happens to be unchanged.
+        original_path.is_current = False
+        original_path.save(update_fields=["is_current"])
+
+        moved_path = DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=self.folder_a,
+            path="/same.pdf",  # same path string
+            version_number=1,
+            parent=original_path,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        history = get_path_history(moved_path)
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0]["action"], "CREATED")
+        self.assertEqual(history[1]["action"], "MOVED")
+        self.assertEqual(history[1]["folder_id"], self.folder_a.id)
+
     def test_delete_folder_creates_moved_event_in_history(self):
         """Documents displaced by folder deletion show MOVED in history."""
         from opencontractserver.documents.versioning import get_path_history
@@ -2926,6 +2973,38 @@ class TestErrorPaths_MoveDocumentIntegrityError(DocumentFolderServiceTestBase):
 
         self.assertFalse(success)
         self.assertIn("Path conflict", error)
+
+    def test_integrity_error_preserves_old_path_as_current(self):
+        """IntegrityError must not orphan the document by leaving no active path.
+
+        Regression guard: prior to the savepoint fix, current.save() was
+        outside the inner savepoint so an IntegrityError on create would
+        commit the is_current=False update, leaving the document with no
+        active path at all.
+        """
+        original_create = DocumentPath.objects.create
+
+        def failing_create(**kwargs):
+            if kwargs.get("parent") is not None:
+                raise IntegrityError("unique_active_path_per_corpus")
+            return original_create(**kwargs)
+
+        with patch.object(DocumentPath.objects, "create", side_effect=failing_create):
+            success, error = DocumentFolderService.move_document_to_folder(
+                user=self.owner,
+                document=self.document,
+                corpus=self.corpus,
+                folder=self.folder,
+            )
+
+        self.assertFalse(success)
+
+        # The old path must still be the active path — not orphaned
+        self.document_path.refresh_from_db()
+        self.assertTrue(
+            self.document_path.is_current,
+            "Old path should remain is_current=True after IntegrityError rollback",
+        )
 
     def test_disambiguate_exhaustion_returns_error(self):
         """ValueError from _disambiguate_path is surfaced as a user-facing error."""
