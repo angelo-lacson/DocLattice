@@ -481,7 +481,10 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
     }
   }, [content, hasChanges, isNew, corpusId, uploadDocument, refetch, onUpdate]);
 
-  // Query for corpus extracts (for the insert toolbar)
+  // Query for corpus extracts (for the insert toolbar).
+  // corpusAction_Isnull: true excludes action-triggered extracts (i.e. extracts
+  // created automatically by a pipeline step / corpus action). Those are internal
+  // implementation details and should not appear in the user-facing embed picker.
   const { data: extractsData, loading: extractsLoading } =
     useQuery<GetExtractsOutput>(GET_EXTRACTS, {
       variables: { corpusId, corpusAction_Isnull: true },
@@ -548,8 +551,9 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
         }
       });
     },
-    // setContent (from useState) is guaranteed stable; textareaRef.current is
-    // read at call-time through the ref object, not captured at creation time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setContent (from
+    // useState) is guaranteed stable; textareaRef.current is read at call-time
+    // through the ref object, not captured at creation time.
     []
   );
 

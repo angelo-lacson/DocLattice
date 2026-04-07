@@ -65,13 +65,6 @@ export type CamlComponentRegistry = Record<string, CamlEmbedComponent>;
 const COMPONENT_MARKER_RE = /^\[component:([a-zA-Z0-9-]+)(?:\s+(.*))?\]$/;
 
 /**
- * Regex for individual `key=value` pairs. Values may be:
- *   - Quoted:   key="some value with spaces" (supports \" and \\ escapes)
- *   - Unquoted: key=simple_value
- */
-const PROP_RE = /([a-zA-Z_]\w*)=(?:"((?:[^"\\]|\\.)*)"|(\S+))/g;
-
-/**
  * Try to parse a prose block's text content as a component marker.
  *
  * Returns the parsed marker if the entire trimmed content is a single
@@ -88,9 +81,11 @@ export function parseComponentMarker(
   const rest = match[2] ?? "";
   const props: CamlComponentProps = {};
 
-  let propMatch: RegExpExecArray | null;
-  PROP_RE.lastIndex = 0;
-  while ((propMatch = PROP_RE.exec(rest)) !== null) {
+  // Use matchAll with an inline regex to avoid shared mutable lastIndex state
+  // from a module-level RegExp with the `g` flag.
+  for (const propMatch of rest.matchAll(
+    /([a-zA-Z_]\w*)=(?:"((?:[^"\\]|\\.)*)"|(\S+))/g
+  )) {
     const key = propMatch[1];
     const quoted = propMatch[2];
     // Unescape \" and \\ inside quoted values
@@ -160,6 +155,5 @@ export function resolveComponentMarker(
   if (!parsed) return null;
   const Component = registry[parsed.type];
   if (!Component) return null;
-  const props = key !== undefined ? { ...parsed.props, key } : parsed.props;
-  return React.createElement(Component, props);
+  return React.createElement(Component, { key, ...parsed.props });
 }
