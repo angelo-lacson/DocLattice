@@ -680,6 +680,10 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 300.0,  # every 5 minutes
         "options": {"queue": "worker_uploads"},
     },
+    "memory-curate-idle-conversations": {
+        "task": "opencontractserver.tasks.memory_tasks.check_conversations_for_curation",
+        "schedule": 600.0,  # every 10 minutes
+    },
 }
 
 # Worker Upload Processing

@@ -187,6 +187,30 @@ class UnifiedAgentFactory:
             doc_obj = None
             corpus_obj = None
 
+        # --------------------------------------------------------------
+        # Corpus memory injection
+        # --------------------------------------------------------------
+        if corpus_obj and getattr(corpus_obj, "memory_enabled", False):
+            try:
+                from opencontractserver.agents.memory import (
+                    format_memory_for_prompt,
+                    get_memory_for_injection,
+                )
+
+                memory_content = await get_memory_for_injection(
+                    corpus_obj, query=config.system_prompt or ""
+                )
+                if memory_content:
+                    config.system_prompt = (
+                        config.system_prompt or ""
+                    ) + format_memory_for_prompt(memory_content)
+            except Exception:
+                logger.warning(
+                    "Failed to inject corpus memory for corpus %s",
+                    corpus_obj.id,
+                    exc_info=True,
+                )
+
         public_context = _is_public(doc_obj) or (corpus_obj and _is_public(corpus_obj))
 
         # Check user's write permission on document (for filtering write tools)
@@ -359,6 +383,30 @@ class UnifiedAgentFactory:
         except Exception:
             # For other exceptions (e.g., network errors), default to private
             corpus_obj = None
+
+        # --------------------------------------------------------------
+        # Corpus memory injection
+        # --------------------------------------------------------------
+        if corpus_obj and getattr(corpus_obj, "memory_enabled", False):
+            try:
+                from opencontractserver.agents.memory import (
+                    format_memory_for_prompt,
+                    get_memory_for_injection,
+                )
+
+                memory_content = await get_memory_for_injection(
+                    corpus_obj, query=config.system_prompt or ""
+                )
+                if memory_content:
+                    config.system_prompt = (
+                        config.system_prompt or ""
+                    ) + format_memory_for_prompt(memory_content)
+            except Exception:
+                logger.warning(
+                    "Failed to inject corpus memory for corpus %s",
+                    corpus_obj.id,
+                    exc_info=True,
+                )
 
         public_context = _is_public(corpus_obj)
 

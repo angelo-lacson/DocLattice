@@ -323,6 +323,24 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         except CorpusEngagementMetrics.DoesNotExist:
             return None
 
+    # Agent memory privacy warning
+    memory_active_warning = graphene.String(
+        description=(
+            "When memory is enabled, returns a privacy notice explaining "
+            "that conversation patterns may be stored. Null when disabled."
+        ),
+    )
+
+    def resolve_memory_active_warning(self, info):
+        if not self.memory_enabled:
+            return None
+        return (
+            "Agent memory is enabled for this corpus. Generalised patterns "
+            "from conversations (not specific content) may be distilled into "
+            "the corpus memory document. Review the memory document in your "
+            "corpus to see what has been recorded."
+        )
+
     # Categories
     categories = graphene.List(lambda: CorpusCategoryType)
 

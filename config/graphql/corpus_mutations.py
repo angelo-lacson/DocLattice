@@ -1416,3 +1416,60 @@ class AddTemplateToCorpus(graphene.Mutation):
                 message="Failed to add template. Please try again.",
                 obj=None,
             )
+
+
+class ToggleCorpusMemory(graphene.Mutation):
+    """
+    Toggle the agent memory system on/off for a corpus.
+
+    When enabled, agents accumulate reusable insights from conversations
+    into a memory document. The memory document is a first-class Document
+    in the corpus, visible and editable by users.
+
+    IMPORTANT: When memory is enabled, conversation patterns (NOT specific
+    content) may be distilled into the memory document. Users should be
+    aware of this when discussing sensitive topics.
+
+    Requires CRUD permission on the corpus.
+    """
+
+    class Arguments:
+        corpus_id = graphene.ID(
+            required=True,
+            description="The global ID of the corpus to toggle memory for",
+        )
+        enabled = graphene.Boolean(
+            required=True,
+            description="Whether to enable (true) or disable (false) memory",
+        )
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    corpus = graphene.Field(CorpusType)
+
+    @login_required
+    @graphql_ratelimit(RateLimits.MUTATIONS)
+    def mutate(self, info, corpus_id, enabled):
+        user = info.context.user
+        try:
+            corpus_pk = from_global_id(corpus_id)[1]
+            corpus = Corpus.objects.get(pk=corpus_pk)
+        except (Corpus.DoesNotExist, Exception):
+            return ToggleCorpusMemory(ok=False, message="Corpus not found", corpus=None)
+
+        if not user_has_permission_for_obj(user, corpus, PermissionTypes.CRUD):
+            return ToggleCorpusMemory(
+                ok=False,
+                message="You don't have permission to modify this corpus",
+                corpus=None,
+            )
+
+        corpus.memory_enabled = enabled
+        corpus.save(update_fields=["memory_enabled", "modified"])
+
+        status = "enabled" if enabled else "disabled"
+        return ToggleCorpusMemory(
+            ok=True,
+            message=f"Agent memory {status} for corpus '{corpus.title}'",
+            corpus=corpus,
+        )

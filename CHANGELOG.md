@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Agent memory system**: Per-corpus memory that lets agents accumulate reusable insights from conversations. Memory is stored as a first-class markdown Document in the corpus (visible and editable by users). Features include:
+  - Corpus model fields: `memory_enabled` toggle and `memory_document` FK (`opencontractserver/corpuses/models.py`)
+  - Memory CRUD utilities with hybrid retrieval (full injection for small memory, keyword-scored section filtering for large) (`opencontractserver/agents/memory.py`)
+  - End-of-conversation curation via two-stage Celery task: privacy-preserving summarisation followed by LLM-based pattern extraction (`opencontractserver/tasks/memory_tasks.py`)
+  - Automatic memory injection into agent system prompts via `UnifiedAgentFactory` (`opencontractserver/llms/agents/agent_factory.py`)
+  - New agent tools: `get_corpus_memory` (read) and `suggest_memory_update` (write) (`opencontractserver/llms/tools/core_tools.py`)
+  - GraphQL `ToggleCorpusMemory` mutation and `memoryActiveWarning` field with privacy notice (`config/graphql/corpus_mutations.py`, `config/graphql/corpus_types.py`)
+  - Periodic Celery beat task to detect idle conversations eligible for curation (`config/settings/base.py`)
+  - Constants and configuration in `opencontractserver/constants/agent_memory.py`
+
 ### Fixed
 
 - **GraphQL security hardening cleanup** (Issue #1198):

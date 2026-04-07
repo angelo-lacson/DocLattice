@@ -2688,3 +2688,123 @@ async def acreate_markdown_link(
         raise ValueError(f"Document with id={entity_id} does not exist.")
     except Conversation.DoesNotExist:
         raise ValueError(f"Conversation with id={entity_id} does not exist.")
+
+
+# ---------------------------------------------------------------------------
+# MEMORY TOOLS
+# ---------------------------------------------------------------------------
+
+
+async def aget_corpus_memory(
+    corpus_id: int,
+    section: str = "",
+) -> str:
+    """Read the corpus agent memory document.
+
+    Returns the full memory content or, if ``section`` is specified, only the
+    matching section (e.g. "Collection Patterns" or "Query Patterns").
+
+    Args:
+        corpus_id: The corpus ID.
+        section: Optional section header to filter to.
+
+    Returns:
+        The memory document content, or a message if no memory exists.
+    """
+    from opencontractserver.agents.memory import (
+        _split_memory_sections,
+        read_memory_content,
+    )
+    from opencontractserver.corpuses.models import Corpus
+
+    try:
+        corpus = await Corpus.objects.aget(pk=corpus_id)
+    except Corpus.DoesNotExist as exc:
+        raise ValueError(f"Corpus with id={corpus_id} does not exist.") from exc
+
+    if not corpus.memory_enabled:
+        return "Memory is not enabled for this corpus."
+
+    content = await read_memory_content(corpus)
+    if not content:
+        return "No memory document exists for this corpus yet."
+
+    if not section:
+        return content
+
+    # Filter to the requested section
+    sections = _split_memory_sections(content)
+    for s in sections:
+        if s.lower().startswith(f"## {section.lower()}"):
+            return s
+
+    return f"Section '{section}' not found in memory document."
+
+
+async def asuggest_memory_update(
+    corpus_id: int,
+    user_id: int,
+    section: str,
+    insight: str,
+) -> str:
+    """Suggest a new insight to add to the corpus memory document.
+
+    The insight is appended to the specified section of the memory document.
+    This allows agents to explicitly contribute learnings during a conversation.
+
+    Args:
+        corpus_id: The corpus ID.
+        user_id: The user performing the update.
+        section: Which section to add to ("collection_patterns" or "query_patterns").
+        insight: The insight text (formatted as ``- **Title**: Description``).
+
+    Returns:
+        Confirmation message.
+    """
+    from django.contrib.auth import get_user_model
+
+    from opencontractserver.agents.memory import (
+        get_or_create_memory_document,
+        merge_curation_into_memory,
+        read_memory_content,
+        update_memory_content,
+    )
+    from opencontractserver.corpuses.models import Corpus
+
+    User = get_user_model()
+
+    try:
+        corpus = await Corpus.objects.aget(pk=corpus_id)
+    except Corpus.DoesNotExist as exc:
+        raise ValueError(f"Corpus with id={corpus_id} does not exist.") from exc
+
+    if not corpus.memory_enabled:
+        return "Memory is not enabled for this corpus."
+
+    try:
+        user = await User.objects.aget(pk=user_id)
+    except User.DoesNotExist as exc:
+        raise ValueError(f"User with id={user_id} does not exist.") from exc
+
+    # Ensure memory document exists
+    await get_or_create_memory_document(corpus, user)
+
+    current_content = await read_memory_content(corpus)
+
+    # Route to the correct section
+    collection = []
+    query = []
+    if section.lower().replace(" ", "_") == "collection_patterns":
+        collection = [insight]
+    else:
+        query = [insight]
+
+    updated = merge_curation_into_memory(
+        current_content=current_content,
+        collection_patterns=collection,
+        query_patterns=query,
+        refinements=[],
+    )
+    await update_memory_content(corpus, updated, user)
+
+    return f"Insight added to {section} section of corpus memory."
