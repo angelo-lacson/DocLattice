@@ -93,6 +93,32 @@ describe("parseComponentMarker()", () => {
       props: { my_prop: "value" },
     });
   });
+
+  it("preserves literal backslash-n/backslash-t in quoted values (no control char injection)", () => {
+    const result = parseComponentMarker(
+      '[component:widget label="line\\none"]'
+    );
+    expect(result).toEqual({
+      type: "widget",
+      props: { label: "line\\none" },
+    });
+  });
+
+  it("preserves literal backslash-t in quoted values", () => {
+    const result = parseComponentMarker('[component:widget label="col\\tcol"]');
+    expect(result).toEqual({
+      type: "widget",
+      props: { label: "col\\tcol" },
+    });
+  });
+
+  it("preserves null byte escape sequences in quoted values", () => {
+    const result = parseComponentMarker('[component:widget label="a\\0b"]');
+    expect(result).toEqual({
+      type: "widget",
+      props: { label: "a\\0b" },
+    });
+  });
 });
 
 describe("buildComponentMarker()", () => {

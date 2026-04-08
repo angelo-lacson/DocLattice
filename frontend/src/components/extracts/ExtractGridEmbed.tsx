@@ -20,6 +20,7 @@ import styled, { keyframes } from "styled-components";
 import {
   DATACELL_STATUS_COLORS,
   EXTRACT_GRID_CELL_TRUNCATE_LENGTH,
+  EXTRACT_GRID_EMBED_MAX_ROWS,
 } from "../../assets/configurations/constants";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import {
@@ -268,7 +269,8 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
       if (!rowMap.has(docId)) {
         rowMap.set(docId, { document: cell.document, cells: new Map() });
       }
-      rowMap.get(docId)!.cells.set(cell.column.id, cell);
+      const row = rowMap.get(docId);
+      if (row) row.cells.set(cell.column.id, cell);
     }
 
     return { columns: cols, rows: Array.from(rowMap.values()) };
@@ -320,6 +322,24 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
           {extract.name}
         </EmbedHeader>
         <CenterMessage>No data extracted yet.</CenterMessage>
+      </EmbedWrapper>
+    );
+  }
+
+  // --- Too-large guard (#1204) ---
+  if (rows.length > EXTRACT_GRID_EMBED_MAX_ROWS) {
+    return (
+      <EmbedWrapper>
+        <EmbedHeader>
+          <Table2 size={14} />
+          {extract.name}
+        </EmbedHeader>
+        <CenterMessage>
+          <AlertCircle size={20} color={OS_LEGAL_COLORS.textMuted} />
+          This extract has {rows.length} documents, which exceeds the embed
+          limit of {EXTRACT_GRID_EMBED_MAX_ROWS}. View the full extract in the
+          Extracts panel instead.
+        </CenterMessage>
       </EmbedWrapper>
     );
   }
@@ -398,10 +418,11 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
                               sources[0].id,
                               extract.corpus
                             )}
-                            title={`View source (p.${sources[0].page + 1})`}
+                            title={`View source (p.${sources[0].page})`}
                           >
                             <ExternalLink size={10} />
-                            p.{sources[0].page + 1}
+                            {/* Annotation.page is 1-based (default=1 in model) */}
+                            p.{sources[0].page}
                           </SourceChip>
                           {sources.length > 1 && (
                             <OverflowBadge

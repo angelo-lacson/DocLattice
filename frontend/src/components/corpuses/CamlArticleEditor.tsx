@@ -20,10 +20,7 @@ import styled from "styled-components";
 import { Modal } from "@os-legal/ui";
 import { ConfirmModal } from "../widgets/modals/ConfirmModal";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
-import {
-  CAML_ARTICLE_FILENAME,
-  DEBOUNCE,
-} from "../../assets/configurations/constants";
+import { CAML_ARTICLE_FILENAME } from "../../assets/configurations/constants";
 import {
   GET_CORPUS_ARTICLE,
   GetCorpusArticleInput,
@@ -504,7 +501,9 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
     );
   }, [extractsData]);
 
-  // Close extract picker when clicking outside
+  // Close extract picker when clicking outside.
+  // The listener is added/removed synchronously when `showExtractPicker`
+  // toggles — no setTimeout needed because the open button stops propagation.
   useEffect(() => {
     if (!showExtractPicker) return;
 
@@ -517,14 +516,8 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
       }
     };
 
-    const timer = setTimeout(() => {
-      document.addEventListener("mousedown", handleClickOutside);
-    }, DEBOUNCE.CLICK_OUTSIDE_DELAY_MS);
-
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showExtractPicker]);
 
   /** Insert a component marker as a prose block at the cursor. */
@@ -588,7 +581,11 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
             <EditorToolbar>
               <div ref={extractPickerRef} style={{ position: "relative" }}>
                 <ToolbarBtn
-                  onClick={() => setShowExtractPicker((v) => !v)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowExtractPicker((v) => !v);
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
                   title="Insert extract grid table"
                 >
                   <Table2 size={12} />

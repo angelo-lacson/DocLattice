@@ -43,9 +43,10 @@ test.describe("ExtractGridEmbed - Populated", () => {
     // Corrected data should be shown when present
     await expect(page.getByText("2023-11-02")).toBeVisible();
 
-    // Source chips should appear for cells with sources
-    await expect(page.getByText("p.3").first()).toBeVisible();
-    await expect(page.getByText("p.6").first()).toBeVisible();
+    // Source chips should appear for cells with sources.
+    // Annotation.page is 1-based, so page:2 displays as "p.2", page:5 as "p.5".
+    await expect(page.getByText("p.2").first()).toBeVisible();
+    await expect(page.getByText("p.5").first()).toBeVisible();
 
     await docScreenshot(page, "caml--extract-grid-embed--populated");
 
