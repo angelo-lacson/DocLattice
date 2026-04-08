@@ -304,9 +304,11 @@ class DocumentQueryMixin:
     def resolve_ingestion_source(self, info, id, **kwargs):
         try:
             _, pk = from_global_id(id)
-        except (ValueError, Exception):
+            if not pk:
+                return None
+        except (ValueError, TypeError):
             return None
         try:
             return IngestionSource.objects.visible_to_user(info.context.user).get(pk=pk)
-        except IngestionSource.DoesNotExist:
+        except (IngestionSource.DoesNotExist, ValueError, TypeError):
             return None

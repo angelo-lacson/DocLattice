@@ -158,10 +158,13 @@ def import_document(
         pdf_file: Optional Django file object for binary files
         txt_file: Optional Django file object for text files
         **doc_kwargs: Additional keyword arguments for Document creation
-            - file_type: MIME type (determines storage field)
-            - ingestion_source: IngestionSource instance (stored on DocumentPath)
-            - external_id: External system identifier (stored on DocumentPath)
-            - ingestion_metadata: Arbitrary source metadata dict (stored on DocumentPath)
+            - file_type (str): MIME type (determines storage field)
+            - ingestion_source (IngestionSource | None): Source that produced
+              this document (stored on DocumentPath)
+            - external_id (str | None): External system identifier (stored on
+              DocumentPath)
+            - ingestion_metadata (dict | None): Arbitrary source metadata such
+              as URL, crawl job ID, etc. (stored on DocumentPath)
 
     Returns:
         Tuple of (document, status, path_record) where status is one of:
