@@ -88,9 +88,14 @@ export function parseComponentMarker(
   )) {
     const key = propMatch[1];
     const quoted = propMatch[2];
-    // Unescape \" and \\ inside quoted values
+    // Only unescape \" and \\ — reject other escape sequences so that
+    // user-authored content cannot inject control characters (\n, \t, \0, etc.).
     const value =
-      quoted !== undefined ? quoted.replace(/\\(.)/g, "$1") : propMatch[3];
+      quoted !== undefined
+        ? quoted.replace(/\\(.)/g, (_, char) =>
+            char === '"' || char === "\\" ? char : `\\${char}`
+          )
+        : propMatch[3];
     props[key] = value;
   }
 
