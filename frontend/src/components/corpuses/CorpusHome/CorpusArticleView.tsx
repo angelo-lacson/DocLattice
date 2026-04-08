@@ -239,6 +239,9 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
 
   // Resolve CAML image protocol URIs to actual URLs.
   // "corpus://icon" resolves to the corpus's icon URL.
+  // "corpus://current" is an alias for "corpus://icon" — both resolve to the
+  // active corpus's icon. The alias exists for semantic clarity in CAML content
+  // where "current" refers to the corpus being viewed.
   const resolveImageSrc = useCallback(
     (src: string): string | undefined => {
       if (src === "corpus://icon" || src === "corpus://current") {
