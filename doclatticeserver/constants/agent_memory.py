@@ -9,7 +9,6 @@ conversations, stored as first-class markdown Documents visible to users.
 # Memory document identification
 # ---------------------------------------------------------------------------
 MEMORY_DOCUMENT_TITLE = "Corpus Memory"
-MEMORY_DOCUMENT_SLUG_SUFFIX = "-memory"
 
 # ---------------------------------------------------------------------------
 # Token thresholds for hybrid retrieval
@@ -47,10 +46,22 @@ MEMORY_MAX_INSIGHTS_PER_CURATION: int = 5
 MEMORY_SECTION_COLLECTION_PATTERNS = "Collection Patterns"
 MEMORY_SECTION_QUERY_PATTERNS = "Query Patterns"
 
+# Placeholder text shown in empty memory sections.  Used both in the
+# template and in the "is memory still empty?" check.
+MEMORY_EMPTY_COLLECTION_PLACEHOLDER = "_No collection patterns recorded yet._"
+MEMORY_EMPTY_QUERY_PLACEHOLDER = "_No query patterns recorded yet._"
+
 # ---------------------------------------------------------------------------
 # Celery beat schedule interval (seconds)
 # ---------------------------------------------------------------------------
 MEMORY_CURATION_CHECK_INTERVAL_SECONDS: float = 600.0  # 10 minutes
+
+# ---------------------------------------------------------------------------
+# Dispatch limit for periodic curation checker
+# ---------------------------------------------------------------------------
+# Maximum number of conversations to dispatch for curation in a single
+# periodic-task run.  Prevents a thundering herd on large installations.
+MEMORY_CURATION_BATCH_LIMIT: int = 500
 
 # ---------------------------------------------------------------------------
 # System prompt injection prefix
