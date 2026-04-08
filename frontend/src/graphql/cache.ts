@@ -277,6 +277,13 @@ export const cache = new InMemoryCache({
           "includeCaml",
           "title",
         ]),
+        conversations: relayStylePagination([
+          "documentId",
+          "corpusId",
+          "conversationType",
+          "hasCorpus",
+          "hasDocument",
+        ]),
         corpuses: relayStylePagination(),
         userexports: relayStylePagination(),
         labelsets: relayStylePagination(),
