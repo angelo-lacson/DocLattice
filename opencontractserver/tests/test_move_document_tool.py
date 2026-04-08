@@ -250,10 +250,12 @@ class TestMoveDocumentAsync(TransactionTestCase):
             process_doc_on_create_atomic,
         )
 
-        post_save.disconnect(
-            process_doc_on_create_atomic, sender=Document, dispatch_uid=DOC_CREATE_UID
-        )
         try:
+            post_save.disconnect(
+                process_doc_on_create_atomic,
+                sender=Document,
+                dispatch_uid=DOC_CREATE_UID,
+            )
             self.user = User.objects.create_user(username="async_mover", password="pw")
             self.corpus = Corpus.objects.create(title="Async Corpus", creator=self.user)
             self.folder_a = CorpusFolder.objects.create(
