@@ -2712,8 +2712,8 @@ async def aget_corpus_memory(
         The memory document content, or a message if no memory exists.
     """
     from opencontractserver.agents.memory import (
-        _split_memory_sections,
         read_memory_content,
+        split_memory_sections,
     )
     from opencontractserver.corpuses.models import Corpus
 
@@ -2733,7 +2733,7 @@ async def aget_corpus_memory(
         return content
 
     # Filter to the requested section
-    sections = _split_memory_sections(content)
+    sections = split_memory_sections(content)
     for s in sections:
         if s.lower().startswith(f"## {section.lower()}"):
             return s

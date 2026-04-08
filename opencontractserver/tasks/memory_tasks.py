@@ -245,7 +245,9 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
         return {"status": "error", "reason": "invalid_curation_output"}
 
     # 7. Write updated memory
-    user = conversation.creator
+    # conversation.creator is NOT NULL in the DB, but we fall back to
+    # corpus.creator as defense-in-depth in case the constraint changes.
+    user = conversation.creator or corpus.creator
     await update_memory_content(corpus, updated_content, user)
 
     logger.info(

@@ -226,7 +226,7 @@ async def update_memory_content(corpus: Corpus, new_content: str, user) -> Docum
 # ---------------------------------------------------------------------------
 
 
-def _split_memory_sections(content: str) -> list[str]:
+def split_memory_sections(content: str) -> list[str]:
     """Split memory document into sections by ``## `` headers.
 
     Returns a list of section strings, each starting with its header line.
@@ -282,7 +282,7 @@ async def get_memory_for_injection(corpus: Corpus, query: str = "") -> str:
         return body
 
     # Semantic-lite fallback: score sections by keyword overlap with query
-    sections = _split_memory_sections(content)
+    sections = split_memory_sections(content)
     if not sections:
         return ""
 

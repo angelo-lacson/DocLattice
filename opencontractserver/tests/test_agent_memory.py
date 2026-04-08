@@ -26,13 +26,13 @@ from django.test import TestCase, TransactionTestCase
 from opencontractserver.agents.memory import (
     _build_empty_memory,
     _find_section_end,
-    _split_memory_sections,
     build_curation_prompt,
     format_memory_for_prompt,
     get_memory_for_injection,
     get_or_create_memory_document,
     merge_curation_into_memory,
     read_memory_content,
+    split_memory_sections,
     update_memory_content,
 )
 from opencontractserver.constants.agent_memory import (
@@ -89,24 +89,24 @@ version: "1.0"
 
 - Pattern two
 """
-        sections = _split_memory_sections(content)
+        sections = split_memory_sections(content)
         self.assertEqual(len(sections), 2)
         self.assertTrue(sections[0].startswith("## Collection Patterns"))
         self.assertTrue(sections[1].startswith("## Query Patterns"))
 
     def test_split_empty_frontmatter(self):
         content = "## Section A\n\nContent\n\n## Section B\n\nMore content"
-        sections = _split_memory_sections(content)
+        sections = split_memory_sections(content)
         self.assertEqual(len(sections), 2)
 
     def test_split_no_sections(self):
         content = "---\nversion: 1\n---\n\nJust some text."
-        sections = _split_memory_sections(content)
+        sections = split_memory_sections(content)
         self.assertEqual(len(sections), 1)
 
     def test_strips_frontmatter(self):
         content = "---\nfoo: bar\n---\n\n## Only Section\n\nContent"
-        sections = _split_memory_sections(content)
+        sections = split_memory_sections(content)
         self.assertEqual(len(sections), 1)
         self.assertNotIn("foo: bar", sections[0])
 
@@ -451,16 +451,16 @@ class TestGetMemoryForInjectionSync(TestCase):
 
     def test_empty_placeholder_not_injected(self):
         """Empty memory with only placeholders should return empty string."""
-        from opencontractserver.agents.memory import _split_memory_sections
+        from opencontractserver.agents.memory import split_memory_sections
 
         content = _build_empty_memory(1)
-        sections = _split_memory_sections(content)
+        sections = split_memory_sections(content)
         # Both sections should contain placeholder text
         self.assertEqual(len(sections), 2)
 
     def test_section_filtering_by_keyword(self):
         """When memory is large, sections should be filtered by relevance."""
-        sections = _split_memory_sections(
+        sections = split_memory_sections(
             "## Collection Patterns\n\n- Pattern about contracts\n\n"
             "## Query Patterns\n\n- Search strategy for dates"
         )
@@ -645,7 +645,7 @@ class TestGetMemoryForInjection(TransactionTestCase):
         self.corpus.refresh_from_db()
         result = async_to_sync(get_memory_for_injection)(self.corpus, query="word")
         # Should still return some sections (not empty)
-        self.assertTrue(len(result) > 0)
+        self.assertGreater(len(result), 0)
 
     def test_large_memory_no_query_returns_first_sections(self):
         """With no query, first N sections up to token budget are returned."""
@@ -659,7 +659,7 @@ class TestGetMemoryForInjection(TransactionTestCase):
         async_to_sync(update_memory_content)(self.corpus, content, self.user)
         self.corpus.refresh_from_db()
         result = async_to_sync(get_memory_for_injection)(self.corpus, query="")
-        self.assertTrue(len(result) > 0)
+        self.assertGreater(len(result), 0)
 
 
 # ---------------------------------------------------------------------------
@@ -935,3 +935,524 @@ class TestInjectCorpusMemory(TestCase):
             async_to_sync(_inject_corpus_memory)(fake_corpus, config)
 
         self.assertIn("## Corpus Memory", config.system_prompt)
+
+
+# ---------------------------------------------------------------------------
+# ToggleCorpusMemory GraphQL mutation tests
+# ---------------------------------------------------------------------------
+
+
+class TestToggleCorpusMemory(TransactionTestCase):
+    """Test the ToggleCorpusMemory GraphQL mutation."""
+
+    def setUp(self):
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import (
+            set_permissions_for_obj_to_user,
+        )
+
+        self.user = User.objects.create_user(
+            username="toggle_mem_user",
+            password="testpass123",
+            email="togglemem@test.com",
+        )
+        self.other_user = User.objects.create_user(
+            username="other_toggle_user",
+            password="testpass123",
+            email="othertoggle@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Toggle Corpus",
+            creator=self.user,
+            memory_enabled=False,
+        )
+        set_permissions_for_obj_to_user(
+            self.user, self.corpus, [PermissionTypes.CRUD, PermissionTypes.READ]
+        )
+
+    def _execute_mutation(self, user, corpus_pk, enabled):
+        """Execute the ToggleCorpusMemory mutation via the Graphene test client."""
+        from graphene.test import Client
+        from graphql_relay import to_global_id
+
+        from config.graphql.schema import schema
+
+        class MockRequest:
+            def __init__(self, u):
+                self.user = u
+                self.META = {}
+
+        client = Client(schema)
+        mutation = """
+            mutation ToggleMem($corpusId: ID!, $enabled: Boolean!) {
+                toggleCorpusMemory(corpusId: $corpusId, enabled: $enabled) {
+                    ok
+                    message
+                }
+            }
+        """
+        variables = {
+            "corpusId": to_global_id("CorpusType", corpus_pk),
+            "enabled": enabled,
+        }
+        return client.execute(
+            mutation, variables=variables, context_value=MockRequest(user)
+        )
+
+    def test_enable_memory(self):
+        result = self._execute_mutation(self.user, self.corpus.pk, True)
+        data = result["data"]["toggleCorpusMemory"]
+        self.assertTrue(data["ok"])
+        self.assertIn("enabled", data["message"])
+        self.corpus.refresh_from_db()
+        self.assertTrue(self.corpus.memory_enabled)
+
+    def test_disable_memory(self):
+        self.corpus.memory_enabled = True
+        self.corpus.save(update_fields=["memory_enabled"])
+        result = self._execute_mutation(self.user, self.corpus.pk, False)
+        data = result["data"]["toggleCorpusMemory"]
+        self.assertTrue(data["ok"])
+        self.assertIn("disabled", data["message"])
+        self.corpus.refresh_from_db()
+        self.assertFalse(self.corpus.memory_enabled)
+
+    def test_corpus_not_found(self):
+        result = self._execute_mutation(self.user, 999999, True)
+        data = result["data"]["toggleCorpusMemory"]
+        self.assertFalse(data["ok"])
+        self.assertIn("not found", data["message"])
+
+    def test_no_permission_denied(self):
+        result = self._execute_mutation(self.other_user, self.corpus.pk, True)
+        data = result["data"]["toggleCorpusMemory"]
+        self.assertFalse(data["ok"])
+        self.assertIn("permission", data["message"].lower())
+
+
+# ---------------------------------------------------------------------------
+# check_conversations_for_curation periodic task tests
+# ---------------------------------------------------------------------------
+
+
+class TestCheckConversationsForCuration(TransactionTestCase):
+    """Test the check_conversations_for_curation periodic task."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="curation_check_user",
+            password="testpass123",
+            email="curationcheck@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Curation Check Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+        self.corpus_no_mem = Corpus.objects.create(
+            title="No Memory Check Corpus",
+            creator=self.user,
+            memory_enabled=False,
+        )
+
+    def test_dispatches_eligible_conversations(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from opencontractserver.constants.agent_memory import (
+            MEMORY_CURATION_IDLE_MINUTES,
+        )
+
+        conv = Conversation.objects.create(
+            title="Idle Chat",
+            creator=self.user,
+            chat_with_corpus=self.corpus,
+            conversation_type=ConversationTypeChoices.CHAT,
+        )
+        # Push modified time before the idle cutoff
+        old_time = timezone.now() - timedelta(minutes=MEMORY_CURATION_IDLE_MINUTES + 5)
+        Conversation.objects.filter(pk=conv.pk).update(modified=old_time)
+
+        with patch(
+            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
+        ) as mock_delay:
+            from opencontractserver.tasks.memory_tasks import (
+                check_conversations_for_curation,
+            )
+
+            result = check_conversations_for_curation()
+
+        self.assertEqual(result["dispatched"], 1)
+        mock_delay.assert_called_once_with(conv.pk)
+
+    def test_skips_already_curated(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from opencontractserver.constants.agent_memory import (
+            MEMORY_CURATION_IDLE_MINUTES,
+        )
+
+        Conversation.objects.create(
+            title="Already Curated",
+            creator=self.user,
+            chat_with_corpus=self.corpus,
+            conversation_type=ConversationTypeChoices.CHAT,
+            memory_curated=True,
+        )
+        old_time = timezone.now() - timedelta(minutes=MEMORY_CURATION_IDLE_MINUTES + 5)
+        Conversation.objects.filter(title="Already Curated").update(modified=old_time)
+
+        with patch(
+            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
+        ) as mock_delay:
+            from opencontractserver.tasks.memory_tasks import (
+                check_conversations_for_curation,
+            )
+
+            result = check_conversations_for_curation()
+
+        self.assertEqual(result["dispatched"], 0)
+        mock_delay.assert_not_called()
+
+    def test_skips_memory_disabled_corpus(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from opencontractserver.constants.agent_memory import (
+            MEMORY_CURATION_IDLE_MINUTES,
+        )
+
+        Conversation.objects.create(
+            title="Disabled Memory Chat",
+            creator=self.user,
+            chat_with_corpus=self.corpus_no_mem,
+            conversation_type=ConversationTypeChoices.CHAT,
+        )
+        old_time = timezone.now() - timedelta(minutes=MEMORY_CURATION_IDLE_MINUTES + 5)
+        Conversation.objects.filter(title="Disabled Memory Chat").update(
+            modified=old_time
+        )
+
+        with patch(
+            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
+        ) as mock_delay:
+            from opencontractserver.tasks.memory_tasks import (
+                check_conversations_for_curation,
+            )
+
+            result = check_conversations_for_curation()
+
+        self.assertEqual(result["dispatched"], 0)
+        mock_delay.assert_not_called()
+
+    def test_skips_thread_type(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from opencontractserver.constants.agent_memory import (
+            MEMORY_CURATION_IDLE_MINUTES,
+        )
+
+        Conversation.objects.create(
+            title="Thread Conv",
+            creator=self.user,
+            chat_with_corpus=self.corpus,
+            conversation_type=ConversationTypeChoices.THREAD,
+        )
+        old_time = timezone.now() - timedelta(minutes=MEMORY_CURATION_IDLE_MINUTES + 5)
+        Conversation.objects.filter(title="Thread Conv").update(modified=old_time)
+
+        with patch(
+            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
+        ) as mock_delay:
+            from opencontractserver.tasks.memory_tasks import (
+                check_conversations_for_curation,
+            )
+
+            result = check_conversations_for_curation()
+
+        self.assertEqual(result["dispatched"], 0)
+        mock_delay.assert_not_called()
+
+    def test_skips_recently_modified(self):
+        """Conversations modified within the idle window are skipped."""
+        Conversation.objects.create(
+            title="Recent Chat",
+            creator=self.user,
+            chat_with_corpus=self.corpus,
+            conversation_type=ConversationTypeChoices.CHAT,
+        )
+        # Don't modify the timestamp -- it was just created (within idle window)
+
+        with patch(
+            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
+        ) as mock_delay:
+            from opencontractserver.tasks.memory_tasks import (
+                check_conversations_for_curation,
+            )
+
+            result = check_conversations_for_curation()
+
+        self.assertEqual(result["dispatched"], 0)
+        mock_delay.assert_not_called()
+
+    def test_batch_limit_respected(self):
+        """Only MEMORY_CURATION_BATCH_LIMIT conversations dispatched per run."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from opencontractserver.constants.agent_memory import (
+            MEMORY_CURATION_BATCH_LIMIT,
+            MEMORY_CURATION_IDLE_MINUTES,
+        )
+
+        old_time = timezone.now() - timedelta(minutes=MEMORY_CURATION_IDLE_MINUTES + 5)
+        # Create more conversations than the batch limit
+        for i in range(MEMORY_CURATION_BATCH_LIMIT + 3):
+            Conversation.objects.create(
+                title=f"Batch Chat {i}",
+                creator=self.user,
+                chat_with_corpus=self.corpus,
+                conversation_type=ConversationTypeChoices.CHAT,
+            )
+        Conversation.objects.filter(title__startswith="Batch Chat").update(
+            modified=old_time
+        )
+
+        with patch(
+            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
+        ) as mock_delay:
+            from opencontractserver.tasks.memory_tasks import (
+                check_conversations_for_curation,
+            )
+
+            result = check_conversations_for_curation()
+
+        self.assertEqual(result["dispatched"], MEMORY_CURATION_BATCH_LIMIT)
+        self.assertEqual(mock_delay.call_count, MEMORY_CURATION_BATCH_LIMIT)
+
+
+# ---------------------------------------------------------------------------
+# curate_corpus_memory task path tests (mocked LLM)
+# ---------------------------------------------------------------------------
+
+
+class TestCurateCorpusMemoryTask(TransactionTestCase):
+    """Test curate_corpus_memory / _curate_corpus_memory_async task paths."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="curation_task_user",
+            password="testpass123",
+            email="curationtask@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Curation Task Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def _create_conversation_with_messages(self, count, curated=False, corpus=None):
+        """Helper to create a conversation with N messages."""
+        conv = Conversation.objects.create(
+            title="Task Test Chat",
+            creator=self.user,
+            chat_with_corpus=corpus or self.corpus,
+            conversation_type=ConversationTypeChoices.CHAT,
+            memory_curated=curated,
+        )
+        for i in range(count):
+            msg_type = (
+                MessageTypeChoices.HUMAN if i % 2 == 0 else MessageTypeChoices.LLM
+            )
+            ChatMessage.objects.create(
+                conversation=conv,
+                msg_type=msg_type,
+                content=f"Message {i} content",
+                creator=self.user,
+            )
+        return conv
+
+    def test_conversation_not_found(self):
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        result = async_to_sync(_curate_corpus_memory_async)(999999)
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "conversation_not_found")
+
+    def test_already_curated_skipped(self):
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        conv = self._create_conversation_with_messages(6, curated=True)
+        result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "already_curated")
+
+    def test_memory_not_enabled_skipped(self):
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        corpus_no_mem = Corpus.objects.create(
+            title="No Mem Curation Corpus",
+            creator=self.user,
+            memory_enabled=False,
+        )
+        conv = self._create_conversation_with_messages(6, corpus=corpus_no_mem)
+        result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "memory_not_enabled")
+
+    def test_too_few_messages_skipped(self):
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        conv = self._create_conversation_with_messages(MEMORY_CURATION_MIN_MESSAGES - 1)
+        result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "too_few_messages")
+        # Conversation should NOT be marked curated (can be re-evaluated)
+        conv.refresh_from_db()
+        self.assertFalse(conv.memory_curated)
+
+    def test_thread_type_skipped(self):
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        conv = Conversation.objects.create(
+            title="Thread for curation",
+            creator=self.user,
+            chat_with_corpus=self.corpus,
+            conversation_type=ConversationTypeChoices.THREAD,
+        )
+        result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "not_chat_type")
+
+    def test_successful_curation(self):
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        conv = self._create_conversation_with_messages(6)
+
+        mock_summary = AsyncMock()
+        mock_summary.return_value.output = "Summary of patterns observed."
+
+        mock_curation = AsyncMock()
+        mock_curation.return_value.output = (
+            '{"collection_patterns": ["- **Test**: A pattern"], '
+            '"query_patterns": [], "refinements": []}'
+        )
+
+        with patch("pydantic_ai.agent.Agent") as MockAgent:
+            # First call = summarise agent, second = curation agent
+            agent1 = AsyncMock()
+            agent1.run = mock_summary
+            agent2 = AsyncMock()
+            agent2.run = mock_curation
+            MockAgent.side_effect = [agent1, agent2]
+
+            result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["new_collection_patterns"], 1)
+        conv.refresh_from_db()
+        self.assertTrue(conv.memory_curated)
+
+    def test_summarisation_failure_releases_claim(self):
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        conv = self._create_conversation_with_messages(6)
+
+        with patch("pydantic_ai.agent.Agent") as MockAgent:
+            agent1 = AsyncMock()
+            agent1.run = AsyncMock(side_effect=RuntimeError("LLM down"))
+            MockAgent.return_value = agent1
+
+            result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["reason"], "summarisation_failed")
+        # Claim should be released so it can be retried
+        conv.refresh_from_db()
+        self.assertFalse(conv.memory_curated)
+
+    def test_curation_llm_failure_releases_claim(self):
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        conv = self._create_conversation_with_messages(6)
+
+        mock_summary = AsyncMock()
+        mock_summary.return_value.output = "Summary"
+
+        with patch("pydantic_ai.agent.Agent") as MockAgent:
+            agent1 = AsyncMock()
+            agent1.run = mock_summary
+            agent2 = AsyncMock()
+            agent2.run = AsyncMock(side_effect=RuntimeError("Curation LLM down"))
+            MockAgent.side_effect = [agent1, agent2]
+
+            result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["reason"], "curation_llm_failed")
+        conv.refresh_from_db()
+        self.assertFalse(conv.memory_curated)
+
+    def test_invalid_json_output_releases_claim(self):
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        conv = self._create_conversation_with_messages(6)
+
+        mock_summary = AsyncMock()
+        mock_summary.return_value.output = "Summary"
+
+        mock_curation = AsyncMock()
+        mock_curation.return_value.output = "This is not JSON"
+
+        with patch("pydantic_ai.agent.Agent") as MockAgent:
+            agent1 = AsyncMock()
+            agent1.run = mock_summary
+            agent2 = AsyncMock()
+            agent2.run = mock_curation
+            MockAgent.side_effect = [agent1, agent2]
+
+            result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["reason"], "invalid_curation_output")
+        conv.refresh_from_db()
+        self.assertFalse(conv.memory_curated)
+
+    def test_concurrent_claim_prevents_duplicate(self):
+        """If two tasks race, the second one should see already_claimed."""
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        conv = self._create_conversation_with_messages(6)
+        # Manually mark as curated (simulating a concurrent claim)
+        Conversation.objects.filter(pk=conv.pk).update(memory_curated=True)
+
+        result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "already_curated")
