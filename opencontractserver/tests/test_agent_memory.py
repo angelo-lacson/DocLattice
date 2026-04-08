@@ -10,10 +10,18 @@ Covers:
 6. Privacy: curated insights must not contain conversation specifics
 7. Toggle: memory not injected when disabled
 8. Corpus isolation
+9. Async CRUD operations (get_or_create, read, update, injection)
+10. Core tool functions (aget_corpus_memory, asuggest_memory_update)
+11. Agent factory memory injection (_inject_corpus_memory)
 """
 
+from dataclasses import dataclass
+from typing import Optional
+from unittest.mock import AsyncMock, patch
+
+from asgiref.sync import async_to_sync
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 
 from opencontractserver.agents.memory import (
     _build_empty_memory,
@@ -21,7 +29,11 @@ from opencontractserver.agents.memory import (
     _split_memory_sections,
     build_curation_prompt,
     format_memory_for_prompt,
+    get_memory_for_injection,
+    get_or_create_memory_document,
     merge_curation_into_memory,
+    read_memory_content,
+    update_memory_content,
 )
 from opencontractserver.constants.agent_memory import (
     MEMORY_CURATION_MIN_MESSAGES,
@@ -456,3 +468,470 @@ class TestGetMemoryForInjectionSync(TestCase):
         # First section is about contracts, second about dates
         self.assertIn("contracts", sections[0])
         self.assertIn("dates", sections[1])
+
+
+# ---------------------------------------------------------------------------
+# Async CRUD tests (memory.py)
+# ---------------------------------------------------------------------------
+
+
+class TestGetOrCreateMemoryDocument(TransactionTestCase):
+    """Test async get_or_create_memory_document()."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="mem_crud_user",
+            password="testpass123",
+            email="memcrud@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="CRUD Test Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def test_creates_memory_document(self):
+        self.assertIsNone(self.corpus.memory_document_id)
+        doc = async_to_sync(get_or_create_memory_document)(self.corpus, self.user)
+        self.assertIsNotNone(doc)
+        self.assertIsNotNone(doc.pk)
+        self.assertEqual(doc.title, MEMORY_DOCUMENT_TITLE)
+        self.corpus.refresh_from_db()
+        self.assertEqual(self.corpus.memory_document_id, doc.pk)
+
+    def test_idempotent_returns_same_document(self):
+        doc1 = async_to_sync(get_or_create_memory_document)(self.corpus, self.user)
+        doc2 = async_to_sync(get_or_create_memory_document)(self.corpus, self.user)
+        self.assertEqual(doc1.pk, doc2.pk)
+
+    def test_recreate_after_fk_cleared(self):
+        """If memory_document FK is cleared, a new doc is created."""
+        doc1 = async_to_sync(get_or_create_memory_document)(self.corpus, self.user)
+        old_pk = doc1.pk
+        # Clear the FK (simulating memory reset)
+        self.corpus.memory_document = None
+        self.corpus.memory_document_id = None
+        self.corpus.save(update_fields=["memory_document"])
+        self.corpus.refresh_from_db()
+        self.assertIsNone(self.corpus.memory_document_id)
+        # Re-creating should produce a new document
+        doc2 = async_to_sync(get_or_create_memory_document)(self.corpus, self.user)
+        self.assertIsNotNone(doc2.pk)
+        self.assertNotEqual(doc2.pk, old_pk)
+
+
+class TestReadMemoryContent(TransactionTestCase):
+    """Test async read_memory_content()."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="mem_read_user",
+            password="testpass123",
+            email="memread@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Read Test Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def test_no_memory_document_returns_empty(self):
+        result = async_to_sync(read_memory_content)(self.corpus)
+        self.assertEqual(result, "")
+
+    def test_with_content(self):
+        async_to_sync(get_or_create_memory_document)(self.corpus, self.user)
+        # Refresh corpus to clear cached FK so read_memory_content gets fresh doc
+        self.corpus.refresh_from_db()
+        content = async_to_sync(read_memory_content)(self.corpus)
+        # The initial memory doc should contain the template content
+        self.assertIn("Collection Patterns", content)
+
+    def test_empty_file_returns_empty(self):
+        """If txt_extract_file is falsy, return empty."""
+        from opencontractserver.documents.models import Document
+
+        doc = Document.objects.create(
+            title=MEMORY_DOCUMENT_TITLE,
+            creator=self.user,
+        )
+        self.corpus.memory_document = doc
+        self.corpus.save(update_fields=["memory_document"])
+        # doc has no txt_extract_file
+        result = async_to_sync(read_memory_content)(self.corpus)
+        self.assertEqual(result, "")
+
+
+class TestUpdateMemoryContent(TransactionTestCase):
+    """Test async update_memory_content()."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="mem_update_user",
+            password="testpass123",
+            email="memupdate@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Update Test Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def test_write_and_read_back(self):
+        new_content = "## Collection Patterns\n\n- **Test**: A test insight\n"
+        async_to_sync(update_memory_content)(self.corpus, new_content, self.user)
+        # Refresh to clear cached FK so read_memory_content reads fresh doc
+        self.corpus.refresh_from_db()
+        result = async_to_sync(read_memory_content)(self.corpus)
+        self.assertIn("- **Test**: A test insight", result)
+
+    def test_creates_doc_if_missing(self):
+        self.assertIsNone(self.corpus.memory_document_id)
+        async_to_sync(update_memory_content)(self.corpus, "# New content", self.user)
+        self.corpus.refresh_from_db()
+        self.assertIsNotNone(self.corpus.memory_document_id)
+
+
+class TestGetMemoryForInjection(TransactionTestCase):
+    """Test async get_memory_for_injection()."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="mem_inject_user",
+            password="testpass123",
+            email="meminject@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Injection Test Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def test_no_memory_returns_empty(self):
+        result = async_to_sync(get_memory_for_injection)(self.corpus)
+        self.assertEqual(result, "")
+
+    def test_empty_placeholder_returns_empty(self):
+        async_to_sync(get_or_create_memory_document)(self.corpus, self.user)
+        self.corpus.refresh_from_db()
+        result = async_to_sync(get_memory_for_injection)(self.corpus)
+        # Initial memory only has placeholders, should return empty
+        self.assertEqual(result, "")
+
+    def test_small_memory_full_injection(self):
+        content = (
+            '---\nversion: "1.0"\ncorpus_id: 1\n'
+            "last_curated: null\ncuration_count: 0\n---\n\n"
+            "## Collection Patterns\n\n- **Test**: A useful insight\n\n"
+            "## Query Patterns\n\n- **Search**: Try keyword search\n"
+        )
+        async_to_sync(update_memory_content)(self.corpus, content, self.user)
+        self.corpus.refresh_from_db()
+        result = async_to_sync(get_memory_for_injection)(self.corpus)
+        self.assertIn("- **Test**: A useful insight", result)
+        self.assertIn("- **Search**: Try keyword search", result)
+
+    def test_large_memory_section_filtering_with_query(self):
+        """When memory exceeds token budget, sections are scored by keyword overlap."""
+        # Build content large enough to exceed MEMORY_FULL_INJECTION_MAX_TOKENS
+        big_section = "- " + " ".join(["word"] * 500) + "\n"
+        content = (
+            '---\nversion: "1.0"\ncorpus_id: 1\n'
+            "last_curated: null\ncuration_count: 0\n---\n\n"
+            f"## Collection Patterns\n\n{big_section}\n"
+            f"## Query Patterns\n\n{big_section}\n"
+        )
+        async_to_sync(update_memory_content)(self.corpus, content, self.user)
+        self.corpus.refresh_from_db()
+        result = async_to_sync(get_memory_for_injection)(self.corpus, query="word")
+        # Should still return some sections (not empty)
+        self.assertTrue(len(result) > 0)
+
+    def test_large_memory_no_query_returns_first_sections(self):
+        """With no query, first N sections up to token budget are returned."""
+        big_section = "- " + " ".join(["word"] * 500) + "\n"
+        content = (
+            '---\nversion: "1.0"\ncorpus_id: 1\n'
+            "last_curated: null\ncuration_count: 0\n---\n\n"
+            f"## Collection Patterns\n\n{big_section}\n"
+            f"## Query Patterns\n\n{big_section}\n"
+        )
+        async_to_sync(update_memory_content)(self.corpus, content, self.user)
+        self.corpus.refresh_from_db()
+        result = async_to_sync(get_memory_for_injection)(self.corpus, query="")
+        self.assertTrue(len(result) > 0)
+
+
+# ---------------------------------------------------------------------------
+# Core tools tests (core_tools.py)
+# ---------------------------------------------------------------------------
+
+
+class TestAgetCorpusMemory(TransactionTestCase):
+    """Test aget_corpus_memory tool function."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="tool_read_user",
+            password="testpass123",
+            email="toolread@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Tool Read Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+        self.corpus_no_mem = Corpus.objects.create(
+            title="No Mem Corpus",
+            creator=self.user,
+            memory_enabled=False,
+        )
+
+    def test_corpus_not_found_raises(self):
+        from opencontractserver.llms.tools.core_tools import aget_corpus_memory
+
+        with self.assertRaises(ValueError):
+            async_to_sync(aget_corpus_memory)(corpus_id=999999)
+
+    def test_memory_disabled_returns_message(self):
+        from opencontractserver.llms.tools.core_tools import aget_corpus_memory
+
+        result = async_to_sync(aget_corpus_memory)(corpus_id=self.corpus_no_mem.pk)
+        self.assertIn("not enabled", result)
+
+    def test_no_memory_doc_returns_message(self):
+        from opencontractserver.llms.tools.core_tools import aget_corpus_memory
+
+        result = async_to_sync(aget_corpus_memory)(corpus_id=self.corpus.pk)
+        self.assertIn("No memory document", result)
+
+    def test_reads_full_content(self):
+        from opencontractserver.llms.tools.core_tools import aget_corpus_memory
+
+        content = (
+            '---\nversion: "1.0"\ncorpus_id: 1\n---\n\n'
+            "## Collection Patterns\n\n- **Insight**: Detail\n\n"
+            "## Query Patterns\n\n- **Search**: Strategy\n"
+        )
+        async_to_sync(update_memory_content)(self.corpus, content, self.user)
+        # aget_corpus_memory re-fetches corpus from DB, so no stale cache issue
+        result = async_to_sync(aget_corpus_memory)(corpus_id=self.corpus.pk)
+        self.assertIn("- **Insight**: Detail", result)
+
+    def test_section_filter(self):
+        from opencontractserver.llms.tools.core_tools import aget_corpus_memory
+
+        content = (
+            '---\nversion: "1.0"\ncorpus_id: 1\n---\n\n'
+            "## Collection Patterns\n\n- **CP**: Col insight\n\n"
+            "## Query Patterns\n\n- **QP**: Query insight\n"
+        )
+        async_to_sync(update_memory_content)(self.corpus, content, self.user)
+        result = async_to_sync(aget_corpus_memory)(
+            corpus_id=self.corpus.pk, section="Collection Patterns"
+        )
+        self.assertIn("- **CP**: Col insight", result)
+        self.assertNotIn("- **QP**: Query insight", result)
+
+    def test_section_not_found(self):
+        from opencontractserver.llms.tools.core_tools import aget_corpus_memory
+
+        content = (
+            '---\nversion: "1.0"\ncorpus_id: 1\n---\n\n'
+            "## Collection Patterns\n\n- data\n"
+        )
+        async_to_sync(update_memory_content)(self.corpus, content, self.user)
+        result = async_to_sync(aget_corpus_memory)(
+            corpus_id=self.corpus.pk, section="Nonexistent"
+        )
+        self.assertIn("not found", result)
+
+
+class TestAsuggestMemoryUpdate(TransactionTestCase):
+    """Test asuggest_memory_update tool function."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="tool_write_user",
+            password="testpass123",
+            email="toolwrite@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Tool Write Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+        self.corpus_no_mem = Corpus.objects.create(
+            title="No Mem Write Corpus",
+            creator=self.user,
+            memory_enabled=False,
+        )
+
+    def test_corpus_not_found_raises(self):
+        from opencontractserver.llms.tools.core_tools import asuggest_memory_update
+
+        with self.assertRaises(ValueError):
+            async_to_sync(asuggest_memory_update)(
+                corpus_id=999999,
+                user_id=self.user.pk,
+                section="collection_patterns",
+                insight="- **Test**: insight",
+            )
+
+    def test_memory_disabled_returns_message(self):
+        from opencontractserver.llms.tools.core_tools import asuggest_memory_update
+
+        result = async_to_sync(asuggest_memory_update)(
+            corpus_id=self.corpus_no_mem.pk,
+            user_id=self.user.pk,
+            section="collection_patterns",
+            insight="- **Test**: insight",
+        )
+        self.assertIn("not enabled", result)
+
+    def test_user_not_found_raises(self):
+        from opencontractserver.llms.tools.core_tools import asuggest_memory_update
+
+        with self.assertRaises(ValueError):
+            async_to_sync(asuggest_memory_update)(
+                corpus_id=self.corpus.pk,
+                user_id=999999,
+                section="collection_patterns",
+                insight="- **Test**: insight",
+            )
+
+    def test_successful_collection_write(self):
+        from opencontractserver.llms.tools.core_tools import asuggest_memory_update
+
+        result = async_to_sync(asuggest_memory_update)(
+            corpus_id=self.corpus.pk,
+            user_id=self.user.pk,
+            section="collection_patterns",
+            insight="- **New**: A new collection insight",
+        )
+        self.assertIn("Insight added", result)
+        # Refresh corpus to clear cached FK
+        self.corpus.refresh_from_db()
+        content = async_to_sync(read_memory_content)(self.corpus)
+        self.assertIn("- **New**: A new collection insight", content)
+
+    def test_successful_query_write(self):
+        from opencontractserver.llms.tools.core_tools import asuggest_memory_update
+
+        result = async_to_sync(asuggest_memory_update)(
+            corpus_id=self.corpus.pk,
+            user_id=self.user.pk,
+            section="query_patterns",
+            insight="- **Search**: A query insight",
+        )
+        self.assertIn("Insight added", result)
+        # Refresh corpus to clear cached FK
+        self.corpus.refresh_from_db()
+        content = async_to_sync(read_memory_content)(self.corpus)
+        self.assertIn("- **Search**: A query insight", content)
+
+
+# ---------------------------------------------------------------------------
+# Agent factory tests (agent_factory.py)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _FakeConfig:
+    """Minimal stand-in for AgentConfig in tests."""
+
+    system_prompt: Optional[str] = "You are an assistant."
+
+
+class TestInjectCorpusMemory(TestCase):
+    """Test _inject_corpus_memory() from agent_factory.py."""
+
+    def test_memory_found_appends_to_prompt(self):
+        from opencontractserver.llms.agents.agent_factory import (
+            _inject_corpus_memory,
+        )
+
+        config = _FakeConfig(system_prompt="Base prompt.")
+        fake_corpus = type("FakeCorpus", (), {"id": 1})()
+
+        with (
+            patch(
+                "opencontractserver.agents.memory.get_memory_for_injection",
+                new_callable=AsyncMock,
+                return_value="## Patterns\n\n- insight",
+            ),
+            patch(
+                "opencontractserver.agents.memory.format_memory_for_prompt",
+                return_value="\n\n## Corpus Memory\n- insight\n",
+            ),
+        ):
+            async_to_sync(_inject_corpus_memory)(fake_corpus, config)
+
+        self.assertIn("## Corpus Memory", config.system_prompt)
+        self.assertIn("- insight", config.system_prompt)
+        self.assertTrue(config.system_prompt.startswith("Base prompt."))
+
+    def test_empty_memory_no_op(self):
+        from opencontractserver.llms.agents.agent_factory import (
+            _inject_corpus_memory,
+        )
+
+        config = _FakeConfig(system_prompt="Base prompt.")
+        fake_corpus = type("FakeCorpus", (), {"id": 2})()
+
+        with (
+            patch(
+                "opencontractserver.agents.memory.get_memory_for_injection",
+                new_callable=AsyncMock,
+                return_value="",
+            ),
+            patch(
+                "opencontractserver.agents.memory.format_memory_for_prompt",
+                return_value="",
+            ),
+        ):
+            async_to_sync(_inject_corpus_memory)(fake_corpus, config)
+
+        self.assertEqual(config.system_prompt, "Base prompt.")
+
+    def test_exception_silently_caught(self):
+        from opencontractserver.llms.agents.agent_factory import (
+            _inject_corpus_memory,
+        )
+
+        config = _FakeConfig(system_prompt="Base prompt.")
+        fake_corpus = type("FakeCorpus", (), {"id": 3})()
+
+        with patch(
+            "opencontractserver.agents.memory.get_memory_for_injection",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("DB unavailable"),
+        ):
+            # Should not raise
+            async_to_sync(_inject_corpus_memory)(fake_corpus, config)
+
+        # System prompt unchanged
+        self.assertEqual(config.system_prompt, "Base prompt.")
+
+    def test_none_system_prompt_handled(self):
+        from opencontractserver.llms.agents.agent_factory import (
+            _inject_corpus_memory,
+        )
+
+        config = _FakeConfig(system_prompt=None)
+        fake_corpus = type("FakeCorpus", (), {"id": 4})()
+
+        with (
+            patch(
+                "opencontractserver.agents.memory.get_memory_for_injection",
+                new_callable=AsyncMock,
+                return_value="## Patterns\n\n- insight",
+            ),
+            patch(
+                "opencontractserver.agents.memory.format_memory_for_prompt",
+                return_value="\n\n## Corpus Memory\n- insight\n",
+            ),
+        ):
+            async_to_sync(_inject_corpus_memory)(fake_corpus, config)
+
+        self.assertIn("## Corpus Memory", config.system_prompt)
