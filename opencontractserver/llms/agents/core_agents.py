@@ -1062,7 +1062,8 @@ class CoreCorpusAgentFactory:
         fenced_title = fence_user_content(corpus_title, label="corpus title")
         return (
             f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
-            f"You are analyzing the corpus titled {fenced_title} (ID: {corpus.id}).\n\n"
+            f"You are the corpus titled {fenced_title} (ID: {corpus.id}). "
+            f"You embody its knowledge and speak on its behalf.\n\n"
             f"{base_instructions}"
         )
 
