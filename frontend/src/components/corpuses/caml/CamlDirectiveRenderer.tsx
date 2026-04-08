@@ -30,6 +30,7 @@ import {
   type CamlComponentRegistry,
 } from "../../../utils/camlComponents";
 import { ErrorBoundary } from "../../widgets/ErrorBoundary";
+import { ComponentEmbedErrorFallback } from "../../widgets/ComponentEmbedErrorFallback";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -157,21 +158,7 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
           return (
             <ErrorBoundary
               fallback={(error) => (
-                <div
-                  style={{
-                    padding: "0.75rem 1rem",
-                    margin: "0.5rem 0",
-                    borderRadius: "8px",
-                    border: "1px solid #e5e7eb",
-                    color: "#6b7280",
-                    fontSize: "0.8125rem",
-                  }}
-                >
-                  Embedded component failed to render
-                  {process.env.NODE_ENV === "development" && (
-                    <>: {error.message}</>
-                  )}
-                </div>
+                <ComponentEmbedErrorFallback error={error} />
               )}
             >
               {resolved}

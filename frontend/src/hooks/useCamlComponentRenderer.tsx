@@ -11,6 +11,7 @@
 import React, { useCallback } from "react";
 import { MarkdownMessageRenderer } from "../components/threads/MarkdownMessageRenderer";
 import { ErrorBoundary } from "../components/widgets/ErrorBoundary";
+import { ComponentEmbedErrorFallback } from "../components/widgets/ComponentEmbedErrorFallback";
 import { resolveComponentMarker } from "../utils/camlComponents";
 export type { CamlComponentRegistry } from "../utils/camlComponents";
 
@@ -32,23 +33,7 @@ export function useCamlComponentRenderer(
       if (resolved) {
         return (
           <ErrorBoundary
-            fallback={(error) => (
-              <div
-                style={{
-                  padding: "0.75rem 1rem",
-                  margin: "0.5rem 0",
-                  borderRadius: "8px",
-                  border: "1px solid #e5e7eb",
-                  color: "#6b7280",
-                  fontSize: "0.8125rem",
-                }}
-              >
-                Embedded component failed to render
-                {process.env.NODE_ENV === "development" && (
-                  <>: {error.message}</>
-                )}
-              </div>
-            )}
+            fallback={(error) => <ComponentEmbedErrorFallback error={error} />}
           >
             {resolved}
           </ErrorBoundary>
