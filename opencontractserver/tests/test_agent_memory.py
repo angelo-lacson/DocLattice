@@ -26,6 +26,8 @@ from opencontractserver.agents.memory import (
 from opencontractserver.constants.agent_memory import (
     MEMORY_CURATION_MIN_MESSAGES,
     MEMORY_DOCUMENT_TITLE,
+    MEMORY_EMPTY_COLLECTION_PLACEHOLDER,
+    MEMORY_EMPTY_QUERY_PLACEHOLDER,
     MEMORY_INJECTION_PREFIX,
     MEMORY_SECTION_COLLECTION_PATTERNS,
     MEMORY_SECTION_QUERY_PATTERNS,
@@ -54,8 +56,8 @@ class TestMemoryDocumentTemplate(TestCase):
 
     def test_build_empty_memory_has_placeholders(self):
         content = _build_empty_memory(1)
-        self.assertIn("_No collection patterns recorded yet._", content)
-        self.assertIn("_No query patterns recorded yet._", content)
+        self.assertIn(MEMORY_EMPTY_COLLECTION_PLACEHOLDER, content)
+        self.assertIn(MEMORY_EMPTY_QUERY_PLACEHOLDER, content)
 
 
 class TestSplitMemorySections(TestCase):
@@ -126,7 +128,7 @@ class TestMergeCurationIntoMemory(TestCase):
             refinements=[],
         )
         self.assertIn("- **Test**: This is a test pattern", result)
-        self.assertNotIn("_No collection patterns recorded yet._", result)
+        self.assertNotIn(MEMORY_EMPTY_COLLECTION_PLACEHOLDER, result)
         self.assertIn("curation_count: 1", result)
 
     def test_add_query_pattern(self):
@@ -137,7 +139,7 @@ class TestMergeCurationIntoMemory(TestCase):
             refinements=[],
         )
         self.assertIn("- **Search**: Use similarity search for X", result)
-        self.assertNotIn("_No query patterns recorded yet._", result)
+        self.assertNotIn(MEMORY_EMPTY_QUERY_PLACEHOLDER, result)
 
     def test_add_both_patterns(self):
         result = merge_curation_into_memory(

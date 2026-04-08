@@ -9,16 +9,17 @@ When a conversation goes idle in a memory-enabled corpus, these tasks:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from datetime import timedelta
 
+from asgiref.sync import async_to_sync
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
 from opencontractserver.constants.agent_memory import (
+    MEMORY_CURATION_BATCH_LIMIT,
     MEMORY_CURATION_IDLE_MINUTES,
     MEMORY_CURATION_MAX_CONVERSATION_TOKENS,
     MEMORY_CURATION_MIN_MESSAGES,
@@ -76,7 +77,7 @@ def curate_corpus_memory(
     Returns:
         Dict with curation outcome metadata.
     """
-    return asyncio.run(_curate_corpus_memory_async(conversation_id))
+    return async_to_sync(_curate_corpus_memory_async)(conversation_id)
 
 
 async def _curate_corpus_memory_async(conversation_id: int) -> dict:
@@ -116,17 +117,9 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
     if conversation.conversation_type != ConversationTypeChoices.CHAT:
         return {"status": "skipped", "reason": "not_chat_type"}
 
-    # Atomically claim this conversation to prevent duplicate dispatches.
-    # If another task already set memory_curated=True, updated will be 0.
-    updated = await database_sync_to_async(
-        lambda: Conversation.objects.filter(
-            pk=conversation.pk, memory_curated=False
-        ).update(memory_curated=True)
-    )()
-    if not updated:
-        return {"status": "skipped", "reason": "already_claimed"}
-
-    # 2. Load messages and check minimum threshold
+    # 2. Load messages and check minimum threshold BEFORE claiming.
+    # This avoids permanently marking short conversations as curated,
+    # which would prevent re-evaluation if more messages are added later.
     messages = await database_sync_to_async(
         lambda: list(
             conversation.chat_messages.filter(deleted_at__isnull=True)
@@ -136,8 +129,17 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
     )()
 
     if len(messages) < MEMORY_CURATION_MIN_MESSAGES:
-        # Already marked as curated by the atomic claim above
         return {"status": "skipped", "reason": "too_few_messages"}
+
+    # Atomically claim this conversation to prevent duplicate dispatches.
+    # If another task already set memory_curated=True, updated will be 0.
+    updated = await database_sync_to_async(
+        lambda: Conversation.objects.filter(
+            pk=conversation.pk, memory_curated=False
+        ).update(memory_curated=True)
+    )()
+    if not updated:
+        return {"status": "skipped", "reason": "already_claimed"}
 
     # 3. Build conversation text (truncated to budget)
     conversation_lines = []
@@ -167,7 +169,7 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
         )
 
     # 4. Stage 1: Summarise conversation (privacy firewall)
-    model_name = getattr(settings, "OPENAI_MODEL", "gpt-4o")
+    model_name = settings.OPENAI_MODEL
     summarise_agent = PydanticAIAgent(
         model=model_name,
         instructions=_SUMMARISE_SYSTEM_PROMPT,
@@ -295,7 +297,8 @@ def check_conversations_for_curation() -> dict:
             # Last modified before the idle cutoff
             modified__lt=cutoff,
         )
-        .values_list("id", flat=True)
+        .order_by("modified")
+        .values_list("id", flat=True)[:MEMORY_CURATION_BATCH_LIMIT]
     )
 
     dispatched = 0

@@ -18,6 +18,8 @@ from django.core.files.base import ContentFile
 
 from opencontractserver.constants.agent_memory import (
     MEMORY_DOCUMENT_TITLE,
+    MEMORY_EMPTY_COLLECTION_PLACEHOLDER,
+    MEMORY_EMPTY_QUERY_PLACEHOLDER,
     MEMORY_FULL_INJECTION_MAX_TOKENS,
     MEMORY_INJECTION_PREFIX,
     MEMORY_SECTION_COLLECTION_PATTERNS,
@@ -47,11 +49,11 @@ curation_count: 0
 
 ## {collection_section}
 
-_No collection patterns recorded yet._
+{collection_placeholder}
 
 ## {query_section}
 
-_No query patterns recorded yet._
+{query_placeholder}
 """
 
 
@@ -61,6 +63,8 @@ def _build_empty_memory(corpus_id: int) -> str:
         corpus_id=corpus_id,
         collection_section=MEMORY_SECTION_COLLECTION_PATTERNS,
         query_section=MEMORY_SECTION_QUERY_PATTERNS,
+        collection_placeholder=MEMORY_EMPTY_COLLECTION_PLACEHOLDER,
+        query_placeholder=MEMORY_EMPTY_QUERY_PLACEHOLDER,
     )
 
 
@@ -195,9 +199,17 @@ async def update_memory_content(corpus: Corpus, new_content: str, user) -> Docum
         from django.db import transaction
 
         with transaction.atomic():
-            # Lock the document row to serialise concurrent writers
-            DocumentModel.objects.select_for_update().filter(pk=doc.pk).exists()
-            doc.txt_extract_file.save(
+            # Lock the document row to serialise concurrent writers.
+            # We must fetch the instance (not just call .exists()) so the
+            # row-level lock is held for the duration of the transaction.
+            locked_doc = (
+                DocumentModel.objects.select_for_update().filter(pk=doc.pk).first()
+            )
+            if locked_doc is None:
+                raise DocumentModel.DoesNotExist(
+                    f"Memory document {doc.pk} was deleted concurrently."
+                )
+            locked_doc.txt_extract_file.save(
                 f"{MEMORY_DOCUMENT_TITLE}.md",
                 ContentFile(new_content.encode("utf-8")),
                 save=True,
@@ -258,8 +270,8 @@ async def get_memory_for_injection(corpus: Corpus, query: str = "") -> str:
 
     # Check for placeholder-only content
     if (
-        "_No collection patterns recorded yet._" in body
-        and "_No query patterns recorded yet._" in body
+        MEMORY_EMPTY_COLLECTION_PLACEHOLDER in body
+        and MEMORY_EMPTY_QUERY_PLACEHOLDER in body
     ):
         return ""
 
@@ -417,7 +429,7 @@ def merge_curation_into_memory(
         if marker in result:
             # Remove placeholder text if present
             result = result.replace(
-                f"{marker}\n\n_No collection patterns recorded yet._",
+                f"{marker}\n\n{MEMORY_EMPTY_COLLECTION_PLACEHOLDER}",
                 marker,
             )
             # Find the end of the section (next ## or end of document)
@@ -431,7 +443,7 @@ def merge_curation_into_memory(
         if marker in result:
             # Remove placeholder text if present
             result = result.replace(
-                f"{marker}\n\n_No query patterns recorded yet._",
+                f"{marker}\n\n{MEMORY_EMPTY_QUERY_PLACEHOLDER}",
                 marker,
             )
             section_end = _find_section_end(result, marker)
