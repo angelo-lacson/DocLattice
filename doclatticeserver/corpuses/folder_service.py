@@ -808,7 +808,11 @@ class DocumentFolderService:
                                      If False, cascade delete child folders
 
         Returns:
-            (success, error_message)
+            (success, error_message).  Returns ``(False, ...)`` if any
+            document in the folder cannot be relocated to root — in that
+            case the folder is **not** deleted to avoid orphaning
+            DocumentPath records (whose ``folder`` FK would be silently
+            nulled via ``on_delete=SET_NULL``).
 
         Side Effects:
             - Documents in folder have their folder assignment removed (moved to root)
@@ -881,16 +885,33 @@ class DocumentFolderService:
                     )
                     failed_docs.append(f"document {current.document_id}: {exc}")
 
-            # Delete folder
+            # Abort if any document could not be relocated.  Because
+            # DocumentPath.folder uses ``on_delete=SET_NULL``, deleting the
+            # folder would silently null out the FK on those stuck paths —
+            # exactly the kind of silent in-place mutation this history
+            # system is designed to prevent.  Successfully relocated
+            # documents stay relocated (their savepoints committed), but
+            # the folder is NOT deleted so the stuck documents remain
+            # consistent.
+            if failed_docs:
+                logger.error(
+                    "Aborting folder %s deletion: %d document(s) could not "
+                    "be relocated: %s",
+                    folder.id,
+                    len(failed_docs),
+                    "; ".join(failed_docs),
+                )
+                return False, (
+                    f"Cannot delete folder: {len(failed_docs)} document(s) "
+                    f"could not be relocated to root: "
+                    f"{'; '.join(failed_docs)}"
+                )
+
+            # Delete folder — safe because all documents were relocated.
             folder_id = folder.id
             folder.delete()
 
             logger.info(f"Deleted folder {folder_id} by user {user.id}")
-            if failed_docs:
-                return True, (
-                    f"Folder deleted but {len(failed_docs)} document(s) could "
-                    f"not be relocated: {'; '.join(failed_docs)}"
-                )
             return True, ""
 
     # =========================================================================
@@ -1179,7 +1200,7 @@ class DocumentFolderService:
             )
 
         if target_folder:
-            folder_path = target_folder.get_path()
+            folder_path = target_folder.get_path().strip("/")
             return f"/{folder_path}/{filename}"
         else:
             return f"/{filename}"
@@ -1206,11 +1227,15 @@ class DocumentFolderService:
         very high collision counts, consider pre-fetching the set of conflicting
         paths with a single ``LIKE`` query.
 
-        **Concurrency note**: The caller must hold ``select_for_update()`` on the
-        relevant DocumentPath rows to prevent TOCTOU races. Without that lock,
-        two concurrent moves to the same path could both see the path as free and
-        violate the ``unique_active_path_per_corpus`` constraint. If that occurs,
-        the database constraint will raise ``IntegrityError``.
+        **Concurrency note**: The caller holds ``select_for_update()`` on the
+        *source* DocumentPath row being moved, which prevents two concurrent
+        moves of the **same** document from racing.  However, two concurrent
+        moves of **different** documents to the same target folder can still
+        both observe the candidate path as free and race to create it.  The
+        database's ``unique_active_path_per_corpus`` partial unique constraint
+        is the real safety net in that case — the loser's ``INSERT`` will
+        raise ``IntegrityError``, which callers must handle (and do, via
+        savepoints and ``except IntegrityError``).
 
         Args:
             base_path: The ideal path string to use.

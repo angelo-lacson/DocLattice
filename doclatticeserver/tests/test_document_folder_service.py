@@ -2872,11 +2872,11 @@ class TestErrorPaths_DisambiguateExtensionless(DocumentFolderServiceTestBase):
 
 class TestErrorPaths_DeleteFolderPartialFailure(DocumentFolderServiceTestBase):
     """
-    SCENARIO: delete_folder reports partial failures when documents
-    cannot be relocated.
+    SCENARIO: delete_folder aborts when documents cannot be relocated.
 
-    BUSINESS RULE: The folder is still deleted, but the caller is
-    informed which documents could not be moved to root.
+    BUSINESS RULE: The folder is NOT deleted when any document cannot be
+    relocated to root, preventing orphaned DocumentPath records whose
+    folder FK would be silently nulled by ``on_delete=SET_NULL``.
     """
 
     def setUp(self):
@@ -2887,8 +2887,10 @@ class TestErrorPaths_DeleteFolderPartialFailure(DocumentFolderServiceTestBase):
             title="Test Corpus", creator=self.owner, is_public=False
         )
 
-    def test_delete_folder_reports_failed_relocations(self):
-        """When _disambiguate_path raises, the failure is reported but folder is deleted."""
+    def test_delete_folder_aborts_when_relocation_fails(self):
+        """When _disambiguate_path raises, the folder deletion is aborted to
+        prevent orphaning DocumentPath records whose folder FK would be
+        silently nulled out by the CASCADE/SET_NULL behaviour."""
         folder, _ = DocumentFolderService.create_folder(
             user=self.owner, corpus=self.corpus, name="Doomed"
         )
@@ -2915,11 +2917,17 @@ class TestErrorPaths_DeleteFolderPartialFailure(DocumentFolderServiceTestBase):
                 user=self.owner, folder=folder
             )
 
-        self.assertTrue(success)
+        # Folder deletion should be refused when documents can't be relocated
+        self.assertFalse(success)
         self.assertIn("could not be relocated", error)
         self.assertIn(str(doc.id), error)
-        # Folder should still be deleted
-        self.assertFalse(CorpusFolder.objects.filter(pk=folder.pk).exists())
+        # Folder must still exist
+        self.assertTrue(CorpusFolder.objects.filter(pk=folder.pk).exists())
+        # Document path must still point to the folder with is_current=True
+        stuck_path = DocumentPath.objects.get(
+            document=doc, corpus=self.corpus, is_current=True
+        )
+        self.assertEqual(stuck_path.folder_id, folder.id)
 
 
 class TestErrorPaths_MoveDocumentIntegrityError(DocumentFolderServiceTestBase):
