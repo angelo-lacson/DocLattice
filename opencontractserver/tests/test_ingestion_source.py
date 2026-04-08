@@ -583,6 +583,14 @@ class TestIngestionSourceQuery(TestCase):
         self.assertIsNone(result.get("errors"))
         self.assertIsNone(result["data"]["ingestionSource"])
 
+    def test_resolve_malformed_global_id_returns_none(self):
+        """Malformed base64 global ID should return None, not 500."""
+        result = self.client.execute(
+            SINGLE_SOURCE_QUERY, variables={"id": "not-valid-base64!@#$"}
+        )
+        self.assertIsNone(result.get("errors"))
+        self.assertIsNone(result["data"]["ingestionSource"])
+
     def test_resolve_other_users_source_returns_none(self):
         """Source owned by a different user should not be visible."""
         other_user = User.objects.create_user(username="other", password="otherpass")

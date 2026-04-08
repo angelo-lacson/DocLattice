@@ -268,27 +268,34 @@ def package_ingestion_sources(corpus: Corpus) -> list[IngestionSourceExport]:
     Returns:
         List of IngestionSourceExport dicts
     """
-    # Find all distinct IngestionSources referenced by this corpus's paths
-    source_ids = (
-        DocumentPath.objects.filter(corpus=corpus)
-        .exclude(ingestion_source__isnull=True)
-        .values_list("ingestion_source_id", flat=True)
-        .distinct()
-    )
+    try:
+        # Find all distinct IngestionSources referenced by this corpus's paths
+        source_ids = (
+            DocumentPath.objects.filter(corpus=corpus)
+            .exclude(ingestion_source__isnull=True)
+            .values_list("ingestion_source_id", flat=True)
+            .distinct()
+        )
 
-    sources = IngestionSource.objects.filter(pk__in=source_ids)
-    return [
-        {
-            "name": source.name,
-            "source_type": source.source_type,
-            # Config is intentionally omitted from exports because it may
-            # contain credentials (API keys, tokens, connection strings).
-            # Importers should reconfigure sources after import.
-            "config": {},
-            "active": source.active,
-        }
-        for source in sources
-    ]
+        sources = IngestionSource.objects.filter(pk__in=source_ids)
+        return [
+            {
+                "name": source.name,
+                "source_type": source.source_type,
+                # Config is intentionally omitted from exports because it may
+                # contain credentials (API keys, tokens, connection strings).
+                # Importers should reconfigure sources after import.
+                "config": {},
+                "active": source.active,
+            }
+            for source in sources
+        ]
+
+    except Exception as e:
+        logger.error(
+            "Error packaging ingestion sources for corpus %s: %s", corpus.id, e
+        )
+        return []
 
 
 def package_relationships(
