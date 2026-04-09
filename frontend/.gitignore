@@ -47,3 +47,6 @@ packages/react-devtools-timeline/dist
 /playwright/.cache/
 
 **/.cache/**
+
+# Coverage output (Istanbul / nyc)
+.nyc_output/

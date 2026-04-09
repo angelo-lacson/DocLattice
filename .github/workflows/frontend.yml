@@ -84,11 +84,11 @@ jobs:
       # Their coverage is not included in the LCOV upload above.
       - name: Run Metadata Component Tests
         run: |
-          yarn run test:ct tests/*Metadata*.ct.tsx
+          yarn run test:ct --reporter=list tests/*Metadata*.ct.tsx
         continue-on-error: true
 
       - name: Upload CT Coverage to Codecov
-        if: always()
+        if: success() || failure()
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -141,7 +141,7 @@ jobs:
       - name: Run Unit Tests with Coverage
         run: yarn run test:coverage:unit
       - name: Upload Unit Coverage to Codecov
-        if: always()
+        if: success() || failure()
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
