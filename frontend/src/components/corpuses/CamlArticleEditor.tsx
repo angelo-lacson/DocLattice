@@ -581,6 +581,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
             <EditorToolbar>
               <div ref={extractPickerRef} style={{ position: "relative" }}>
                 <ToolbarBtn
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowExtractPicker((v) => !v);
@@ -604,6 +605,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
                     ) : (
                       corpusExtracts.map((ext) => (
                         <ExtractPickerItem
+                          type="button"
                           key={ext.id}
                           onClick={() =>
                             handleInsertComponent("extract-grid", {
@@ -645,8 +647,11 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
         </ContentWrapper>
 
         <ActionBar>
-          <ActionButton onClick={handleClose}>Close</ActionButton>
+          <ActionButton type="button" onClick={handleClose}>
+            Close
+          </ActionButton>
           <ActionButton
+            type="button"
             $primary
             onClick={handleSave}
             disabled={(!hasChanges && !isNew) || saving}

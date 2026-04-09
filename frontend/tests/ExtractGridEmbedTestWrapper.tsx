@@ -194,6 +194,57 @@ const loadingExtractMock: MockedResponse = {
   },
 };
 
+/** Mock: extract with more than EXTRACT_GRID_EMBED_MAX_ROWS documents (too-many-rows guard) */
+const tooManyRowsExtractMock: MockedResponse = {
+  request: {
+    query: GET_EXTRACT_GRID_EMBED,
+    variables: { extractId: TEST_EXTRACT_ID },
+  },
+  result: {
+    data: {
+      extract: {
+        __typename: "ExtractType",
+        id: TEST_EXTRACT_ID,
+        name: "Large Extract",
+        corpus: {
+          __typename: "CorpusType",
+          id: "Q29ycHVzVHlwZTox",
+          slug: "supply-chain-analysis",
+          creator: { __typename: "UserType", slug: "test-user" },
+        },
+        fieldset: {
+          __typename: "FieldsetType",
+          id: "fieldset-1",
+          fullColumnList: [
+            { __typename: "ColumnType", id: "col-1", name: "Term" },
+          ],
+        },
+        fullDatacellList: Array.from({ length: 201 }, (_, i) => ({
+          __typename: "DatacellType" as const,
+          id: `cell-${i}`,
+          column: {
+            __typename: "ColumnType" as const,
+            id: "col-1",
+            name: "Term",
+          },
+          document: {
+            __typename: "DocumentType" as const,
+            id: `doc-${i}`,
+            title: `Document ${i}`,
+            slug: `document-${i}`,
+            creator: { __typename: "UserType" as const, slug: "test-user" },
+          },
+          data: `value-${i}`,
+          correctedData: null,
+          completed: "2024-03-01T12:00:00Z",
+          failed: null,
+          fullSourceList: [],
+        })),
+      },
+    },
+  },
+};
+
 /** Mock: GraphQL error */
 const errorExtractMock: MockedResponse = {
   request: {
@@ -217,7 +268,8 @@ export type ExtractGridEmbedState =
   | "not-found"
   | "error"
   | "missing-id"
-  | "loading";
+  | "loading"
+  | "too-many-rows";
 
 export interface ExtractGridEmbedTestWrapperProps {
   state?: ExtractGridEmbedState;
@@ -235,6 +287,7 @@ export const ExtractGridEmbedTestWrapper: React.FC<
     "not-found": notFoundExtractMock,
     error: errorExtractMock,
     loading: loadingExtractMock,
+    "too-many-rows": tooManyRowsExtractMock,
   };
 
   const extractId = state === "missing-id" ? undefined : TEST_EXTRACT_ID;

@@ -135,6 +135,29 @@ test.describe("ExtractGridEmbed - Loading", () => {
   });
 });
 
+test.describe("ExtractGridEmbed - Too Many Rows", () => {
+  test("should show limit message when document count exceeds max rows", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <ExtractGridEmbedTestWrapper state="too-many-rows" />
+    );
+
+    await expect(page.getByText("Large Extract")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Guard message should appear with the row count and limit
+    await expect(page.getByText(/201 documents/)).toBeVisible();
+    await expect(page.getByText(/exceeds the embed limit/)).toBeVisible();
+
+    await docScreenshot(page, "caml--extract-grid-embed--too-many-rows");
+
+    await component.unmount();
+  });
+});
+
 test.describe("ExtractGridEmbed - Missing ID", () => {
   test("should show missing-id message when no extractId is provided", async ({
     mount,
