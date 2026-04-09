@@ -269,15 +269,9 @@ def package_ingestion_sources(corpus: Corpus) -> list[IngestionSourceExport]:
         List of IngestionSourceExport dicts
     """
     try:
-        # Find all distinct IngestionSources referenced by this corpus's paths
-        source_ids = (
-            DocumentPath.objects.filter(corpus=corpus)
-            .exclude(ingestion_source__isnull=True)
-            .values_list("ingestion_source_id", flat=True)
-            .distinct()
-        )
-
-        sources = IngestionSource.objects.filter(pk__in=source_ids)
+        sources = IngestionSource.objects.filter(
+            document_paths__corpus=corpus
+        ).distinct()
         return [
             {
                 "name": source.name,

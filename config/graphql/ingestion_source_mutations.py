@@ -23,6 +23,30 @@ from opencontractserver.utils.permissioning import (
 logger = logging.getLogger(__name__)
 
 EXPECTED_GLOBAL_ID_TYPE = "IngestionSourceType"
+_NOT_FOUND_MSG = "Ingestion source not found"
+
+
+def _parse_ingestion_source_global_id(
+    global_id: str,
+) -> tuple[str | None, str | None]:
+    """Parse and validate a global ID for IngestionSource.
+
+    Returns (pk, None) on success or (None, error_message) on failure.
+    """
+    try:
+        type_name, pk = from_global_id(global_id)
+    except (ValueError, TypeError):
+        return None, _NOT_FOUND_MSG
+    if type_name != EXPECTED_GLOBAL_ID_TYPE:
+        return None, _NOT_FOUND_MSG
+    return pk, None
+
+
+def _resolve_source_type(source_type):
+    """Coerce a graphene Enum to its string value, defaulting to MANUAL."""
+    if source_type is None:
+        return IngestionSourceCategory.MANUAL
+    return source_type.value if hasattr(source_type, "value") else source_type
 
 
 class CreateIngestionSourceMutation(graphene.Mutation):
@@ -50,13 +74,7 @@ class CreateIngestionSourceMutation(graphene.Mutation):
     def mutate(_root, info, name, source_type=None, config=None):
         user = info.context.user
 
-        # Coerce graphene Enum to its string value so the in-memory object
-        # holds a plain string that graphene-django can serialize.
-        resolved_type = (
-            source_type.value
-            if hasattr(source_type, "value")
-            else IngestionSourceCategory.MANUAL
-        )
+        resolved_type = _resolve_source_type(source_type)
 
         # Use try/except around create() instead of exists() + create()
         # to avoid TOCTOU race condition with the unique constraint.
@@ -100,12 +118,12 @@ class UpdateIngestionSourceMutation(graphene.Mutation):
     @login_required
     def mutate(_root, info, id, **kwargs):
         user = info.context.user
-        type_name, pk = from_global_id(id)
 
-        if type_name != EXPECTED_GLOBAL_ID_TYPE:
+        pk, error = _parse_ingestion_source_global_id(id)
+        if error:
             return UpdateIngestionSourceMutation(
                 ok=False,
-                message="Ingestion source not found",
+                message=error,
                 ingestion_source=None,
             )
 
@@ -117,14 +135,12 @@ class UpdateIngestionSourceMutation(graphene.Mutation):
         except IngestionSource.DoesNotExist:
             return UpdateIngestionSourceMutation(
                 ok=False,
-                message="Ingestion source not found",
+                message=_NOT_FOUND_MSG,
                 ingestion_source=None,
             )
 
-        # Coerce graphene Enum to its string value for source_type
         if "source_type" in kwargs and kwargs["source_type"] is not None:
-            st = kwargs["source_type"]
-            kwargs["source_type"] = st.value if hasattr(st, "value") else st
+            kwargs["source_type"] = _resolve_source_type(kwargs["source_type"])
 
         # Note: the `is not None` guard prevents nulling JSON fields like
         # `config` (to clear it, pass config={} instead).  Boolean fields
@@ -168,12 +184,12 @@ class DeleteIngestionSourceMutation(graphene.Mutation):
     @login_required
     def mutate(_root, info, id):
         user = info.context.user
-        type_name, pk = from_global_id(id)
 
-        if type_name != EXPECTED_GLOBAL_ID_TYPE:
+        pk, error = _parse_ingestion_source_global_id(id)
+        if error:
             return DeleteIngestionSourceMutation(
                 ok=False,
-                message="Ingestion source not found",
+                message=error,
             )
 
         # Intentionally scoped to creator even for superusers — see
@@ -183,7 +199,7 @@ class DeleteIngestionSourceMutation(graphene.Mutation):
         except IngestionSource.DoesNotExist:
             return DeleteIngestionSourceMutation(
                 ok=False,
-                message="Ingestion source not found",
+                message=_NOT_FOUND_MSG,
             )
 
         source.delete()
