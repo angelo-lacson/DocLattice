@@ -81,7 +81,7 @@ class IngestionSourceType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             return queryset.filter(is_public=True)
         if user.is_superuser:
             return queryset
-        return IngestionSource.objects.visible_to_user(user)
+        return queryset.filter(pk__in=IngestionSource.objects.visible_to_user(user))
 
 
 # -------------------- Document Path Types -------------------- #
