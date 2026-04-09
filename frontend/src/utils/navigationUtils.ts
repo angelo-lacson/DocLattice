@@ -325,6 +325,11 @@ export function getCorpusUrl(
  * @param corpus - Optional corpus for context (generates 3-segment URL)
  * @param queryParams - Optional query parameters for URL-driven state
  * @returns Full document URL with query string, or "#" if slugs missing
+ *
+ * NOTE: `id` fields are `Partial` (optional) because URL generation only
+ * needs slugs. Callers like ExtractGridEmbed that build lightweight document
+ * objects from datacell data may not have the `id` available. Making `id`
+ * optional avoids forcing callers to synthesize a dummy value.
  */
 export function getDocumentUrl(
   document: Pick<DocumentType, "slug"> &

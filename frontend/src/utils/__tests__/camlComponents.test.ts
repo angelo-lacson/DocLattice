@@ -180,6 +180,16 @@ describe("buildComponentMarker()", () => {
     expect(parsed).toEqual(original);
   });
 
+  it("round-trips values containing equals signs", () => {
+    const original = {
+      type: "filter",
+      props: { expr: "a=b" },
+    };
+    const marker = buildComponentMarker(original.type, original.props);
+    const parsed = parseComponentMarker(marker);
+    expect(parsed).toEqual(original);
+  });
+
   it("escapes backslashes inside values", () => {
     const original = {
       type: "widget",

@@ -48,15 +48,10 @@ export interface CamlDirectiveRendererProps {
     contributors?: number;
     threads?: number;
   };
+  /** Optional callback to resolve protocol URIs (e.g. corpus://icon) to image URLs */
+  resolveImageSrc?: (src: string) => string | undefined;
   /** Optional registry of embedded component types (e.g. extract-grid). */
   componentRegistry?: CamlComponentRegistry;
-  /**
-   * Optional callback to resolve protocol URIs (e.g. corpus://icon) to image URLs.
-   * @deprecated Currently a no-op. @os-legal/caml-react does not yet expose
-   * resolveImageSrc on CamlArticleProps (see issue #1172). Pass-through will be
-   * re-enabled once the upstream version ships.
-   */
-  resolveImageSrc?: (src: string) => string | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,8 +77,8 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
   document,
   handlerContext,
   stats,
+  resolveImageSrc,
   componentRegistry,
-  resolveImageSrc: _resolveImageSrc,
 }) => {
   // Single pass: extract directives and build cleaned document simultaneously.
   // Each prose block is parsed once via extractInlineDirectives, producing both
@@ -189,17 +184,13 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
     componentRegistry,
   ]);
 
-  // NOTE: _resolveImageSrc is accepted by this component for forward
-  // compatibility but @os-legal/caml-react@0.0.3 does not yet expose
-  // that prop on CamlArticle. Pass it through once a future version adds
-  // `resolveImageSrc` to CamlArticleProps.
-
   return (
     <CamlThemeProvider>
       <CamlArticle
         document={cleanedDocument}
         stats={stats}
         renderMarkdown={renderMarkdown}
+        resolveImageSrc={resolveImageSrc}
       />
     </CamlThemeProvider>
   );

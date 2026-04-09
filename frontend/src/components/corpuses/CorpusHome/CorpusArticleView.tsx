@@ -344,8 +344,8 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
         document={parsedDocument}
         handlerContext={handlerContext}
         stats={stats}
-        componentRegistry={CAML_COMPONENTS}
         resolveImageSrc={resolveImageSrc}
+        componentRegistry={CAML_COMPONENTS}
       />
     </ArticleViewContainer>
   );

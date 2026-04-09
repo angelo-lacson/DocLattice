@@ -497,6 +497,9 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
         // Only show extracts that have either completed processing or have
         // associated documents. This hides newly-created extracts that haven't
         // started yet and would produce empty grid embeds.
+        // NOTE: Relies on `finished` and `fullDocumentList` being present in the
+        // GET_EXTRACTS query response. If those fields are ever removed from
+        // the query, this filter silently degrades to `e.finished` only.
         .filter((e) => e.finished || (e.fullDocumentList?.length ?? 0) > 0)
     );
   }, [extractsData]);
@@ -581,6 +584,9 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
             <EditorToolbar>
               <div ref={extractPickerRef} style={{ position: "relative" }}>
                 <ToolbarBtn
+                  type="button"
+                  aria-haspopup="listbox"
+                  aria-expanded={showExtractPicker}
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowExtractPicker((v) => !v);
@@ -592,7 +598,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
                   Insert Extract Grid
                 </ToolbarBtn>
                 {showExtractPicker && (
-                  <ExtractPickerDropdown>
+                  <ExtractPickerDropdown role="listbox">
                     {extractsLoading ? (
                       <ExtractPickerEmpty>
                         Loading extracts...
@@ -604,6 +610,8 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
                     ) : (
                       corpusExtracts.map((ext) => (
                         <ExtractPickerItem
+                          type="button"
+                          role="option"
                           key={ext.id}
                           onClick={() =>
                             handleInsertComponent("extract-grid", {
@@ -645,8 +653,11 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
         </ContentWrapper>
 
         <ActionBar>
-          <ActionButton onClick={handleClose}>Close</ActionButton>
+          <ActionButton type="button" onClick={handleClose}>
+            Close
+          </ActionButton>
           <ActionButton
+            type="button"
             $primary
             onClick={handleSave}
             disabled={(!hasChanges && !isNew) || saving}
