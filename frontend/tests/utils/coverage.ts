@@ -37,8 +37,9 @@ export const test = baseTest.extend({
         const filePath = path.join(COVERAGE_DIR, `coverage-${id}.json`);
         fs.writeFileSync(filePath, JSON.stringify(coverage));
       }
-    } catch {
+    } catch (err) {
       // Coverage collection is best-effort; do not fail the test
+      console.warn("[coverage] failed to collect coverage data:", err);
     }
   },
 });
