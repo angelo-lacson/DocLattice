@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Frontend code coverage reporting** (PR #1205): Added coverage collection and Codecov integration for both unit tests (Vitest + v8) and component tests (Playwright CT + Istanbul). Coverage is opt-in via `COVERAGE=true` environment variable to avoid performance overhead during normal test runs. Custom Playwright fixture (`frontend/tests/utils/coverage.ts`) extracts Istanbul `__coverage__` data from the browser after each test. CI uploads separate coverage flags (`frontend-unit`, `frontend-component`) with `carryforward: true` for granular tracking. Added `.codecov.yml` configuration, `vite-plugin-istanbul` for build-time instrumentation, and `nyc` for LCOV report generation from collected coverage data.
+
 ### Fixed
 
 - **Conversation pagination cache collisions** (PR #1206): Added `keyArgs` configuration for the `conversations` relay pagination cache entry in `frontend/src/graphql/cache.ts`. Previously `conversations` used `relayStylePagination()` with no key arguments, causing all conversation queries (across different corpora, documents, and conversation types) to share a single cache entry. This led to paginated results from one context bleeding into another. Now uses `["documentId", "corpusId", "conversationType", "hasCorpus", "hasDocument"]` to isolate cache entries by filter dimensions.
