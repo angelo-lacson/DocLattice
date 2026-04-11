@@ -830,6 +830,30 @@ class TestAsuggestMemoryUpdate(TransactionTestCase):
         content = async_to_sync(read_memory_content)(self.corpus)
         self.assertIn("- **Search**: A query insight", content)
 
+    def test_empty_insight_rejected(self):
+        from opencontractserver.llms.tools.core_tools import asuggest_memory_update
+
+        result = async_to_sync(asuggest_memory_update)(
+            corpus_id=self.corpus.pk,
+            user_id=self.user.pk,
+            section="collection_patterns",
+            insight="   ",
+        )
+        self.assertIn("cannot be empty", result)
+
+    def test_oversized_insight_rejected(self):
+        from opencontractserver.constants.agent_memory import MEMORY_INSIGHT_MAX_LENGTH
+        from opencontractserver.llms.tools.core_tools import asuggest_memory_update
+
+        long_insight = "x" * (MEMORY_INSIGHT_MAX_LENGTH + 1)
+        result = async_to_sync(asuggest_memory_update)(
+            corpus_id=self.corpus.pk,
+            user_id=self.user.pk,
+            section="collection_patterns",
+            insight=long_insight,
+        )
+        self.assertIn("exceeds maximum length", result)
+
 
 # ---------------------------------------------------------------------------
 # Agent factory tests (agent_factory.py)

@@ -15,7 +15,6 @@ from datetime import timedelta
 
 from asgiref.sync import async_to_sync
 from celery import shared_task
-from django.conf import settings
 from django.utils import timezone
 
 from opencontractserver.constants.agent_memory import (
@@ -60,9 +59,8 @@ Summarise the following conversation for memory curation:
 # ---------------------------------------------------------------------------
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=30)
+@shared_task
 def curate_corpus_memory(
-    self,
     conversation_id: int,
 ) -> dict:
     """Reflect on a completed conversation and update corpus memory.
@@ -100,7 +98,7 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
     # 1. Load conversation and validate
     try:
         conversation = await Conversation.objects.select_related(
-            "chat_with_corpus", "creator"
+            "chat_with_corpus", "chat_with_corpus__creator", "creator"
         ).aget(id=conversation_id)
     except Conversation.DoesNotExist:
         logger.warning("Conversation %s not found for curation", conversation_id)
@@ -172,7 +170,9 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
         )
 
     # 4. Stage 1: Summarise conversation (privacy firewall)
-    model_name = settings.OPENAI_MODEL
+    from opencontractserver.llms.agents.core_agents import get_default_config
+
+    model_name = get_default_config().model_name
     summarise_agent = PydanticAIAgent(
         model=model_name,
         instructions=_SUMMARISE_SYSTEM_PROMPT,
@@ -251,7 +251,16 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
     # conversation.creator is NOT NULL in the DB, but we fall back to
     # corpus.creator as defense-in-depth in case the constraint changes.
     user = conversation.creator or corpus.creator
-    await update_memory_content(corpus, updated_content, user)
+    try:
+        await update_memory_content(corpus, updated_content, user)
+    except Exception:
+        logger.warning(
+            "Failed to write updated memory for conversation %s",
+            conversation_id,
+            exc_info=True,
+        )
+        await _release_claim()
+        raise
 
     logger.info(
         "Curated memory for corpus %s from conversation %s: "

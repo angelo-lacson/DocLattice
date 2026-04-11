@@ -2885,9 +2885,20 @@ async def asuggest_memory_update(
         read_memory_content,
         update_memory_content,
     )
+    from opencontractserver.constants.agent_memory import MEMORY_INSIGHT_MAX_LENGTH
     from opencontractserver.corpuses.models import Corpus
 
     User = get_user_model()
+
+    # Content validation
+    insight = insight.strip()
+    if not insight:
+        return "Insight text cannot be empty."
+    if len(insight) > MEMORY_INSIGHT_MAX_LENGTH:
+        return (
+            f"Insight exceeds maximum length of {MEMORY_INSIGHT_MAX_LENGTH} "
+            f"characters ({len(insight)} provided). Please shorten the insight."
+        )
 
     try:
         corpus = await Corpus.objects.aget(pk=corpus_id)

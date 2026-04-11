@@ -68,6 +68,14 @@ MEMORY_CURATION_CHECK_INTERVAL_SECONDS: float = 600.0  # 10 minutes
 MEMORY_CURATION_BATCH_LIMIT: int = 500
 
 # ---------------------------------------------------------------------------
+# Content validation limits
+# ---------------------------------------------------------------------------
+# Maximum character length for a single insight submitted via the
+# asuggest_memory_update tool.  Prevents LLM-generated content from
+# inflating the memory document with excessively long entries.
+MEMORY_INSIGHT_MAX_LENGTH: int = 500
+
+# ---------------------------------------------------------------------------
 # System prompt injection prefix
 # ---------------------------------------------------------------------------
 MEMORY_INJECTION_PREFIX = (
