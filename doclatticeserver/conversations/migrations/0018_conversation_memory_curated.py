@@ -15,6 +15,7 @@ class Migration(migrations.Migration):
             name="memory_curated",
             field=models.BooleanField(
                 default=False,
+                db_index=True,
                 help_text="Whether this conversation has been curated for corpus memory.",
             ),
         ),

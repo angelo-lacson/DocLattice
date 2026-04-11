@@ -96,8 +96,8 @@ async def get_or_create_memory_document(corpus: Corpus, user) -> Document:
     from doclatticeserver.corpuses.models import Corpus as CorpusModel
 
     def _get_or_create_sync():
+        # Phase 1: Check under lock whether a memory document already exists.
         with transaction.atomic():
-            # Lock the corpus row to prevent concurrent creation
             locked = CorpusModel.objects.select_for_update().get(pk=corpus.pk)
 
             if locked.memory_document_id:
@@ -111,35 +111,47 @@ async def get_or_create_memory_document(corpus: Corpus, user) -> Document:
                         corpus.id,
                         exc_info=True,
                     )
+            # No existing document — fall through to create one.
 
-            # Create a new memory document
-            content = _build_empty_memory(corpus.id).encode("utf-8")
-            try:
-                doc, _status, _path = corpus.import_content(
-                    content=content,
-                    user=user,
-                    filename=MEMORY_DOCUMENT_FILENAME,
-                    file_type=MARKDOWN_MIME_TYPE,
-                    title=MEMORY_DOCUMENT_TITLE,
-                    description="Accumulated agent insights for this corpus.",
-                )
-            except IntegrityError:
-                # Another transaction created it concurrently; re-read
-                locked.refresh_from_db()
-                if locked.memory_document_id:
-                    return locked.memory_document
-                raise
+        # Phase 2: Create the document OUTSIDE the lock so that
+        # import_content (potentially slow I/O) does not hold the
+        # select_for_update row lock and serialise all requests.
+        content = _build_empty_memory(corpus.id).encode("utf-8")
+        try:
+            doc, _status, _path = corpus.import_content(
+                content=content,
+                user=user,
+                filename=MEMORY_DOCUMENT_FILENAME,
+                file_type=MARKDOWN_MIME_TYPE,
+                title=MEMORY_DOCUMENT_TITLE,
+                description="Accumulated agent insights for this corpus.",
+            )
+        except IntegrityError:
+            # Another transaction created it concurrently; re-read
+            corpus.refresh_from_db()
+            if corpus.memory_document_id:
+                return corpus.memory_document
+            raise
 
-            # Link back to corpus
+        # Phase 3: Re-acquire the lock to write back the FK.
+        with transaction.atomic():
+            locked = CorpusModel.objects.select_for_update().get(pk=corpus.pk)
+
+            # Another caller may have won the race and already linked a doc.
+            if locked.memory_document_id:
+                # Our doc is an orphan; delete it and return the winner.
+                doc.delete()
+                return locked.memory_document
+
             locked.memory_document = doc
             locked.save(update_fields=["memory_document"])
 
-            # Keep the in-memory corpus in sync
-            corpus.memory_document = doc
-            corpus.memory_document_id = doc.pk
+        # Keep the in-memory corpus in sync
+        corpus.memory_document = doc
+        corpus.memory_document_id = doc.pk
 
-            logger.info("Created memory document %s for corpus %s", doc.id, corpus.id)
-            return doc
+        logger.info("Created memory document %s for corpus %s", doc.id, corpus.id)
+        return doc
 
     return await database_sync_to_async(_get_or_create_sync)()
 
@@ -211,6 +223,10 @@ async def update_memory_content(corpus: Corpus, new_content: str, user) -> Docum
                 raise DocumentModel.DoesNotExist(
                     f"Memory document {doc.pk} was deleted concurrently."
                 )
+            # Delete the old storage file to avoid orphans (Django's
+            # FieldFile.save creates a new file rather than overwriting).
+            if locked_doc.txt_extract_file:
+                locked_doc.txt_extract_file.delete(save=False)
             locked_doc.txt_extract_file.save(
                 MEMORY_DOCUMENT_FILENAME,
                 ContentFile(new_content.encode("utf-8")),
@@ -233,6 +249,10 @@ def split_memory_sections(content: str) -> list[str]:
 
     Returns a list of section strings, each starting with its header line.
     The YAML frontmatter (delimited by ``---``) is excluded.
+
+    Note: if the content contains no ``## `` headers the entire body is
+    returned as a single-element list.  Callers therefore cannot
+    distinguish "one real section" from "headerless free-form content".
     """
     # Strip YAML frontmatter
     stripped = re.sub(r"^---\s*\n.*?\n---\s*\n", "", content, count=1, flags=re.DOTALL)
@@ -278,6 +298,15 @@ async def get_memory_for_injection(corpus: Corpus, query: str = "") -> str:
         return ""
 
     token_count = estimate_token_count(body)
+
+    if token_count > MEMORY_FULL_INJECTION_MAX_TOKENS:
+        logger.warning(
+            "Memory document for corpus %s exceeds full-injection threshold "
+            "(%d tokens > %d max); falling back to section filtering",
+            corpus.id,
+            token_count,
+            MEMORY_FULL_INJECTION_MAX_TOKENS,
+        )
 
     if token_count <= MEMORY_FULL_INJECTION_MAX_TOKENS:
         # Full injection — include everything
