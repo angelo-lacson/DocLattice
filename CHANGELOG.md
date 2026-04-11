@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Document lineage fields dropped on move/delete/restore** (PR #1197): `move_document`, `delete_document`, and `restore_document` in `opencontractserver/documents/versioning.py` now forward `ingestion_source`, `external_id`, and `ingestion_metadata` from the parent path record to newly-created path nodes. Previously these fields were silently dropped, losing lineage provenance on any path operation.
+
+- **`ingestion_metadata` truthiness check** (PR #1197): Changed `if ingestion_metadata:` to `if ingestion_metadata is not None:` in `config/graphql/document_mutations.py` so that an empty dict `{}` is correctly stored rather than silently discarded.
+
+- **Lazy logging in export_v2.py** (PR #1197): Replaced remaining f-string logger calls with `%s`-style lazy formatting in `opencontractserver/utils/export_v2.py` for corpus folders, relationships, and conversations error handlers.
+
 - **Conversation pagination cache collisions** (PR #1206): Added `keyArgs` configuration for the `conversations` relay pagination cache entry in `frontend/src/graphql/cache.ts`. Previously `conversations` used `relayStylePagination()` with no key arguments, causing all conversation queries (across different corpora, documents, and conversation types) to share a single cache entry. This led to paginated results from one context bleeding into another. Now uses `["documentId", "corpusId", "conversationType", "hasCorpus", "hasDocument"]` to isolate cache entries by filter dimensions.
 
 - **GraphQL security hardening cleanup** (Issue #1198):

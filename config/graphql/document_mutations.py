@@ -250,7 +250,7 @@ class UploadDocument(graphene.Mutation):
                 lineage_kwargs["ingestion_source"] = ingestion_source
             if external_id is not None:
                 lineage_kwargs["external_id"] = external_id
-            if ingestion_metadata:
+            if ingestion_metadata is not None:
                 lineage_kwargs["ingestion_metadata"] = ingestion_metadata
 
             # Import document - import_content handles path generation

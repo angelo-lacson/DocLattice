@@ -446,6 +446,9 @@ def move_document(
             is_current=True,
             is_deleted=False,
             creator=user,
+            ingestion_source=current.ingestion_source,
+            external_id=current.external_id,
+            ingestion_metadata=current.ingestion_metadata,
         )
 
         logger.info(
@@ -480,6 +483,9 @@ def delete_document(corpus: Corpus, path: str, user: User) -> DocumentPath:
             is_deleted=True,  # Soft delete
             is_current=True,
             creator=user,
+            ingestion_source=current.ingestion_source,
+            external_id=current.external_id,
+            ingestion_metadata=current.ingestion_metadata,
         )
 
         logger.info(
@@ -514,6 +520,9 @@ def restore_document(corpus: Corpus, path: str, user: User) -> DocumentPath:
             is_deleted=False,  # Not deleted
             is_current=True,
             creator=user,
+            ingestion_source=deleted.ingestion_source,
+            external_id=deleted.external_id,
+            ingestion_metadata=deleted.ingestion_metadata,
         )
 
         logger.info(

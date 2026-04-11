@@ -177,7 +177,7 @@ def package_corpus_folders(corpus: Corpus) -> list[CorpusFolderExport]:
             )
 
     except Exception as e:
-        logger.error(f"Error packaging corpus folders for corpus {corpus.id}: {e}")
+        logger.error("Error packaging corpus folders for corpus %s: %s", corpus.id, e)
 
     return folders_export
 
@@ -337,7 +337,7 @@ def package_relationships(
             )
 
     except Exception as e:
-        logger.error(f"Error packaging relationships for corpus {corpus.id}: {e}")
+        logger.error("Error packaging relationships for corpus %s: %s", corpus.id, e)
 
     return relationships_export
 
@@ -546,7 +546,7 @@ def package_conversations(
             )
 
     except Exception as e:
-        logger.error(f"Error packaging conversations for corpus {corpus.id}: {e}")
+        logger.error("Error packaging conversations for corpus %s: %s", corpus.id, e)
 
     return conversations_export, messages_export, votes_export
 
