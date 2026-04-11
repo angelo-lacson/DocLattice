@@ -1,3 +1,5 @@
+import { OS_LEGAL_COLORS } from "./osLegalStyles";
+
 export const VERSION_TAG = "v3.0.0.rc1";
 export const MOBILE_VIEW_BREAKPOINT = 600;
 // Tablet breakpoint - used for sidebar collapse behavior (larger than mobile)
@@ -353,11 +355,12 @@ export const EXTRACT_GRID_CELL_TRUNCATE_LENGTH = 100;
  */
 export const EXTRACT_GRID_EMBED_MAX_ROWS = 200;
 
-// Datacell status indicator colors (used in ExtractGridEmbed status dots)
+// Datacell status indicator colors (used in ExtractGridEmbed status dots).
+// Values reference OS_LEGAL_COLORS design tokens for consistency.
 export const DATACELL_STATUS_COLORS = {
-  FAILED: "#ef4444",
-  COMPLETE: "#22c55e",
-  PENDING: "#94a3b8",
+  FAILED: OS_LEGAL_COLORS.danger,
+  COMPLETE: OS_LEGAL_COLORS.green,
+  PENDING: OS_LEGAL_COLORS.textMuted,
 } as const;
 
 // Processing failure UI colors (used in DocumentItem, ModernDocumentItem)
