@@ -1372,3 +1372,200 @@ class TestAnonymousIngestionSourceAccess(TestCase):
         gid = to_global_id("IngestionSourceType", source.pk)
         result = anon_client.execute(SINGLE_SOURCE_QUERY, variables={"id": gid})
         self.assertIsNotNone(result.get("errors"))
+
+
+# ------------------------------------------------------------------ #
+# Superuser access to ingestion sources
+# ------------------------------------------------------------------ #
+
+
+class TestSuperuserIngestionSourceAccess(TestCase):
+    """Test that superusers can see all ingestion sources."""
+
+    def setUp(self):
+        self.superuser = User.objects.create_superuser(
+            username="is_admin_superuser", password="adminpass"
+        )
+        self.regular_user = User.objects.create_user(
+            username="regular", password="regularpass"
+        )
+        self.source = IngestionSource.objects.create(
+            name="regular_source",
+            source_type=IngestionSourceCategory.API,
+            creator=self.regular_user,
+        )
+        set_permissions_for_obj_to_user(
+            self.regular_user, self.source, [PermissionTypes.CRUD]
+        )
+
+    def test_superuser_list_sees_all_sources(self):
+        """Superuser should see sources from all users."""
+        admin_client = Client(schema, context_value=TestContext(self.superuser))
+        result = admin_client.execute(LIST_SOURCES_QUERY)
+        self.assertIsNone(result.get("errors"))
+        sources = result["data"]["ingestionSources"]
+        names = [s["name"] for s in sources]
+        self.assertIn("regular_source", names)
+
+    def test_superuser_single_source(self):
+        """Superuser should be able to query any source by ID."""
+        admin_client = Client(schema, context_value=TestContext(self.superuser))
+        gid = to_global_id("IngestionSourceType", self.source.pk)
+        result = admin_client.execute(SINGLE_SOURCE_QUERY, variables={"id": gid})
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["ingestionSource"]
+        self.assertIsNotNone(data)
+        self.assertEqual(data["name"], "regular_source")
+
+
+# ------------------------------------------------------------------ #
+# Versioning lineage preservation tests
+# ------------------------------------------------------------------ #
+
+
+class TestVersioningLineagePreservation(TestCase):
+    """Test that move/delete/restore operations preserve lineage fields."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        self.source = IngestionSource.objects.create(
+            name="lineage_source",
+            source_type=IngestionSourceCategory.CRAWLER,
+            creator=self.user,
+        )
+
+    def _create_doc_with_lineage(self):
+        """Create a document with lineage fields on its path."""
+        from opencontractserver.documents.versioning import import_document
+
+        content = b"%PDF-1.5 test content"
+        doc, status, path = import_document(
+            corpus=self.corpus,
+            path="/documents/lineage_test.pdf",
+            content=content,
+            user=self.user,
+            ingestion_source=self.source,
+            external_id="ext-lineage-001",
+            ingestion_metadata={"crawl_url": "https://example.com/doc1"},
+        )
+        return doc, path
+
+    def test_import_document_stores_lineage_on_path(self):
+        """import_document with lineage kwargs should store them on the path."""
+        doc, path = self._create_doc_with_lineage()
+        self.assertEqual(path.ingestion_source, self.source)
+        self.assertEqual(path.external_id, "ext-lineage-001")
+        self.assertEqual(
+            path.ingestion_metadata, {"crawl_url": "https://example.com/doc1"}
+        )
+
+    def test_move_preserves_lineage(self):
+        """move_document should copy lineage fields to the new path record."""
+        from opencontractserver.documents.versioning import move_document
+
+        _, original_path = self._create_doc_with_lineage()
+        new_path = move_document(
+            corpus=self.corpus,
+            old_path="/documents/lineage_test.pdf",
+            new_path="/documents/moved_lineage.pdf",
+            user=self.user,
+        )
+        self.assertEqual(new_path.ingestion_source, self.source)
+        self.assertEqual(new_path.external_id, "ext-lineage-001")
+        self.assertEqual(
+            new_path.ingestion_metadata, {"crawl_url": "https://example.com/doc1"}
+        )
+
+    def test_delete_preserves_lineage(self):
+        """delete_document should copy lineage fields to the deleted path record."""
+        from opencontractserver.documents.versioning import delete_document
+
+        self._create_doc_with_lineage()
+        deleted_path = delete_document(
+            corpus=self.corpus,
+            path="/documents/lineage_test.pdf",
+            user=self.user,
+        )
+        self.assertTrue(deleted_path.is_deleted)
+        self.assertEqual(deleted_path.ingestion_source, self.source)
+        self.assertEqual(deleted_path.external_id, "ext-lineage-001")
+        self.assertEqual(
+            deleted_path.ingestion_metadata, {"crawl_url": "https://example.com/doc1"}
+        )
+
+    def test_restore_preserves_lineage(self):
+        """restore_document should copy lineage fields to the restored path record."""
+        from opencontractserver.documents.versioning import (
+            delete_document,
+            restore_document,
+        )
+
+        self._create_doc_with_lineage()
+        delete_document(
+            corpus=self.corpus,
+            path="/documents/lineage_test.pdf",
+            user=self.user,
+        )
+        restored_path = restore_document(
+            corpus=self.corpus,
+            path="/documents/lineage_test.pdf",
+            user=self.user,
+        )
+        self.assertFalse(restored_path.is_deleted)
+        self.assertEqual(restored_path.ingestion_source, self.source)
+        self.assertEqual(restored_path.external_id, "ext-lineage-001")
+        self.assertEqual(
+            restored_path.ingestion_metadata, {"crawl_url": "https://example.com/doc1"}
+        )
+
+    def test_import_document_without_lineage(self):
+        """import_document without lineage kwargs should leave fields at defaults."""
+        from opencontractserver.documents.versioning import import_document
+
+        content = b"%PDF-1.5 no lineage content"
+        doc, status, path = import_document(
+            corpus=self.corpus,
+            path="/documents/no_lineage.pdf",
+            content=content,
+            user=self.user,
+        )
+        self.assertIsNone(path.ingestion_source)
+        self.assertEqual(path.external_id, "")
+        self.assertFalse(path.ingestion_metadata)
+
+
+# ------------------------------------------------------------------ #
+# Corpus.import_content lineage kwargs passthrough
+# ------------------------------------------------------------------ #
+
+
+class TestCorpusImportContentLineage(TestCase):
+    """Test that Corpus.import_content passes lineage kwargs to DocumentPath."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+        self.source = IngestionSource.objects.create(
+            name="corpus_test_source",
+            source_type=IngestionSourceCategory.API,
+            creator=self.user,
+        )
+
+    def test_import_content_with_lineage_kwargs(self):
+        """Corpus.import_content should pass lineage kwargs through to DocumentPath."""
+        pdf_content = b"%PDF-1.5 test"
+        doc, status, path = self.corpus.import_content(
+            filename="lineage_doc.pdf",
+            content=pdf_content,
+            user=self.user,
+            ingestion_source=self.source,
+            external_id="ext-corpus-001",
+            ingestion_metadata={"import_job": "batch-42"},
+        )
+        self.assertIsNotNone(path)
+        path.refresh_from_db()
+        self.assertEqual(path.ingestion_source, self.source)
+        self.assertEqual(path.external_id, "ext-corpus-001")
+        self.assertEqual(path.ingestion_metadata, {"import_job": "batch-42"})
