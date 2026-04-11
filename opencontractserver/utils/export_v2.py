@@ -239,7 +239,10 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
                 "created": doc_path.created.isoformat(),
             }
 
-            # Include ingestion lineage fields when present
+            # Include ingestion lineage fields when present.
+            # Intentionally uses truthiness: empty string / empty dict are
+            # treated the same as None (omitted from export). This keeps
+            # exports compact; import interprets a missing key as "not set".
             if doc_path.ingestion_source_id:
                 entry["ingestion_source_name"] = doc_path.ingestion_source.name
             if doc_path.external_id:

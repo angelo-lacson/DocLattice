@@ -5,7 +5,6 @@ integration, and export/import round-trip.
 
 from unittest.mock import patch
 
-import pytest
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from graphene.test import Client
@@ -27,7 +26,6 @@ from opencontractserver.utils.files import base_64_encode_bytes
 from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()
-pytestmark = pytest.mark.django_db
 
 
 class TestContext:

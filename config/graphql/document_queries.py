@@ -275,6 +275,9 @@ class DocumentQueryMixin:
 
     # INGESTION SOURCE RESOLVERS ###########################################
 
+    # NOTE: Uses graphene.List (not ConnectionField) intentionally.
+    # Ingestion sources are owner-scoped and expected to be a small set
+    # per user (< 50). Relay pagination adds complexity without benefit here.
     ingestion_sources = graphene.List(
         IngestionSourceType,
         active_only=graphene.Boolean(
