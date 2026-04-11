@@ -497,6 +497,9 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
         // Only show extracts that have either completed processing or have
         // associated documents. This hides newly-created extracts that haven't
         // started yet and would produce empty grid embeds.
+        // NOTE: Relies on `finished` and `fullDocumentList` being present in the
+        // GET_EXTRACTS query response. If those fields are ever removed from
+        // the query, this filter silently degrades to `e.finished` only.
         .filter((e) => e.finished || (e.fullDocumentList?.length ?? 0) > 0)
     );
   }, [extractsData]);

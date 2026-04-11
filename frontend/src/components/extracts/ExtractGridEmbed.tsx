@@ -328,6 +328,13 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
 
   // --- Too-large guard (#1204) ---
   if (rows.length > EXTRACT_GRID_EMBED_MAX_ROWS) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        `[ExtractGridEmbed] Extract "${extract.name}" has ${rows.length} rows ` +
+          `(limit: ${EXTRACT_GRID_EMBED_MAX_ROWS}). The full datacell payload ` +
+          `was still fetched — consider server-side pagination (#1204).`
+      );
+    }
     return (
       <EmbedWrapper>
         <EmbedHeader>
