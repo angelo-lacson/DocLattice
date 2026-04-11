@@ -81,7 +81,12 @@ async function loadIstanbulPlugins() {
   return [
     istanbul({
       include: "src/**/*.{ts,tsx}",
-      exclude: ["node_modules", "src/**/*.test.{ts,tsx}", "src/setupTests.ts"],
+      exclude: [
+        "node_modules",
+        "src/**/*.test.{ts,tsx}",
+        "src/setupTests.ts",
+        "src/main.tsx",
+      ],
       extension: [".ts", ".tsx"],
       // requireEnv is false because loadIstanbulPlugins() already gates on
       // process.env.COVERAGE; setting requireEnv: true would require a
