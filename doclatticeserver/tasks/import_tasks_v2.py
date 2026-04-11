@@ -549,7 +549,7 @@ def _reconstruct_document_paths(
             updates["ingestion_source"] = source_name_map[source_name]
 
         external_id = path_data.get("external_id")
-        if external_id:
+        if external_id is not None:
             updates["external_id"] = external_id
 
         ingestion_metadata = path_data.get("ingestion_metadata")

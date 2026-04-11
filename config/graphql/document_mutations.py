@@ -26,6 +26,7 @@ from config.graphql.graphene_types import (
     DocumentType,
     UserExportType,
 )
+from config.graphql.ingestion_source_mutations import EXPECTED_GLOBAL_ID_TYPE
 from config.graphql.ratelimits import (
     RateLimits,
     get_user_tier_rate,
@@ -231,7 +232,7 @@ class UploadDocument(graphene.Mutation):
             if ingestion_source_id is not None:
                 try:
                     type_name, source_pk = from_global_id(ingestion_source_id)
-                    if type_name != "IngestionSourceType":
+                    if type_name != EXPECTED_GLOBAL_ID_TYPE:
                         raise IngestionSource.DoesNotExist
                     ingestion_source = IngestionSource.objects.get(
                         pk=source_pk, creator=user
@@ -247,7 +248,7 @@ class UploadDocument(graphene.Mutation):
             lineage_kwargs = {}
             if ingestion_source is not None:
                 lineage_kwargs["ingestion_source"] = ingestion_source
-            if external_id:
+            if external_id is not None:
                 lineage_kwargs["external_id"] = external_id
             if ingestion_metadata:
                 lineage_kwargs["ingestion_metadata"] = ingestion_metadata

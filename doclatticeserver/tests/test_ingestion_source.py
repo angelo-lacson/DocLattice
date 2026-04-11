@@ -977,6 +977,53 @@ class TestImportReconstructLineage(TestCase):
 
 
 # ------------------------------------------------------------------ #
+# _import_ingestion_sources IntegrityError fallback
+# ------------------------------------------------------------------ #
+
+
+class TestImportIngestionSourcesIntegrityFallback(TestCase):
+    """Test that _import_ingestion_sources handles the get_or_create race."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+
+    def test_integrity_error_fallback_resolves_existing(self):
+        """When get_or_create raises IntegrityError (race condition), the
+        fallback .get() should resolve the existing record."""
+        from django.db import IntegrityError
+
+        # Pre-create the source so the fallback .get() has something to find
+        existing = IngestionSource.objects.create(
+            name="race_source",
+            source_type=IngestionSourceCategory.API,
+            creator=self.user,
+        )
+
+        sources_data = [
+            {
+                "name": "race_source",
+                "source_type": "api",
+                "config": {"url": "https://example.com"},
+                "active": True,
+            }
+        ]
+
+        # Mock get_or_create to simulate a race condition: it raises
+        # IntegrityError as if a concurrent process created the row
+        # between the SELECT and INSERT.
+        with patch.object(
+            type(IngestionSource.objects),
+            "get_or_create",
+            side_effect=IntegrityError("duplicate key value"),
+        ):
+            source_map = _import_ingestion_sources(sources_data, self.user)
+
+        self.assertIn("race_source", source_map)
+        self.assertEqual(source_map["race_source"].pk, existing.pk)
+        self.assertEqual(source_map["race_source"].source_type, "api")
+
+
+# ------------------------------------------------------------------ #
 # IngestionSource model __str__
 # ------------------------------------------------------------------ #
 
