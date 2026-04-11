@@ -9,7 +9,6 @@ _SpecRunner.html
 __benchmarks__
 build/
 remote-repo/
-coverage/
 .module-cache
 fixtures/dom/public/react-dom.js
 fixtures/dom/public/react.js
@@ -49,4 +48,5 @@ packages/react-devtools-timeline/dist
 **/.cache/**
 
 # Coverage output (Istanbul / nyc)
+/coverage/
 .nyc_output/
