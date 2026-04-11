@@ -1104,9 +1104,16 @@ class TestCheckConversationsForCuration(TransactionTestCase):
             chat_with_corpus=self.corpus,
             conversation_type=ConversationTypeChoices.CHAT,
         )
-        # Push modified time before the idle cutoff
+        # Create a message so last_message_at annotation is non-null
+        msg = ChatMessage.objects.create(
+            conversation=conv,
+            creator=self.user,
+            msg_type=MessageTypeChoices.HUMAN,
+            content="hello",
+        )
+        # Push message timestamp before the idle cutoff
         old_time = timezone.now() - timedelta(minutes=MEMORY_CURATION_IDLE_MINUTES + 5)
-        Conversation.objects.filter(pk=conv.pk).update(modified=old_time)
+        ChatMessage.objects.filter(pk=msg.pk).update(created_at=old_time)
 
         with patch(
             "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
@@ -1129,15 +1136,21 @@ class TestCheckConversationsForCuration(TransactionTestCase):
             MEMORY_CURATION_IDLE_MINUTES,
         )
 
-        Conversation.objects.create(
+        conv = Conversation.objects.create(
             title="Already Curated",
             creator=self.user,
             chat_with_corpus=self.corpus,
             conversation_type=ConversationTypeChoices.CHAT,
             memory_curated=True,
         )
+        msg = ChatMessage.objects.create(
+            conversation=conv,
+            creator=self.user,
+            msg_type=MessageTypeChoices.HUMAN,
+            content="hello",
+        )
         old_time = timezone.now() - timedelta(minutes=MEMORY_CURATION_IDLE_MINUTES + 5)
-        Conversation.objects.filter(title="Already Curated").update(modified=old_time)
+        ChatMessage.objects.filter(pk=msg.pk).update(created_at=old_time)
 
         with patch(
             "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
@@ -1160,16 +1173,20 @@ class TestCheckConversationsForCuration(TransactionTestCase):
             MEMORY_CURATION_IDLE_MINUTES,
         )
 
-        Conversation.objects.create(
+        conv = Conversation.objects.create(
             title="Disabled Memory Chat",
             creator=self.user,
             chat_with_corpus=self.corpus_no_mem,
             conversation_type=ConversationTypeChoices.CHAT,
         )
-        old_time = timezone.now() - timedelta(minutes=MEMORY_CURATION_IDLE_MINUTES + 5)
-        Conversation.objects.filter(title="Disabled Memory Chat").update(
-            modified=old_time
+        msg = ChatMessage.objects.create(
+            conversation=conv,
+            creator=self.user,
+            msg_type=MessageTypeChoices.HUMAN,
+            content="hello",
         )
+        old_time = timezone.now() - timedelta(minutes=MEMORY_CURATION_IDLE_MINUTES + 5)
+        ChatMessage.objects.filter(pk=msg.pk).update(created_at=old_time)
 
         with patch(
             "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
@@ -1192,14 +1209,20 @@ class TestCheckConversationsForCuration(TransactionTestCase):
             MEMORY_CURATION_IDLE_MINUTES,
         )
 
-        Conversation.objects.create(
+        conv = Conversation.objects.create(
             title="Thread Conv",
             creator=self.user,
             chat_with_corpus=self.corpus,
             conversation_type=ConversationTypeChoices.THREAD,
         )
+        msg = ChatMessage.objects.create(
+            conversation=conv,
+            creator=self.user,
+            msg_type=MessageTypeChoices.HUMAN,
+            content="hello",
+        )
         old_time = timezone.now() - timedelta(minutes=MEMORY_CURATION_IDLE_MINUTES + 5)
-        Conversation.objects.filter(title="Thread Conv").update(modified=old_time)
+        ChatMessage.objects.filter(pk=msg.pk).update(created_at=old_time)
 
         with patch(
             "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
@@ -1213,15 +1236,21 @@ class TestCheckConversationsForCuration(TransactionTestCase):
         self.assertEqual(result["dispatched"], 0)
         mock_delay.assert_not_called()
 
-    def test_skips_recently_modified(self):
-        """Conversations modified within the idle window are skipped."""
-        Conversation.objects.create(
+    def test_skips_recently_active(self):
+        """Conversations with recent messages within the idle window are skipped."""
+        conv = Conversation.objects.create(
             title="Recent Chat",
             creator=self.user,
             chat_with_corpus=self.corpus,
             conversation_type=ConversationTypeChoices.CHAT,
         )
-        # Don't modify the timestamp -- it was just created (within idle window)
+        # Create a message -- it was just created (within idle window)
+        ChatMessage.objects.create(
+            conversation=conv,
+            creator=self.user,
+            msg_type=MessageTypeChoices.HUMAN,
+            content="hello",
+        )
 
         with patch(
             "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
@@ -1242,34 +1271,46 @@ class TestCheckConversationsForCuration(TransactionTestCase):
         from django.utils import timezone
 
         from opencontractserver.constants.agent_memory import (
-            MEMORY_CURATION_BATCH_LIMIT,
             MEMORY_CURATION_IDLE_MINUTES,
         )
 
+        test_batch_limit = 3
+        num_conversations = 5  # slightly more than the patched limit
+
         old_time = timezone.now() - timedelta(minutes=MEMORY_CURATION_IDLE_MINUTES + 5)
-        # Create more conversations than the batch limit
-        for i in range(MEMORY_CURATION_BATCH_LIMIT + 3):
-            Conversation.objects.create(
+        # Create more conversations than the batch limit, each with a message
+        for i in range(num_conversations):
+            conv = Conversation.objects.create(
                 title=f"Batch Chat {i}",
                 creator=self.user,
                 chat_with_corpus=self.corpus,
                 conversation_type=ConversationTypeChoices.CHAT,
             )
-        Conversation.objects.filter(title__startswith="Batch Chat").update(
-            modified=old_time
+            ChatMessage.objects.create(
+                conversation=conv,
+                creator=self.user,
+                msg_type=MessageTypeChoices.HUMAN,
+                content=f"hello {i}",
+            )
+        # Push message timestamps before the idle cutoff
+        ChatMessage.objects.filter(conversation__title__startswith="Batch Chat").update(
+            created_at=old_time
         )
 
         with patch(
             "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
-        ) as mock_delay:
+        ) as mock_delay, patch(
+            "opencontractserver.tasks.memory_tasks.MEMORY_CURATION_BATCH_LIMIT",
+            test_batch_limit,
+        ):
             from opencontractserver.tasks.memory_tasks import (
                 check_conversations_for_curation,
             )
 
             result = check_conversations_for_curation()
 
-        self.assertEqual(result["dispatched"], MEMORY_CURATION_BATCH_LIMIT)
-        self.assertEqual(mock_delay.call_count, MEMORY_CURATION_BATCH_LIMIT)
+        self.assertEqual(result["dispatched"], test_batch_limit)
+        self.assertEqual(mock_delay.call_count, test_batch_limit)
 
 
 # ---------------------------------------------------------------------------

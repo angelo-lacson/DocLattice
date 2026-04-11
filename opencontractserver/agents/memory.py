@@ -211,6 +211,10 @@ async def update_memory_content(corpus: Corpus, new_content: str, user) -> Docum
                 raise DocumentModel.DoesNotExist(
                     f"Memory document {doc.pk} was deleted concurrently."
                 )
+            # Delete the old storage file to avoid orphans (Django's
+            # FieldFile.save creates a new file rather than overwriting).
+            if locked_doc.txt_extract_file:
+                locked_doc.txt_extract_file.delete(save=False)
             locked_doc.txt_extract_file.save(
                 MEMORY_DOCUMENT_FILENAME,
                 ContentFile(new_content.encode("utf-8")),
@@ -233,6 +237,10 @@ def split_memory_sections(content: str) -> list[str]:
 
     Returns a list of section strings, each starting with its header line.
     The YAML frontmatter (delimited by ``---``) is excluded.
+
+    Note: if the content contains no ``## `` headers the entire body is
+    returned as a single-element list.  Callers therefore cannot
+    distinguish "one real section" from "headerless free-form content".
     """
     # Strip YAML frontmatter
     stripped = re.sub(r"^---\s*\n.*?\n---\s*\n", "", content, count=1, flags=re.DOTALL)
@@ -278,6 +286,15 @@ async def get_memory_for_injection(corpus: Corpus, query: str = "") -> str:
         return ""
 
     token_count = estimate_token_count(body)
+
+    if token_count > MEMORY_FULL_INJECTION_MAX_TOKENS:
+        logger.warning(
+            "Memory document for corpus %s exceeds full-injection threshold "
+            "(%d tokens > %d max); falling back to section filtering",
+            corpus.id,
+            token_count,
+            MEMORY_FULL_INJECTION_MAX_TOKENS,
+        )
 
     if token_count <= MEMORY_FULL_INJECTION_MAX_TOKENS:
         # Full injection — include everything

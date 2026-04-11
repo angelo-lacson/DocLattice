@@ -286,6 +286,8 @@ def check_conversations_for_curation() -> dict:
 
     cutoff = timezone.now() - timedelta(minutes=MEMORY_CURATION_IDLE_MINUTES)
 
+    from django.db.models import Max
+
     eligible = (
         Conversation.objects.filter(
             memory_curated=False,
@@ -293,11 +295,15 @@ def check_conversations_for_curation() -> dict:
             chat_with_corpus__memory_enabled=True,
             chat_with_corpus__isnull=False,
         )
-        .filter(
-            # Last modified before the idle cutoff
-            modified__lt=cutoff,
+        .annotate(
+            last_message_at=Max("chat_messages__created_at"),
         )
-        .order_by("modified")
+        .filter(
+            # Only conversations with at least one message, idle since cutoff
+            last_message_at__isnull=False,
+            last_message_at__lt=cutoff,
+        )
+        .order_by("last_message_at")
         .values_list("id", flat=True)[:MEMORY_CURATION_BATCH_LIMIT]
     )
 
