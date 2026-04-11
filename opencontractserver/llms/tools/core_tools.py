@@ -2907,10 +2907,18 @@ async def asuggest_memory_update(
 
     current_content = await read_memory_content(corpus)
 
-    # Route to the correct section
+    # Route to the correct section (validate explicitly)
+    normalized = section.lower().replace(" ", "_")
+    valid_sections = {"collection_patterns", "query_patterns"}
+    if normalized not in valid_sections:
+        return (
+            f"Invalid section '{section}'. "
+            f"Must be one of: {', '.join(sorted(valid_sections))}"
+        )
+
     collection = []
     query = []
-    if section.lower().replace(" ", "_") == "collection_patterns":
+    if normalized == "collection_patterns":
         collection = [insight]
     else:
         query = [insight]

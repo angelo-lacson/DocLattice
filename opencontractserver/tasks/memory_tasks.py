@@ -157,12 +157,15 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
         estimate_token_count(conversation_text)
         > MEMORY_CURATION_MAX_CONVERSATION_TOKENS
     ):
-        # Truncate from the beginning, keep most recent messages
+        # Pre-compute per-line token estimates to avoid O(n^2) re-scanning.
+        line_tokens = [estimate_token_count(line) for line in conversation_lines]
+        total_tokens = sum(line_tokens)
+        # Drop lines from the beginning until budget is met.
         while (
-            estimate_token_count(conversation_text)
-            > MEMORY_CURATION_MAX_CONVERSATION_TOKENS
+            total_tokens > MEMORY_CURATION_MAX_CONVERSATION_TOKENS
             and len(conversation_lines) > MEMORY_CURATION_MIN_MESSAGES
         ):
+            total_tokens -= line_tokens.pop(0)
             conversation_lines.pop(0)
         conversation_text = "[Earlier messages truncated]\n" + "\n".join(
             conversation_lines

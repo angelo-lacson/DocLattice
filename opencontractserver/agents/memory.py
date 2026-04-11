@@ -17,14 +17,15 @@ from channels.db import database_sync_to_async
 from django.core.files.base import ContentFile
 
 from opencontractserver.constants.agent_memory import (
+    MEMORY_DOCUMENT_FILENAME,
     MEMORY_DOCUMENT_TITLE,
     MEMORY_EMPTY_COLLECTION_PLACEHOLDER,
     MEMORY_EMPTY_QUERY_PLACEHOLDER,
     MEMORY_FULL_INJECTION_MAX_TOKENS,
     MEMORY_INJECTION_PREFIX,
+    MEMORY_KEYWORD_SEARCH_TOP_K,
     MEMORY_SECTION_COLLECTION_PATTERNS,
     MEMORY_SECTION_QUERY_PATTERNS,
-    MEMORY_SEMANTIC_SEARCH_TOP_K,
 )
 from opencontractserver.constants.document_processing import MARKDOWN_MIME_TYPE
 from opencontractserver.llms.context_guardrails import estimate_token_count
@@ -108,6 +109,7 @@ async def get_or_create_memory_document(corpus: Corpus, user) -> Document:
                     logger.warning(
                         "memory_document FK on corpus %s is stale, recreating",
                         corpus.id,
+                        exc_info=True,
                     )
 
             # Create a new memory document
@@ -116,7 +118,7 @@ async def get_or_create_memory_document(corpus: Corpus, user) -> Document:
                 doc, _status, _path = corpus.import_content(
                     content=content,
                     user=user,
-                    filename=f"{MEMORY_DOCUMENT_TITLE}.md",
+                    filename=MEMORY_DOCUMENT_FILENAME,
                     file_type=MARKDOWN_MIME_TYPE,
                     title=MEMORY_DOCUMENT_TITLE,
                     description="Accumulated agent insights for this corpus.",
@@ -210,7 +212,7 @@ async def update_memory_content(corpus: Corpus, new_content: str, user) -> Docum
                     f"Memory document {doc.pk} was deleted concurrently."
                 )
             locked_doc.txt_extract_file.save(
-                f"{MEMORY_DOCUMENT_TITLE}.md",
+                MEMORY_DOCUMENT_FILENAME,
                 ContentFile(new_content.encode("utf-8")),
                 save=True,
             )
@@ -281,7 +283,7 @@ async def get_memory_for_injection(corpus: Corpus, query: str = "") -> str:
         # Full injection — include everything
         return body
 
-    # Semantic-lite fallback: score sections by keyword overlap with query
+    # Keyword-overlap fallback: score sections by word overlap with query
     sections = split_memory_sections(content)
     if not sections:
         return ""
@@ -307,7 +309,7 @@ async def get_memory_for_injection(corpus: Corpus, query: str = "") -> str:
         scored.append((overlap, section))
 
     scored.sort(key=lambda x: x[0], reverse=True)
-    top_sections = scored[:MEMORY_SEMANTIC_SEARCH_TOP_K]
+    top_sections = scored[:MEMORY_KEYWORD_SEARCH_TOP_K]
 
     return "\n\n".join(s for _, s in top_sections if s)
 
@@ -469,8 +471,15 @@ def _find_section_end(content: str, section_header: str) -> int:
     """Find the character position where a section ends.
 
     A section ends at the next ``## `` header or at end of document.
+
+    Raises:
+        ValueError: If *section_header* is not found in *content*.
+            Callers must verify the header exists before calling.
     """
-    start = content.index(section_header)
+    try:
+        start = content.index(section_header)
+    except ValueError:
+        raise ValueError(f"Section header {section_header!r} not found in content")
     # Look for the next ## header after this section's header line
     after_header = start + len(section_header)
     next_section = content.find("\n## ", after_header)

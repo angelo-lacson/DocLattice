@@ -9,6 +9,10 @@ conversations, stored as first-class markdown Documents visible to users.
 # Memory document identification
 # ---------------------------------------------------------------------------
 MEMORY_DOCUMENT_TITLE = "Corpus Memory"
+# Stable internal filename for the memory document.  Decoupled from
+# MEMORY_DOCUMENT_TITLE so that title changes (e.g., localisation) do not
+# break storage-layer lookups.
+MEMORY_DOCUMENT_FILENAME = "corpus_memory.md"
 
 # ---------------------------------------------------------------------------
 # Token thresholds for hybrid retrieval
@@ -18,9 +22,9 @@ MEMORY_DOCUMENT_TITLE = "Corpus Memory"
 # back to semantic search over individual memory sections.
 MEMORY_FULL_INJECTION_MAX_TOKENS: int = 2000
 
-# Number of memory sections to retrieve via semantic search when the document
-# exceeds MEMORY_FULL_INJECTION_MAX_TOKENS.
-MEMORY_SEMANTIC_SEARCH_TOP_K: int = 5
+# Number of memory sections to retrieve via keyword-overlap scoring when the
+# document exceeds MEMORY_FULL_INJECTION_MAX_TOKENS.
+MEMORY_KEYWORD_SEARCH_TOP_K: int = 5
 
 # ---------------------------------------------------------------------------
 # Curation settings

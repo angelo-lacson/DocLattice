@@ -99,7 +99,7 @@ version: "1.0"
         sections = split_memory_sections(content)
         self.assertEqual(len(sections), 2)
 
-    def test_split_no_sections(self):
+    def test_split_body_without_headers(self):
         content = "---\nversion: 1\n---\n\nJust some text."
         sections = split_memory_sections(content)
         self.assertEqual(len(sections), 1)
