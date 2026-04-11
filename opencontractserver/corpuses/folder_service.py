@@ -799,7 +799,20 @@ class DocumentFolderService:
         move_children_to_parent: bool = True,
     ) -> tuple[bool, str]:
         """
-        Delete folder.
+        Delete folder, atomically relocating all contained documents to root.
+
+        **Atomicity guarantee**: The entire operation (document relocations,
+        child folder reparenting, and folder deletion) runs inside a single
+        ``transaction.atomic()`` block.  If ANY document cannot be relocated
+        (e.g. path disambiguation exhausted, integrity constraint violation),
+        the entire transaction is rolled back — no documents are moved, no
+        child folders are reparented, and the folder is NOT deleted.  This
+        prevents partial-success states where some documents end up at root
+        while others remain stuck in the folder.
+
+        **Retry safety**: Because a failed call leaves the database in its
+        original state (full rollback), the caller can safely retry the
+        operation without risk of double-moving already-relocated documents.
 
         Args:
             user: Deleting user
@@ -810,19 +823,8 @@ class DocumentFolderService:
         Returns:
             (success, error_message).  Returns ``(False, ...)`` if any
             document in the folder cannot be relocated to root — in that
-            case the folder is **not** deleted to avoid orphaning
-            DocumentPath records (whose ``folder`` FK would be silently
-            nulled via ``on_delete=SET_NULL``).
-
-            **Partial-success semantics**: Each document relocation runs
-            in its own savepoint.  On partial failure, documents that were
-            successfully relocated keep their new root-level paths (those
-            savepoints are committed), but the folder itself is NOT
-            deleted so that documents which failed to relocate retain a
-            valid ``folder`` FK.  This is a deliberate design choice: it
-            avoids an all-or-nothing rollback that would silently undo
-            successful relocations, while preventing the ``on_delete=SET_NULL``
-            side-effect from orphaning stuck documents.
+            case the entire transaction is rolled back and no changes are
+            persisted.
 
         Side Effects:
             - Documents in folder have their folder assignment removed (moved to root)
@@ -840,94 +842,70 @@ class DocumentFolderService:
                 "Permission denied: You do not have delete access to this corpus",
             )
 
-        with transaction.atomic():
-            # Handle child folders
-            if move_children_to_parent:
-                # Reparent children to this folder's parent
-                folder.children.update(parent=folder.parent)
-            # else: cascade delete will handle children automatically
+        try:
+            with transaction.atomic():
+                # Handle child folders
+                if move_children_to_parent:
+                    # Reparent children to this folder's parent
+                    folder.children.update(parent=folder.parent)
+                # else: cascade delete will handle children automatically
 
-            # Move documents in folder to root with history tracking.
-            # TODO(perf): O(N) queries — consider bulk_update/bulk_create for
-            # large batches. Blocked on per-document disambiguation and parent
-            # link assignment which require sequential processing today.
-            affected_paths = list(
-                DocumentPath.objects.select_for_update()
-                .filter(
-                    folder=folder,
-                    is_current=True,
-                    is_deleted=False,
-                )
-                .order_by("pk")
-            )
-            failed_docs: list[str] = []
-            for current in affected_paths:
-                try:
-                    # Savepoint per document: an IntegrityError aborts the
-                    # PostgreSQL transaction; a nested atomic() creates a
-                    # savepoint so only this iteration is rolled back.
-                    with transaction.atomic():
-                        # Note: _compute_moved_path extracts only the filename;
-                        # intermediate directory segments are dropped (the new
-                        # path is derived from the target folder's tree position).
-                        new_path = cls._compute_moved_path(current.path, None)
-                        new_path = cls._disambiguate_path(
-                            new_path, current.corpus, exclude_pk=current.pk
-                        )
-
-                        current.is_current = False
-                        current.save(update_fields=["is_current"])
-
-                        DocumentPath.objects.create(
-                            document=current.document,
-                            corpus=current.corpus,
-                            folder=None,  # Moved to root
-                            path=new_path,
-                            version_number=current.version_number,
-                            parent=current,
-                            is_current=True,
-                            is_deleted=False,
-                            creator=user,
-                        )
-                except (ValueError, IntegrityError) as exc:
-                    logger.warning(
-                        "Failed to relocate document %s (path %r) during "
-                        "folder %s deletion: %s",
-                        current.document_id,
-                        current.path,
-                        folder.id,
-                        exc,
+                # Move documents in folder to root with history tracking.
+                # TODO(perf): O(N) queries — consider bulk_update/bulk_create
+                # for large batches. Blocked on per-document disambiguation
+                # and parent link assignment which require sequential
+                # processing today.
+                affected_paths = list(
+                    DocumentPath.objects.select_for_update()
+                    .filter(
+                        folder=folder,
+                        is_current=True,
+                        is_deleted=False,
                     )
-                    failed_docs.append(f"document {current.document_id}: {exc}")
-
-            # Abort if any document could not be relocated.  Because
-            # DocumentPath.folder uses ``on_delete=SET_NULL``, deleting the
-            # folder would silently null out the FK on those stuck paths —
-            # exactly the kind of silent in-place mutation this history
-            # system is designed to prevent.  Successfully relocated
-            # documents stay relocated (their savepoints committed), but
-            # the folder is NOT deleted so the stuck documents remain
-            # consistent.
-            if failed_docs:
-                logger.error(
-                    "Aborting folder %s deletion: %d document(s) could not "
-                    "be relocated: %s",
-                    folder.id,
-                    len(failed_docs),
-                    "; ".join(failed_docs),
-                )
-                return False, (
-                    f"Cannot delete folder: {len(failed_docs)} document(s) "
-                    f"could not be relocated to root: "
-                    f"{'; '.join(failed_docs)}"
+                    .order_by("pk")
                 )
 
-            # Delete folder — safe because all documents were relocated.
-            folder_id = folder.id
-            folder.delete()
+                for current in affected_paths:
+                    # Note: _compute_moved_path extracts only the filename;
+                    # intermediate directory segments are dropped (the new
+                    # path is derived from the target folder's tree position).
+                    new_path = cls._compute_moved_path(current.path, None)
+                    new_path = cls._disambiguate_path(
+                        new_path, current.corpus, exclude_pk=current.pk
+                    )
 
-            logger.info(f"Deleted folder {folder_id} by user {user.id}")
-            return True, ""
+                    current.is_current = False
+                    current.save(update_fields=["is_current"])
+
+                    DocumentPath.objects.create(
+                        document=current.document,
+                        corpus=current.corpus,
+                        folder=None,  # Moved to root
+                        path=new_path,
+                        version_number=current.version_number,
+                        parent=current,
+                        is_current=True,
+                        is_deleted=False,
+                        creator=user,
+                    )
+
+                # Delete folder — safe because all documents were relocated.
+                folder_id = folder.id
+                folder.delete()
+
+                logger.info(f"Deleted folder {folder_id} by user {user.id}")
+                return True, ""
+
+        except (ValueError, IntegrityError) as exc:
+            logger.error(
+                "Atomic rollback during folder %s deletion: %s",
+                folder.id,
+                exc,
+            )
+            return False, (
+                f"Cannot delete folder: document relocation failed "
+                f"and all changes have been rolled back: {exc}"
+            )
 
     # =========================================================================
     # DOCUMENT-IN-FOLDER WRITE OPERATIONS
@@ -1069,6 +1047,24 @@ class DocumentFolderService:
         implementing the path tree audit trail (see ``move_document_to_folder``
         for design rationale).
 
+        **Atomicity guarantee**: The entire batch runs inside a single
+        ``transaction.atomic()`` block.  If ANY document fails to move
+        (e.g. path disambiguation exhausted, integrity constraint violation,
+        within-batch path conflict), the entire transaction is rolled back —
+        no documents are moved.  This prevents partial-success states where
+        some documents end up in the target folder while others remain in
+        their original locations.
+
+        **Within-batch conflict detection**: Before executing any moves,
+        this method pre-computes all target paths and checks for duplicates
+        within the batch itself (e.g. two documents with the same filename
+        being moved to the same folder).  Conflicts are resolved by
+        disambiguation before any database writes occur.
+
+        **Retry safety**: Because a failed call leaves the database in its
+        original state (full rollback), the caller can safely retry the
+        operation without risk of double-moving already-relocated documents.
+
         Args:
             user: Moving user
             document_ids: List of document IDs to move
@@ -1078,7 +1074,8 @@ class DocumentFolderService:
         Returns:
             (moved_count, error_message) — ``moved_count`` reflects only
             documents that were actually relocated (documents already in the
-            target folder are skipped and not counted).
+            target folder are skipped and not counted).  On failure,
+            ``moved_count`` is 0 because the transaction is rolled back.
 
         Validations:
             - User has corpus UPDATE permission
@@ -1104,84 +1101,102 @@ class DocumentFolderService:
                 return 0, f"Document {doc.id} does not belong to this corpus"
 
         target_folder_id = folder.id if folder else None
-        moved_count = 0
 
-        with transaction.atomic():
-            # Get all current paths for these documents.
-            # ORDER BY pk to acquire row locks in a deterministic order,
-            # preventing deadlocks when concurrent calls overlap on the
-            # same document set.
-            current_paths = list(
-                DocumentPath.objects.select_for_update()
-                .filter(
-                    document_id__in=document_ids,
-                    corpus=corpus,
-                    is_current=True,
-                    is_deleted=False,
-                )
-                .order_by("pk")
-            )
-
-            # TODO(perf): O(N) queries — consider bulk_update/bulk_create for
-            # large batches. Blocked on per-document disambiguation and parent
-            # link assignment which require sequential processing today.
-            failed_docs: list[str] = []
-            for current in current_paths:
-                # Skip if already in the target folder
-                if current.folder_id == target_folder_id:
-                    continue
-
-                try:
-                    # Savepoint per document: an IntegrityError aborts the
-                    # PostgreSQL transaction; a nested atomic() creates a
-                    # savepoint so only this iteration is rolled back.
-                    with transaction.atomic():
-                        # Note: _compute_moved_path extracts only the filename;
-                        # intermediate directory segments are dropped.
-                        new_path = cls._compute_moved_path(current.path, folder)
-                        new_path = cls._disambiguate_path(
-                            new_path, corpus, exclude_pk=current.pk
-                        )
-
-                        # Mark old path as not current
-                        current.is_current = False
-                        current.save(update_fields=["is_current"])
-
-                        # Create new node linked to previous (audit chain)
-                        DocumentPath.objects.create(
-                            document=current.document,
-                            corpus=corpus,
-                            folder=folder,
-                            path=new_path,
-                            version_number=current.version_number,
-                            parent=current,
-                            is_current=True,
-                            is_deleted=False,
-                            creator=user,
-                        )
-                        moved_count += 1
-                except (ValueError, IntegrityError) as exc:
-                    logger.warning(
-                        "Failed to move document %s (path %r) to folder "
-                        "%s in corpus %s: %s",
-                        current.document_id,
-                        current.path,
-                        folder.id if folder else "root",
-                        corpus.id,
-                        exc,
+        try:
+            with transaction.atomic():
+                # Get all current paths for these documents.
+                # ORDER BY pk to acquire row locks in a deterministic order,
+                # preventing deadlocks when concurrent calls overlap on the
+                # same document set.
+                current_paths = list(
+                    DocumentPath.objects.select_for_update()
+                    .filter(
+                        document_id__in=document_ids,
+                        corpus=corpus,
+                        is_current=True,
+                        is_deleted=False,
                     )
-                    failed_docs.append(f"document {current.document_id}: {exc}")
-
-            logger.info(
-                f"Bulk moved {moved_count} documents to folder "
-                f"{folder.id if folder else 'root'} in corpus {corpus.id} by user {user.id}"
-            )
-            if failed_docs:
-                return moved_count, (
-                    f"{len(failed_docs)} document(s) could not be moved: "
-                    f"{'; '.join(failed_docs)}"
+                    .order_by("pk")
                 )
-            return moved_count, ""
+
+                # Filter to only paths that need moving
+                paths_to_move = [
+                    p for p in current_paths if p.folder_id != target_folder_id
+                ]
+
+                if not paths_to_move:
+                    return 0, ""
+
+                # Pre-compute all target paths and detect within-batch
+                # conflicts up front.  We track paths already claimed by
+                # earlier items in this batch so that two documents with
+                # the same filename get disambiguated relative to each
+                # other, not just relative to what is already in the DB.
+                planned_paths: list[tuple] = []  # (current, new_path)
+                batch_claimed: set[str] = set()
+
+                for current in paths_to_move:
+                    # Note: _compute_moved_path extracts only the filename;
+                    # intermediate directory segments are dropped.
+                    new_path = cls._compute_moved_path(current.path, folder)
+                    new_path = cls._disambiguate_path(
+                        new_path, corpus, exclude_pk=current.pk
+                    )
+
+                    # Check within-batch conflict: if another document in
+                    # this batch already claimed this path, disambiguate
+                    # further by trying numeric suffixes against both the
+                    # DB-occupied set and the batch-claimed set.
+                    if new_path in batch_claimed:
+                        new_path = cls._disambiguate_path_with_batch(
+                            new_path, corpus, batch_claimed, exclude_pk=current.pk
+                        )
+
+                    batch_claimed.add(new_path)
+                    planned_paths.append((current, new_path))
+
+                # Execute all moves now that paths are validated.
+                # TODO(perf): O(N) queries — consider bulk_update/bulk_create
+                # for large batches. Blocked on per-document disambiguation
+                # and parent link assignment which require sequential
+                # processing today.
+                moved_count = 0
+                for current, new_path in planned_paths:
+                    # Mark old path as not current
+                    current.is_current = False
+                    current.save(update_fields=["is_current"])
+
+                    # Create new node linked to previous (audit chain)
+                    DocumentPath.objects.create(
+                        document=current.document,
+                        corpus=corpus,
+                        folder=folder,
+                        path=new_path,
+                        version_number=current.version_number,
+                        parent=current,
+                        is_current=True,
+                        is_deleted=False,
+                        creator=user,
+                    )
+                    moved_count += 1
+
+                logger.info(
+                    f"Bulk moved {moved_count} documents to folder "
+                    f"{folder.id if folder else 'root'} in corpus {corpus.id} "
+                    f"by user {user.id}"
+                )
+                return moved_count, ""
+
+        except (ValueError, IntegrityError) as exc:
+            logger.error(
+                "Atomic rollback during bulk move of %d documents to "
+                "folder %s in corpus %s: %s",
+                len(document_ids),
+                folder.id if folder else "root",
+                corpus.id,
+                exc,
+            )
+            return 0, (f"Bulk move failed and all changes have been rolled back: {exc}")
 
     @staticmethod
     def _compute_moved_path(
@@ -1211,13 +1226,20 @@ class DocumentFolderService:
         Returns:
             New path string (e.g. "/Legal/report.pdf" or "/report.pdf")
         """
+        # Guard against empty, whitespace-only, or root-only paths early.
+        if not current_path or not current_path.strip() or current_path.strip() == "/":
+            raise ValueError(
+                f"Cannot extract filename from path {current_path!r} — "
+                f"empty or root-only paths are not supported"
+            )
+
         # Extract filename (last segment of path)
         filename = (
             current_path.rsplit("/", 1)[-1] if "/" in current_path else current_path
         )
 
-        # Guard against empty or root-only paths where filename would be empty.
-        # This indicates a data quality issue that should be surfaced, not masked.
+        # Secondary guard: the rsplit may produce an empty filename for paths
+        # like "/dir/" (trailing slash).
         if not filename:
             raise ValueError(
                 f"Cannot extract filename from path {current_path!r} — "
@@ -1347,6 +1369,94 @@ class DocumentFolderService:
         raise ValueError(
             f"Cannot find a unique path for {base_path!r} in corpus {corpus.id} "
             f"after {MAX_PATH_DISAMBIGUATION_SUFFIX} attempts"
+        )
+
+    @staticmethod
+    def _disambiguate_path_with_batch(
+        base_path: str,
+        corpus: Corpus,
+        batch_claimed: set[str],
+        exclude_pk: int | None = None,
+    ) -> str:
+        """
+        Disambiguate a path considering both DB-occupied paths AND batch-claimed paths.
+
+        Used during bulk moves when multiple documents in the same batch would
+        receive the same target path (e.g. two files both named ``report.pdf``
+        being moved to the same folder).  The standard ``_disambiguate_path``
+        only checks the database; this method additionally checks the
+        ``batch_claimed`` set to avoid within-batch collisions.
+
+        Args:
+            base_path: The path that has a within-batch conflict.
+            corpus: Corpus to check for DB conflicts in.
+            batch_claimed: Set of paths already claimed by earlier items in
+                           this batch.
+            exclude_pk: Optional DocumentPath PK to exclude from DB conflict check.
+
+        Returns:
+            A path string unique in both the database and the batch.
+
+        Raises:
+            ValueError: If no unique path can be found within the suffix limit.
+        """
+        from opencontractserver.documents.models import DocumentPath
+
+        # Build the combined set of occupied paths (DB + batch)
+        if "/" in base_path:
+            directory = base_path.rsplit("/", 1)[0] + "/"
+        else:
+            directory = ""
+
+        qs = DocumentPath.objects.filter(
+            corpus=corpus,
+            is_current=True,
+            is_deleted=False,
+        )
+        if directory == "/":
+            qs = qs.filter(path__regex=r"^/[^/]+$")
+        elif directory:
+            qs = qs.filter(path__startswith=directory)
+        if exclude_pk is not None:
+            qs = qs.exclude(pk=exclude_pk)
+        db_occupied = set(qs.values_list("path", flat=True))
+        occupied = db_occupied | batch_claimed
+
+        # Split into stem and extension
+        if "/" in base_path:
+            dir_part, filename = base_path.rsplit("/", 1)
+        else:
+            dir_part, filename = None, base_path
+
+        bare = filename.lstrip(".")
+        leading_dots = filename[: len(filename) - len(bare)]
+
+        def _join_stem(name_part: str) -> str:
+            return f"{dir_part}/{name_part}" if dir_part is not None else name_part
+
+        if "." in bare:
+            name_stem, name_ext = bare.rsplit(".", 1)
+            stem = _join_stem(f"{leading_dots}{name_stem}")
+            ext = f".{name_ext}"
+        else:
+            stem = _join_stem(filename)
+            ext = ""
+
+        for counter in range(1, MAX_PATH_DISAMBIGUATION_SUFFIX + 1):
+            candidate = f"{stem}_{counter}{ext}"
+            if candidate not in occupied:
+                logger.warning(
+                    "Within-batch path conflict for %r in corpus %s "
+                    "— disambiguated to %r",
+                    base_path,
+                    corpus.id,
+                    candidate,
+                )
+                return candidate
+
+        raise ValueError(
+            f"Cannot find a unique path for {base_path!r} in corpus {corpus.id} "
+            f"after {MAX_PATH_DISAMBIGUATION_SUFFIX} attempts (including batch)"
         )
 
     @classmethod

@@ -2966,13 +2966,15 @@ class TestErrorPaths_DisambiguateRootLevel(DocumentFolderServiceTestBase):
         self.assertEqual(result, "/report_1.pdf")
 
 
-class TestErrorPaths_DeleteFolderPartialFailure(DocumentFolderServiceTestBase):
+class TestErrorPaths_DeleteFolderAtomicRollback(DocumentFolderServiceTestBase):
     """
-    SCENARIO: delete_folder aborts when documents cannot be relocated.
+    SCENARIO: delete_folder is fully atomic — if ANY document relocation
+    fails, the entire operation (all relocations + folder deletion) is
+    rolled back.
 
-    BUSINESS RULE: The folder is NOT deleted when any document cannot be
-    relocated to root, preventing orphaned DocumentPath records whose
-    folder FK would be silently nulled by ``on_delete=SET_NULL``.
+    BUSINESS RULE: No partial-success state is ever visible.  Either all
+    documents are relocated and the folder is deleted, or nothing changes.
+    The caller can safely retry after a failure.
     """
 
     def setUp(self):
@@ -2983,10 +2985,9 @@ class TestErrorPaths_DeleteFolderPartialFailure(DocumentFolderServiceTestBase):
             title="Test Corpus", creator=self.owner, is_public=False
         )
 
-    def test_delete_folder_aborts_when_relocation_fails(self):
-        """When _disambiguate_path raises, the folder deletion is aborted to
-        prevent orphaning DocumentPath records whose folder FK would be
-        silently nulled out by the CASCADE/SET_NULL behaviour."""
+    def test_delete_folder_rolls_back_all_on_failure(self):
+        """When _disambiguate_path raises, the entire transaction is rolled
+        back: no documents are relocated and the folder still exists."""
         folder, _ = DocumentFolderService.create_folder(
             user=self.owner, corpus=self.corpus, name="Doomed"
         )
@@ -3013,10 +3014,9 @@ class TestErrorPaths_DeleteFolderPartialFailure(DocumentFolderServiceTestBase):
                 user=self.owner, folder=folder
             )
 
-        # Folder deletion should be refused when documents can't be relocated
+        # Operation should fail
         self.assertFalse(success)
-        self.assertIn("could not be relocated", error)
-        self.assertIn(str(doc.id), error)
+        self.assertIn("rolled back", error)
         # Folder must still exist
         self.assertTrue(CorpusFolder.objects.filter(pk=folder.pk).exists())
         # Document path must still point to the folder with is_current=True
@@ -3024,6 +3024,170 @@ class TestErrorPaths_DeleteFolderPartialFailure(DocumentFolderServiceTestBase):
             document=doc, corpus=self.corpus, is_current=True
         )
         self.assertEqual(stuck_path.folder_id, folder.id)
+
+    def test_delete_folder_rolls_back_successful_relocations_on_later_failure(self):
+        """When the second document fails, the first document's relocation
+        is also rolled back (atomic all-or-nothing)."""
+        folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Mixed"
+        )
+
+        # Create two documents in the folder
+        doc1 = Document.objects.create(
+            title="Doc 1", creator=self.owner, pdf_file="doc1.pdf"
+        )
+        path1 = DocumentPath.objects.create(
+            document=doc1,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=folder,
+            path="/Mixed/doc1.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        doc2 = Document.objects.create(
+            title="Doc 2", creator=self.owner, pdf_file="doc2.pdf"
+        )
+        path2 = DocumentPath.objects.create(
+            document=doc2,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=folder,
+            path="/Mixed/doc2.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        original_disambiguate = DocumentFolderService._disambiguate_path
+        call_count = 0
+
+        def fail_on_second(base_path, corpus, exclude_pk=None):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise ValueError("suffix exhausted")
+            return original_disambiguate(base_path, corpus, exclude_pk=exclude_pk)
+
+        with patch.object(
+            DocumentFolderService,
+            "_disambiguate_path",
+            staticmethod(fail_on_second),
+        ):
+            success, error = DocumentFolderService.delete_folder(
+                user=self.owner, folder=folder
+            )
+
+        # Entire operation should fail
+        self.assertFalse(success)
+        self.assertIn("rolled back", error)
+
+        # Folder must still exist
+        self.assertTrue(CorpusFolder.objects.filter(pk=folder.pk).exists())
+
+        # BOTH documents must still be in their original location
+        path1.refresh_from_db()
+        self.assertTrue(path1.is_current)
+        self.assertEqual(path1.folder_id, folder.id)
+
+        path2.refresh_from_db()
+        self.assertTrue(path2.is_current)
+        self.assertEqual(path2.folder_id, folder.id)
+
+        # No new DocumentPath records should have been created
+        total_paths = DocumentPath.objects.filter(
+            corpus=self.corpus, document__in=[doc1, doc2]
+        ).count()
+        self.assertEqual(total_paths, 2, "No new paths should exist after rollback")
+
+    def test_delete_folder_retry_after_failure_succeeds(self):
+        """After a failed delete_folder (full rollback), retrying with the
+        underlying issue resolved should succeed cleanly."""
+        folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Retryable"
+        )
+        doc = Document.objects.create(
+            title="Retry Doc", creator=self.owner, pdf_file="retry.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=folder,
+            path="/Retryable/retry.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # First attempt: fails
+        with patch.object(
+            DocumentFolderService,
+            "_disambiguate_path",
+            side_effect=ValueError("temporary failure"),
+        ):
+            success, error = DocumentFolderService.delete_folder(
+                user=self.owner, folder=folder
+            )
+        self.assertFalse(success)
+
+        # Folder still exists, doc still in folder
+        self.assertTrue(CorpusFolder.objects.filter(pk=folder.pk).exists())
+
+        # Second attempt: succeeds (no mock = real disambiguate)
+        success, error = DocumentFolderService.delete_folder(
+            user=self.owner, folder=folder
+        )
+        self.assertTrue(success, f"Retry should succeed, got error: {error}")
+        self.assertEqual(error, "")
+
+        # Folder is deleted
+        self.assertFalse(CorpusFolder.objects.filter(pk=folder.pk).exists())
+
+        # Document is now at root
+        new_path = DocumentPath.objects.get(
+            document=doc, corpus=self.corpus, is_current=True
+        )
+        self.assertIsNone(new_path.folder_id)
+
+    def test_delete_folder_child_reparenting_rolled_back_on_failure(self):
+        """Child folder reparenting is also rolled back when document
+        relocation fails (part of the same atomic transaction)."""
+        parent_folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Parent"
+        )
+        child_folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Child", parent=parent_folder
+        )
+
+        doc = Document.objects.create(
+            title="Blocking Doc", creator=self.owner, pdf_file="blocking.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=parent_folder,
+            path="/Parent/blocking.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        with patch.object(
+            DocumentFolderService,
+            "_disambiguate_path",
+            side_effect=ValueError("blocked"),
+        ):
+            success, _ = DocumentFolderService.delete_folder(
+                user=self.owner, folder=parent_folder
+            )
+
+        self.assertFalse(success)
+        # Child folder's parent should NOT have changed
+        child_folder.refresh_from_db()
+        self.assertEqual(child_folder.parent_id, parent_folder.id)
 
 
 class TestErrorPaths_MoveDocumentIntegrityError(DocumentFolderServiceTestBase):
@@ -3128,13 +3292,14 @@ class TestErrorPaths_MoveDocumentIntegrityError(DocumentFolderServiceTestBase):
         self.assertIn("all suffixes exhausted", error)
 
 
-class TestErrorPaths_BulkMovePartialFailure(DocumentFolderServiceTestBase):
+class TestErrorPaths_BulkMoveAtomicRollback(DocumentFolderServiceTestBase):
     """
-    SCENARIO: move_documents_to_folder reports per-document failures.
+    SCENARIO: move_documents_to_folder is fully atomic — if ANY document
+    fails to move, the entire batch is rolled back.
 
-    BUSINESS RULE: If some documents fail to move (e.g. path disambiguation
-    exhausted), the successfully moved ones are committed and the caller
-    gets a count plus failure details.
+    BUSINESS RULE: No partial-success state is ever visible.  Either all
+    documents in the batch are moved, or none are.  The caller can safely
+    retry after a failure.
     """
 
     def setUp(self):
@@ -3148,14 +3313,16 @@ class TestErrorPaths_BulkMovePartialFailure(DocumentFolderServiceTestBase):
             user=self.owner, corpus=self.corpus, name="Target"
         )
 
-    def test_bulk_move_reports_partial_failures(self):
-        """Some docs move successfully, others fail — both are reported."""
+    def test_bulk_move_rolls_back_all_on_failure(self):
+        """When one document fails during path computation, the entire batch
+        is rolled back: no documents are moved."""
         docs = []
+        paths = []
         for i in range(3):
             doc = Document.objects.create(
                 title=f"Doc {i}", creator=self.owner, pdf_file=f"doc{i}.pdf"
             )
-            DocumentPath.objects.create(
+            p = DocumentPath.objects.create(
                 document=doc,
                 corpus=self.corpus,
                 creator=self.owner,
@@ -3166,6 +3333,7 @@ class TestErrorPaths_BulkMovePartialFailure(DocumentFolderServiceTestBase):
                 is_deleted=False,
             )
             docs.append(doc)
+            paths.append(p)
 
         original_disambiguate = DocumentFolderService._disambiguate_path
         call_count = 0
@@ -3188,5 +3356,135 @@ class TestErrorPaths_BulkMovePartialFailure(DocumentFolderServiceTestBase):
                 folder=self.folder,
             )
 
+        # All-or-nothing: zero documents moved
+        self.assertEqual(moved_count, 0)
+        self.assertIn("rolled back", error)
+
+        # ALL documents must remain in their original locations
+        for p in paths:
+            p.refresh_from_db()
+            self.assertTrue(p.is_current, f"Path {p.id} should still be current")
+            self.assertIsNone(p.folder_id, f"Path {p.id} should still be at root")
+
+        # No new DocumentPath records should have been created
+        total_paths = DocumentPath.objects.filter(
+            corpus=self.corpus, document__in=docs
+        ).count()
+        self.assertEqual(total_paths, 3, "No new paths should exist after rollback")
+
+    def test_bulk_move_retry_after_failure_succeeds(self):
+        """After a failed bulk move (full rollback), retrying with the
+        underlying issue resolved should succeed cleanly."""
+        docs = []
+        for i in range(2):
+            doc = Document.objects.create(
+                title=f"Doc {i}", creator=self.owner, pdf_file=f"retry{i}.pdf"
+            )
+            DocumentPath.objects.create(
+                document=doc,
+                corpus=self.corpus,
+                creator=self.owner,
+                folder=None,
+                path=f"/retry{i}.pdf",
+                version_number=1,
+                is_current=True,
+                is_deleted=False,
+            )
+            docs.append(doc)
+
+        # First attempt: fails
+        with patch.object(
+            DocumentFolderService,
+            "_disambiguate_path",
+            side_effect=ValueError("temporary failure"),
+        ):
+            moved_count, error = DocumentFolderService.move_documents_to_folder(
+                user=self.owner,
+                document_ids=[d.id for d in docs],
+                corpus=self.corpus,
+                folder=self.folder,
+            )
+        self.assertEqual(moved_count, 0)
+        self.assertIn("rolled back", error)
+
+        # All docs still at root
+        for doc in docs:
+            path = DocumentPath.objects.get(
+                document=doc, corpus=self.corpus, is_current=True
+            )
+            self.assertIsNone(path.folder_id)
+
+        # Second attempt: succeeds (no mock = real disambiguate)
+        moved_count, error = DocumentFolderService.move_documents_to_folder(
+            user=self.owner,
+            document_ids=[d.id for d in docs],
+            corpus=self.corpus,
+            folder=self.folder,
+        )
         self.assertEqual(moved_count, 2)
-        self.assertIn("1 document(s) could not be moved", error)
+        self.assertEqual(error, "")
+
+        # All docs now in target folder
+        for doc in docs:
+            path = DocumentPath.objects.get(
+                document=doc, corpus=self.corpus, is_current=True
+            )
+            self.assertEqual(path.folder_id, self.folder.id)
+
+    def test_bulk_move_within_batch_conflict_detection(self):
+        """Two documents with the same filename moved to the same folder
+        should both succeed with disambiguation, not conflict."""
+        doc1 = Document.objects.create(
+            title="Report A", creator=self.owner, pdf_file="report.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc1,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/report.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Second doc with same filename but from a different source folder
+        source_folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Source"
+        )
+        doc2 = Document.objects.create(
+            title="Report B", creator=self.owner, pdf_file="report2.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc2,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=source_folder,
+            path="/Source/report.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Move both to the same target folder — they both produce
+        # "/Target/report.pdf" as the base path
+        moved_count, error = DocumentFolderService.move_documents_to_folder(
+            user=self.owner,
+            document_ids=[doc1.id, doc2.id],
+            corpus=self.corpus,
+            folder=self.folder,
+        )
+
+        self.assertEqual(moved_count, 2)
+        self.assertEqual(error, "")
+
+        # Verify they got different paths
+        path1 = DocumentPath.objects.get(
+            document=doc1, corpus=self.corpus, is_current=True
+        )
+        path2 = DocumentPath.objects.get(
+            document=doc2, corpus=self.corpus, is_current=True
+        )
+        self.assertNotEqual(path1.path, path2.path)
+        self.assertEqual(path1.folder_id, self.folder.id)
+        self.assertEqual(path2.folder_id, self.folder.id)
