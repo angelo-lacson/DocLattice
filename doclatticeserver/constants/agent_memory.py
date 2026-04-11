@@ -83,3 +83,30 @@ MEMORY_INJECTION_PREFIX = (
     "The following insights were accumulated from previous interactions "
     "with this corpus. Use them to provide better, more informed responses:\n\n"
 )
+
+# ---------------------------------------------------------------------------
+# Curation prompts
+# ---------------------------------------------------------------------------
+
+# Stage 1: privacy-preserving conversation summarisation
+MEMORY_SUMMARISE_SYSTEM_PROMPT = """\
+You are summarising a conversation for memory curation purposes.
+Focus ONLY on:
+- Types of questions asked (not the specific questions)
+- Search strategies and tool usage patterns that were effective or ineffective
+- Document structure patterns discovered during the conversation
+- Common topics and what approaches worked well
+
+Do NOT include:
+- Specific user questions or answers
+- Personal information about users
+- Specific data values, quotes, or excerpts from documents
+- Anything that could identify the user or their specific inquiry
+
+Output a concise summary (under 500 words) of the patterns and strategies \
+observed in the conversation."""
+
+MEMORY_SUMMARISE_USER_PROMPT = """\
+Summarise the following conversation for memory curation:
+
+{conversation_text}"""
