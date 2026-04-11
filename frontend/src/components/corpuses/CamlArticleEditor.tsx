@@ -585,6 +585,8 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
               <div ref={extractPickerRef} style={{ position: "relative" }}>
                 <ToolbarBtn
                   type="button"
+                  aria-haspopup="listbox"
+                  aria-expanded={showExtractPicker}
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowExtractPicker((v) => !v);
@@ -596,7 +598,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
                   Insert Extract Grid
                 </ToolbarBtn>
                 {showExtractPicker && (
-                  <ExtractPickerDropdown>
+                  <ExtractPickerDropdown role="listbox">
                     {extractsLoading ? (
                       <ExtractPickerEmpty>
                         Loading extracts...
@@ -609,6 +611,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
                       corpusExtracts.map((ext) => (
                         <ExtractPickerItem
                           type="button"
+                          role="option"
                           key={ext.id}
                           onClick={() =>
                             handleInsertComponent("extract-grid", {

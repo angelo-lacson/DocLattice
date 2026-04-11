@@ -5,7 +5,7 @@
  * Fetches the Readme.CAML document, parses its content, and renders
  * the full scrollytelling article experience.
  */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@apollo/client";
 import { ArrowLeft, FileText, Edit } from "lucide-react";
 import styled from "styled-components";
@@ -238,6 +238,21 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
     }
   }, [camlContent]);
 
+  // Resolve CAML image protocol URIs to actual URLs.
+  // "corpus://icon" resolves to the corpus's icon URL.
+  // "corpus://current" is an alias for "corpus://icon" — both resolve to the
+  // active corpus's icon. The alias exists for semantic clarity in CAML content
+  // where "current" refers to the corpus being viewed.
+  const resolveImageSrc = useCallback(
+    (src: string): string | undefined => {
+      if (src === "corpus://icon" || src === "corpus://current") {
+        return corpus.icon || undefined;
+      }
+      return undefined;
+    },
+    [corpus.icon]
+  );
+
   if (loading) {
     return (
       <ArticleViewContainer data-testid={testId}>
@@ -329,6 +344,7 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
         document={parsedDocument}
         handlerContext={handlerContext}
         stats={stats}
+        resolveImageSrc={resolveImageSrc}
         componentRegistry={CAML_COMPONENTS}
       />
     </ArticleViewContainer>

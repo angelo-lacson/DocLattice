@@ -48,6 +48,8 @@ export interface CamlDirectiveRendererProps {
     contributors?: number;
     threads?: number;
   };
+  /** Optional callback to resolve protocol URIs (e.g. corpus://icon) to image URLs */
+  resolveImageSrc?: (src: string) => string | undefined;
   /** Optional registry of embedded component types (e.g. extract-grid). */
   componentRegistry?: CamlComponentRegistry;
 }
@@ -75,6 +77,7 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
   document,
   handlerContext,
   stats,
+  resolveImageSrc,
   componentRegistry,
 }) => {
   // Single pass: extract directives and build cleaned document simultaneously.
@@ -187,6 +190,7 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
         document={cleanedDocument}
         stats={stats}
         renderMarkdown={renderMarkdown}
+        resolveImageSrc={resolveImageSrc}
       />
     </CamlThemeProvider>
   );
