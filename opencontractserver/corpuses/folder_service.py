@@ -842,11 +842,13 @@ class DocumentFolderService:
             # large batches. Blocked on per-document disambiguation and parent
             # link assignment which require sequential processing today.
             affected_paths = list(
-                DocumentPath.objects.select_for_update().filter(
+                DocumentPath.objects.select_for_update()
+                .filter(
                     folder=folder,
                     is_current=True,
                     is_deleted=False,
                 )
+                .order_by("pk")
             )
             failed_docs: list[str] = []
             for current in affected_paths:
@@ -855,6 +857,9 @@ class DocumentFolderService:
                     # PostgreSQL transaction; a nested atomic() creates a
                     # savepoint so only this iteration is rolled back.
                     with transaction.atomic():
+                        # Note: _compute_moved_path extracts only the filename;
+                        # intermediate directory segments are dropped (the new
+                        # path is derived from the target folder's tree position).
                         new_path = cls._compute_moved_path(current.path, None)
                         new_path = cls._disambiguate_path(
                             new_path, current.corpus, exclude_pk=current.pk
@@ -989,6 +994,9 @@ class DocumentFolderService:
 
             # Compute new path reflecting the folder location,
             # disambiguating with a numeric suffix if there is a conflict.
+            # Note: _compute_moved_path extracts only the filename;
+            # intermediate directory segments are dropped (the new path is
+            # derived entirely from the target folder's tree position).
             new_path = cls._compute_moved_path(current.path, folder)
             try:
                 new_path = cls._disambiguate_path(
@@ -1089,14 +1097,19 @@ class DocumentFolderService:
         moved_count = 0
 
         with transaction.atomic():
-            # Get all current paths for these documents
+            # Get all current paths for these documents.
+            # ORDER BY pk to acquire row locks in a deterministic order,
+            # preventing deadlocks when concurrent calls overlap on the
+            # same document set.
             current_paths = list(
-                DocumentPath.objects.select_for_update().filter(
+                DocumentPath.objects.select_for_update()
+                .filter(
                     document_id__in=document_ids,
                     corpus=corpus,
                     is_current=True,
                     is_deleted=False,
                 )
+                .order_by("pk")
             )
 
             # TODO(perf): O(N) queries — consider bulk_update/bulk_create for
@@ -1113,6 +1126,8 @@ class DocumentFolderService:
                     # PostgreSQL transaction; a nested atomic() creates a
                     # savepoint so only this iteration is rolled back.
                     with transaction.atomic():
+                        # Note: _compute_moved_path extracts only the filename;
+                        # intermediate directory segments are dropped.
                         new_path = cls._compute_moved_path(current.path, folder)
                         new_path = cls._disambiguate_path(
                             new_path, corpus, exclude_pk=current.pk
@@ -1222,10 +1237,9 @@ class DocumentFolderService:
         A hard cap (``MAX_PATH_DISAMBIGUATION_SUFFIX``) prevents unbounded loops
         if many documents share the same filename in the same folder.
 
-        **Performance note**: Each candidate suffix issues a separate EXISTS query
-        (O(N) worst case where N = number of conflicting paths). For corpuses with
-        very high collision counts, consider pre-fetching the set of conflicting
-        paths with a single ``LIKE`` query.
+        **Performance**: Uses a single ``startswith`` query to pre-fetch all
+        occupied paths in the target directory, then checks candidates in memory
+        (O(1) per candidate instead of O(1)-per-query).
 
         **Concurrency note**: The caller holds ``select_for_update()`` on the
         *source* DocumentPath row being moved, which prevents two concurrent
@@ -1253,15 +1267,25 @@ class DocumentFolderService:
         # folder_service -> documents.models -> corpuses.models -> folder_service
         from opencontractserver.documents.models import DocumentPath
 
-        def _is_taken(path: str) -> bool:
-            qs = DocumentPath.objects.filter(
-                corpus=corpus, path=path, is_current=True, is_deleted=False
-            )
-            if exclude_pk is not None:
-                qs = qs.exclude(pk=exclude_pk)
-            return qs.exists()
+        # Pre-fetch all occupied paths in the target directory with a single
+        # query, then check candidates in memory.  This avoids O(N) EXISTS
+        # queries when many documents share the same filename.
+        if "/" in base_path:
+            directory = base_path.rsplit("/", 1)[0] + "/"
+        else:
+            directory = ""
 
-        if not _is_taken(base_path):
+        qs = DocumentPath.objects.filter(
+            corpus=corpus,
+            is_current=True,
+            is_deleted=False,
+            path__startswith=directory,
+        )
+        if exclude_pk is not None:
+            qs = qs.exclude(pk=exclude_pk)
+        occupied = set(qs.values_list("path", flat=True))
+
+        if base_path not in occupied:
             return base_path
 
         # Split into stem and extension for suffix insertion.
@@ -1292,7 +1316,7 @@ class DocumentFolderService:
 
         for counter in range(1, MAX_PATH_DISAMBIGUATION_SUFFIX + 1):
             candidate = f"{stem}_{counter}{ext}"
-            if not _is_taken(candidate):
+            if candidate not in occupied:
                 logger.warning(
                     "Path conflict for %r in corpus %s — disambiguated to %r",
                     base_path,
