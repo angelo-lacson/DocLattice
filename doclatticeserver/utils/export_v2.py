@@ -240,14 +240,11 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
             }
 
             # Include ingestion lineage fields when present.
-            # Intentionally uses truthiness: empty string / empty dict are
-            # treated the same as None (omitted from export). This keeps
-            # exports compact; import interprets a missing key as "not set".
             if doc_path.ingestion_source_id:
                 entry["ingestion_source_name"] = doc_path.ingestion_source.name
             if doc_path.external_id:
                 entry["external_id"] = doc_path.external_id
-            if doc_path.ingestion_metadata:
+            if doc_path.ingestion_metadata is not None:
                 entry["ingestion_metadata"] = doc_path.ingestion_metadata
 
             paths_export.append(entry)

@@ -862,6 +862,7 @@ class TestExportWithLineageFields(TestCase):
             path="/documents/plain.pdf",
             version_number=1,
             creator=self.user,
+            ingestion_metadata=None,
         )
 
         from doclatticeserver.utils.export_v2 import package_document_paths
@@ -1372,3 +1373,396 @@ class TestAnonymousIngestionSourceAccess(TestCase):
         gid = to_global_id("IngestionSourceType", source.pk)
         result = anon_client.execute(SINGLE_SOURCE_QUERY, variables={"id": gid})
         self.assertIsNotNone(result.get("errors"))
+
+
+# ------------------------------------------------------------------ #
+# Superuser access to ingestion sources
+# ------------------------------------------------------------------ #
+
+
+class TestSuperuserIngestionSourceAccess(TestCase):
+    """Test that superusers can see all ingestion sources."""
+
+    def setUp(self):
+        self.superuser = User.objects.create_superuser(
+            username="is_admin_superuser", password="adminpass"
+        )
+        self.regular_user = User.objects.create_user(
+            username="regular", password="regularpass"
+        )
+        self.source = IngestionSource.objects.create(
+            name="regular_source",
+            source_type=IngestionSourceCategory.API,
+            creator=self.regular_user,
+        )
+        set_permissions_for_obj_to_user(
+            self.regular_user, self.source, [PermissionTypes.CRUD]
+        )
+
+    def test_superuser_list_sees_all_sources(self):
+        """Superuser should see sources from all users."""
+        admin_client = Client(schema, context_value=TestContext(self.superuser))
+        result = admin_client.execute(LIST_SOURCES_QUERY)
+        self.assertIsNone(result.get("errors"))
+        sources = result["data"]["ingestionSources"]
+        names = [s["name"] for s in sources]
+        self.assertIn("regular_source", names)
+
+    def test_superuser_single_source(self):
+        """Superuser should be able to query any source by ID."""
+        admin_client = Client(schema, context_value=TestContext(self.superuser))
+        gid = to_global_id("IngestionSourceType", self.source.pk)
+        result = admin_client.execute(SINGLE_SOURCE_QUERY, variables={"id": gid})
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["ingestionSource"]
+        self.assertIsNotNone(data)
+        self.assertEqual(data["name"], "regular_source")
+
+
+# ------------------------------------------------------------------ #
+# Versioning lineage preservation tests
+# ------------------------------------------------------------------ #
+
+
+class TestVersioningLineagePreservation(TestCase):
+    """Test that move/delete/restore operations preserve lineage fields."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        self.source = IngestionSource.objects.create(
+            name="lineage_source",
+            source_type=IngestionSourceCategory.CRAWLER,
+            creator=self.user,
+        )
+
+    def _create_doc_with_lineage(self):
+        """Create a document with lineage fields on its path."""
+        from doclatticeserver.documents.versioning import import_document
+
+        content = b"%PDF-1.5 test content"
+        doc, status, path = import_document(
+            corpus=self.corpus,
+            path="/documents/lineage_test.pdf",
+            content=content,
+            user=self.user,
+            ingestion_source=self.source,
+            external_id="ext-lineage-001",
+            ingestion_metadata={"crawl_url": "https://example.com/doc1"},
+        )
+        return doc, path
+
+    def test_import_document_stores_lineage_on_path(self):
+        """import_document with lineage kwargs should store them on the path."""
+        doc, path = self._create_doc_with_lineage()
+        self.assertEqual(path.ingestion_source, self.source)
+        self.assertEqual(path.external_id, "ext-lineage-001")
+        self.assertEqual(
+            path.ingestion_metadata, {"crawl_url": "https://example.com/doc1"}
+        )
+
+    def test_move_preserves_lineage(self):
+        """move_document should copy lineage fields to the new path record."""
+        from doclatticeserver.documents.versioning import move_document
+
+        _, original_path = self._create_doc_with_lineage()
+        new_path = move_document(
+            corpus=self.corpus,
+            old_path="/documents/lineage_test.pdf",
+            new_path="/documents/moved_lineage.pdf",
+            user=self.user,
+        )
+        self.assertEqual(new_path.ingestion_source, self.source)
+        self.assertEqual(new_path.external_id, "ext-lineage-001")
+        self.assertEqual(
+            new_path.ingestion_metadata, {"crawl_url": "https://example.com/doc1"}
+        )
+
+    def test_delete_preserves_lineage(self):
+        """delete_document should copy lineage fields to the deleted path record."""
+        from doclatticeserver.documents.versioning import delete_document
+
+        self._create_doc_with_lineage()
+        deleted_path = delete_document(
+            corpus=self.corpus,
+            path="/documents/lineage_test.pdf",
+            user=self.user,
+        )
+        self.assertTrue(deleted_path.is_deleted)
+        self.assertEqual(deleted_path.ingestion_source, self.source)
+        self.assertEqual(deleted_path.external_id, "ext-lineage-001")
+        self.assertEqual(
+            deleted_path.ingestion_metadata, {"crawl_url": "https://example.com/doc1"}
+        )
+
+    def test_restore_preserves_lineage(self):
+        """restore_document should copy lineage fields to the restored path record."""
+        from doclatticeserver.documents.versioning import (
+            delete_document,
+            restore_document,
+        )
+
+        self._create_doc_with_lineage()
+        delete_document(
+            corpus=self.corpus,
+            path="/documents/lineage_test.pdf",
+            user=self.user,
+        )
+        restored_path = restore_document(
+            corpus=self.corpus,
+            path="/documents/lineage_test.pdf",
+            user=self.user,
+        )
+        self.assertFalse(restored_path.is_deleted)
+        self.assertEqual(restored_path.ingestion_source, self.source)
+        self.assertEqual(restored_path.external_id, "ext-lineage-001")
+        self.assertEqual(
+            restored_path.ingestion_metadata, {"crawl_url": "https://example.com/doc1"}
+        )
+
+    def test_import_document_without_lineage(self):
+        """import_document without lineage kwargs should leave fields at defaults."""
+        from doclatticeserver.documents.versioning import import_document
+
+        content = b"%PDF-1.5 no lineage content"
+        doc, status, path = import_document(
+            corpus=self.corpus,
+            path="/documents/no_lineage.pdf",
+            content=content,
+            user=self.user,
+        )
+        self.assertIsNone(path.ingestion_source)
+        self.assertEqual(path.external_id, "")
+        self.assertFalse(path.ingestion_metadata)
+
+
+# ------------------------------------------------------------------ #
+# Corpus.import_content lineage kwargs passthrough
+# ------------------------------------------------------------------ #
+
+
+class TestCorpusImportContentLineage(TestCase):
+    """Test that Corpus.import_content passes lineage kwargs to DocumentPath."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+        self.source = IngestionSource.objects.create(
+            name="corpus_test_source",
+            source_type=IngestionSourceCategory.API,
+            creator=self.user,
+        )
+
+    def test_import_content_with_lineage_kwargs(self):
+        """Corpus.import_content should pass lineage kwargs through to DocumentPath."""
+        pdf_content = b"%PDF-1.5 test"
+        doc, status, path = self.corpus.import_content(
+            filename="lineage_doc.pdf",
+            content=pdf_content,
+            user=self.user,
+            ingestion_source=self.source,
+            external_id="ext-corpus-001",
+            ingestion_metadata={"import_job": "batch-42"},
+        )
+        self.assertIsNotNone(path)
+        path.refresh_from_db()
+        self.assertEqual(path.ingestion_source, self.source)
+        self.assertEqual(path.external_id, "ext-corpus-001")
+        self.assertEqual(path.ingestion_metadata, {"import_job": "batch-42"})
+
+
+# ------------------------------------------------------------------ #
+# Corpus.add_document lineage kwargs passthrough
+# ------------------------------------------------------------------ #
+
+
+class TestCorpusAddDocumentLineage(TestCase):
+    """Test that Corpus.add_document passes lineage kwargs to DocumentPath."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+        self.source = IngestionSource.objects.create(
+            name="add_doc_source",
+            source_type=IngestionSourceCategory.API,
+            creator=self.user,
+        )
+
+    def test_add_document_with_lineage_kwargs(self):
+        """Corpus.add_document should extract lineage kwargs and pass to DocumentPath."""
+        original_doc = Document.objects.create(
+            title="Original Doc",
+            creator=self.user,
+            pdf_file="original.pdf",
+        )
+        corpus_doc, status, path = self.corpus.add_document(
+            document=original_doc,
+            user=self.user,
+            ingestion_source=self.source,
+            external_id="ext-add-001",
+            ingestion_metadata={"batch": "add-42"},
+        )
+        self.assertIsNotNone(path)
+        path.refresh_from_db()
+        self.assertEqual(path.ingestion_source, self.source)
+        self.assertEqual(path.external_id, "ext-add-001")
+        self.assertEqual(path.ingestion_metadata, {"batch": "add-42"})
+
+
+# ------------------------------------------------------------------ #
+# import_document update path with lineage kwargs
+# ------------------------------------------------------------------ #
+
+
+class TestImportDocumentUpdateLineage(TestCase):
+    """Test import_document update path (existing path) with lineage kwargs."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        self.source = IngestionSource.objects.create(
+            name="update_source",
+            source_type=IngestionSourceCategory.CRAWLER,
+            creator=self.user,
+        )
+
+    def test_update_existing_path_with_lineage(self):
+        """Updating an existing path should store lineage kwargs on the new version."""
+        from doclatticeserver.documents.versioning import import_document
+
+        # Create initial document at a path
+        content_v1 = b"%PDF-1.5 version 1"
+        doc_v1, status_v1, path_v1 = import_document(
+            corpus=self.corpus,
+            path="/documents/update_lineage.pdf",
+            content=content_v1,
+            user=self.user,
+        )
+        self.assertEqual(status_v1, "created")
+        self.assertIsNone(path_v1.ingestion_source)
+
+        # Update same path with new content and lineage kwargs
+        content_v2 = b"%PDF-1.5 version 2 different"
+        doc_v2, status_v2, path_v2 = import_document(
+            corpus=self.corpus,
+            path="/documents/update_lineage.pdf",
+            content=content_v2,
+            user=self.user,
+            ingestion_source=self.source,
+            external_id="ext-update-001",
+            ingestion_metadata={"crawl_run": "run-99"},
+        )
+        self.assertEqual(status_v2, "updated")
+        self.assertEqual(path_v2.ingestion_source, self.source)
+        self.assertEqual(path_v2.external_id, "ext-update-001")
+        self.assertEqual(path_v2.ingestion_metadata, {"crawl_run": "run-99"})
+
+
+# ------------------------------------------------------------------ #
+# Export document_ref fallback paths
+# ------------------------------------------------------------------ #
+
+
+class TestExportDocumentRefFallbacks(TestCase):
+    """Test package_document_paths document_ref fallback logic."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+
+    def test_document_ref_uses_hash_when_available(self):
+        """document_ref should use pdf_file_hash when available."""
+        from doclatticeserver.utils.export_v2 import package_document_paths
+
+        doc = Document.objects.create(
+            title="Hash Doc",
+            creator=self.user,
+            pdf_file="hash_doc.pdf",
+            pdf_file_hash="sha256_abc123",
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/hash_doc.pdf",
+            version_number=1,
+            creator=self.user,
+        )
+        exported = package_document_paths(self.corpus)
+        self.assertEqual(len(exported), 1)
+        self.assertEqual(exported[0]["document_ref"], "sha256_abc123")
+
+    def test_document_ref_falls_back_to_filename(self):
+        """document_ref should fall back to filename when hash is empty."""
+        from doclatticeserver.utils.export_v2 import package_document_paths
+
+        doc = Document.objects.create(
+            title="No Hash Doc",
+            creator=self.user,
+            pdf_file="subdir/fallback_doc.pdf",
+            pdf_file_hash="",
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/fallback_doc.pdf",
+            version_number=1,
+            creator=self.user,
+        )
+        exported = package_document_paths(self.corpus)
+        self.assertEqual(len(exported), 1)
+        self.assertEqual(exported[0]["document_ref"], "fallback_doc.pdf")
+
+    def test_document_ref_falls_back_to_id(self):
+        """document_ref should fall back to str(id) when no hash and no file."""
+        from doclatticeserver.utils.export_v2 import package_document_paths
+
+        doc = Document.objects.create(
+            title="No File Doc",
+            creator=self.user,
+            pdf_file_hash="",
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/no_file_doc.pdf",
+            version_number=1,
+            creator=self.user,
+        )
+        exported = package_document_paths(self.corpus)
+        self.assertEqual(len(exported), 1)
+        self.assertEqual(exported[0]["document_ref"], str(doc.id))
+
+    def test_export_parent_version_number(self):
+        """Exported paths should include parent_version_number when parent exists."""
+        from doclatticeserver.utils.export_v2 import package_document_paths
+
+        doc = Document.objects.create(
+            title="Versioned Doc",
+            creator=self.user,
+            pdf_file="versioned.pdf",
+            pdf_file_hash="hash_versioned",
+        )
+        root_path = DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/versioned.pdf",
+            version_number=1,
+            is_current=False,
+            creator=self.user,
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/versioned.pdf",
+            version_number=2,
+            parent=root_path,
+            is_current=True,
+            creator=self.user,
+        )
+        exported = package_document_paths(self.corpus)
+        self.assertEqual(len(exported), 2)
+        # Find the child entry
+        child_entry = next(e for e in exported if e["version_number"] == 2)
+        self.assertEqual(child_entry["parent_version_number"], 1)
