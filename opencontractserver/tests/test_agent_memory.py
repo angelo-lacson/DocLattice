@@ -691,18 +691,22 @@ class TestAgetCorpusMemory(TransactionTestCase):
         from opencontractserver.llms.tools.core_tools import aget_corpus_memory
 
         with self.assertRaises(ValueError):
-            async_to_sync(aget_corpus_memory)(corpus_id=999999)
+            async_to_sync(aget_corpus_memory)(corpus_id=999999, user_id=self.user.pk)
 
     def test_memory_disabled_returns_message(self):
         from opencontractserver.llms.tools.core_tools import aget_corpus_memory
 
-        result = async_to_sync(aget_corpus_memory)(corpus_id=self.corpus_no_mem.pk)
+        result = async_to_sync(aget_corpus_memory)(
+            corpus_id=self.corpus_no_mem.pk, user_id=self.user.pk
+        )
         self.assertIn("not enabled", result)
 
     def test_no_memory_doc_returns_message(self):
         from opencontractserver.llms.tools.core_tools import aget_corpus_memory
 
-        result = async_to_sync(aget_corpus_memory)(corpus_id=self.corpus.pk)
+        result = async_to_sync(aget_corpus_memory)(
+            corpus_id=self.corpus.pk, user_id=self.user.pk
+        )
         self.assertIn("No memory document", result)
 
     def test_reads_full_content(self):
@@ -715,7 +719,9 @@ class TestAgetCorpusMemory(TransactionTestCase):
         )
         async_to_sync(update_memory_content)(self.corpus, content, self.user)
         # aget_corpus_memory re-fetches corpus from DB, so no stale cache issue
-        result = async_to_sync(aget_corpus_memory)(corpus_id=self.corpus.pk)
+        result = async_to_sync(aget_corpus_memory)(
+            corpus_id=self.corpus.pk, user_id=self.user.pk
+        )
         self.assertIn("- **Insight**: Detail", result)
 
     def test_section_filter(self):
@@ -728,7 +734,9 @@ class TestAgetCorpusMemory(TransactionTestCase):
         )
         async_to_sync(update_memory_content)(self.corpus, content, self.user)
         result = async_to_sync(aget_corpus_memory)(
-            corpus_id=self.corpus.pk, section="Collection Patterns"
+            corpus_id=self.corpus.pk,
+            user_id=self.user.pk,
+            section="Collection Patterns",
         )
         self.assertIn("- **CP**: Col insight", result)
         self.assertNotIn("- **QP**: Query insight", result)
@@ -742,7 +750,9 @@ class TestAgetCorpusMemory(TransactionTestCase):
         )
         async_to_sync(update_memory_content)(self.corpus, content, self.user)
         result = async_to_sync(aget_corpus_memory)(
-            corpus_id=self.corpus.pk, section="Nonexistent"
+            corpus_id=self.corpus.pk,
+            user_id=self.user.pk,
+            section="Nonexistent",
         )
         self.assertIn("not found", result)
 

@@ -23,35 +23,11 @@ from opencontractserver.constants.agent_memory import (
     MEMORY_CURATION_MAX_CONVERSATION_TOKENS,
     MEMORY_CURATION_MIN_MESSAGES,
     MEMORY_MAX_INSIGHTS_PER_CURATION,
+    MEMORY_SUMMARISE_SYSTEM_PROMPT,
+    MEMORY_SUMMARISE_USER_PROMPT,
 )
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Conversation summarisation prompt (privacy firewall)
-# ---------------------------------------------------------------------------
-_SUMMARISE_SYSTEM_PROMPT = """\
-You are summarising a conversation for memory curation purposes.
-Focus ONLY on:
-- Types of questions asked (not the specific questions)
-- Search strategies and tool usage patterns that were effective or ineffective
-- Document structure patterns discovered during the conversation
-- Common topics and what approaches worked well
-
-Do NOT include:
-- Specific user questions or answers
-- Personal information about users
-- Specific data values, quotes, or excerpts from documents
-- Anything that could identify the user or their specific inquiry
-
-Output a concise summary (under 500 words) of the patterns and strategies \
-observed in the conversation."""
-
-_SUMMARISE_USER_PROMPT = """\
-Summarise the following conversation for memory curation:
-
-{conversation_text}"""
 
 
 # ---------------------------------------------------------------------------
@@ -139,46 +115,8 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
     if not updated:
         return {"status": "skipped", "reason": "already_claimed"}
 
-    # 3. Build conversation text (truncated to budget)
-    conversation_lines = []
-    for msg in messages:
-        role = (
-            msg.msg_type.upper()
-            if hasattr(msg.msg_type, "upper")
-            else str(msg.msg_type)
-        )
-        content = msg.content or ""
-        conversation_lines.append(f"[{role}]: {content}")
-
-    conversation_text = "\n".join(conversation_lines)
-    if (
-        estimate_token_count(conversation_text)
-        > MEMORY_CURATION_MAX_CONVERSATION_TOKENS
-    ):
-        # Pre-compute per-line token estimates to avoid O(n^2) re-scanning.
-        line_tokens = [estimate_token_count(line) for line in conversation_lines]
-        total_tokens = sum(line_tokens)
-        # Drop lines from the beginning until budget is met.
-        while (
-            total_tokens > MEMORY_CURATION_MAX_CONVERSATION_TOKENS
-            and len(conversation_lines) > MEMORY_CURATION_MIN_MESSAGES
-        ):
-            total_tokens -= line_tokens.pop(0)
-            conversation_lines.pop(0)
-        conversation_text = "[Earlier messages truncated]\n" + "\n".join(
-            conversation_lines
-        )
-
-    # 4. Stage 1: Summarise conversation (privacy firewall)
-    from opencontractserver.llms.agents.core_agents import get_default_config
-
-    model_name = get_default_config().model_name
-    summarise_agent = PydanticAIAgent(
-        model=model_name,
-        instructions=_SUMMARISE_SYSTEM_PROMPT,
-    )
-
-    # Helper to release the claim on error so the task can be retried
+    # Helper to release the claim on error so the task can be retried.
+    # Defined immediately after the claim so all post-claim code can use it.
     async def _release_claim():
         await database_sync_to_async(
             lambda: Conversation.objects.filter(pk=conversation.pk).update(
@@ -186,9 +124,57 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
             )
         )()
 
+    # 3. Build conversation text (truncated to budget)
+    try:
+        conversation_lines = []
+        for msg in messages:
+            role = (
+                msg.msg_type.upper()
+                if hasattr(msg.msg_type, "upper")
+                else str(msg.msg_type)
+            )
+            content = msg.content or ""
+            conversation_lines.append(f"[{role}]: {content}")
+
+        conversation_text = "\n".join(conversation_lines)
+        if (
+            estimate_token_count(conversation_text)
+            > MEMORY_CURATION_MAX_CONVERSATION_TOKENS
+        ):
+            # Pre-compute per-line token estimates to avoid O(n^2) re-scanning.
+            line_tokens = [estimate_token_count(line) for line in conversation_lines]
+            total_tokens = sum(line_tokens)
+            # Drop lines from the beginning until budget is met.
+            while (
+                total_tokens > MEMORY_CURATION_MAX_CONVERSATION_TOKENS
+                and len(conversation_lines) > MEMORY_CURATION_MIN_MESSAGES
+            ):
+                total_tokens -= line_tokens.pop(0)
+                conversation_lines.pop(0)
+            conversation_text = "[Earlier messages truncated]\n" + "\n".join(
+                conversation_lines
+            )
+    except Exception:
+        logger.warning(
+            "Failed to build conversation text for curation of conversation %s",
+            conversation_id,
+            exc_info=True,
+        )
+        await _release_claim()
+        return {"status": "error", "reason": "text_build_failed"}
+
+    # 4. Stage 1: Summarise conversation (privacy firewall)
+    from opencontractserver.llms.agents.core_agents import get_default_config
+
+    model_name = get_default_config().model_name
+    summarise_agent = PydanticAIAgent(
+        model=model_name,
+        instructions=MEMORY_SUMMARISE_SYSTEM_PROMPT,
+    )
+
     try:
         summary_result = await summarise_agent.run(
-            _SUMMARISE_USER_PROMPT.format(conversation_text=conversation_text)
+            MEMORY_SUMMARISE_USER_PROMPT.format(conversation_text=conversation_text)
         )
         conversation_summary = str(summary_result.output)
     except Exception:

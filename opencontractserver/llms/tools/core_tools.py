@@ -2813,6 +2813,7 @@ async def amove_document(
 
 async def aget_corpus_memory(
     corpus_id: int,
+    user_id: int,
     section: str = "",
 ) -> str:
     """Read the corpus agent memory document.
@@ -2822,21 +2823,35 @@ async def aget_corpus_memory(
 
     Args:
         corpus_id: The corpus ID.
+        user_id: The requesting user (injected from context).
         section: Optional section header to filter to.
 
     Returns:
         The memory document content, or a message if no memory exists.
     """
+    from django.contrib.auth import get_user_model
+
     from opencontractserver.agents.memory import (
         read_memory_content,
         split_memory_sections,
     )
     from opencontractserver.corpuses.models import Corpus
 
+    User = get_user_model()
+
     try:
-        corpus = await Corpus.objects.aget(pk=corpus_id)
+        user = await User.objects.aget(pk=user_id)
+    except User.DoesNotExist as exc:
+        raise ValueError(f"User with id={user_id} does not exist.") from exc
+
+    try:
+        corpus = await _db_sync_to_async(
+            lambda: Corpus.objects.visible_to_user(user).get(pk=corpus_id)
+        )()
     except Corpus.DoesNotExist as exc:
-        raise ValueError(f"Corpus with id={corpus_id} does not exist.") from exc
+        raise ValueError(
+            f"Corpus with id={corpus_id} does not exist or is not accessible."
+        ) from exc
 
     if not corpus.memory_enabled:
         return "Memory is not enabled for this corpus."
@@ -2901,17 +2916,21 @@ async def asuggest_memory_update(
         )
 
     try:
-        corpus = await Corpus.objects.aget(pk=corpus_id)
-    except Corpus.DoesNotExist as exc:
-        raise ValueError(f"Corpus with id={corpus_id} does not exist.") from exc
-
-    if not corpus.memory_enabled:
-        return "Memory is not enabled for this corpus."
-
-    try:
         user = await User.objects.aget(pk=user_id)
     except User.DoesNotExist as exc:
         raise ValueError(f"User with id={user_id} does not exist.") from exc
+
+    try:
+        corpus = await _db_sync_to_async(
+            lambda: Corpus.objects.visible_to_user(user).get(pk=corpus_id)
+        )()
+    except Corpus.DoesNotExist as exc:
+        raise ValueError(
+            f"Corpus with id={corpus_id} does not exist or is not accessible."
+        ) from exc
+
+    if not corpus.memory_enabled:
+        return "Memory is not enabled for this corpus."
 
     # Ensure memory document exists
     await get_or_create_memory_document(corpus, user)
