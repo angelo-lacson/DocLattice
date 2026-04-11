@@ -20,9 +20,6 @@ flags:
     paths:
       - frontend/src/
     carryforward: true
-    # NOTE: Metadata component tests (tests/*Metadata*.ct.tsx) run separately
-    # without coverage instrumentation due to flakiness. Code exercised only
-    # by those tests will not appear in this flag's coverage data.
 
 parsers:
   gcov:

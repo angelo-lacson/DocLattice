@@ -80,9 +80,10 @@ jobs:
       - name: Run Playwright Component Tests with Coverage
         run: yarn run test:coverage:ct
 
-      # Metadata tests run separately without coverage instrumentation.
-      # Their coverage is not included in the LCOV upload above.
-      - name: Run Metadata Component Tests
+      # Metadata tests already run with coverage above (included in *.ct.tsx).
+      # This separate re-run without coverage catches flaky failures that
+      # may have been masked by retries, without blocking the pipeline.
+      - name: Re-run Metadata Component Tests (flakiness check)
         run: |
           yarn run test:ct --reporter=list tests/*Metadata*.ct.tsx
         continue-on-error: true
