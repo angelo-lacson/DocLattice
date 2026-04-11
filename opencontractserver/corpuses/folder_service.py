@@ -1148,8 +1148,11 @@ class DocumentFolderService:
                     # further by trying numeric suffixes against both the
                     # DB-occupied set and the batch-claimed set.
                     if new_path in batch_claimed:
-                        new_path = cls._disambiguate_path_with_batch(
-                            new_path, corpus, batch_claimed, exclude_pk=current.pk
+                        new_path = cls._disambiguate_path(
+                            new_path,
+                            corpus,
+                            exclude_pk=current.pk,
+                            extra_occupied=batch_claimed,
                         )
 
                     batch_claimed.add(new_path)
@@ -1257,6 +1260,7 @@ class DocumentFolderService:
         base_path: str,
         corpus: Corpus,
         exclude_pk: int | None = None,
+        extra_occupied: set[str] | None = None,
     ) -> str:
         """
         Generate a unique path by appending numeric suffixes when a conflict exists.
@@ -1273,24 +1277,25 @@ class DocumentFolderService:
         occupied paths in the target directory, then checks candidates in memory
         (O(1) per candidate instead of O(1)-per-query).
 
-        **Concurrency note**: The caller holds ``select_for_update()`` on the
-        *source* DocumentPath row being moved, which prevents two concurrent
-        moves of the **same** document from racing.  However, two concurrent
-        moves of **different** documents to the same target folder can still
-        both observe the candidate path as free and race to create it.  The
-        database's ``unique_active_path_per_corpus`` partial unique constraint
-        is the real safety net in that case — the loser's ``INSERT`` will
-        raise ``IntegrityError``, which callers must handle (and do, via
-        savepoints and ``except IntegrityError``).
+        **Concurrency note**: The caller's ``select_for_update()`` only prevents
+        two concurrent moves of the **same** document from racing.  It does NOT
+        lock target-path rows — two concurrent moves of **different** documents
+        to the same target folder can both observe a candidate path as free and
+        race to create it.  The database's ``unique_active_path_per_corpus``
+        partial unique constraint is the real safety net: the loser's ``INSERT``
+        raises ``IntegrityError``, which callers handle via savepoints.
 
         Args:
             base_path: The ideal path string to use.
             corpus: Corpus to check for conflicts in.
             exclude_pk: Optional DocumentPath PK to exclude from conflict check
                         (the record being superseded).
+            extra_occupied: Optional set of additional paths to treat as occupied
+                           (used during bulk moves to avoid within-batch collisions).
 
         Returns:
-            A path string guaranteed to be unique among active paths in the corpus.
+            A path string guaranteed to be unique among active paths in the corpus
+            (and the extra_occupied set, if provided).
 
         Raises:
             ValueError: If no unique path can be found within the suffix limit.
@@ -1326,6 +1331,10 @@ class DocumentFolderService:
             qs = qs.exclude(pk=exclude_pk)
         occupied = set(qs.values_list("path", flat=True))
 
+        # Merge in any extra occupied paths (e.g. from within-batch claims)
+        if extra_occupied:
+            occupied = occupied | extra_occupied
+
         if base_path not in occupied:
             return base_path
 
@@ -1358,105 +1367,27 @@ class DocumentFolderService:
         for counter in range(1, MAX_PATH_DISAMBIGUATION_SUFFIX + 1):
             candidate = f"{stem}_{counter}{ext}"
             if candidate not in occupied:
+                log_prefix = (
+                    "Within-batch path conflict" if extra_occupied else "Path conflict"
+                )
                 logger.warning(
-                    "Path conflict for %r in corpus %s — disambiguated to %r",
+                    "%s for %r in corpus %s — disambiguated to %r",
+                    log_prefix,
                     base_path,
                     corpus.id,
                     candidate,
                 )
                 return candidate
 
+        logger.error(
+            "Path disambiguation exhausted for %r in corpus %s after %d attempts",
+            base_path,
+            corpus.id,
+            MAX_PATH_DISAMBIGUATION_SUFFIX,
+        )
         raise ValueError(
             f"Cannot find a unique path for {base_path!r} in corpus {corpus.id} "
             f"after {MAX_PATH_DISAMBIGUATION_SUFFIX} attempts"
-        )
-
-    @staticmethod
-    def _disambiguate_path_with_batch(
-        base_path: str,
-        corpus: Corpus,
-        batch_claimed: set[str],
-        exclude_pk: int | None = None,
-    ) -> str:
-        """
-        Disambiguate a path considering both DB-occupied paths AND batch-claimed paths.
-
-        Used during bulk moves when multiple documents in the same batch would
-        receive the same target path (e.g. two files both named ``report.pdf``
-        being moved to the same folder).  The standard ``_disambiguate_path``
-        only checks the database; this method additionally checks the
-        ``batch_claimed`` set to avoid within-batch collisions.
-
-        Args:
-            base_path: The path that has a within-batch conflict.
-            corpus: Corpus to check for DB conflicts in.
-            batch_claimed: Set of paths already claimed by earlier items in
-                           this batch.
-            exclude_pk: Optional DocumentPath PK to exclude from DB conflict check.
-
-        Returns:
-            A path string unique in both the database and the batch.
-
-        Raises:
-            ValueError: If no unique path can be found within the suffix limit.
-        """
-        from opencontractserver.documents.models import DocumentPath
-
-        # Build the combined set of occupied paths (DB + batch)
-        if "/" in base_path:
-            directory = base_path.rsplit("/", 1)[0] + "/"
-        else:
-            directory = ""
-
-        qs = DocumentPath.objects.filter(
-            corpus=corpus,
-            is_current=True,
-            is_deleted=False,
-        )
-        if directory == "/":
-            qs = qs.filter(path__regex=r"^/[^/]+$")
-        elif directory:
-            qs = qs.filter(path__startswith=directory)
-        if exclude_pk is not None:
-            qs = qs.exclude(pk=exclude_pk)
-        db_occupied = set(qs.values_list("path", flat=True))
-        occupied = db_occupied | batch_claimed
-
-        # Split into stem and extension
-        if "/" in base_path:
-            dir_part, filename = base_path.rsplit("/", 1)
-        else:
-            dir_part, filename = None, base_path
-
-        bare = filename.lstrip(".")
-        leading_dots = filename[: len(filename) - len(bare)]
-
-        def _join_stem(name_part: str) -> str:
-            return f"{dir_part}/{name_part}" if dir_part is not None else name_part
-
-        if "." in bare:
-            name_stem, name_ext = bare.rsplit(".", 1)
-            stem = _join_stem(f"{leading_dots}{name_stem}")
-            ext = f".{name_ext}"
-        else:
-            stem = _join_stem(filename)
-            ext = ""
-
-        for counter in range(1, MAX_PATH_DISAMBIGUATION_SUFFIX + 1):
-            candidate = f"{stem}_{counter}{ext}"
-            if candidate not in occupied:
-                logger.warning(
-                    "Within-batch path conflict for %r in corpus %s "
-                    "— disambiguated to %r",
-                    base_path,
-                    corpus.id,
-                    candidate,
-                )
-                return candidate
-
-        raise ValueError(
-            f"Cannot find a unique path for {base_path!r} in corpus {corpus.id} "
-            f"after {MAX_PATH_DISAMBIGUATION_SUFFIX} attempts (including batch)"
         )
 
     @classmethod
