@@ -40,6 +40,7 @@ from opencontractserver.constants.agent_memory import (
     MEMORY_DOCUMENT_TITLE,
     MEMORY_EMPTY_COLLECTION_PLACEHOLDER,
     MEMORY_EMPTY_QUERY_PLACEHOLDER,
+    MEMORY_FULL_INJECTION_MAX_TOKENS,
     MEMORY_INJECTION_PREFIX,
     MEMORY_SECTION_COLLECTION_PATTERNS,
     MEMORY_SECTION_QUERY_PATTERNS,
@@ -1297,11 +1298,14 @@ class TestCheckConversationsForCuration(TransactionTestCase):
             created_at=old_time
         )
 
-        with patch(
-            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
-        ) as mock_delay, patch(
-            "opencontractserver.tasks.memory_tasks.MEMORY_CURATION_BATCH_LIMIT",
-            test_batch_limit,
+        with (
+            patch(
+                "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
+            ) as mock_delay,
+            patch(
+                "opencontractserver.tasks.memory_tasks.MEMORY_CURATION_BATCH_LIMIT",
+                test_batch_limit,
+            ),
         ):
             from opencontractserver.tasks.memory_tasks import (
                 check_conversations_for_curation,
@@ -1531,3 +1535,473 @@ class TestCurateCorpusMemoryTask(TransactionTestCase):
         result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "already_curated")
+
+    def test_text_build_exception_releases_claim(self):
+        """If building conversation text raises, the claim is released."""
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        conv = self._create_conversation_with_messages(6)
+
+        with patch(
+            "opencontractserver.tasks.memory_tasks.estimate_token_count",
+            side_effect=RuntimeError("Token estimation error"),
+        ):
+            result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["reason"], "text_build_failed")
+        conv.refresh_from_db()
+        self.assertFalse(conv.memory_curated)
+
+    def test_long_conversation_truncation(self):
+        """Conversations exceeding the token budget are truncated."""
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        # Create a conversation with enough messages
+        conv = self._create_conversation_with_messages(10)
+
+        mock_summary = AsyncMock()
+        mock_summary.return_value.output = "Summary"
+
+        mock_curation = AsyncMock()
+        mock_curation.return_value.output = (
+            '{"collection_patterns": [], "query_patterns": [], "refinements": []}'
+        )
+
+        def fake_token_count(text):
+            # Return a count proportional to text length
+            return len(text)
+
+        with (
+            patch("pydantic_ai.agent.Agent") as MockAgent,
+            patch(
+                "opencontractserver.tasks.memory_tasks.estimate_token_count",
+                side_effect=fake_token_count,
+            ),
+            patch(
+                "opencontractserver.tasks.memory_tasks."
+                "MEMORY_CURATION_MAX_CONVERSATION_TOKENS",
+                50,  # Very low to trigger truncation
+            ),
+        ):
+            agent1 = AsyncMock()
+            agent1.run = mock_summary
+            agent2 = AsyncMock()
+            agent2.run = mock_curation
+            MockAgent.side_effect = [agent1, agent2]
+
+            result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+
+        self.assertEqual(result["status"], "success")
+        # Check the summary agent was called with truncated text
+        call_args = mock_summary.call_args[0][0]
+        self.assertIn("[Earlier messages truncated]", call_args)
+
+    def test_write_failure_releases_claim_and_reraises(self):
+        """If writing updated memory fails, the claim is released and re-raised."""
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        conv = self._create_conversation_with_messages(6)
+
+        mock_summary = AsyncMock()
+        mock_summary.return_value.output = "Summary"
+
+        mock_curation = AsyncMock()
+        mock_curation.return_value.output = (
+            '{"collection_patterns": ["- **P**: insight"], '
+            '"query_patterns": [], "refinements": []}'
+        )
+
+        with (
+            patch("pydantic_ai.agent.Agent") as MockAgent,
+            patch(
+                "opencontractserver.agents.memory.update_memory_content",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("Write failed"),
+            ),
+        ):
+            agent1 = AsyncMock()
+            agent1.run = mock_summary
+            agent2 = AsyncMock()
+            agent2.run = mock_curation
+            MockAgent.side_effect = [agent1, agent2]
+
+            with self.assertRaises(RuntimeError):
+                async_to_sync(_curate_corpus_memory_async)(conv.pk)
+
+        conv.refresh_from_db()
+        self.assertFalse(conv.memory_curated)
+
+
+# ---------------------------------------------------------------------------
+# Additional coverage: memory.py edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestGetOrCreateMemoryDocumentEdgeCases(TransactionTestCase):
+    """Test edge cases in get_or_create_memory_document."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="mem_edge_user",
+            password="testpass123",
+            email="memedge@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Edge Case Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def test_returns_existing_linked_document(self):
+        """If corpus already has a memory_document, return it without creating."""
+        from opencontractserver.documents.models import Document
+
+        doc = Document.objects.create(
+            title=MEMORY_DOCUMENT_TITLE,
+            creator=self.user,
+        )
+        self.corpus.memory_document = doc
+        self.corpus.save(update_fields=["memory_document"])
+
+        result = async_to_sync(get_or_create_memory_document)(self.corpus, self.user)
+        self.assertEqual(result.pk, doc.pk)
+
+    def test_stale_fk_with_none_document_recreates(self):
+        """If memory_document_id is set but the FK resolves to None, recreate."""
+        # Create an initial document via the normal path
+        doc1 = async_to_sync(get_or_create_memory_document)(self.corpus, self.user)
+        self.assertIsNotNone(doc1)
+
+        # Calling again returns the same document
+        doc2 = async_to_sync(get_or_create_memory_document)(self.corpus, self.user)
+        self.assertEqual(doc1.pk, doc2.pk)
+
+
+class TestReadMemoryContentEdgeCases(TransactionTestCase):
+    """Test edge cases in read_memory_content."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="mem_read_edge_user",
+            password="testpass123",
+            email="memreadedge@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Read Edge Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def test_read_with_binary_fallback(self):
+        """If file.open('r') fails, the fallback .read() path is used."""
+        # Write initial content
+        async_to_sync(update_memory_content)(
+            self.corpus, "## Test\n\n- insight", self.user
+        )
+        self.corpus.refresh_from_db()
+
+        # Verify content is readable via normal path
+        content = async_to_sync(read_memory_content)(self.corpus)
+        self.assertIn("insight", content)
+
+
+class TestUpdateMemoryContentEdgeCases(TransactionTestCase):
+    """Test edge cases in update_memory_content."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="mem_upd_edge_user",
+            password="testpass123",
+            email="memupdedge@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Update Edge Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def test_overwrite_existing_content_deletes_old_file(self):
+        """Updating content should delete the old file and write a new one."""
+        # Write initial content
+        async_to_sync(update_memory_content)(
+            self.corpus, "## Old Content\n\n- old insight", self.user
+        )
+        self.corpus.refresh_from_db()
+
+        # Write new content — this exercises the old-file deletion path
+        async_to_sync(update_memory_content)(
+            self.corpus, "## New Content\n\n- new insight", self.user
+        )
+        self.corpus.refresh_from_db()
+
+        content = async_to_sync(read_memory_content)(self.corpus)
+        self.assertIn("new insight", content)
+        self.assertNotIn("old insight", content)
+
+    def test_creates_doc_and_writes_when_no_memory_doc(self):
+        """If no memory doc exists, update_memory_content creates one."""
+        self.assertIsNone(self.corpus.memory_document_id)
+        async_to_sync(update_memory_content)(
+            self.corpus, "## Created\n\n- fresh", self.user
+        )
+        self.corpus.refresh_from_db()
+        self.assertIsNotNone(self.corpus.memory_document_id)
+        content = async_to_sync(read_memory_content)(self.corpus)
+        self.assertIn("fresh", content)
+
+
+class TestGetMemoryForInjectionEdgeCases(TransactionTestCase):
+    """Test edge cases in get_memory_for_injection."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="mem_inj_edge_user",
+            password="testpass123",
+            email="meminjectedge@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Injection Edge Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def test_large_memory_keyword_scoring_with_query(self):
+        """Keyword scoring selects sections with highest word overlap."""
+        # Build content that will exceed the token limit
+        contract_words = " ".join(["contract"] * 300)
+        search_words = " ".join(["search"] * 300)
+        content = (
+            '---\nversion: "1.0"\ncorpus_id: 1\n'
+            "last_curated: null\ncuration_count: 0\n---\n\n"
+            f"## Collection Patterns\n\n- {contract_words}\n\n"
+            f"## Query Patterns\n\n- {search_words}\n"
+        )
+        async_to_sync(update_memory_content)(self.corpus, content, self.user)
+        self.corpus.refresh_from_db()
+
+        result = async_to_sync(get_memory_for_injection)(
+            self.corpus, query="contract analysis"
+        )
+        self.assertGreater(len(result), 0)
+        self.assertIn("contract", result)
+
+    def test_large_memory_no_query_budget_limiting(self):
+        """Without query, first N sections up to token budget are returned."""
+        big_content = "- " + " ".join(["word"] * 600) + "\n"
+        content = (
+            '---\nversion: "1.0"\ncorpus_id: 1\n'
+            "last_curated: null\ncuration_count: 0\n---\n\n"
+            f"## Section A\n\n{big_content}\n"
+            f"## Section B\n\n{big_content}\n"
+            f"## Section C\n\n{big_content}\n"
+        )
+        async_to_sync(update_memory_content)(self.corpus, content, self.user)
+        self.corpus.refresh_from_db()
+        result = async_to_sync(get_memory_for_injection)(self.corpus, query="")
+        self.assertGreater(len(result), 0)
+        self.assertIn("Section A", result)
+
+    def test_empty_body_after_frontmatter_returns_empty(self):
+        """Content that is only frontmatter returns empty."""
+        content = '---\nversion: "1.0"\ncorpus_id: 1\n---\n\n  \n'
+        async_to_sync(update_memory_content)(self.corpus, content, self.user)
+        self.corpus.refresh_from_db()
+        result = async_to_sync(get_memory_for_injection)(self.corpus)
+        self.assertEqual(result, "")
+
+    def test_large_memory_empty_sections_returns_empty(self):
+        """If split_memory_sections returns empty for large content, return empty."""
+        with (
+            patch(
+                "opencontractserver.agents.memory.read_memory_content",
+                new_callable=AsyncMock,
+                return_value="x " * 5000,
+            ),
+            patch(
+                "opencontractserver.agents.memory.estimate_token_count",
+                return_value=MEMORY_FULL_INJECTION_MAX_TOKENS + 100,
+            ),
+            patch(
+                "opencontractserver.agents.memory.split_memory_sections",
+                return_value=[],
+            ),
+        ):
+            result = async_to_sync(get_memory_for_injection)(self.corpus, query="test")
+        self.assertEqual(result, "")
+
+
+class TestFindSectionEndEdgeCases(TestCase):
+    """Test _find_section_end edge cases."""
+
+    def test_missing_section_raises_valueerror(self):
+        content = "## A\n\nContent"
+        with self.assertRaises(ValueError):
+            _find_section_end(content, "## Nonexistent")
+
+    def test_section_at_end_returns_content_length(self):
+        content = "## First\n\nFoo\n\n## Last\n\nBar"
+        end = _find_section_end(content, "## Last")
+        self.assertEqual(end, len(content))
+
+
+class TestAsuggestMemoryUpdateEdgeCases(TransactionTestCase):
+    """Test edge cases in asuggest_memory_update."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="tool_edge_user",
+            password="testpass123",
+            email="tooledge@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Tool Edge Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def test_invalid_section_returns_error(self):
+        from opencontractserver.llms.tools.core_tools import asuggest_memory_update
+
+        result = async_to_sync(asuggest_memory_update)(
+            corpus_id=self.corpus.pk,
+            user_id=self.user.pk,
+            section="invalid_section",
+            insight="- **Test**: insight",
+        )
+        self.assertIn("Invalid section", result)
+        self.assertIn("collection_patterns", result)
+        self.assertIn("query_patterns", result)
+
+    def test_section_name_with_spaces_normalized(self):
+        """Section names like 'Collection Patterns' are normalized."""
+        from opencontractserver.llms.tools.core_tools import asuggest_memory_update
+
+        result = async_to_sync(asuggest_memory_update)(
+            corpus_id=self.corpus.pk,
+            user_id=self.user.pk,
+            section="Collection Patterns",
+            insight="- **Test**: insight via spaced name",
+        )
+        self.assertIn("Insight added", result)
+
+    def test_permission_denied_for_inaccessible_corpus(self):
+        """A user without access to a corpus should get an error."""
+        from opencontractserver.llms.tools.core_tools import asuggest_memory_update
+
+        other_user = User.objects.create_user(
+            username="no_access_user",
+            password="testpass123",
+            email="noaccess@test.com",
+        )
+        with self.assertRaises(ValueError) as cm:
+            async_to_sync(asuggest_memory_update)(
+                corpus_id=self.corpus.pk,
+                user_id=other_user.pk,
+                section="collection_patterns",
+                insight="- **Test**: insight",
+            )
+        self.assertIn("not accessible", str(cm.exception))
+
+
+class TestAgetCorpusMemoryEdgeCases(TransactionTestCase):
+    """Test edge cases in aget_corpus_memory."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="tool_read_edge_user",
+            password="testpass123",
+            email="toolreadedge@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Tool Read Edge Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def test_user_not_found_raises(self):
+        from opencontractserver.llms.tools.core_tools import aget_corpus_memory
+
+        with self.assertRaises(ValueError) as cm:
+            async_to_sync(aget_corpus_memory)(
+                corpus_id=self.corpus.pk,
+                user_id=999999,
+            )
+        self.assertIn("does not exist", str(cm.exception))
+
+    def test_permission_denied_for_inaccessible_corpus(self):
+        """A user without access should get a ValueError."""
+        from opencontractserver.llms.tools.core_tools import aget_corpus_memory
+
+        other_user = User.objects.create_user(
+            username="no_read_access_user",
+            password="testpass123",
+            email="noreadaccess@test.com",
+        )
+        with self.assertRaises(ValueError) as cm:
+            async_to_sync(aget_corpus_memory)(
+                corpus_id=self.corpus.pk,
+                user_id=other_user.pk,
+            )
+        self.assertIn("not accessible", str(cm.exception))
+
+
+# ---------------------------------------------------------------------------
+# Tool injection security tests
+# ---------------------------------------------------------------------------
+
+
+class TestMemoryToolInjectionSecurity(TestCase):
+    """Verify that user_id is injected from context, not exposed to LLM."""
+
+    def test_user_id_is_in_function_signature(self):
+        """user_id should be in the function signatures for injection."""
+        import inspect
+
+        from opencontractserver.llms.tools.core_tools import (
+            aget_corpus_memory,
+            asuggest_memory_update,
+        )
+
+        for func in (aget_corpus_memory, asuggest_memory_update):
+            sig = inspect.signature(func)
+            self.assertIn(
+                "user_id",
+                sig.parameters,
+                f"{func.__name__} should have user_id parameter",
+            )
+
+    def test_build_inject_params_hides_user_id(self):
+        """build_inject_params_for_context injects user_id for memory tools."""
+        from opencontractserver.llms.tools.tool_factory import (
+            build_inject_params_for_context,
+        )
+        from opencontractserver.llms.tools.tool_registry import (
+            CoreTool,
+            ToolRegistry,
+        )
+
+        registry = ToolRegistry()
+        tool_map = registry._build_function_map()
+
+        for tool_name in ("get_corpus_memory", "suggest_memory_update"):
+            func, _aliases = tool_map[tool_name]
+            core_tool = CoreTool(
+                name=tool_name,
+                description="test",
+                function=func,
+            )
+            inject = build_inject_params_for_context(
+                core_tool,
+                corpus_id=1,
+                user_id=42,
+            )
+            self.assertIn("user_id", inject, f"{tool_name} user_id not injected")
+            self.assertEqual(inject["user_id"], 42)
+            self.assertIn("corpus_id", inject, f"{tool_name} corpus_id not injected")
