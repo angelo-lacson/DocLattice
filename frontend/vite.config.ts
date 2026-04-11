@@ -88,12 +88,15 @@ async function loadIstanbulPlugins() {
         "src/main.tsx",
       ],
       extension: [".ts", ".tsx"],
-      // requireEnv is false because loadIstanbulPlugins() already gates on
-      // process.env.COVERAGE; setting requireEnv: true would require a
-      // VITE_COVERAGE env var (from .env files) which the CI script doesn't set.
+      // requireEnv is false because loadIstanbulPlugins() is only called when
+      // process.env.COVERAGE is truthy (see the guard at the top of this function).
+      // Setting requireEnv: true would require VITE_COVERAGE from .env files,
+      // which the CI script doesn't set.
       requireEnv: false,
-      // forceBuildInstrument is required because Playwright CT runs in
-      // build mode; without it the instrumentation is skipped.
+      // Playwright CT runs in build mode (vite build), so instrumentation must
+      // be enabled for builds. This is safe because the entire plugin is only
+      // loaded when COVERAGE=true (the guard above). Normal `yarn build` is
+      // unaffected since COVERAGE is not set in production environments.
       forceBuildInstrument: true,
     }),
   ];
