@@ -205,6 +205,10 @@ class Corpus(TreeNode):
             "accumulate reusable insights from conversations into a memory document."
         ),
     )
+    # NOTE: on_delete=SET_NULL means deleting the memory Document leaves
+    # memory_enabled=True.  This is intentional — get_or_create_memory_document
+    # will transparently recreate the document on the next agent interaction,
+    # preserving the "memory stays enabled across disable/enable cycles" design.
     memory_document = django.db.models.OneToOneField(
         "documents.Document",
         on_delete=django.db.models.SET_NULL,

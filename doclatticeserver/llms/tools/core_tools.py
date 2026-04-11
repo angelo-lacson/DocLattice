@@ -2885,9 +2885,20 @@ async def asuggest_memory_update(
         read_memory_content,
         update_memory_content,
     )
+    from doclatticeserver.constants.agent_memory import MEMORY_INSIGHT_MAX_LENGTH
     from doclatticeserver.corpuses.models import Corpus
 
     User = get_user_model()
+
+    # Content validation
+    insight = insight.strip()
+    if not insight:
+        return "Insight text cannot be empty."
+    if len(insight) > MEMORY_INSIGHT_MAX_LENGTH:
+        return (
+            f"Insight exceeds maximum length of {MEMORY_INSIGHT_MAX_LENGTH} "
+            f"characters ({len(insight)} provided). Please shorten the insight."
+        )
 
     try:
         corpus = await Corpus.objects.aget(pk=corpus_id)
@@ -2907,10 +2918,18 @@ async def asuggest_memory_update(
 
     current_content = await read_memory_content(corpus)
 
-    # Route to the correct section
+    # Route to the correct section (validate explicitly)
+    normalized = section.lower().replace(" ", "_")
+    valid_sections = {"collection_patterns", "query_patterns"}
+    if normalized not in valid_sections:
+        return (
+            f"Invalid section '{section}'. "
+            f"Must be one of: {', '.join(sorted(valid_sections))}"
+        )
+
     collection = []
     query = []
-    if section.lower().replace(" ", "_") == "collection_patterns":
+    if normalized == "collection_patterns":
         collection = [insight]
     else:
         query = [insight]
