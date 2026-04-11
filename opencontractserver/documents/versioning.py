@@ -558,6 +558,10 @@ def get_path_history(document_path: DocumentPath):
             return "DELETED"
         if not current.is_deleted and previous.is_deleted:
             return "RESTORED"
+        # MOVED takes priority over UPDATED: a document replacement that also
+        # changes the path is primarily a move (the path change is the visible
+        # user action), and callers can inspect document_id to detect the
+        # replacement separately.
         if current.path != previous.path or current.folder_id != previous.folder_id:
             return "MOVED"
         if current.document_id != previous.document_id:

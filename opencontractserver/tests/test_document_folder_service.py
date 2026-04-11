@@ -2325,6 +2325,14 @@ class TestDocumentPathHistory_PathConflicts(DocumentFolderServiceTestBase):
             DocumentPath.objects,
             "filter",
         ) as mock_filter:
+            # _disambiguate_path now chains two .filter() calls (base filters,
+            # then directory filter), so the mock must support the extra link:
+            # filter().filter().exclude().values_list() and
+            # filter().filter().values_list().
+            inner = mock_filter.return_value.filter.return_value
+            inner.exclude.return_value.values_list.return_value = all_candidates
+            inner.values_list.return_value = all_candidates
+            # Also keep the old single-filter chain working for safety.
             mock_filter.return_value.exclude.return_value.values_list.return_value = (
                 all_candidates
             )
@@ -2878,6 +2886,84 @@ class TestErrorPaths_DisambiguateExtensionless(DocumentFolderServiceTestBase):
 
         result = DocumentFolderService._disambiguate_path("/Makefile", self.corpus)
         self.assertEqual(result, "/Makefile_1")
+
+
+class TestErrorPaths_DisambiguateRootLevel(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: _disambiguate_path for root-level paths only considers
+    top-level paths, not every path in the corpus.
+
+    BUSINESS RULE: When disambiguating "/report.pdf", the method should
+    only look at other root-level paths like "/other.pdf", not paths
+    inside subdirectories like "/folder/report.pdf".  Without this,
+    rsplit("/", 1)[0] produces "" -> directory="/", and
+    path__startswith="/" would match EVERY active path in the corpus.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+
+    def test_root_disambiguation_ignores_nested_paths(self):
+        """Root-level "/report.pdf" does not conflict with "/folder/report.pdf"."""
+        doc1 = Document.objects.create(
+            title="Nested Doc", creator=self.owner, pdf_file="r.pdf"
+        )
+        # A path nested inside a folder — should NOT count as a conflict.
+        DocumentPath.objects.create(
+            document=doc1,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/folder/report.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Disambiguating "/report.pdf" should return it unchanged because the
+        # only existing "report.pdf" is inside "/folder/", not at root.
+        result = DocumentFolderService._disambiguate_path("/report.pdf", self.corpus)
+        self.assertEqual(result, "/report.pdf")
+
+    def test_root_disambiguation_detects_root_conflict(self):
+        """Root-level "/report.pdf" DOES conflict with another root "/report.pdf"."""
+        doc1 = Document.objects.create(
+            title="Root Doc", creator=self.owner, pdf_file="r.pdf"
+        )
+        # A path at the root level — this IS a real conflict.
+        DocumentPath.objects.create(
+            document=doc1,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/report.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+        # Also add a nested path that should be ignored.
+        doc2 = Document.objects.create(
+            title="Nested Doc", creator=self.owner, pdf_file="r2.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc2,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/folder/report.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Should get "_1" suffix because root "/report.pdf" is taken.
+        result = DocumentFolderService._disambiguate_path("/report.pdf", self.corpus)
+        self.assertEqual(result, "/report_1.pdf")
 
 
 class TestErrorPaths_DeleteFolderPartialFailure(DocumentFolderServiceTestBase):

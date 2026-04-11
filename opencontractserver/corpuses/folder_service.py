@@ -814,6 +814,16 @@ class DocumentFolderService:
             DocumentPath records (whose ``folder`` FK would be silently
             nulled via ``on_delete=SET_NULL``).
 
+            **Partial-success semantics**: Each document relocation runs
+            in its own savepoint.  On partial failure, documents that were
+            successfully relocated keep their new root-level paths (those
+            savepoints are committed), but the folder itself is NOT
+            deleted so that documents which failed to relocate retain a
+            valid ``folder`` FK.  This is a deliberate design choice: it
+            avoids an all-or-nothing rollback that would silently undo
+            successful relocations, while preventing the ``on_delete=SET_NULL``
+            side-effect from orphaning stuck documents.
+
         Side Effects:
             - Documents in folder have their folder assignment removed (moved to root)
             - Child folders are either reparented or deleted based on flag
@@ -1275,12 +1285,21 @@ class DocumentFolderService:
         else:
             directory = ""
 
+        # Special-case root-level paths: for paths like "/report.pdf",
+        # rsplit produces directory="/", and path__startswith="/" would
+        # match EVERY active path in the corpus.  Instead, use a regex
+        # that only matches single-segment root paths (e.g. "/report.pdf"
+        # but not "/folder/report.pdf").
         qs = DocumentPath.objects.filter(
             corpus=corpus,
             is_current=True,
             is_deleted=False,
-            path__startswith=directory,
         )
+        if directory == "/":
+            qs = qs.filter(path__regex=r"^/[^/]+$")
+        elif directory:
+            qs = qs.filter(path__startswith=directory)
+        # else: directory == "" means no leading slash; match all (rare)
         if exclude_pk is not None:
             qs = qs.exclude(pk=exclude_pk)
         occupied = set(qs.values_list("path", flat=True))
