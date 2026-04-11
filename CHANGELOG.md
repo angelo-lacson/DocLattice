@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Move-document agent tool** (PR #1196): New `move_document` / `amove_document` tool that moves a document between folders within the same corpus. Delegates to `DocumentFolderService.move_document_to_folder` for permission checks and path updates. Categorized as `ToolCategory.CORPUS` (corpus-level agents only), requires write permission and approval. Pass `target_folder_id` for a specific folder or omit for corpus root. Uses `visible_to_user()` for document and corpus lookups to prevent IDOR enumeration (`opencontractserver/llms/tools/core_tools.py`, `opencontractserver/llms/tools/tool_registry.py`).
 - **Web search agent tool** (PR #1174): New `aweb_search` tool for agents with pluggable provider backends (Brave Search and Tavily). Introduces `BaseTool` base class (`opencontractserver/llms/tools/base_tool.py`) for tools with database-backed settings and encrypted secrets via `PipelineSettings`. Tools declare a nested `Settings` dataclass with `PipelineSetting` metadata; `is_configured()` gates tool availability at resolution time. `ToolFunctionRegistry` supports `tool_class` entries for database-level enablement gating. New GraphQL mutations `UpdateToolSecretsMutation` and `DeleteToolSecretsMutation` (`config/graphql/pipeline_settings_mutations.py`) allow superusers to manage tool API keys. Includes per-process rate limiting, provider-specific response parsing, and comprehensive test coverage.
 
 ### Fixed

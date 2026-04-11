@@ -355,6 +355,34 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         requires_write_permission=True,
         parameters=(("new_content", "Full markdown content", True),),
     ),
+    ToolDefinition(
+        name="move_document",
+        description=(
+            "Move a document to a different folder within the current corpus. "
+            "Pass target_folder_id to specify the destination folder, or omit "
+            "it to move the document to the corpus root."
+        ),
+        # CORPUS (not DOCUMENT) because this manipulates the corpus folder
+        # hierarchy, not the document's own content or metadata.  It is only
+        # available to corpus-level agents where the LLM picks which document
+        # to move; document-scoped agents operate on a single fixed document.
+        category=ToolCategory.CORPUS,
+        requires_corpus=True,
+        requires_approval=True,
+        requires_write_permission=True,
+        parameters=(
+            (
+                "document_id",
+                "ID of the document to move",
+                True,
+            ),
+            (
+                "target_folder_id",
+                "ID of the destination folder, or omit for corpus root",
+                False,
+            ),
+        ),
+    ),
     # -------------------------------------------------------------------------
     # COORDINATION TOOLS (for corpus agents)
     # -------------------------------------------------------------------------
@@ -859,6 +887,7 @@ class ToolFunctionRegistry:
             aget_page_image,
             aload_document_md_summary,
             aload_document_txt_extract,
+            amove_document,
             asearch_document_notes,
             asearch_exact_text_as_sources,
             asuggest_memory_update,
@@ -930,6 +959,7 @@ class ToolFunctionRegistry:
             # Corpus tools
             "get_corpus_description": (aget_corpus_description, ()),
             "update_corpus_description": (aupdate_corpus_description, ()),
+            "move_document": (amove_document, ()),
             # Image tools
             "list_document_images": (alist_document_images, ()),
             "get_document_image": (aget_document_image, ()),
