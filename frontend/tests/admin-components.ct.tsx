@@ -1,6 +1,6 @@
 // Playwright Component Test for Admin Components (Settings Panel, Agent Management)
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { gql } from "@apollo/client";
 import {
   GlobalSettingsPanelWrapper,

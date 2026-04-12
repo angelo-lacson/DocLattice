@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { docScreenshot } from "./utils/docScreenshot";
 import { EmbedderSelectorTestWrapper } from "./EmbedderSelectorTestWrapper";
 import { GET_EMBEDDERS } from "../src/graphql/queries";

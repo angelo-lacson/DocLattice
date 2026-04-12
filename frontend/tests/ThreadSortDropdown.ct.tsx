@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { Provider as JotaiProvider } from "jotai";
 import { ThreadSortDropdown } from "../src/components/threads/ThreadSortDropdown";
 import { threadSortAtom } from "../src/atoms/threadAtoms";

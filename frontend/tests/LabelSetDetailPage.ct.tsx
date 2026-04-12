@@ -10,7 +10,7 @@
  */
 
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedResponse } from "@apollo/client/testing";
 import { LabelSetDetailPageTestWrapper } from "./LabelSetDetailPageTestWrapper";
 import { GET_LABELSET_WITH_ALL_LABELS } from "../src/graphql/queries";

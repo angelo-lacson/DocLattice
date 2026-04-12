@@ -1,5 +1,5 @@
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { LabelSetFormFields } from "../src/components/forms/LabelSetFormFields";
 import { docScreenshot } from "./utils/docScreenshot";
 
