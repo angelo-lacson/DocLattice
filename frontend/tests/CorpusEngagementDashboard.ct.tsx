@@ -1,5 +1,5 @@
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedProvider } from "@apollo/client/testing";
 import { CorpusEngagementDashboard } from "../src/components/analytics/CorpusEngagementDashboard";
 import { GET_CORPUS_ENGAGEMENT_METRICS } from "../src/graphql/queries";

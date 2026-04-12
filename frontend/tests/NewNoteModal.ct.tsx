@@ -1,7 +1,7 @@
 // Playwright Component Test for NewNoteModal
 // Tests the note creation modal with title/content fields and markdown support info.
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedProvider } from "@apollo/client/testing";
 import { NewNoteModal } from "../src/components/knowledge_base/document/NewNoteModal";
 import { CREATE_NOTE } from "../src/graphql/mutations/noteMutations";

@@ -1,7 +1,7 @@
 // Playwright Component Test for ExportModal
 // Tests the export listing modal with search and lazy-loaded export items.
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedProvider } from "@apollo/client/testing";
 import { ExportModal } from "../src/components/widgets/modals/ExportModal";
 import { GET_EXPORTS } from "../src/graphql/queries";
