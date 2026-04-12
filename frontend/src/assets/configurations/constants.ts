@@ -355,8 +355,11 @@ export const EXTRACT_GRID_CELL_TRUNCATE_LENGTH = 100;
  * the extract has more cells than this, the component displays a
  * "showing N of M" indicator and the overflow rows are omitted.
  *
- * Sized so that typical use cases (a few dozen documents × ≤ 20 columns)
+ * Sized so that typical use cases (a few dozen documents x <= 20 columns)
  * fit comfortably without truncation. Resolves #1204.
+ *
+ * Must match the backend constant ``MAX_FULL_DATACELL_LIST_LIMIT`` in
+ * ``opencontractserver/constants/extracts.py``.
  */
 export const EXTRACT_GRID_EMBED_CELL_LIMIT = 500;
 /**

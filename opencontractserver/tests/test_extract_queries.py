@@ -243,3 +243,49 @@ class ExtractsQueryTestCase(TestCase):
             1,
             "Expected 1 remaining cell after offset=4 on a 5-row list.",
         )
+
+    def test_full_datacell_list_negative_offset_clamped_to_zero(self):
+        """
+        A negative ``offset`` must be clamped to 0 rather than crashing.
+        Django does not support negative indexing on querysets; passing a
+        negative offset should behave identically to offset=0.
+        """
+        extract_id = to_global_id("ExtractType", self.extract.id)
+
+        result = self.client.execute("""
+            query {
+                extract(id: "%s") {
+                    fullDatacellList(limit: 10, offset: -5) {
+                        id
+                    }
+                }
+            }
+            """ % extract_id)
+        self.assertIsNone(result.get("errors"))
+        # With offset clamped to 0, the single existing datacell is returned.
+        self.assertEqual(len(result["data"]["extract"]["fullDatacellList"]), 1)
+
+    def test_full_datacell_list_limit_capped_at_server_max(self):
+        """
+        A ``limit`` exceeding ``MAX_FULL_DATACELL_LIST_LIMIT`` must be
+        silently capped to the server maximum. We verify by requesting a
+        limit far above the cap and checking we still get a bounded result
+        (the test fixture only has 1 cell, so we just assert no error).
+        """
+        from opencontractserver.constants.extracts import MAX_FULL_DATACELL_LIST_LIMIT
+
+        extract_id = to_global_id("ExtractType", self.extract.id)
+        huge_limit = MAX_FULL_DATACELL_LIST_LIMIT + 9999
+
+        result = self.client.execute("""
+            query {{
+                extract(id: "{}") {{
+                    fullDatacellList(limit: {}) {{
+                        id
+                    }}
+                }}
+            }}
+            """.format(extract_id, huge_limit))
+        self.assertIsNone(result.get("errors"))
+        # Only 1 cell exists; the important thing is no 500 error.
+        self.assertEqual(len(result["data"]["extract"]["fullDatacellList"]), 1)

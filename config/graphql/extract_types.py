@@ -107,6 +107,7 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     def resolve_full_datacell_list(self, info, limit=None, offset=None):
         from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
+        from opencontractserver.constants.extracts import MAX_FULL_DATACELL_LIST_LIMIT
 
         qs = ExtractQueryOptimizer.get_extract_datacells(
             self, info.context.user, document_id=None
@@ -117,10 +118,14 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         # return rows in any order, which would make pagination indeterminate.
         qs = qs.order_by("document_id", "column_id", "id")
 
-        start = offset or 0
+        # Guard against negative offset — Django does not support negative
+        # indexing on querysets and would raise AssertionError.
+        start = max(0, offset) if offset is not None else 0
+
         if limit is not None:
-            if limit < 0:
-                limit = 0
+            # Clamp to [0, MAX_FULL_DATACELL_LIST_LIMIT] so callers cannot
+            # bypass the intended payload cap via the GraphQL API.
+            limit = max(0, min(limit, MAX_FULL_DATACELL_LIST_LIMIT))
             return qs[start : start + limit]
         if start:
             return qs[start:]
