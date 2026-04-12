@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { CreateThreadButton } from "../src/components/threads/CreateThreadButton";
 import { CreateThreadButtonTestWrapper } from "./CreateThreadButtonTestWrapper";
 

@@ -1,5 +1,5 @@
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { CorpusListViewTestWrapper } from "./CorpusListViewTestWrapper";
 import { CorpusType, CorpusCategoryType } from "../src/types/graphql-api";
 import { PermissionTypes } from "../src/components/types";

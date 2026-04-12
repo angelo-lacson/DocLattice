@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { BadgeManagementTestWrapper } from "./BadgeManagementTestWrapper";
 import { GET_BADGES, GET_BADGE_CRITERIA_TYPES } from "../src/graphql/queries";
 import { docScreenshot } from "./utils/docScreenshot";

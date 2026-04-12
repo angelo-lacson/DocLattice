@@ -1,6 +1,6 @@
 // Playwright Component Test for Extracts View
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { ExtractsTestWrapper } from "./ExtractsTestWrapper";
 import { ExtractType } from "../src/types/graphql-api";
 

@@ -1,6 +1,6 @@
 // Playwright Component Test for slug hydration – mount using DocumentKnowledgeBaseTestWrapper
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { DocumentKnowledgeBaseTestWrapper } from "./DocumentKnowledgeBaseTestWrapper";
 import { MockedResponse } from "@apollo/client/testing";
 import {

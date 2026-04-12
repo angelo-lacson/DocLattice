@@ -11,7 +11,7 @@
  * - Jumping to annotations from analysis sidebar
  */
 
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { Page } from "@playwright/test";
 import fs from "fs";
 import { DocumentKnowledgeBaseTestWrapper } from "./DocumentKnowledgeBaseTestWrapper";
