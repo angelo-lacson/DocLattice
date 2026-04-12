@@ -69,108 +69,152 @@ const docxodusWasmPlugin = () => {
   };
 };
 
-// https://vitejs.dev/config/
-export default defineConfig({
-  base: "/",
-  plugins: [react(), assetPlugin(), docxodusWasmPlugin()],
-  server: {
-    proxy: {
-      // Proxy WebSocket connections to Django backend
-      "/ws": {
-        target: "ws://localhost:8000",
-        ws: true,
-        changeOrigin: true,
-      },
-      // Also proxy GraphQL API calls to Django backend
-      "/graphql": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
-      },
-      // Proxy other API endpoints if needed
-      "/api": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
-      },
-    },
-  },
-  // Add asset handling for Playwright tests
-  assetsInclude: [
-    "**/*.png",
-    "**/*.jpg",
-    "**/*.jpeg",
-    "**/*.svg",
-    "**/*.gif",
-    "**/*.webp",
-    "**/*.wasm",
-  ],
-  // Exclude docxodus from dep optimization so import.meta.url resolves to
-  // the real node_modules path (needed for WASM file auto-detection).
-  optimizeDeps: {
-    exclude: ["docxodus"],
-  },
-  // Better handling of assets in all environments
-  resolve: {
-    alias: {
-      // Standard path aliases if needed
-      "@": path.resolve(__dirname, "src"),
-    },
-  },
-  // Handle static asset imports better in tests
-  define: {
-    // Add TEST environment variable that code can check
-    // This will be false in production/development
-    "import.meta.env.TEST": JSON.stringify(false),
-  },
-  build: {
-    // Ensure proper handling of asset files
-    assetsInlineLimit: 4096, // 4kb - files smaller than this will be inlined as base64
-    rollupOptions: {
-      output: {
-        // Ensure proper handling of assets, especially for testing
-        assetFileNames: "assets/[name].[ext]",
-      },
-    },
-  },
-  test: {
-    globals: true,
-    environment: "jsdom",
-    setupFiles: "./src/setupTests.ts",
-    css: true,
-    reporters: ["verbose"],
-    deps: {
-      // @os-legal/caml-react uses styled-components template literals in its
-      // ESM bundle. Vitest's jsdom environment needs these inlined so the
-      // styled-components CJS interop resolves correctly.
-      inline: ["@os-legal/caml-react"],
-    },
-    // More specific include pattern
-    include: ["src/**/*.test.{ts,tsx}"],
-    // Explicitly exclude Playwright directories and node_modules
-    exclude: [
-      "node_modules",
-      "tests",
-      "tests-examples",
-      "dist",
-      ".idea",
-      ".git",
-      ".cache",
-    ],
-    alias: {
-      "^.+\\.(css|less|scss|sass|png|jpg|jpeg|gif|svg|webp)$": path.resolve(
-        __dirname,
-        "src/__mocks__/fileMock.ts"
-      ),
-    },
-    coverage: {
-      reporter: ["text", "json", "html"],
-      // Adjust coverage include/exclude if needed, based on the new test patterns
-      include: ["src/**/*.{ts,tsx}"], // Keep covering src
+/**
+ * Load the Istanbul instrumentation plugin via dynamic import().
+ * vite-plugin-istanbul v8 is ESM-only (exports.require is null),
+ * so a static top-level import fails when esbuild bundles the config
+ * as CJS. Dynamic import() works in both contexts.
+ */
+async function loadIstanbulPlugins() {
+  if (!process.env.COVERAGE) return [];
+  const { default: istanbul } = await import("vite-plugin-istanbul");
+  return [
+    istanbul({
+      include: "src/**/*.{ts,tsx}",
       exclude: [
-        "src/**/*.test.{ts,tsx}", // Exclude test files themselves
-        "src/setupTests.ts", // Exclude setup file
-        "src/main.tsx", // Exclude entry point if desired
-        // Add any other files/patterns to exclude from coverage
+        "node_modules",
+        "src/**/*.test.{ts,tsx}",
+        "src/setupTests.ts",
+        "src/main.tsx",
       ],
+      extension: [".ts", ".tsx"],
+      // requireEnv is false because loadIstanbulPlugins() is only called when
+      // process.env.COVERAGE is truthy (see the guard at the top of this function).
+      // Setting requireEnv: true would require VITE_COVERAGE from .env files,
+      // which the CI script doesn't set.
+      requireEnv: false,
+      // Playwright CT runs in build mode (vite build), so instrumentation must
+      // be enabled for builds. This is safe because the entire plugin is only
+      // loaded when COVERAGE=true (the guard above). Normal `yarn build` is
+      // unaffected since COVERAGE is not set in production environments.
+      forceBuildInstrument: true,
+    }),
+  ];
+}
+
+// https://vitejs.dev/config/
+export default defineConfig(async () => {
+  const istanbulPlugins = await loadIstanbulPlugins();
+  return {
+    base: "/",
+    plugins: [
+      react(),
+      assetPlugin(),
+      docxodusWasmPlugin(),
+      // Instrument source code with Istanbul when collecting Playwright CT coverage
+      ...istanbulPlugins,
+    ],
+    server: {
+      proxy: {
+        // Proxy WebSocket connections to Django backend
+        "/ws": {
+          target: "ws://localhost:8000",
+          ws: true,
+          changeOrigin: true,
+        },
+        // Also proxy GraphQL API calls to Django backend
+        "/graphql": {
+          target: "http://localhost:8000",
+          changeOrigin: true,
+        },
+        // Proxy other API endpoints if needed
+        "/api": {
+          target: "http://localhost:8000",
+          changeOrigin: true,
+        },
+      },
     },
-  },
+    // Add asset handling for Playwright tests
+    assetsInclude: [
+      "**/*.png",
+      "**/*.jpg",
+      "**/*.jpeg",
+      "**/*.svg",
+      "**/*.gif",
+      "**/*.webp",
+      "**/*.wasm",
+    ],
+    // Exclude docxodus from dep optimization so import.meta.url resolves to
+    // the real node_modules path (needed for WASM file auto-detection).
+    optimizeDeps: {
+      exclude: ["docxodus"],
+    },
+    // Better handling of assets in all environments
+    resolve: {
+      alias: {
+        // Standard path aliases if needed
+        "@": path.resolve(__dirname, "src"),
+      },
+    },
+    // Handle static asset imports better in tests
+    define: {
+      // Add TEST environment variable that code can check
+      // This will be false in production/development
+      "import.meta.env.TEST": JSON.stringify(false),
+    },
+    build: {
+      // Ensure proper handling of asset files
+      assetsInlineLimit: 4096, // 4kb - files smaller than this will be inlined as base64
+      rollupOptions: {
+        output: {
+          // Ensure proper handling of assets, especially for testing
+          assetFileNames: "assets/[name].[ext]",
+        },
+      },
+    },
+    test: {
+      globals: true,
+      environment: "jsdom",
+      setupFiles: "./src/setupTests.ts",
+      css: true,
+      reporters: ["verbose"],
+      deps: {
+        // @os-legal/caml-react uses styled-components template literals in its
+        // ESM bundle. Vitest's jsdom environment needs these inlined so the
+        // styled-components CJS interop resolves correctly.
+        inline: ["@os-legal/caml-react"],
+      },
+      // More specific include pattern
+      include: ["src/**/*.test.{ts,tsx}"],
+      // Explicitly exclude Playwright directories and node_modules
+      exclude: [
+        "node_modules",
+        "tests",
+        "tests-examples",
+        "dist",
+        ".idea",
+        ".git",
+        ".cache",
+      ],
+      alias: {
+        "^.+\\.(css|less|scss|sass|png|jpg|jpeg|gif|svg|webp)$": path.resolve(
+          __dirname,
+          "src/__mocks__/fileMock.ts"
+        ),
+      },
+      coverage: {
+        provider: "v8",
+        reporter: ["text", "json", "html", "lcov"],
+        reportsDirectory: "./coverage/unit",
+        // Adjust coverage include/exclude if needed, based on the new test patterns
+        include: ["src/**/*.{ts,tsx}"], // Keep covering src
+        exclude: [
+          "src/**/*.test.{ts,tsx}", // Exclude test files themselves
+          "src/setupTests.ts", // Exclude setup file
+          "src/main.tsx", // Exclude entry point if desired
+          // Add any other files/patterns to exclude from coverage
+        ],
+      },
+    },
+  };
 });

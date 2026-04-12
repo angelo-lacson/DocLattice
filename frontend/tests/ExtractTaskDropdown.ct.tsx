@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { docScreenshot } from "./utils/docScreenshot";
 import { ExtractTaskDropdownTestWrapper } from "./ExtractTaskDropdownTestWrapper";
 import { GET_REGISTERED_EXTRACT_TASKS } from "../src/graphql/queries";

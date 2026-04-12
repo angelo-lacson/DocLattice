@@ -1,5 +1,5 @@
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { SummaryVersionStack } from "../src/components/knowledge_base/document/floating_summary_preview/SummaryVersionStack";
 import { DocumentSummaryRevision } from "../src/components/knowledge_base/document/floating_summary_preview/graphql/documentSummaryQueries";
 

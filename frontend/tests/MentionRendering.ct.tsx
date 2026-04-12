@@ -10,7 +10,7 @@
  * - Regular links still work
  * - Markdown formatting works with mentions
  */
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MentionTestWrapper } from "./MentionRenderingTestWrapper";
 
 test.describe("MentionRendering - User Mentions", () => {

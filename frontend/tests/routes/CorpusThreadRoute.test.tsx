@@ -10,7 +10,7 @@
  * - Back button navigation works
  */
 
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "../utils/coverage";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { MockedProvider } from "@apollo/client/testing";
 import { CorpusThreadRoute } from "../../src/components/routes/CorpusThreadRoute";

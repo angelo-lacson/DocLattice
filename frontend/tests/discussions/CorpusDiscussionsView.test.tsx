@@ -10,7 +10,7 @@
  * - Navigation utilities are called correctly
  */
 
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "../utils/coverage";
 import { MemoryRouter } from "react-router-dom";
 import { MockedProvider } from "@apollo/client/testing";
 import { CorpusDiscussionsView } from "../../src/components/discussions/CorpusDiscussionsView";
