@@ -1,7 +1,7 @@
 // Playwright Component Test for RunCorpusActionModal
 // Tests the modal that lets users select a document and run a corpus action against it.
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedProvider } from "@apollo/client/testing";
 import { RunCorpusActionModal } from "../src/components/corpuses/RunCorpusActionModal";
 import { GET_CORPUS_DOCUMENTS_FOR_TOC } from "../src/graphql/queries";

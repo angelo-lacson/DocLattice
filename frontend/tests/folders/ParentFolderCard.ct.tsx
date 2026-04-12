@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "../utils/coverage";
 import { ParentFolderCard } from "../../src/components/corpuses/folders/ParentFolderCard";
 import { ParentFolderCardTestWrapper } from "./utils/ParentFolderCardTestWrapper";
 
