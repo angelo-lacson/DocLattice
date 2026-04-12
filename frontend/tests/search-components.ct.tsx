@@ -1,6 +1,6 @@
 // Playwright Component Tests for Thread Search System
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedProvider } from "@apollo/client/testing";
 import { SearchBar } from "../src/components/search/SearchBar";
 import { SearchFilters } from "../src/components/search/SearchFilters";

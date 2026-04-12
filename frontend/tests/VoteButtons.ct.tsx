@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { VoteButtons } from "../src/components/threads/VoteButtons";
 import { MockedProvider } from "@apollo/client/testing";
 import {

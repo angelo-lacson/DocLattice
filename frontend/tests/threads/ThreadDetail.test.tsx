@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "../utils/coverage";
 import { ThreadDetail } from "../../src/components/threads/ThreadDetail";
 import { ThreadTestWrapper } from "./utils/ThreadTestWrapper";
 import {

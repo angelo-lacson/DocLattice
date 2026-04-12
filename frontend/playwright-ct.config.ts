@@ -22,8 +22,12 @@ export default defineConfig({
   workers: process.env.CI ? 2 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: "html",
-  /* Global timeout for the entire test run (15 minutes) */
-  globalTimeout: process.env.CI ? 15 * 60 * 1000 : undefined,
+  /* Global timeout for the entire test run.
+   * Coverage instrumentation adds overhead, so allow 25 minutes;
+   * normal runs use 15 minutes. */
+  globalTimeout: process.env.CI
+    ? (process.env.COVERAGE ? 25 : 15) * 60 * 1000
+    : undefined,
   /* Expect timeout - give assertions more time on CI */
   expect: {
     timeout: process.env.CI ? 10 * 1000 : 5 * 1000,
