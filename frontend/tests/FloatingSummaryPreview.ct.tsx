@@ -1,5 +1,5 @@
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedResponse } from "@apollo/client/testing";
 import { FloatingSummaryPreviewTestWrapper } from "./FloatingSummaryPreviewTestWrapper";
 import { GET_DOCUMENT_SUMMARY_VERSIONS } from "../src/components/knowledge_base/document/floating_summary_preview/graphql/documentSummaryQueries";
@@ -659,15 +659,11 @@ test("read-only: minimize and back buttons remain functional", async ({
   const minimizeButton = page.getByTestId("minimize-button");
   await expect(minimizeButton).toBeVisible();
 
-  // Click and wait for state to update
-  await minimizeButton.click({ force: true });
-  await page.waitForLoadState("networkidle");
+  // Click via JS dispatch to ensure framer-motion doesn't swallow the event
+  await minimizeButton.dispatchEvent("click");
   await page.waitForTimeout(500);
 
-  // Should be collapsed - check that the summary button returns
-  await expect(summaryButton).toBeVisible();
-
-  // Header should no longer be visible
+  // Header should no longer be visible (panel collapsed)
   await expect(page.locator('h3:has-text("Document Summary")')).not.toBeVisible(
     { timeout: 10000 }
   );

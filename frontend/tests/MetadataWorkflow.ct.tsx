@@ -1,5 +1,5 @@
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedResponse } from "@apollo/client/testing";
 import { CorpusesTestWrapper } from "./CorpusesTestWrapper";
 import {
@@ -7,6 +7,7 @@ import {
   GET_CORPUS_METADATA,
   GET_DOCUMENTS,
   GET_CORPUS_STATS,
+  GET_CORPUS_ARTICLE,
 } from "../src/graphql/queries";
 import { GET_CORPUS_FOLDERS } from "../src/graphql/queries/folders";
 import {
@@ -353,6 +354,7 @@ test.describe("Metadata Workflow Integration", () => {
             inFolderId: "__root__",
             annotateDocLabels: true,
             includeMetadata: true,
+            includeCaml: true,
           },
         },
         result: {
@@ -391,6 +393,7 @@ test.describe("Metadata Workflow Integration", () => {
             inFolderId: "__root__",
             annotateDocLabels: true,
             includeMetadata: true,
+            includeCaml: true,
           },
         },
         result: {
@@ -453,6 +456,7 @@ test.describe("Metadata Workflow Integration", () => {
             inCorpusWithId: corpusId,
             annotateDocLabels: true,
             includeMetadata: true,
+            includeCaml: true,
           },
         },
         result: {
@@ -490,6 +494,7 @@ test.describe("Metadata Workflow Integration", () => {
             inCorpusWithId: corpusId,
             annotateDocLabels: true,
             includeMetadata: true,
+            includeCaml: true,
           },
         },
         result: {
@@ -594,6 +599,36 @@ test.describe("Metadata Workflow Integration", () => {
         result: {
           data: {
             corpusFolders: [],
+          },
+        },
+      },
+      // GET_CORPUS_ARTICLE - initial fetch
+      {
+        request: {
+          query: GET_CORPUS_ARTICLE,
+          variables: { corpusId, title: "Readme.CAML" },
+        },
+        result: {
+          data: {
+            documents: {
+              edges: [],
+              __typename: "DocumentTypeConnection",
+            },
+          },
+        },
+      },
+      // GET_CORPUS_ARTICLE - refetch
+      {
+        request: {
+          query: GET_CORPUS_ARTICLE,
+          variables: { corpusId, title: "Readme.CAML" },
+        },
+        result: {
+          data: {
+            documents: {
+              edges: [],
+              __typename: "DocumentTypeConnection",
+            },
           },
         },
       },

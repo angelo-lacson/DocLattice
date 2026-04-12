@@ -89,3 +89,10 @@ if DEBUG and USE_SILK:
 # Set DEBUG based on env variable, defaulting to False for better performance
 # You can override this with DJANGO_DEBUG=True in your .env file when needed
 DEBUG = env.bool("DJANGO_DEBUG", False)
+
+# In local dev, use simple static file serving (no manifest required).
+# The base.py CompressedManifestStaticFilesStorage requires collectstatic
+# which is unnecessary when runserver serves static files directly.
+STORAGES["staticfiles"] = {  # noqa: F405
+    "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+}

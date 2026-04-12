@@ -20,6 +20,12 @@ export const MENTION_SEARCH_MIN_CHARS = 2;
 // Used for truncating annotation text in mention chips and pickers
 export const MENTION_PREVIEW_LENGTH = 24;
 
+// CAML article configuration
+// The conventional document title for corpus articles (like GitHub's README)
+export const CAML_ARTICLE_FILENAME = "Readme.CAML";
+// MIME type used by the backend for CAML/Markdown documents
+export const MARKDOWN_MIME_TYPE = "text/markdown";
+
 // Label/UI colors
 // Default neutral gray color (Tailwind slate-400) used for inactive/placeholder states
 export const DEFAULT_LABEL_COLOR = "94a3b8";
@@ -149,6 +155,9 @@ export const POPOVER_Z_INDEX = 100002;
 export const Z_INDEX = {
   /** In-page loading overlays (position: absolute within a relative parent) */
   OVERLAY: 10,
+  /** Document header — establishes stacking context above content when backdrop-filter is active.
+   *  Does not spatially overlap the sidebar (flex column layout), so 50 < sidebar's 90 is fine. */
+  HEADER: 50,
   /** Standard dropdown overlays (pickers, menus) */
   DROPDOWN: 100,
   /** Modal-level overlays (dialogs, full-screen) */
@@ -470,6 +479,10 @@ export const PICKER_DROPDOWN_WIDTH = 380;
 
 // Minimum left offset (px) to prevent dropdown from going off-screen
 export const PICKER_DROPDOWN_VIEWPORT_PADDING = 8;
+
+// Modal content layout constants
+/** Maximum height for scrollable modal body content (e.g. document picker) */
+export const MODAL_BODY_MAX_HEIGHT = "70vh";
 
 // Corpus action trigger display labels
 // Maps backend trigger enum values (lowercase) to user-facing short labels

@@ -11,6 +11,8 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@floating-ui/dom": "^1.6.0",
     "@hello-pangea/dnd": "^18.0.1",
+    "@os-legal/caml": "^0.1.0",
+    "@os-legal/caml-react": "^0.1.0",
     "@os-legal/ui": "0.1.16",
     "@rjsf/core": "^5.24.12",
     "@rjsf/utils": "^5.24.1",
@@ -38,7 +40,7 @@
     "@uiw/react-color": "^2.3.2",
     "@uiw/react-json-view": "^2.0.0-alpha.30",
     "@vitejs/plugin-react-swc": "^3.9.0",
-    "axios": "^1.13.5",
+    "axios": "^1.15.0",
     "d3": "^7.9.0",
     "date-fns": "^4.1.0",
     "docxodus": "5.5.3",
@@ -49,7 +51,7 @@
     "history": "^5.3.0",
     "jotai": "^2.10.2",
     "jotai-apollo": "^0.2.1",
-    "lodash": "^4.17.23",
+    "lodash": "^4.18.1",
     "lodash.uniqueid": "^4.0.1",
     "lucide-react": "^0.438.0",
     "pdfjs-dist": "^4.7.0",
@@ -85,7 +87,7 @@
     "unified": "^11.0.5",
     "use-debounce": "^10.0.3",
     "uuid": "^8.3.2",
-    "vite": "^6.4.1",
+    "vite": "^7.3.2",
     "vite-plugin-svgr": "^4.3.0",
     "vite-tsconfig-paths": "^5.1.4",
     "web-vitals": "^2.1.2"
@@ -96,7 +98,8 @@
     "serve": "vite preview",
     "test:unit": "vitest",
     "test:e2e": "playwright test",
-    "test:coverage": "vitest run --coverage --watch=false",
+    "test:coverage:unit": "vitest run --coverage --watch=false",
+    "test:coverage:ct": "COVERAGE=true playwright test -c playwright-ct.config.ts --reporter=list && mkdir -p coverage/ct/.nyc_output && nyc report --reporter=lcov --reporter=text --report-dir=coverage/ct --temp-dir=coverage/ct/.nyc_output",
     "lint": "prettier . --check --ignore-unknown",
     "fix-styles": "prettier . --check --write --ignore-unknown",
     "prepare": "cd .. && husky install frontend/.husky",
@@ -124,14 +127,17 @@
     "**/*": "prettier --write --ignore-unknown"
   },
   "resolutions": {
+    "@os-legal/caml": "^0.1.0",
     "@rjsf/validator-ajv8/ajv": "8.18.0",
     "ajv-formats/ajv": "8.18.0",
     "glob": "10.5.0",
     "js-yaml": "4.1.1",
-    "lodash-es": "4.17.23",
+    "lodash": ">=4.18.0",
+    "lodash-es": ">=4.18.0",
     "mdast-util-to-hast": "13.2.1",
     "rollup": "^4.59.0",
-    "immutable": ">=3.8.3"
+    "immutable": ">=3.8.3",
+    "vite": "^7.3.2"
   },
   "devDependencies": {
     "@graphql-codegen/cli": "^5.0.2",
@@ -148,7 +154,21 @@
     "fake-indexeddb": "^6.2.2",
     "husky": "^8.0.1",
     "jsdom": "^26.1.0",
+    "nyc": "^18.0.0",
     "prettier": "^2.7.1",
+    "vite-plugin-istanbul": "^8.0.0",
     "vitest": "^3.1.2"
+  },
+  "nyc": {
+    "include": [
+      "src/**/*.{ts,tsx}"
+    ],
+    "exclude": [
+      "src/**/*.test.{ts,tsx}",
+      "src/setupTests.ts",
+      "src/main.tsx"
+    ],
+    "sourceMap": true,
+    "instrument": false
   }
 }

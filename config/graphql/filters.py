@@ -17,6 +17,7 @@ from opencontractserver.annotations.models import (
 )
 from opencontractserver.badges.models import Badge, UserBadge
 from opencontractserver.constants.annotations import MANUAL_ANNOTATION_SENTINEL
+from opencontractserver.constants.document_processing import MARKDOWN_MIME_TYPE
 from opencontractserver.conversations.models import (
     ChatMessage,
     Conversation,
@@ -366,13 +367,32 @@ class DocumentFilter(django_filters.FilterSet):
     has_label_with_title = filters.CharFilter(method="has_label_title")
     has_label_with_id = filters.CharFilter(method="has_label_id")
     text_search = filters.CharFilter(method="naive_text_search")
+    include_caml = filters.BooleanFilter(method="handle_include_caml")
 
     def handle_has_annotations_with_ids(self, queryset, info, value):
         annotation_pks = [from_global_id(val)[1] for val in value.split(",")]
         return queryset.filter(doc_annotation__in=annotation_pks)
 
     def filter_queryset(self, queryset):
-        return super().filter_queryset(queryset).distinct()
+        qs = super().filter_queryset(queryset).distinct()
+        # When filtering by corpus, exclude CAML/markdown files by default.
+        # Corpus views pass includeCaml=true to show them; extractors and
+        # analyzers omit the flag so CAML articles stay out of pipelines.
+        #
+        # Note: self.data values are Python-typed (bool, not str) because
+        # graphene-django deserializes GraphQL arguments before populating
+        # the filterset. The falsy check on include_caml is therefore safe.
+        if self.data.get("in_corpus_with_id") and not self.data.get("include_caml"):
+            qs = qs.exclude(file_type=MARKDOWN_MIME_TYPE)
+        return qs
+
+    def handle_include_caml(self, queryset, name, value):
+        # Intentional no-op: the actual CAML exclusion lives in
+        # filter_queryset() which checks both in_corpus_with_id and
+        # include_caml together.  Passing includeCaml=false without a
+        # corpus filter has no effect because CAML exclusion only
+        # applies to corpus-scoped queries.
+        return queryset
 
     def naive_text_search(self, queryset, name, value):
         return queryset.filter(Q(description__contains=value)).distinct()
@@ -466,6 +486,7 @@ class DocumentFilter(django_filters.FilterSet):
         fields = {
             "description": ["exact", "contains"],
             "id": ["exact"],
+            "title": ["exact", "contains"],
         }
 
 

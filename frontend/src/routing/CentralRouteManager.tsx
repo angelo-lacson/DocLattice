@@ -882,12 +882,14 @@ export function CentralRouteManager() {
         ? homeViewParam
         : null;
 
-    // Parse detailView param (valid values: "details", "discussions"; defaults to "landing")
+    // Parse detailView param (valid values: "details", "discussions", "article"; defaults to "landing")
     const newDetailView: CorpusDetailViewType =
       detailViewParam === "details"
         ? "details"
         : detailViewParam === "discussions"
         ? "discussions"
+        : detailViewParam === "article"
+        ? "article"
         : "landing";
 
     // Collect all reactive var updates into a batch
@@ -924,7 +926,8 @@ export function CentralRouteManager() {
     if (currentDetailView !== newDetailView) {
       updates.push(() => corpusDetailView(newDetailView));
     }
-    const newPowerUserMode = modeParam === "power";
+    const newPowerUserMode =
+      modeParam === "power" && authStatus === "AUTHENTICATED";
     if (currentPowerUserMode !== newPowerUserMode) {
       updates.push(() => corpusPowerUserMode(newPowerUserMode));
     }
@@ -968,7 +971,7 @@ export function CentralRouteManager() {
 
     // Mark that we've initialized from URL - allows Phase 4 to start syncing
     hasInitializedFromUrl.current = true;
-  }, [searchParams]);
+  }, [searchParams, authStatus]);
 
   // ═══════════════════════════════════════════════════════════════
   // PHASE 3: Entity Data → Canonical Redirects

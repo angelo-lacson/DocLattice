@@ -83,6 +83,7 @@ from config.graphql.corpus_mutations import (
     RunCorpusAction,
     SetCorpusVisibility,
     StartCorpusFork,
+    ToggleCorpusMemory,
     UpdateCorpusAction,
     UpdateCorpusDescription,
     UpdateCorpusMutation,
@@ -176,9 +177,11 @@ from config.graphql.notification_mutations import (
 # Import pipeline settings mutations
 from config.graphql.pipeline_settings_mutations import (
     DeleteComponentSecretsMutation,
+    DeleteToolSecretsMutation,
     ResetPipelineSettingsMutation,
     UpdateComponentSecretsMutation,
     UpdatePipelineSettingsMutation,
+    UpdateToolSecretsMutation,
 )
 
 # Import smart label mutations
@@ -295,6 +298,7 @@ class Mutation(graphene.ObjectType):
     delete_corpus_action = DeleteCorpusAction.Field()
     run_corpus_action = RunCorpusAction.Field()
     add_template_to_corpus = AddTemplateToCorpus.Field()
+    toggle_corpus_memory = ToggleCorpusMemory.Field()
 
     # CORPUS FOLDER MUTATIONS ##################################################
     create_corpus_folder = CreateCorpusFolderMutation.Field()
@@ -400,6 +404,8 @@ class Mutation(graphene.ObjectType):
     reset_pipeline_settings = ResetPipelineSettingsMutation.Field()
     update_component_secrets = UpdateComponentSecretsMutation.Field()
     delete_component_secrets = DeleteComponentSecretsMutation.Field()
+    update_tool_secrets = UpdateToolSecretsMutation.Field()
+    delete_tool_secrets = DeleteToolSecretsMutation.Field()
 
     # WORKER UPLOAD MUTATIONS ########################################################
     create_worker_account = CreateWorkerAccount.Field()

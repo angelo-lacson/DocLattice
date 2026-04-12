@@ -1,6 +1,8 @@
-import React from "react";
-import { useReactiveVar } from "@apollo/client";
+import React, { useMemo } from "react";
+import { useReactiveVar, useQuery } from "@apollo/client";
 import { useLocation, useNavigate } from "react-router-dom";
+import styled from "styled-components";
+import { Compass, LayoutDashboard } from "lucide-react";
 
 import { corpusDetailView } from "../../graphql/cache";
 import {
@@ -8,13 +10,49 @@ import {
   navigateToDiscussionThread,
 } from "../../utils/navigationUtils";
 import { CorpusType } from "../../types/graphql-api";
+import {
+  GET_CORPUS_ARTICLE,
+  GetCorpusArticleInput,
+  GetCorpusArticleOutput,
+} from "../../graphql/queries";
+import { CAML_ARTICLE_FILENAME } from "../../assets/configurations/constants";
+import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 import { CorpusLandingView } from "./CorpusHome/CorpusLandingView";
 import { CorpusDetailsView } from "./CorpusHome/CorpusDetailsView";
 import { CorpusDiscussionsInlineView } from "./CorpusHome/CorpusDiscussionsInlineView";
+import { CorpusArticleView } from "./CorpusHome/CorpusArticleView";
+import { InlineChatBar } from "./CorpusHero/InlineChatBar";
+import { PillToggle, PillToggleLabel } from "./CorpusHome/styles";
+
+/** Floating chat bar — centered at bottom */
+const FloatingChatBar = styled.div`
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 0.375rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
+  width: calc(100% - 3rem);
+`;
+
+/** Floating mode toggle — anchored bottom-right */
+const FloatingModeToggle = styled.div`
+  position: fixed;
+  bottom: 1.75rem;
+  right: 1.5rem;
+  z-index: 20;
+`;
 
 export interface CorpusHomeProps {
   corpus: CorpusType;
   onEditDescription: () => void;
+  onEditArticle?: () => void;
   onNavigate?: (tabIndex: number) => void;
   onBack?: () => void;
   canUpdate?: boolean;
@@ -23,6 +61,7 @@ export interface CorpusHomeProps {
     totalAnnotations: number;
     totalAnalyses: number;
     totalExtracts: number;
+    totalThreads: number;
   };
   statsLoading: boolean;
   // Chat integration props
@@ -50,10 +89,13 @@ export interface CorpusHomeProps {
  * - /c/user/corpus → Landing view (default)
  * - /c/user/corpus?view=details → Details view
  * - /c/user/corpus?view=discussions → Discussions view
+ * - /c/user/corpus?view=article → Article view (Readme.CAML)
  */
 export const CorpusHome: React.FC<CorpusHomeProps> = ({
   corpus,
   onEditDescription,
+  onEditArticle,
+  stats,
   chatQuery = "",
   onChatQueryChange,
   onChatSubmit,
@@ -68,6 +110,26 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
 
   // Get current view from URL-driven reactive var (set by CentralRouteManager)
   const currentView = useReactiveVar(corpusDetailView);
+
+  // Detect whether the corpus has a Readme.CAML article.
+  // When it does and we're on the default landing view, the article becomes
+  // the home page with floating controls overlaid.
+  const articleQueryVars = useMemo<GetCorpusArticleInput>(
+    () => ({
+      corpusId: corpus.id,
+      title: CAML_ARTICLE_FILENAME,
+    }),
+    [corpus.id]
+  );
+
+  const { data: articleData, loading: articleLoading } = useQuery<
+    GetCorpusArticleOutput,
+    GetCorpusArticleInput
+  >(GET_CORPUS_ARTICLE, { variables: articleQueryVars });
+
+  const hasArticle =
+    (articleData?.documents?.edges?.length ?? 0) > 0 &&
+    !!articleData?.documents?.edges[0]?.node?.txtExtractFile;
 
   // Handle switching to details view
   const handleViewDetails = () => {
@@ -87,6 +149,11 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
   // Handle switching to discussions view
   const handleViewDiscussions = () => {
     updateDetailViewParam(location, navigate, "discussions");
+  };
+
+  // Handle switching to article view
+  const handleViewArticle = () => {
+    updateDetailViewParam(location, navigate, "article");
   };
 
   // Handle clicking a specific thread from the landing page feed
@@ -117,22 +184,134 @@ export const CorpusHome: React.FC<CorpusHomeProps> = ({
     );
   }
 
+  if (currentView === "article") {
+    return (
+      <CorpusArticleView
+        corpus={corpus}
+        onBack={handleBackToLanding}
+        onEditArticle={isPowerUserMode ? onEditArticle : undefined}
+        showDocumentsButton={!isPowerUserMode}
+        stats={{
+          documents: stats.totalDocs,
+          annotations: stats.totalAnnotations,
+          threads: stats.totalThreads,
+        }}
+        testId="corpus-home-article"
+      />
+    );
+  }
+
+  // Wait for article detection before choosing between article and landing view.
+  // Without this guard, CorpusLandingView renders momentarily then gets swapped
+  // out when the article query resolves, causing a visible flicker.
+  if (articleLoading) {
+    return null;
+  }
+
+  // When a Readme.CAML exists, render the article as the default landing view
+  // with floating chat and mode-toggle controls overlaid at the bottom.
+  if (hasArticle) {
+    return (
+      <div
+        style={{
+          position: "relative",
+          height: "100%",
+          minWidth: 0,
+          width: "100%",
+          overflowY: "auto",
+        }}
+      >
+        <CorpusArticleView
+          corpus={corpus}
+          onBack={onNavigateToCorpuses || handleBackToLanding}
+          onEditArticle={isPowerUserMode ? onEditArticle : undefined}
+          showDocumentsButton={!isPowerUserMode}
+          stats={{
+            documents: stats.totalDocs,
+            annotations: stats.totalAnnotations,
+            threads: stats.totalThreads,
+          }}
+          testId="corpus-home-article"
+        />
+        <FloatingChatBar data-testid="corpus-article-floating-controls">
+          <InlineChatBar
+            value={chatQuery}
+            onChange={onChatQueryChange || (() => {})}
+            onSubmit={onChatSubmit || (() => {})}
+            onViewHistory={onViewChatHistory || (() => {})}
+            showQuickActions={false}
+            autoFocus={false}
+            testId="corpus-article-chat"
+          />
+        </FloatingChatBar>
+        {onModeToggle && (
+          <FloatingModeToggle>
+            <PillToggle
+              onClick={onModeToggle}
+              title={
+                isPowerUserMode
+                  ? "Switch to explore view"
+                  : "Switch to corpus management view"
+              }
+              data-testid="article-power-user-toggle"
+            >
+              <PillToggleLabel $active={!isPowerUserMode}>
+                <Compass size={12} />
+                Explore
+              </PillToggleLabel>
+              <PillToggleLabel $active={!!isPowerUserMode}>
+                <LayoutDashboard size={12} />
+                Manage
+              </PillToggleLabel>
+            </PillToggle>
+          </FloatingModeToggle>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <CorpusLandingView
-      corpus={corpus}
-      onViewDetails={handleViewDetails}
-      onEditDescription={onEditDescription}
-      onNavigateToCorpuses={onNavigateToCorpuses}
-      chatQuery={chatQuery}
-      onChatQueryChange={onChatQueryChange}
-      onChatSubmit={onChatSubmit}
-      onViewChatHistory={onViewChatHistory}
-      onOpenMobileMenu={onOpenMobileMenu}
-      onModeToggle={onModeToggle}
-      isPowerUserMode={isPowerUserMode}
-      onViewDiscussions={handleViewDiscussions}
-      onThreadClick={handleThreadClick}
-      testId="corpus-home-landing"
-    />
+    <>
+      <CorpusLandingView
+        corpus={corpus}
+        hasArticle={hasArticle}
+        onViewDetails={handleViewDetails}
+        onEditDescription={onEditDescription}
+        onNavigateToCorpuses={onNavigateToCorpuses}
+        chatQuery={chatQuery}
+        onChatQueryChange={onChatQueryChange}
+        onChatSubmit={onChatSubmit}
+        onViewChatHistory={onViewChatHistory}
+        onOpenMobileMenu={onOpenMobileMenu}
+        isPowerUserMode={isPowerUserMode}
+        onViewDiscussions={handleViewDiscussions}
+        onViewArticle={handleViewArticle}
+        onOpenArticleEditor={onEditArticle}
+        onThreadClick={handleThreadClick}
+        testId="corpus-home-landing"
+      />
+      {onModeToggle && (
+        <FloatingModeToggle>
+          <PillToggle
+            onClick={onModeToggle}
+            title={
+              isPowerUserMode
+                ? "Switch to explore view"
+                : "Switch to corpus management view"
+            }
+            data-testid="landing-mode-toggle"
+          >
+            <PillToggleLabel $active={!isPowerUserMode}>
+              <Compass size={12} />
+              Explore
+            </PillToggleLabel>
+            <PillToggleLabel $active={!!isPowerUserMode}>
+              <LayoutDashboard size={12} />
+              Manage
+            </PillToggleLabel>
+          </PillToggle>
+        </FloatingModeToggle>
+      )}
+    </>
   );
 };

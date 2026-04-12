@@ -7,6 +7,9 @@ from pathlib import Path
 
 import environ
 
+from opencontractserver.constants.agent_memory import (
+    MEMORY_CURATION_CHECK_INTERVAL_SECONDS,
+)
 from opencontractserver.constants.document_processing import MAX_FILE_UPLOAD_SIZE_BYTES
 
 ROOT_DIR = Path(__file__).resolve(strict=True).parent.parent.parent
@@ -24,7 +27,7 @@ if READ_DOT_ENV_FILE:
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#allowed-hosts
 ALLOWED_HOSTS = env.list(
-    "DJANGO_ALLOWED_HOSTS", default=["localhost", "0.0.0.0", "127.0.0.1"]
+    "DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "0.0.0.0"]
 )
 
 # https://docs.djangoproject.com/en/dev/ref/settings/#debug
@@ -505,6 +508,10 @@ FIXTURE_DIRS = (str(APPS_DIR / "fixtures"),)
 SESSION_COOKIE_HTTPONLY = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#csrf-cookie-httponly
 CSRF_COOKIE_HTTPONLY = True
+# https://docs.djangoproject.com/en/dev/ref/settings/#session-cookie-samesite
+SESSION_COOKIE_SAMESITE = "Lax"
+# https://docs.djangoproject.com/en/dev/ref/settings/#csrf-cookie-samesite
+CSRF_COOKIE_SAMESITE = "Lax"
 # https://docs.djangoproject.com/en/dev/ref/settings/#x-frame-options
 X_FRAME_OPTIONS = "DENY"
 
@@ -676,6 +683,11 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 300.0,  # every 5 minutes
         "options": {"queue": "worker_uploads"},
     },
+    "memory-curate-idle-conversations": {
+        "task": "opencontractserver.tasks.memory_tasks.check_conversations_for_curation",
+        "schedule": MEMORY_CURATION_CHECK_INTERVAL_SECONDS,
+        "options": {"queue": "celery"},
+    },
 }
 
 # Worker Upload Processing
@@ -732,9 +744,10 @@ GRAPHENE_MIDDLEWARE = [
     "config.graphql.permissioning.permission_annotator.middleware.PermissionAnnotatingMiddleware",
 ]
 
-# Add JWT middleware if using Auth0
-if USE_AUTH0:
-    GRAPHENE_MIDDLEWARE.append("graphql_jwt.middleware.JSONWebTokenMiddleware")
+# JWT middleware is always needed — both Auth0 and password login
+# return JWT tokens via the tokenAuth mutation, and subsequent
+# GraphQL requests use Authorization: Bearer <token>.
+GRAPHENE_MIDDLEWARE.append("graphql_jwt.middleware.JSONWebTokenMiddleware")
 
 # Add API Key middleware if enabled
 if USE_API_KEY_AUTH:
@@ -785,8 +798,10 @@ DEFAULT_PERMISSIONS_GROUP = "Public Objects Access"
 # NOTE(deferred): These could be consolidated into an EMBEDDER_KWARGS dict
 # (similar to PARSER_KWARGS) once all embedder backends are pluggable.
 # Microservice URLs - read from environment with defaults
-EMBEDDINGS_MICROSERVICE_URL = env("EMBEDDINGS_MICROSERVICE_URL")
-VECTOR_EMBEDDER_API_KEY = env("VECTOR_EMBEDDER_API_KEY", default="abc123")
+EMBEDDINGS_MICROSERVICE_URL = env(
+    "EMBEDDINGS_MICROSERVICE_URL", default="http://vector-embedder:8000"
+)
+VECTOR_EMBEDDER_API_KEY = env("VECTOR_EMBEDDER_API_KEY", default="")
 # CLIP embedder configuration (768-dimensional vectors)
 CLIP_EMBEDDER_URL = env("CLIP_EMBEDDER_URL", default="http://vector-embedder:8000")
 CLIP_EMBEDDER_API_KEY = env("CLIP_EMBEDDER_API_KEY", default="")
@@ -817,7 +832,9 @@ MULTIMODAL_EMBEDDING_WEIGHTS = {
     "text_weight": env.float("MULTIMODAL_TEXT_WEIGHT", default=0.3),
     "image_weight": env.float("MULTIMODAL_IMAGE_WEIGHT", default=0.7),
 }
-DOCLING_PARSER_SERVICE_URL = env("DOCLING_PARSER_SERVICE_URL")
+DOCLING_PARSER_SERVICE_URL = env(
+    "DOCLING_PARSER_SERVICE_URL", default="http://docling-parser:8000/parse/"
+)
 DOCLING_PARSER_TIMEOUT = env.int(
     "DOCLING_PARSER_TIMEOUT", default=300  # 5 minutes default
 )
@@ -1159,36 +1176,38 @@ Use `load_document_summary` when:
 • Use multiple search strategies to ensure thoroughness
 • Present findings clearly with proper attribution to sources"""
 
-DEFAULT_CORPUS_AGENT_INSTRUCTIONS = """You are a helpful corpus analysis assistant.
-Your role is to help users understand and analyze collections of documents by coordinating across
-multiple documents and using the tools available to you.
+DEFAULT_CORPUS_AGENT_INSTRUCTIONS = """You are the voice of this corpus — the collected knowledge \
+contained in these documents, and your purpose is to represent that knowledge faithfully to anyone who asks.
 
-**CRITICAL RULES:**
-1. ALWAYS use tools to gather information before answering
-2. You have access to multiple documents - use them effectively
-3. ALWAYS cite sources from specific documents when making claims
+**YOUR IDENTITY:**
+You speak as the corpus itself — when a user asks "what do you know about X?", you answer from \
+the perspective of the knowledge contained in your documents. You are not an external analyst; \
+you ARE this body of knowledge, speaking directly.
 
-**Available Tools:**
-- **Document-Specific Tools**: Available via `ask_document(document_id, question)`
-- **Corpus-Level Tools**: `list_documents()` to see all available documents
-- **Cross-Document Search**: Semantic search across the entire corpus
+**EPISTEMIC RULES (NON-NEGOTIABLE):**
+1. NEVER infer, extrapolate, speculate, or draw conclusions beyond what is explicitly stated in the documents.
+2. Clearly distinguish between what the documents explicitly state and what might be implied or interpreted.
+3. If the documents do not contain information on a topic, say so plainly — this is a valuable answer, not a failure.
+4. When documents contain conflicting information, present all sides without resolving the conflict yourself.
 
-**Recommended Strategy:**
-1. If the corpus has a description, use it as context
-2. If the corpus description is empty BUT has documents:
-   - Start by using `list_documents()` to see what's available
-   - Use `ask_document()` to query specific documents
-   - Use cross-document vector search for themes across documents
-3. Synthesize information from multiple sources
-4. Always cite which document(s) your information comes from
+**TOOL USAGE:**
+- ALWAYS use tools to retrieve information before answering — never rely on assumptions about your contents.
+- `list_documents()` — see all documents in the corpus
+- `ask_document(document_id, question)` — query a specific document
+- `similarity_search(query)` — semantic search across all documents
 
-**When Corpus Has No Description:**
-Don't just say "the corpus description is empty" - that's not helpful! Instead:
-1. List available documents
-2. Ask the user which documents they want to know about
-3. OR proactively examine key documents to provide a useful summary
+**STRATEGY:**
+1. If the corpus has a description, use it as orienting context.
+2. If the corpus description is empty, use `list_documents()` to understand your contents, then examine \
+key documents as needed.
+3. For broad questions, search across multiple documents to ensure completeness.
+4. ALWAYS cite the specific document(s) your information comes from.
 
-Always prioritize being helpful and use your tools to provide value."""
+**RESPONDING WITH AUTHORITY AND HUMILITY:**
+- Speak confidently about what IS in the documents — you know your own contents.
+- Be transparent about gaps: "My documents do not address this topic" is a direct, honest answer.
+- Never pad answers with general knowledge or outside information. Your knowledge boundary is the boundary \
+of your documents."""
 
 # LLM Client Provider Settings
 # ------------------------------------------------------------------------------

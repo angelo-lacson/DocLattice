@@ -16,7 +16,7 @@
  * Also tests mobile responsive behavior and tab navigation.
  */
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedResponse } from "@apollo/client/testing";
 import { CorpusesTestWrapper } from "./CorpusesTestWrapper";
 import { openedCorpus, selectedTab } from "../src/graphql/cache";
@@ -34,6 +34,7 @@ import {
   GET_CORPUS_ACTIONS,
   GET_CORPUS_ENGAGEMENT_METRICS,
   GET_BADGES,
+  GET_CORPUS_ARTICLE,
 } from "../src/graphql/queries";
 import { CorpusType } from "../src/types/graphql-api";
 import { docScreenshot, releaseScreenshot } from "./utils/docScreenshot";
@@ -403,6 +404,7 @@ const createDocumentsMocks = (corpusId: string): MockedResponse[] => {
           inCorpusWithId: corpusId,
           annotateDocLabels: true,
           includeMetadata: true,
+          includeCaml: true,
         },
       },
       result: documentsResult,
@@ -415,6 +417,7 @@ const createDocumentsMocks = (corpusId: string): MockedResponse[] => {
           inFolderId: "__root__",
           annotateDocLabels: true,
           includeMetadata: true,
+          includeCaml: true,
         },
       },
       result: documentsResult,
@@ -599,6 +602,24 @@ const createCorpusActionsMock = (corpusId: string): MockedResponse => ({
   },
 });
 
+const createArticleMock = (corpusId: string): MockedResponse => ({
+  request: {
+    query: GET_CORPUS_ARTICLE,
+    variables: {
+      corpusId,
+      title: "Readme.CAML",
+    },
+  },
+  result: {
+    data: {
+      documents: {
+        edges: [],
+        __typename: "DocumentTypeConnection",
+      },
+    },
+  },
+});
+
 const createEmptyDocumentsMock = (): MockedResponse => ({
   request: {
     query: GET_DOCUMENTS,
@@ -638,6 +659,8 @@ const createAllTabMocks = (corpus: CorpusType): MockedResponse[] => [
   createCorpusActionsMock(corpus.id),
   createEngagementMetricsMock(corpus.id),
   createEmptyDocumentsMock(),
+  createArticleMock(corpus.id),
+  createArticleMock(corpus.id),
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -1388,17 +1411,17 @@ test.describe("Corpus - Power User Mode", () => {
     // Sidebar should NOT be visible (clean view)
     await expect(page.getByTestId("navigation-sidebar")).toBeHidden();
 
-    // Power User toggle should be visible (user has CAN_UPDATE)
-    // Toggle is a pill with "Focus" and "Power" labels
-    const toggle = page.getByTestId("power-user-toggle");
+    // Mode toggle should be visible (user has CAN_UPDATE)
+    // Toggle is a floating pill with "Explore" and "Manage" labels
+    const toggle = page.getByTestId("landing-mode-toggle");
     await expect(toggle).toBeVisible();
-    await expect(toggle).toContainText("Focus");
-    await expect(toggle).toContainText("Power");
+    await expect(toggle).toContainText("Explore");
+    await expect(toggle).toContainText("Manage");
 
     await docScreenshot(page, "corpus--landing--clean-view");
   });
 
-  test("should hide power user toggle for read-only users", async ({
+  test("should show power user toggle for read-only authenticated users", async ({
     mount,
     page,
   }) => {
@@ -1409,8 +1432,12 @@ test.describe("Corpus - Power User Mode", () => {
     const landing = page.getByTestId("corpus-home-landing");
     await expect(landing).toBeVisible({ timeout: 10000 });
 
-    // Power User toggle should NOT be visible (no CAN_UPDATE permission)
-    await expect(page.getByTestId("power-user-toggle")).toBeHidden();
+    // Mode toggle IS visible for read-only users — it controls a client-side
+    // view preference (Explore vs Manage), not a write operation.
+    const toggle = page.getByTestId("landing-mode-toggle");
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toContainText("Explore");
+    await expect(toggle).toContainText("Manage");
   });
 
   test("should show sidebar and exit button in power user mode", async ({
@@ -1444,11 +1471,11 @@ test.describe("Corpus - Power User Mode", () => {
     await expect(page.getByTestId("navigation-sidebar")).not.toBeVisible({
       timeout: 10000,
     });
-    const powerToggle = page.getByTestId("power-user-toggle");
-    await expect(powerToggle).toBeVisible();
+    const modeToggle = page.getByTestId("landing-mode-toggle");
+    await expect(modeToggle).toBeVisible();
 
-    // Click Power User toggle - sidebar should appear
-    await powerToggle.click();
+    // Click Manage toggle - sidebar should appear
+    await modeToggle.click();
     await expect(page.getByTestId("navigation-sidebar")).toBeVisible({
       timeout: 10000,
     });

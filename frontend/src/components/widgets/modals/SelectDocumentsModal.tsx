@@ -32,6 +32,7 @@ import {
   uploadModalPreloadedFiles,
 } from "../../../graphql/cache";
 import { FileUploadPackageProps } from "./DocumentUploadModal";
+import { MODAL_BODY_MAX_HEIGHT } from "../../../assets/configurations/constants";
 
 /**
  * Overrides the nested card styling from CreateAndSearchBar when rendered
@@ -96,6 +97,7 @@ export const SelectDocumentsModal = ({
   }
   if (filtered_to_corpus) {
     document_variables["inCorpusWithId"] = filtered_to_corpus.id;
+    document_variables["includeCaml"] = false;
   }
   // Only annotate document labels if there is a selected corpus to cut down on possible explosion of possible labels otherwise.
   if (filtered_to_corpus || filtered_to_labelset_id) {
@@ -210,7 +212,7 @@ export const SelectDocumentsModal = ({
         style={{
           flex: 1,
           overflow: "hidden",
-          maxHeight: "70vh",
+          maxHeight: MODAL_BODY_MAX_HEIGHT,
           padding: "0.5rem 1rem",
         }}
       >

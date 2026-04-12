@@ -16,6 +16,7 @@
  */
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import styled, { keyframes, css } from "styled-components";
 import {
   Dropdown,
@@ -47,6 +48,7 @@ import {
   HelpText,
 } from "../../components/SelectionActionMenu";
 import { clampMenuPosition } from "../../../../utils/layout";
+import { Z_INDEX } from "../../../../assets/configurations/constants";
 import {
   OS_LEGAL_COLORS,
   chatSourceBlueAlpha,
@@ -1154,91 +1156,94 @@ const TxtAnnotator: React.FC<TxtAnnotatorProps> = ({
         )}
       </PaperContainer>
 
-      {/* Text Selection Action Menu */}
-      {showActionMenu && (
-        <SelectionActionMenu
-          ref={menuRef}
-          data-testid="txt-selection-action-menu"
-          onMouseDown={(e) => e.stopPropagation()}
-          style={{
-            position: "fixed",
-            left: `${actionMenuPosition.x}px`,
-            top: `${actionMenuPosition.y}px`,
-            zIndex: 1000,
-          }}
-        >
-          <ActionMenuItem
-            onClick={(e) => {
-              e.stopPropagation();
-              handleTxtCopyText();
+      {/* Text Selection Action Menu — rendered via portal to escape
+          PDFContainer's stacking context (z-index: 1) */}
+      {showActionMenu &&
+        createPortal(
+          <SelectionActionMenu
+            ref={menuRef}
+            data-testid="txt-selection-action-menu"
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{
+              position: "fixed",
+              left: `${actionMenuPosition.x}px`,
+              top: `${actionMenuPosition.y}px`,
+              zIndex: Z_INDEX.CONTEXT_MENU,
             }}
-            data-testid="txt-copy-text-button"
           >
-            <Copy size={16} />
-            <span>Copy Text</span>
-            <ShortcutHint>C</ShortcutHint>
-          </ActionMenuItem>
+            <ActionMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                handleTxtCopyText();
+              }}
+              data-testid="txt-copy-text-button"
+            >
+              <Copy size={16} />
+              <span>Copy Text</span>
+              <ShortcutHint>C</ShortcutHint>
+            </ActionMenuItem>
 
-          <ActionMenuItem
-            onClick={(e) => {
-              e.stopPropagation();
-              handleTxtCopyLink();
-            }}
-            data-testid="txt-copy-link-button"
-          >
-            <Link size={16} />
-            <span>Copy Link</span>
-            <ShortcutHint>L</ShortcutHint>
-          </ActionMenuItem>
+            <ActionMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                handleTxtCopyLink();
+              }}
+              data-testid="txt-copy-link-button"
+            >
+              <Link size={16} />
+              <span>Copy Link</span>
+              <ShortcutHint>L</ShortcutHint>
+            </ActionMenuItem>
 
-          {allowInput && !read_only && (
-            <>
-              <MenuDivider />
-              <ActionMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleTxtApplyLabel();
-                }}
-                data-testid="txt-apply-label-button"
-              >
-                <Tag size={16} />
-                <span>Apply Label</span>
-                <ShortcutHint>A</ShortcutHint>
-              </ActionMenuItem>
-            </>
-          )}
+            {allowInput && !read_only && (
+              <>
+                <MenuDivider />
+                <ActionMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTxtApplyLabel();
+                  }}
+                  data-testid="txt-apply-label-button"
+                >
+                  <Tag size={16} />
+                  <span>Apply Label</span>
+                  <ShortcutHint>A</ShortcutHint>
+                </ActionMenuItem>
+              </>
+            )}
 
-          {(!allowInput || read_only) && (
-            <>
-              <MenuDivider />
-              <HelpMessage>
-                <AlertCircle size={16} />
-                <div>
-                  <span>Annotation unavailable</span>
-                  <HelpText>
-                    {read_only
-                      ? "Document is read-only"
-                      : "No input permissions"}
-                  </HelpText>
-                </div>
-              </HelpMessage>
-            </>
-          )}
+            {(!allowInput || read_only) && (
+              <>
+                <MenuDivider />
+                <HelpMessage>
+                  <AlertCircle size={16} />
+                  <div>
+                    <span>Annotation unavailable</span>
+                    <HelpText>
+                      {read_only
+                        ? "Document is read-only"
+                        : "No input permissions"}
+                    </HelpText>
+                  </div>
+                </HelpMessage>
+              </>
+            )}
 
-          <MenuDivider />
-          <ActionMenuItem
-            onClick={(e) => {
-              e.stopPropagation();
-              dismissMenu();
-            }}
-            data-testid="txt-cancel-button"
-          >
-            <X size={16} />
-            <span>Cancel</span>
-            <ShortcutHint>ESC</ShortcutHint>
-          </ActionMenuItem>
-        </SelectionActionMenu>
-      )}
+            <MenuDivider />
+            <ActionMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                dismissMenu();
+              }}
+              data-testid="txt-cancel-button"
+            >
+              <X size={16} />
+              <span>Cancel</span>
+              <ShortcutHint>ESC</ShortcutHint>
+            </ActionMenuItem>
+          </SelectionActionMenu>,
+          document.body
+        )}
 
       <StyledModalWrapper>
         <Modal

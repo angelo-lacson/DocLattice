@@ -200,7 +200,8 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
         .filter().visible_to_user() would skip guardian entirely.
 
         Follows the same pattern as BaseVisibilityManager.visible_to_user
-        (opencontractserver/shared/Managers.py lines 103-118).
+        (opencontractserver/shared/Managers.py). Prefetch optimisation is
+        handled by DocumentManager.
         """
         from django.contrib.auth.models import AnonymousUser
 
@@ -209,6 +210,11 @@ class DocumentQuerySet(PermissionQuerySet, VectorSearchViaEmbeddingMixin):
 
         if hasattr(user, "is_superuser") and user.is_superuser:
             return self.all()
+
+        # Documents in public corpora have is_public=True auto-propagated
+        # at creation time (see Corpus.add_document, import_document, and
+        # Corpus._propagate_public_status_to_documents), so the standard
+        # is_public filter naturally covers them without subqueries.
 
         if user.is_anonymous:
             return self.filter(is_public=True).distinct()

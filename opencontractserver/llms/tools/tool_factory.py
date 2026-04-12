@@ -44,7 +44,9 @@ def build_inject_params_for_context(
             inject["document_id"] = document_id
         elif param_name == "corpus_id" and corpus_id is not None:
             inject["corpus_id"] = corpus_id
-        elif param_name in ("author_id", "creator_id") and user_id is not None:
+        elif (
+            param_name in ("author_id", "creator_id", "user_id") and user_id is not None
+        ):
             inject[param_name] = user_id
         elif param_name == "corpus_action_id" and corpus_action_id is not None:
             inject["corpus_action_id"] = corpus_action_id

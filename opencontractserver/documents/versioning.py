@@ -36,6 +36,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import transaction
 
+from opencontractserver.constants.document_processing import TEXT_MIMETYPES
 from opencontractserver.corpuses.models import Corpus, CorpusFolder
 from opencontractserver.documents.models import Document, DocumentPath
 
@@ -50,10 +51,8 @@ MIME_TO_EXTENSION = {
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
     "text/plain": ".txt",
+    "text/markdown": ".md",
 }
-
-# File types that are stored as txt_extract_file (plain text, no parsing needed)
-TEXT_MIMETYPES = {"text/plain", "application/txt"}
 
 
 def _create_content_file(
@@ -231,6 +230,9 @@ def import_document(
                 inherited_set = None
 
             # Create new document version (isolated within corpus)
+            # Documents in public corpora inherit is_public=True so that
+            # the permissioning guide rule (both flags must be True) is
+            # naturally satisfied without queryset-level overrides.
             new_doc = Document.objects.create(
                 title=doc_kwargs.get("title", old_doc.title),
                 description=doc_kwargs.get("description", old_doc.description),
@@ -241,12 +243,15 @@ def import_document(
                 version_tree_id=old_doc.version_tree_id,  # Same tree
                 parent=old_doc,
                 is_current=True,
+                is_public=corpus.is_public
+                or old_doc.is_public
+                or doc_kwargs.get("is_public", False),
                 structural_annotation_set=inherited_set,
                 creator=user,
                 **{
                     k: v
                     for k, v in doc_kwargs.items()
-                    if k not in ["title", "description", "file_type"]
+                    if k not in ["title", "description", "file_type", "is_public"]
                 },
             )
 
@@ -322,6 +327,9 @@ def import_document(
                     )
                 effective_txt_file = None
 
+            # Documents in public corpora inherit is_public=True so that
+            # the permissioning guide rule (both flags must be True) is
+            # naturally satisfied without queryset-level overrides.
             doc = Document.objects.create(
                 title=doc_kwargs.get("title", f"Document at {path}"),
                 description=doc_kwargs.get("description", ""),
@@ -331,13 +339,14 @@ def import_document(
                 pdf_file_hash=content_hash,
                 version_tree_id=tree_id,
                 is_current=True,
+                is_public=corpus.is_public or doc_kwargs.get("is_public", False),
                 parent=None,  # Root of content tree
                 source_document=None,  # Set via add_document() when dragging existing docs
                 creator=user,
                 **{
                     k: v
                     for k, v in doc_kwargs.items()
-                    if k not in ["title", "description", "file_type"]
+                    if k not in ["title", "description", "file_type", "is_public"]
                 },
             )
             version = 1
@@ -549,7 +558,13 @@ def get_path_history(document_path: DocumentPath):
             return "DELETED"
         if not current.is_deleted and previous.is_deleted:
             return "RESTORED"
-        if current.path != previous.path:
+        # MOVED takes priority over UPDATED: a document replacement that also
+        # changes the path is primarily a move (the path change is the visible
+        # user action), and callers can inspect document_id to detect the
+        # replacement separately.
+        # folder_id can differ while path stays the same if a folder was
+        # deleted and recreated with the same name — treat that as a move.
+        if current.path != previous.path or current.folder_id != previous.folder_id:
             return "MOVED"
         if current.document_id != previous.document_id:
             return "UPDATED"
@@ -563,6 +578,7 @@ def get_path_history(document_path: DocumentPath):
                 "id": current.id,
                 "timestamp": current.created,
                 "path": current.path,
+                "folder_id": current.folder_id,
                 "version": current.version_number,
                 "deleted": current.is_deleted,
                 "document_id": current.document_id,

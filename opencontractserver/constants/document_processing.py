@@ -6,6 +6,14 @@ It MUST remain free of Django imports (models, apps, etc.) to avoid
 AppRegistryNotReady errors during settings loading.
 """
 
+# MIME type for Markdown / CAML files.  Used in doc_tasks.py to skip
+# ingestion and in the parser pipeline for type detection.
+MARKDOWN_MIME_TYPE = "text/markdown"
+
+# File types that are stored as txt_extract_file (plain text, no parsing needed).
+# Shared between versioning.py and corpus models.py — single source of truth.
+TEXT_MIMETYPES = {"text/plain", MARKDOWN_MIME_TYPE, "application/txt"}
+
 # Maximum file upload size in bytes (5 GB).
 # Used by Django's DATA_UPLOAD_MAX_MEMORY_SIZE setting.
 MAX_FILE_UPLOAD_SIZE_BYTES = 5_242_880_000
@@ -96,3 +104,12 @@ DEFAULT_CHUNK_RETRY_LIMIT = 1
 # Caps the exponential backoff (5s * 2^attempt) so that increasing
 # chunk_retry_limit doesn't block Celery workers excessively.
 MAX_CHUNK_RETRY_BACKOFF_SECONDS = 30
+
+# ---------------------------------------------------------------------------
+# Path disambiguation constants
+# ---------------------------------------------------------------------------
+
+# Hard cap on numeric suffix attempts when disambiguating document paths.
+# Prevents unbounded loops in _disambiguate_path() if a corpus has hundreds
+# of documents sharing the same filename in the same folder.
+MAX_PATH_DISAMBIGUATION_SUFFIX = 1000

@@ -194,7 +194,7 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         DocumentTypeConnection, description="Documents in this corpus via DocumentPath"
     )
 
-    def resolve_documents(self, info):
+    def resolve_documents(self, info, **kwargs):
         """
         Custom resolver for documents field that uses DocumentPath.
         Returns documents with active paths in this corpus, filtered by
@@ -204,11 +204,16 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Effective Permission = MIN(document_permission, corpus_permission).
         A private document in a public corpus is still hidden from
         users without document-level access.
+
+        CAML/markdown files are included here since this resolver serves
+        corpus views that need to display the article landing page.
         """
         from opencontractserver.documents.models import Document
 
         user = getattr(info.context, "user", None)
-        corpus_doc_ids = self.get_documents().values_list("id", flat=True)
+        corpus_doc_ids = self.get_documents(include_caml=True).values_list(
+            "id", flat=True
+        )
         return Document.objects.filter(id__in=corpus_doc_ids).visible_to_user(user)
 
     def resolve_annotations(self, info):
@@ -317,6 +322,24 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             return self.engagement_metrics
         except CorpusEngagementMetrics.DoesNotExist:
             return None
+
+    # Agent memory privacy warning
+    memory_active_warning = graphene.String(
+        description=(
+            "When memory is enabled, returns a privacy notice explaining "
+            "that conversation patterns may be stored. Null when disabled."
+        ),
+    )
+
+    def resolve_memory_active_warning(self, info):
+        if not self.memory_enabled:
+            return None
+        return (
+            "Agent memory is enabled for this corpus. Generalised patterns "
+            "from conversations (not specific content) may be distilled into "
+            "the corpus memory document. Review the memory document in your "
+            "corpus to see what has been recorded."
+        )
 
     # Categories
     categories = graphene.List(lambda: CorpusCategoryType)
