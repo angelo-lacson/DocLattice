@@ -197,6 +197,12 @@ async def update_memory_content(corpus: Corpus, new_content: str, user) -> Docum
     curation tasks targeting the same corpus are serialised at write
     time (the second writer will block until the first commits).
 
+    Reprocessing safety: Memory documents use ``MARKDOWN_MIME_TYPE``,
+    which is short-circuited by ``process_doc_on_create_atomic`` (the
+    post-save signal marks them COMPLETED immediately without running
+    the parser/embedder pipeline).  This means curated content in
+    ``txt_extract_file`` is never overwritten by background tasks.
+
     Args:
         corpus: The Corpus whose memory to update.
         new_content: The full new markdown content.

@@ -1541,9 +1541,14 @@ class TestCurateCorpusMemoryTask(TransactionTestCase):
 
         Both tasks start with memory_curated=False so the early guard
         (``if conversation.memory_curated``) passes.  We simulate the race
-        by letting the first caller's atomic UPDATE succeed, then verifying
-        the second caller gets ``already_claimed`` from the atomic claim
-        (not the initial guard).
+        by intercepting the atomic claim UPDATE so it returns 0 rows,
+        as would happen when another task already set memory_curated=True
+        in the DB between the initial guard and the claim.
+
+        A true multi-thread database-level race test would require
+        ``TransactionTestCase`` and be inherently non-deterministic.
+        This mock-based approach reliably exercises the "claim lost" code
+        path that the atomic UPDATE protects.
         """
         from opencontractserver.tasks.memory_tasks import (
             _curate_corpus_memory_async,
@@ -1553,17 +1558,14 @@ class TestCurateCorpusMemoryTask(TransactionTestCase):
         # Conversation starts with memory_curated=False (default)
         self.assertFalse(conv.memory_curated)
 
-        # Simulate the first task winning the atomic claim: set
-        # memory_curated=True AFTER the initial guard would have passed
-        # (the DB row is False when select_related loads it, then the
-        # atomic UPDATE sets it to True).
-        # We need the initial ``conversation.memory_curated`` check to
-        # see False, but the atomic claim to see True (another task won).
-        # Achieve this by patching the atomic claim UPDATE to return 0.
-        original_update = Conversation.objects.filter
+        # Simulate the first task winning the atomic claim: patch the
+        # claim query (filter(pk=X, memory_curated=False).update(...))
+        # to return 0, as if another task's UPDATE already flipped the
+        # flag to True.
+        original_filter = Conversation.objects.filter
 
         def _claim_lost_filter(*args, **kwargs):
-            qs = original_update(*args, **kwargs)
+            qs = original_filter(*args, **kwargs)
             if kwargs.get("memory_curated") is False and "pk" in kwargs:
                 # The claim query: filter(pk=X, memory_curated=False).update(...)
                 # Return a queryset whose .update() returns 0
