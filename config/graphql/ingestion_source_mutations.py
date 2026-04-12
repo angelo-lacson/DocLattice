@@ -11,7 +11,7 @@ from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
 from config.graphql.document_types import (
-    EXPECTED_GLOBAL_ID_TYPE,
+    INGESTION_SOURCE_GLOBAL_ID_TYPE,
     IngestionSourceType,
     IngestionSourceTypeEnum,
 )
@@ -39,7 +39,7 @@ def _parse_ingestion_source_global_id(
         type_name, pk = from_global_id(global_id)
     except (ValueError, TypeError):
         return None, _NOT_FOUND_MSG
-    if type_name != EXPECTED_GLOBAL_ID_TYPE:
+    if type_name != INGESTION_SOURCE_GLOBAL_ID_TYPE:
         return None, _NOT_FOUND_MSG
     return pk, None
 

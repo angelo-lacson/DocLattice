@@ -17,7 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`ingestion_metadata` truthiness check** (PR #1197): Changed `if ingestion_metadata:` to `if ingestion_metadata is not None:` in `config/graphql/document_mutations.py` so that an empty dict `{}` is correctly stored rather than silently discarded.
 
-- **Lazy logging in export_v2.py** (PR #1197): Replaced remaining f-string logger calls with `%s`-style lazy formatting in `opencontractserver/utils/export_v2.py` for corpus folders, relationships, and conversations error handlers.
+- **Lazy logging in export_v2.py** (PR #1197): Replaced remaining f-string logger calls with `%s`-style lazy formatting in `opencontractserver/utils/export_v2.py` for corpus folders, relationships, conversations, structural annotations, and markdown description error handlers.
+
+- **TOCTOU race in `_import_ingestion_sources`** (PR #1197): Wrapped `get_or_create` in `transaction.atomic()` savepoint so that an `IntegrityError` from a concurrent insert doesn't abort the outer PostgreSQL transaction, which would cause the fallback `.get()` to raise `TransactionManagementError`.
+
+- **`DRFMutation` validation error formatting extracted** (PR #1197): Extracted inline validation-error formatting logic from `DRFMutation.mutate()` into a reusable `format_validation_error()` static method (`config/graphql/base.py`). Updated `TestDRFMutationValidationError` tests to call the real method instead of duplicating the logic inline.
+
+- **Renamed `EXPECTED_GLOBAL_ID_TYPE` to `INGESTION_SOURCE_GLOBAL_ID_TYPE`** (PR #1197): Renamed the generic constant to be self-documenting across `config/graphql/document_types.py`, `document_queries.py`, `document_mutations.py`, and `ingestion_source_mutations.py`.
 
 - **Conversation pagination cache collisions** (PR #1206): Added `keyArgs` configuration for the `conversations` relay pagination cache entry in `frontend/src/graphql/cache.ts`. Previously `conversations` used `relayStylePagination()` with no key arguments, causing all conversation queries (across different corpora, documents, and conversation types) to share a single cache entry. This led to paginated results from one context bleeding into another. Now uses `["documentId", "corpusId", "conversationType", "hasCorpus", "hasDocument"]` to isolate cache entries by filter dimensions.
 

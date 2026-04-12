@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 # -------------------- Ingestion Source Types -------------------- #
 
-EXPECTED_GLOBAL_ID_TYPE = "IngestionSourceType"
+INGESTION_SOURCE_GLOBAL_ID_TYPE = "IngestionSourceType"
 
 IngestionSourceTypeEnum = graphene.Enum.from_enum(
     IngestionSourceCategory, name="IngestionSourceTypeEnum"

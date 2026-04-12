@@ -13,7 +13,7 @@ import logging
 import zipfile
 
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 
 from config import celery_app
 from opencontractserver.annotations.models import (
@@ -448,17 +448,18 @@ def _import_ingestion_sources(
             continue
 
         try:
-            source, created = IngestionSource.objects.get_or_create(
-                creator=user_obj,
-                name=name,
-                defaults={
-                    "source_type": src.get(
-                        "source_type", IngestionSourceCategory.MANUAL
-                    ),
-                    "config": src.get("config") or {},
-                    "active": src.get("active", True),
-                },
-            )
+            with transaction.atomic():
+                source, created = IngestionSource.objects.get_or_create(
+                    creator=user_obj,
+                    name=name,
+                    defaults={
+                        "source_type": src.get(
+                            "source_type", IngestionSourceCategory.MANUAL
+                        ),
+                        "config": src.get("config") or {},
+                        "active": src.get("active", True),
+                    },
+                )
         except IntegrityError as exc:
             logger.debug("IntegrityError on create, falling back to get: %s", exc)
             source = IngestionSource.objects.get(creator=user_obj, name=name)

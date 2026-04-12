@@ -21,7 +21,7 @@ from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
 from config.graphql.base import DRFDeletion, DRFMutation
-from config.graphql.document_types import EXPECTED_GLOBAL_ID_TYPE
+from config.graphql.document_types import INGESTION_SOURCE_GLOBAL_ID_TYPE
 from config.graphql.graphene_types import (
     CorpusType,
     DocumentType,
@@ -232,7 +232,7 @@ class UploadDocument(graphene.Mutation):
             if ingestion_source_id is not None:
                 try:
                     type_name, source_pk = from_global_id(ingestion_source_id)
-                    if type_name != EXPECTED_GLOBAL_ID_TYPE:
+                    if type_name != INGESTION_SOURCE_GLOBAL_ID_TYPE:
                         raise IngestionSource.DoesNotExist
                     ingestion_source = IngestionSource.objects.get(
                         pk=source_pk, creator=user

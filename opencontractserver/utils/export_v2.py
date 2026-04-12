@@ -123,7 +123,9 @@ def package_structural_annotation_set(
 
     except Exception as e:
         logger.error(
-            f"Error packaging structural annotation set {structural_set.id}: {e}"
+            "Error packaging structural annotation set %s: %s",
+            structural_set.id,
+            e,
         )
         return None
 
@@ -396,7 +398,9 @@ def package_md_description_revisions(
 
     except Exception as e:
         logger.error(
-            f"Error packaging markdown description for corpus {corpus.id}: {e}"
+            "Error packaging markdown description for corpus %s: %s",
+            corpus.id,
+            e,
         )
 
     return current_description, revisions_export
