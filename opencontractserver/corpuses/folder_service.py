@@ -870,6 +870,16 @@ class DocumentFolderService:
                     # Note: _compute_moved_path extracts only the filename;
                     # intermediate directory segments are dropped (the new
                     # path is derived from the target folder's tree position).
+                    #
+                    # Unlike move_documents_to_folder (which pre-computes all
+                    # paths and needs extra_occupied to detect within-batch
+                    # conflicts), this loop is sequential: each iteration
+                    # writes the new DocumentPath row before the next
+                    # _disambiguate_path query runs.  Because we are inside
+                    # a single transaction.atomic() block, each new row is
+                    # immediately visible to subsequent queries in the same
+                    # transaction, so _disambiguate_path naturally sees all
+                    # previously relocated documents without extra_occupied.
                     new_path = cls._compute_moved_path(current.path, None)
                     new_path = cls._disambiguate_path(
                         new_path, current.corpus, exclude_pk=current.pk
@@ -1294,8 +1304,13 @@ class DocumentFolderService:
                            (used during bulk moves to avoid within-batch collisions).
 
         Returns:
-            A path string guaranteed to be unique among active paths in the corpus
-            (and the extra_occupied set, if provided).
+            A path string unique among active paths in the corpus (and the
+            extra_occupied set, if provided) *at query time*.  This is a
+            best-effort check — concurrent transactions may claim the same
+            path between the SELECT and INSERT (TOCTOU race).  The database's
+            ``unique_active_path_per_corpus`` partial unique constraint is the
+            authoritative guarantee of uniqueness; callers must handle
+            ``IntegrityError`` for the rare conflict case.
 
         Raises:
             ValueError: If no unique path can be found within the suffix limit.
