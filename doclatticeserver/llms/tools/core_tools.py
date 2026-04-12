@@ -2883,6 +2883,11 @@ async def asuggest_memory_update(
     The insight is appended to the specified section of the memory document.
     This allows agents to explicitly contribute learnings during a conversation.
 
+    Note: There is currently no per-conversation rate limit on memory updates.
+    An agent could call this tool many times in a single conversation.  The
+    ``MEMORY_INSIGHT_MAX_LENGTH`` cap and write-permission check provide some
+    guardrails, but per-session throttling may be warranted if abuse is observed.
+
     Args:
         corpus_id: The corpus ID.
         user_id: The user performing the update.
