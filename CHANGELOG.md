@@ -22,6 +22,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Document lineage fields dropped on move/delete/restore** (PR #1197): `move_document`, `delete_document`, and `restore_document` in `opencontractserver/documents/versioning.py` now forward `ingestion_source`, `external_id`, and `ingestion_metadata` from the parent path record to newly-created path nodes. Previously these fields were silently dropped, losing lineage provenance on any path operation.
+
+- **`ingestion_metadata` truthiness check** (PR #1197): Changed `if ingestion_metadata:` to `if ingestion_metadata is not None:` in `config/graphql/document_mutations.py` so that an empty dict `{}` is correctly stored rather than silently discarded.
+
+- **Lazy logging in export_v2.py** (PR #1197): Replaced remaining f-string logger calls with `%s`-style lazy formatting in `opencontractserver/utils/export_v2.py` for corpus folders, relationships, conversations, structural annotations, and markdown description error handlers.
+
+- **TOCTOU race in `_import_ingestion_sources`** (PR #1197): Wrapped `get_or_create` in `transaction.atomic()` savepoint so that an `IntegrityError` from a concurrent insert doesn't abort the outer PostgreSQL transaction, which would cause the fallback `.get()` to raise `TransactionManagementError`.
+
+- **`DRFMutation` validation error formatting extracted** (PR #1197): Extracted inline validation-error formatting logic from `DRFMutation.mutate()` into a reusable `format_validation_error()` static method (`config/graphql/base.py`). Updated `TestDRFMutationValidationError` tests to call the real method instead of duplicating the logic inline.
+
+- **Renamed `EXPECTED_GLOBAL_ID_TYPE` to `INGESTION_SOURCE_GLOBAL_ID_TYPE`** (PR #1197): Renamed the generic constant to be self-documenting across `config/graphql/document_types.py`, `document_queries.py`, `document_mutations.py`, and `ingestion_source_mutations.py`.
+
 - **Conversation pagination cache collisions** (PR #1206): Added `keyArgs` configuration for the `conversations` relay pagination cache entry in `frontend/src/graphql/cache.ts`. Previously `conversations` used `relayStylePagination()` with no key arguments, causing all conversation queries (across different corpora, documents, and conversation types) to share a single cache entry. This led to paginated results from one context bleeding into another. Now uses `["documentId", "corpusId", "conversationType", "hasCorpus", "hasDocument"]` to isolate cache entries by filter dimensions.
 
 - **GraphQL security hardening cleanup** (Issue #1198):
@@ -30,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added backslash-prefix check to `_get_safe_redirect_url()` to prevent open-redirect bypass via browser backslash-to-slash normalization (`config/admin_auth/views.py`)
 
 ### Added
+
+- **Document lineage tracking** (IngestionSource + DocumentPath enrichment): New `IngestionSource` model (`opencontractserver/documents/models.py`) registers named integrations/crawlers/pipelines that produce documents. Three new fields on `DocumentPath` — `ingestion_source` (FK), `external_id` (indexed CharField), and `ingestion_metadata` (JSON) — record which source produced each version of a document and with what context. Lineage kwargs flow through `import_document()` (`opencontractserver/documents/versioning.py`), `Corpus.add_document()` (`opencontractserver/corpuses/models.py`), and the `UploadDocument` GraphQL mutation. New GraphQL types (`IngestionSourceType`, `IngestionSourceTypeEnum`), queries (`ingestionSources`, `ingestionSource`), and CRUD mutations (`createIngestionSource`, `updateIngestionSource`, `deleteIngestionSource`) in `config/graphql/`. Migration: `0036_add_ingestion_source_and_lineage_fields`.
 
 - **Document path history tracking** (PR #1195): Document moves via `DocumentFolderService.move_document_to_folder()`, `move_documents_to_folder()`, and `delete_folder()` now create immutable `DocumentPath` history nodes instead of silent in-place updates. Each move produces a new `DocumentPath` record linked to the previous one via `parent`, enabling full audit trail traversal. Path conflicts are resolved by appending numeric suffixes (e.g. `report_1.pdf`). `versioning.py` `determine_action()` now detects folder-only moves (same path string, different `folder_id`). **Atomic guarantees**: Both `delete_folder()` and `move_documents_to_folder()` use `transaction.atomic()` so that if any document fails to relocate, ALL changes are rolled back (no partial-success state). Within-batch path conflict detection prevents two documents with the same filename from colliding during bulk moves. Failed operations are safe to retry. Comprehensive test coverage in `test_document_folder_service.py` for move tracking, path conflicts, bulk moves, delete-folder tracking, atomic rollback, retry-after-failure, and full lifecycle integration.
 - **Move-document agent tool** (PR #1196): New `move_document` / `amove_document` tool that moves a document between folders within the same corpus. Delegates to `DocumentFolderService.move_document_to_folder` for permission checks and path updates. Categorized as `ToolCategory.CORPUS` (corpus-level agents only), requires write permission and approval. Pass `target_folder_id` for a specific folder or omit for corpus root. Uses `visible_to_user()` for document and corpus lookups to prevent IDOR enumeration (`opencontractserver/llms/tools/core_tools.py`, `opencontractserver/llms/tools/tool_registry.py`).

@@ -139,6 +139,13 @@ from config.graphql.extract_mutations import (
     UpdateMetadataColumn,
 )
 
+# Import ingestion source mutations
+from config.graphql.ingestion_source_mutations import (
+    CreateIngestionSourceMutation,
+    DeleteIngestionSourceMutation,
+    UpdateIngestionSourceMutation,
+)
+
 # Import label mutations
 from config.graphql.label_mutations import (
     CreateLabelForLabelsetMutation,
@@ -398,6 +405,11 @@ class Mutation(graphene.ObjectType):
     create_agent_configuration = CreateAgentConfigurationMutation.Field()
     update_agent_configuration = UpdateAgentConfigurationMutation.Field()
     delete_agent_configuration = DeleteAgentConfigurationMutation.Field()
+
+    # INGESTION SOURCE MUTATIONS ###################################################
+    create_ingestion_source = CreateIngestionSourceMutation.Field()
+    update_ingestion_source = UpdateIngestionSourceMutation.Field()
+    delete_ingestion_source = DeleteIngestionSourceMutation.Field()
 
     # PIPELINE SETTINGS MUTATIONS (Superuser only) ###############################
     update_pipeline_settings = UpdatePipelineSettingsMutation.Field()
