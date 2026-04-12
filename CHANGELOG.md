@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **IngestionSource follow-up hardening** (Issue #1228):
+  - Added `@graphql_ratelimit` to `CreateIngestionSourceMutation`, `UpdateIngestionSourceMutation`, and `DeleteIngestionSourceMutation` (`config/graphql/ingestion_source_mutations.py`). Previously these mutations only carried `@login_required`, allowing an authenticated user to create thousands of rows (plus Guardian permission entries) in a tight loop. Creates/updates use `WRITE_MEDIUM`, deletes use `WRITE_LIGHT`, matching other CRUD mutations in the codebase.
+  - Guarded the fallback `.get()` inside the `except IntegrityError` handler in `_import_ingestion_sources` (`opencontractserver/tasks/import_tasks_v2.py` ~line 463). In the rare scenario where a concurrent request created-then-deleted the row between the `IntegrityError` and the fallback, the unguarded `.get()` would raise `IngestionSource.DoesNotExist` and abort the entire corpus import. Now logs a warning and continues.
+  - Added an explicit `fields` allowlist to `IngestionSourceType.Meta` (`config/graphql/document_types.py`) to prevent `user_lock`, `backend_lock`, and `is_public` from leaking through the GraphQL API. `user_lock` in particular would leak the username of whoever currently holds the lock — an information-disclosure issue.
+  - Added a clarifying comment documenting the intentional export/import asymmetry for `ingestion_metadata` in `_reconstruct_document_paths` (`opencontractserver/tasks/import_tasks_v2.py`).
+
 - **Document lineage fields dropped on move/delete/restore** (PR #1197): `move_document`, `delete_document`, and `restore_document` in `opencontractserver/documents/versioning.py` now forward `ingestion_source`, `external_id`, and `ingestion_metadata` from the parent path record to newly-created path nodes. Previously these fields were silently dropped, losing lineage provenance on any path operation.
 
 - **`ingestion_metadata` truthiness check** (PR #1197): Changed `if ingestion_metadata:` to `if ingestion_metadata is not None:` in `config/graphql/document_mutations.py` so that an empty dict `{}` is correctly stored rather than silently discarded.
