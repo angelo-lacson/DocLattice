@@ -33,6 +33,7 @@ class ToolCategory(str, Enum):
     MODERATION = "moderation"
     IMAGE = "image"
     WEB = "web"
+    MEMORY = "memory"
 
 
 @dataclass(frozen=True)
@@ -639,6 +640,49 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
             ("entity_id", "The primary key (ID) of the entity", True),
         ),
     ),
+    # -------------------------------------------------------------------------
+    # MEMORY TOOLS
+    # -------------------------------------------------------------------------
+    ToolDefinition(
+        name="get_corpus_memory",
+        description=(
+            "Read accumulated insights about this corpus from previous interactions. "
+            "Returns patterns about document structure, effective search strategies, "
+            "and common question types learned over time."
+        ),
+        category=ToolCategory.MEMORY,
+        requires_corpus=True,
+        parameters=(
+            (
+                "section",
+                "Optional section to filter to (e.g., 'Collection Patterns' or 'Query Patterns')",
+                False,
+            ),
+        ),
+    ),
+    ToolDefinition(
+        name="suggest_memory_update",
+        description=(
+            "Suggest a new insight to add to corpus memory for future interactions. "
+            "Use this when you discover a useful pattern about the document collection "
+            "or an effective search strategy."
+        ),
+        category=ToolCategory.MEMORY,
+        requires_corpus=True,
+        requires_write_permission=True,
+        parameters=(
+            (
+                "section",
+                "Which section: 'collection_patterns' or 'query_patterns'",
+                True,
+            ),
+            (
+                "insight",
+                "The insight text, formatted as '- **Title**: Description'",
+                True,
+            ),
+        ),
+    ),
 )
 
 
@@ -833,6 +877,7 @@ class ToolFunctionRegistry:
             acreate_markdown_link,
             aduplicate_annotations_with_label,
             aget_corpus_description,
+            aget_corpus_memory,
             aget_document_description,
             aget_document_summary,
             aget_document_summary_diff,
@@ -845,6 +890,7 @@ class ToolFunctionRegistry:
             amove_document,
             asearch_document_notes,
             asearch_exact_text_as_sources,
+            asuggest_memory_update,
             aupdate_corpus_description,
             aupdate_document_description,
             aupdate_document_note,
@@ -932,6 +978,9 @@ class ToolFunctionRegistry:
             "create_markdown_link": (acreate_markdown_link, ()),
             # Web tools
             "web_search": (aweb_search, ("search_web",)),
+            # Memory tools
+            "get_corpus_memory": (aget_corpus_memory, ()),
+            "suggest_memory_update": (asuggest_memory_update, ()),
         }
         # NOTE: similarity_search, get_document_text_length, list_documents,
         # and ask_document are NOT in FUNCTION_MAP because they require

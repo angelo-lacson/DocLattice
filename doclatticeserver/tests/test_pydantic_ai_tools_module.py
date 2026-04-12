@@ -638,6 +638,11 @@ async def tool_needing_multiple_ids(
     }
 
 
+async def tool_needing_user_id(user_id: int, query: str) -> dict:
+    """Tool that needs user_id directly (not author_id or creator_id)."""
+    return {"user_id": user_id, "query": query}
+
+
 async def tool_needing_no_ids(query: str, limit: int = 5) -> dict:
     """Tool that doesn't need any context IDs."""
     return {"query": query, "limit": limit}
@@ -673,6 +678,13 @@ class TestBuildInjectParamsForContext(TestCase):
         inject = build_inject_params_for_context(tool, user_id=789)
 
         self.assertEqual(inject, {"creator_id": 789})
+
+    def test_injects_user_id_directly(self):
+        """Test that user_id is injected when tool param is named user_id."""
+        tool = CoreTool.from_function(tool_needing_user_id)
+        inject = build_inject_params_for_context(tool, user_id=789)
+
+        self.assertEqual(inject, {"user_id": 789})
 
     def test_injects_multiple_params(self):
         """Test that multiple context params are injected correctly."""
