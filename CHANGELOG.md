@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Agent memory system**: Per-corpus memory that lets agents accumulate reusable insights from conversations. Memory is stored as a first-class markdown Document in the corpus (visible and editable by users). Features include:
+  - Corpus model fields: `memory_enabled` toggle and `memory_document` FK (`opencontractserver/corpuses/models.py`)
+  - Memory CRUD utilities with hybrid retrieval (full injection for small memory, keyword-scored section filtering for large) (`opencontractserver/agents/memory.py`)
+  - End-of-conversation curation via two-stage Celery task: privacy-preserving summarisation followed by LLM-based pattern extraction (`opencontractserver/tasks/memory_tasks.py`)
+  - Automatic memory injection into agent system prompts via `UnifiedAgentFactory` (`opencontractserver/llms/agents/agent_factory.py`)
+  - New agent tools: `get_corpus_memory` (read) and `suggest_memory_update` (write) (`opencontractserver/llms/tools/core_tools.py`)
+  - GraphQL `ToggleCorpusMemory` mutation and `memoryActiveWarning` field with privacy notice (`config/graphql/corpus_mutations.py`, `config/graphql/corpus_types.py`)
+  - Periodic Celery beat task to detect idle conversations eligible for curation (`config/settings/base.py`)
+  - Constants and configuration in `opencontractserver/constants/agent_memory.py`
 - **Frontend code coverage reporting** (PR #1205): Added coverage collection and Codecov integration for both unit tests (Vitest + v8) and component tests (Playwright CT + Istanbul). Coverage is opt-in via `COVERAGE=true` environment variable to avoid performance overhead during normal test runs. Custom Playwright fixture (`frontend/tests/utils/coverage.ts`) extracts Istanbul `__coverage__` data from the browser after each test. CI uploads separate coverage flags (`frontend-unit`, `frontend-component`) with `carryforward: true` for granular tracking. Added `.codecov.yml` configuration, `vite-plugin-istanbul` for build-time instrumentation, and `nyc` for LCOV report generation from collected coverage data.
 
 ### Fixed
