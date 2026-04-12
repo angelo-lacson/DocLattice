@@ -1,5 +1,5 @@
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MetadataCellEditor } from "../src/components/metadata/editors/MetadataCellEditor";
 import { MetadataDataType } from "../src/types/metadata";
 import { createMockColumn } from "./factories/metadataFactories";

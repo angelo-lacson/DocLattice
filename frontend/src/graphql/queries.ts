@@ -54,6 +54,7 @@ export const GET_DOCUMENTS = gql`
     $annotateDocLabels: Boolean!
     $hasAnnotationsWithIds: String
     $includeMetadata: Boolean!
+    $includeCaml: Boolean
   ) {
     documents(
       inCorpusWithId: $inCorpusWithId
@@ -61,6 +62,7 @@ export const GET_DOCUMENTS = gql`
       textSearch: $textSearch
       hasLabelWithId: $hasLabelWithId
       hasAnnotationsWithIds: $hasAnnotationsWithIds
+      includeCaml: $includeCaml
       first: $limit
       after: $cursor
     ) {
@@ -198,6 +200,7 @@ export const RESOLVE_CORPUS_BY_SLUGS_FULL = gql`
       title
       description
       mdDescription
+      icon
       isPublic
       myPermissions
       allowComments
@@ -5124,6 +5127,54 @@ export const GET_CORPUS_DOCUMENTS_FOR_TOC = gql`
     }
   }
 `;
+
+// ============================================================================
+// CAML ARTICLE (Readme.CAML document)
+// ============================================================================
+
+export const GET_CORPUS_ARTICLE = gql`
+  query GetCorpusArticle($corpusId: String!, $title: String!) {
+    documents(
+      inCorpusWithId: $corpusId
+      title: $title
+      includeCaml: true
+      first: 1
+    ) {
+      edges {
+        node {
+          id
+          title
+          txtExtractFile
+          modified
+          creator {
+            email
+          }
+        }
+      }
+    }
+  }
+`;
+
+export interface GetCorpusArticleInput {
+  corpusId: string;
+  title: string;
+}
+
+export interface GetCorpusArticleOutput {
+  documents: {
+    edges: Array<{
+      node: {
+        id: string;
+        title: string;
+        txtExtractFile: string | null;
+        modified: string;
+        creator: {
+          email: string;
+        };
+      };
+    }>;
+  };
+}
 
 // ============================================================================
 // CORPUS ACTION TEMPLATES

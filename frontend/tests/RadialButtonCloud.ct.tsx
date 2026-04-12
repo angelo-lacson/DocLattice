@@ -1,7 +1,7 @@
 // Playwright Component Test for RadialButtonCloud
 // Tests the pulsing dot, radial button expansion, and confirmation modal.
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import type { CloudButtonItem } from "../src/components/widgets/buttons/RadialButtonCloud";
 import { RadialButtonCloudWrapper } from "./utils/RadialButtonCloudWrapper";
 import { docScreenshot } from "./utils/docScreenshot";

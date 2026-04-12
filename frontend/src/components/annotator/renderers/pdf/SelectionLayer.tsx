@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   BoundingBox,
   PermissionTypes,
@@ -32,6 +33,7 @@ import {
   textBlockFromTokensByPage,
 } from "../../../../utils/textBlockEncoding";
 import { clampMenuPosition } from "../../../../utils/layout";
+import { Z_INDEX } from "../../../../assets/configurations/constants";
 
 interface SelectionLayerProps {
   pageInfo: PDFPageInfo;
@@ -760,142 +762,147 @@ const SelectionLayer = ({
           />
         ))}
 
-      {/* Selection Action Menu */}
-      {showActionMenu && (
-        <SelectionActionMenu
-          ref={menuRef}
-          data-testid="selection-action-menu"
-          onTouchStart={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-          onTouchEnd={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          style={{
-            position: "fixed",
-            left: `${actionMenuPosition.x}px`,
-            top: `${actionMenuPosition.y}px`,
-            zIndex: 1000,
-          }}
-        >
-          <ActionMenuItem
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCopyText();
+      {/* Selection Action Menu — rendered via portal to escape
+          PDFContainer's stacking context (z-index: 1) */}
+      {showActionMenu &&
+        createPortal(
+          <SelectionActionMenu
+            ref={menuRef}
+            data-testid="selection-action-menu"
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{
+              position: "fixed",
+              left: `${actionMenuPosition.x}px`,
+              top: `${actionMenuPosition.y}px`,
+              zIndex: Z_INDEX.CONTEXT_MENU,
             }}
-            onTouchStart={(e) => {
-              e.stopPropagation();
-              lastMenuInteractionTime.current = Date.now();
-            }}
-            data-testid="copy-text-button"
           >
-            <Copy size={16} />
-            <span>Copy Text</span>
-            <ShortcutHint>C</ShortcutHint>
-          </ActionMenuItem>
+            <ActionMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCopyText();
+              }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                lastMenuInteractionTime.current = Date.now();
+              }}
+              data-testid="copy-text-button"
+            >
+              <Copy size={16} />
+              <span>Copy Text</span>
+              <ShortcutHint>C</ShortcutHint>
+            </ActionMenuItem>
 
-          <ActionMenuItem
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCopyLink();
-            }}
-            onTouchStart={(e) => {
-              e.stopPropagation();
-              lastMenuInteractionTime.current = Date.now();
-            }}
-            data-testid="copy-link-button"
-          >
-            <Link size={16} />
-            <span>Copy Link</span>
-            <ShortcutHint>L</ShortcutHint>
-          </ActionMenuItem>
+            <ActionMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCopyLink();
+              }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                lastMenuInteractionTime.current = Date.now();
+              }}
+              data-testid="copy-link-button"
+            >
+              <Link size={16} />
+              <span>Copy Link</span>
+              <ShortcutHint>L</ShortcutHint>
+            </ActionMenuItem>
 
-          {/* Show annotation option or helpful message */}
-          {!read_only && canUpdateCorpus && (
-            <>
-              <MenuDivider />
-              {activeSpanLabel ? (
-                <ActionMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleApplyLabel();
-                  }}
-                  onTouchStart={(e) => {
-                    e.stopPropagation();
-                    lastMenuInteractionTime.current = Date.now();
-                  }}
-                  data-testid="apply-label-button"
-                >
-                  <Tag size={16} />
-                  <span>Apply Label: {activeSpanLabel.text}</span>
-                  <ShortcutHint>A</ShortcutHint>
-                </ActionMenuItem>
-              ) : !hasLabelset ? (
+            {/* Show annotation option or helpful message */}
+            {!read_only && canUpdateCorpus && (
+              <>
+                <MenuDivider />
+                {activeSpanLabel ? (
+                  <ActionMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleApplyLabel();
+                    }}
+                    onTouchStart={(e) => {
+                      e.stopPropagation();
+                      lastMenuInteractionTime.current = Date.now();
+                    }}
+                    data-testid="apply-label-button"
+                  >
+                    <Tag size={16} />
+                    <span>Apply Label: {activeSpanLabel.text}</span>
+                    <ShortcutHint>A</ShortcutHint>
+                  </ActionMenuItem>
+                ) : !hasLabelset ? (
+                  <HelpMessage>
+                    <AlertCircle size={16} />
+                    <div>
+                      <span>No labelset configured</span>
+                      <HelpText>
+                        Click the label selector (bottom right) to create one
+                      </HelpText>
+                    </div>
+                  </HelpMessage>
+                ) : !hasLabels ? (
+                  <HelpMessage>
+                    <AlertCircle size={16} />
+                    <div>
+                      <span>No labels available</span>
+                      <HelpText>
+                        Click the label selector to create labels
+                      </HelpText>
+                    </div>
+                  </HelpMessage>
+                ) : (
+                  <HelpMessage>
+                    <Settings size={16} />
+                    <div>
+                      <span>Select a label to annotate</span>
+                      <HelpText>
+                        Click the label selector (bottom right)
+                      </HelpText>
+                    </div>
+                  </HelpMessage>
+                )}
+              </>
+            )}
+
+            {/* Show message for read-only mode */}
+            {(read_only || !canUpdateCorpus) && (
+              <>
+                <MenuDivider />
                 <HelpMessage>
                   <AlertCircle size={16} />
                   <div>
-                    <span>No labelset configured</span>
+                    <span>Annotation unavailable</span>
                     <HelpText>
-                      Click the label selector (bottom right) to create one
+                      {read_only
+                        ? "Document is read-only"
+                        : "No corpus permissions"}
                     </HelpText>
                   </div>
                 </HelpMessage>
-              ) : !hasLabels ? (
-                <HelpMessage>
-                  <AlertCircle size={16} />
-                  <div>
-                    <span>No labels available</span>
-                    <HelpText>
-                      Click the label selector to create labels
-                    </HelpText>
-                  </div>
-                </HelpMessage>
-              ) : (
-                <HelpMessage>
-                  <Settings size={16} />
-                  <div>
-                    <span>Select a label to annotate</span>
-                    <HelpText>Click the label selector (bottom right)</HelpText>
-                  </div>
-                </HelpMessage>
-              )}
-            </>
-          )}
+              </>
+            )}
 
-          {/* Show message for read-only mode */}
-          {(read_only || !canUpdateCorpus) && (
-            <>
-              <MenuDivider />
-              <HelpMessage>
-                <AlertCircle size={16} />
-                <div>
-                  <span>Annotation unavailable</span>
-                  <HelpText>
-                    {read_only
-                      ? "Document is read-only"
-                      : "No corpus permissions"}
-                  </HelpText>
-                </div>
-              </HelpMessage>
-            </>
-          )}
-
-          <MenuDivider />
-          <ActionMenuItem
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCancel();
-            }}
-            onTouchStart={(e) => {
-              e.stopPropagation();
-              lastMenuInteractionTime.current = Date.now();
-            }}
-            data-testid="cancel-button"
-          >
-            <X size={16} />
-            <span>Cancel</span>
-            <ShortcutHint>ESC</ShortcutHint>
-          </ActionMenuItem>
-        </SelectionActionMenu>
-      )}
+            <MenuDivider />
+            <ActionMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCancel();
+              }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                lastMenuInteractionTime.current = Date.now();
+              }}
+              data-testid="cancel-button"
+            >
+              <X size={16} />
+              <span>Cancel</span>
+              <ShortcutHint>ESC</ShortcutHint>
+            </ActionMenuItem>
+          </SelectionActionMenu>,
+          document.body
+        )}
     </div>
   );
 };

@@ -6,7 +6,7 @@
 // 2. Refetches triggered by search term changes or other state updates
 // Without duplicates, subsequent queries would fail with "No more mocked responses".
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedProvider } from "@apollo/client/testing";
 import { UploadModal } from "../src/components/widgets/modals/UploadModal";
 import { GET_CORPUSES } from "../src/graphql/queries";

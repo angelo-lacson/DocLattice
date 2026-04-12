@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { BadgeCelebrationModal } from "../src/components/badges/BadgeCelebrationModal";
 import { BadgeToast } from "../src/components/badges/BadgeToast";
 import { docScreenshot, releaseScreenshot } from "./utils/docScreenshot";

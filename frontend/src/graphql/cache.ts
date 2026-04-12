@@ -274,6 +274,15 @@ export const cache = new InMemoryCache({
           "textSearch",
           "hasLabelWithId",
           "hasAnnotationsWithIds",
+          "includeCaml",
+          "title",
+        ]),
+        conversations: relayStylePagination([
+          "documentId",
+          "corpusId",
+          "conversationType",
+          "hasCorpus",
+          "hasDocument",
         ]),
         corpuses: relayStylePagination(),
         userexports: relayStylePagination(),
@@ -623,8 +632,13 @@ export const tocExpandAll = makeVar<boolean>(false);
  *   /c/user/corpus                    → corpusDetailView("landing") = default landing
  *   /c/user/corpus?view=details       → corpusDetailView("details")
  *   /c/user/corpus?view=discussions   → corpusDetailView("discussions")
+ *   /c/user/corpus?view=article       → corpusDetailView("article")
  */
-export type CorpusDetailViewType = "landing" | "details" | "discussions";
+export type CorpusDetailViewType =
+  | "landing"
+  | "details"
+  | "discussions"
+  | "article";
 export const corpusDetailView = makeVar<CorpusDetailViewType>("landing");
 
 /**

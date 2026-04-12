@@ -2,19 +2,19 @@
 
 psycopg2-binary==2.9.11  # https://github.com/psycopg/psycopg2
 watchfiles==1.1.1  # https://github.com/samuelcolvin/watchfiles
-Werkzeug[watchdog]==3.1.6 # https://github.com/pallets/werkzeug
+Werkzeug[watchdog]==3.1.8 # https://github.com/pallets/werkzeug
 ipdb==0.13.13  # https://github.com/gotcha/ipdb
 
 # Testing
 # ------------------------------------------------------------------------------
 
-mypy==1.19.1  # https://github.com/python/mypy
-django-stubs==6.0.1  # https://github.com/typeddjango/django-stubs
-pytest==8.4.2  # https://github.com/pytest-dev/pytest
+mypy==1.20.0  # https://github.com/python/mypy
+django-stubs==6.0.2  # https://github.com/typeddjango/django-stubs
+pytest==9.0.3  # https://github.com/pytest-dev/pytest
 pytest-cov==7.1.0  # https://github.com/pytest-dev/pytest-cov
 pytest-sugar==1.1.1  # https://github.com/Frozenball/pytest-sugar
 pytest-xdist==3.8.0  # https://github.com/pytest-dev/pytest-xdist (parallel test execution)
-djangorestframework-stubs==3.16.8  # https://github.com/typeddjango/djangorestframework-stubs
+djangorestframework-stubs==3.16.9  # https://github.com/typeddjango/djangorestframework-stubs
 responses==0.26.0  # https://github.com/getsentry/responses
 vcrpy==8.1.1
 
@@ -37,7 +37,7 @@ pre-commit==4.5.1  # https://github.com/pre-commit/pre-commit
 # ------------------------------------------------------------------------------
 factory-boy==3.3.3  # https://github.com/FactoryBoy/factory_boy
 django-extensions==4.1  # https://github.com/django-extensions/django-extensions
-django-coverage-plugin==3.2.0  # https://github.com/nedbat/django_coverage_plugin
+django-coverage-plugin==3.2.2  # https://github.com/nedbat/django_coverage_plugin
 pytest-django==4.12.0  # https://github.com/pytest-dev/pytest-django
 
 # PDFs
@@ -51,7 +51,7 @@ python-pptx
 
 # Not directly required, pinned by Snyk to avoid a vulnerability
 # ------------------------------------------------------------------------------
-django==5.2.11  # https://www.djangoproject.com/
+django==5.2.13  # https://www.djangoproject.com/
 twisted>=24.7.0rc1 # not directly required, pinned by Snyk to avoid a vulnerability
 ipython>=8.10.0 # not directly required, pinned by Snyk to avoid a vulnerability
 requests>=2.32.2 # not directly required, pinned by Snyk to avoid a vulnerability

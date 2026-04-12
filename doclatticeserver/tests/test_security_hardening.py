@@ -886,3 +886,285 @@ class TestAnalyzerIsPublicDefault(TestCase):
             creator=user,
         )
         self.assertFalse(gremlin.is_public)
+
+
+# ===========================================================================
+# 10. GraphQL security utility tests
+# ===========================================================================
+
+
+class TestDepthLimitValidationRule(TestCase):
+    """Tests for the DepthLimitValidationRule GraphQL validation rule.
+
+    Uses graphql-core's validate() directly because the graphene test Client
+    does not pass validation_rules (those are applied by GraphQLView in urls.py).
+    """
+
+    def _validate_query(self, query_str, max_depth):
+        """Validate a query against the real schema with a given depth limit."""
+        from graphql import parse, validate
+
+        import config.graphql.security as security_module
+
+        original_depth = security_module.GRAPHQL_MAX_QUERY_DEPTH
+        security_module.GRAPHQL_MAX_QUERY_DEPTH = max_depth
+        try:
+            document = parse(query_str)
+            from config.graphql.security import DepthLimitValidationRule
+
+            errors = validate(
+                schema.graphql_schema, document, [DepthLimitValidationRule]
+            )
+            return errors
+        finally:
+            security_module.GRAPHQL_MAX_QUERY_DEPTH = original_depth
+
+    def test_shallow_query_passes(self):
+        """A query within the depth limit should succeed."""
+        query = """
+            query {
+                corpuses {
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                    }
+                }
+            }
+        """
+        errors = self._validate_query(query, max_depth=15)
+        depth_errors = [e for e in errors if "depth" in str(e).lower()]
+        self.assertEqual(len(depth_errors), 0)
+
+    def test_deep_query_rejected(self):
+        """A query exceeding the depth limit should be rejected."""
+        # This query has depth ~7: query(0) -> corpuses(1) -> edges(2) ->
+        # node(3) -> documents(4) -> edges(5) -> node(6) -> id(7)
+        query = """
+            query {
+                corpuses {
+                    edges {
+                        node {
+                            documents {
+                                edges {
+                                    node {
+                                        id
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        """
+        errors = self._validate_query(query, max_depth=3)
+        depth_errors = [e for e in errors if "depth" in str(e).lower()]
+        self.assertGreater(
+            len(depth_errors), 0, "Expected a depth limit error but got none"
+        )
+
+    def test_query_at_exact_limit_passes(self):
+        """A query exactly at the depth limit should pass."""
+        # This query has depth 4 (corpuses -> edges -> node -> id)
+        query = """
+            query {
+                corpuses {
+                    edges {
+                        node {
+                            id
+                        }
+                    }
+                }
+            }
+        """
+        errors = self._validate_query(query, max_depth=4)
+        depth_errors = [e for e in errors if "depth" in str(e).lower()]
+        self.assertEqual(len(depth_errors), 0)
+
+    def test_query_one_over_limit_rejected(self):
+        """A query one level over the limit should be rejected."""
+        # Same query as above, but with limit=3 (one less than actual depth 4)
+        query = """
+            query {
+                corpuses {
+                    edges {
+                        node {
+                            id
+                        }
+                    }
+                }
+            }
+        """
+        errors = self._validate_query(query, max_depth=3)
+        depth_errors = [e for e in errors if "depth" in str(e).lower()]
+        self.assertGreater(
+            len(depth_errors), 0, "Expected a depth limit error but got none"
+        )
+
+    def test_fragment_spread_does_not_bypass_limit(self):
+        """Fragment spreads should not allow attackers to hide depth."""
+        # This uses a fragment to add depth that must be counted
+        query = """
+            fragment CorpusFields on CorpusType {
+                documents {
+                    edges {
+                        node {
+                            id
+                        }
+                    }
+                }
+            }
+
+            query {
+                corpuses {
+                    edges {
+                        node {
+                            ...CorpusFields
+                        }
+                    }
+                }
+            }
+        """
+        errors = self._validate_query(query, max_depth=3)
+        depth_errors = [e for e in errors if "depth" in str(e).lower()]
+        self.assertGreater(
+            len(depth_errors),
+            0,
+            "Fragment spread should not bypass depth limit",
+        )
+
+
+class TestDisableIntrospection(TestCase):
+    """Tests for the DisableIntrospection validation rule."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="introspection_user", password="test"
+        )
+        self.gql_client = Client(schema)
+
+    def test_introspection_allowed_without_rule(self):
+        """Without DisableIntrospection in validation rules, introspection works.
+
+        This validates that introspection is permitted when the rule is absent
+        (the production condition when DEBUG=True in schema.py). We use
+        graphql-core's validate() directly because graphene's test Client
+        does not apply validation rules.
+        """
+        from graphql import build_ast_schema, parse, validate
+
+        schema_ast = parse("""
+            type Query {
+                hello: String
+            }
+        """)
+        test_schema = build_ast_schema(schema_ast)
+
+        introspection_query = parse("{ __schema { types { name } } }")
+        # Validate with an empty rules list (no DisableIntrospection)
+        errors = validate(test_schema, introspection_query, [])
+        introspection_errors = [
+            e for e in errors if "introspection" in e.message.lower()
+        ]
+        self.assertEqual(len(introspection_errors), 0)
+
+    def test_introspection_blocked_with_rule(self):
+        """DisableIntrospection rule should block __schema queries."""
+        from graphql import build_ast_schema, parse, validate
+
+        from config.graphql.security import DisableIntrospection
+
+        # Use graphql-core's validate directly with the rule
+        schema_ast = parse("""
+            type Query {
+                hello: String
+            }
+        """)
+        test_schema = build_ast_schema(schema_ast)
+
+        introspection_query = parse("{ __schema { types { name } } }")
+        errors = validate(test_schema, introspection_query, [DisableIntrospection])
+        self.assertGreater(len(errors), 0)
+        self.assertIn("introspection", errors[0].message.lower())
+
+    def test_type_introspection_blocked_with_rule(self):
+        """DisableIntrospection rule should block __type queries."""
+        from graphql import build_ast_schema, parse, validate
+
+        from config.graphql.security import DisableIntrospection
+
+        schema_ast = parse("""
+            type Query {
+                hello: String
+            }
+        """)
+        test_schema = build_ast_schema(schema_ast)
+
+        type_query = parse('{ __type(name: "Query") { fields { name } } }')
+        errors = validate(test_schema, type_query, [DisableIntrospection])
+        self.assertGreater(len(errors), 0)
+        self.assertIn("introspection", errors[0].message.lower())
+
+
+class TestConditionalCsrfExempt(TestCase):
+    """Tests for the conditional_csrf_exempt decorator."""
+
+    def test_token_auth_bypasses_csrf(self):
+        """Requests with Authorization header should bypass CSRF checks."""
+        from django.test import RequestFactory
+
+        from config.graphql.security import conditional_csrf_exempt
+
+        factory = RequestFactory()
+
+        @conditional_csrf_exempt
+        def dummy_view(request):
+            from django.http import HttpResponse
+
+            return HttpResponse("ok")
+
+        # Request with Authorization header — should bypass CSRF
+        request = factory.post(
+            "/graphql/",
+            data="{}",
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer test-token",
+        )
+        response = dummy_view(request)
+        self.assertEqual(response.status_code, 200)
+
+    def test_session_auth_without_csrf_rejected(self):
+        """Session-only requests without CSRF token should be rejected."""
+        from django.test import RequestFactory
+
+        from config.graphql.security import conditional_csrf_exempt
+
+        factory = RequestFactory()
+
+        @conditional_csrf_exempt
+        def dummy_view(request):
+            from django.http import HttpResponse
+
+            return HttpResponse("ok")
+
+        # Session request without CSRF token — should be rejected
+        request = factory.post(
+            "/graphql/",
+            data="{}",
+            content_type="application/json",
+        )
+        # Ensure Django treats this as having a session (no auth header)
+        response = dummy_view(request)
+        # CsrfViewMiddleware returns 403 for missing CSRF token
+        self.assertEqual(response.status_code, 403)
+
+    def test_csrf_exempt_attribute_set(self):
+        """The wrapped view should have csrf_exempt=True attribute."""
+        from config.graphql.security import conditional_csrf_exempt
+
+        @conditional_csrf_exempt
+        def dummy_view(request):
+            pass
+
+        self.assertTrue(getattr(dummy_view, "csrf_exempt", False))

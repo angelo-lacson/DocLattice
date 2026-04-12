@@ -10,7 +10,7 @@
  * These tests focus on frontend UI gating and mutation calls.
  */
 
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { CorpusSettingsTestWrapper } from "./CorpusSettingsTestWrapper";
 import { SET_CORPUS_VISIBILITY, UPDATE_CORPUS } from "../src/graphql/mutations";
 import { GET_CORPUS_ACTIONS } from "../src/graphql/queries";

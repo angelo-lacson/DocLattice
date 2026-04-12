@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo } from "react";
+import styled from "styled-components";
 import { useQuery } from "@apollo/client";
 import {
   ChevronRight,
@@ -10,7 +11,7 @@ import {
   ArrowRight,
   Plus,
   Menu,
-  Zap,
+  BookOpen,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -19,6 +20,7 @@ import {
   GetCorpusWithHistoryQuery,
   GetCorpusWithHistoryQueryVariables,
 } from "../../../graphql/queries";
+import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 import { CorpusType } from "../../../types/graphql-api";
 import { PermissionTypes } from "../../types";
 import { getPermissions } from "../../../utils/transform";
@@ -43,17 +45,66 @@ import {
   MetadataItem,
   MetadataSeparator,
   AccessBadge,
-  PillToggle,
-  PillToggleLabel,
   ChatSection,
   ViewDetailsButton,
   HeaderRow,
   MobileMenuButton,
 } from "./styles";
 
+const CreateArticleCTA = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 1rem 1.25rem;
+  margin-top: 0.5rem;
+  background: none;
+  border: 2px dashed ${OS_LEGAL_COLORS.border};
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+
+  &:hover {
+    border-color: ${OS_LEGAL_COLORS.accent};
+    background: ${OS_LEGAL_COLORS.surfaceHover};
+  }
+`;
+
+const CTAIconCircle = styled.div`
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: ${OS_LEGAL_COLORS.surfaceLight};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: ${OS_LEGAL_COLORS.textMuted};
+  flex-shrink: 0;
+`;
+
+const CTATextGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+`;
+
+const CTATitle = styled.span`
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: ${OS_LEGAL_COLORS.textPrimary};
+`;
+
+const CTASubtitle = styled.span`
+  font-size: 0.6875rem;
+  color: ${OS_LEGAL_COLORS.textMuted};
+`;
+
 export interface CorpusLandingViewProps {
   /** The corpus object */
   corpus: CorpusType;
+  /** Whether a Readme.CAML article exists — provided by parent to avoid redundant query */
+  hasArticle?: boolean;
   /** Callback when "View Details" is clicked */
   onViewDetails: () => void;
   /** Callback when edit description is clicked */
@@ -69,14 +120,18 @@ export interface CorpusLandingViewProps {
   onOpenMobileMenu?: () => void;
   /** Callback when "View All Discussions" is clicked */
   onViewDiscussions?: () => void;
+  /** Callback when "Read Article" is clicked */
+  onViewArticle?: () => void;
+  /** Callback when "Create Article" CTA is clicked */
+  onOpenArticleEditor?: () => void;
   /** Callback when a specific thread is clicked from the feed */
   onThreadClick?: (threadId: string) => void;
-  /** Callback when mode toggle is clicked (only shown when present) */
+  /** @deprecated Mode toggle is now rendered as a floating element by CorpusHome */
   onModeToggle?: () => void;
   /**
    * Whether the view is rendered from the power-user sidebar's home tab
    * (true) vs the clean/focus landing mode (false). Controls the toggle
-   * button label ("Focus Mode" vs "Power User").
+   * button label ("Explore" vs "Manage").
    */
   isPowerUserMode?: boolean;
   /** Test ID for the component */
@@ -97,6 +152,7 @@ export interface CorpusLandingViewProps {
  */
 export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
   corpus,
+  hasArticle: hasArticleProp,
   onViewDetails,
   onEditDescription,
   onNavigateToCorpuses,
@@ -106,8 +162,9 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
   onViewChatHistory,
   onOpenMobileMenu,
   onViewDiscussions,
+  onViewArticle,
+  onOpenArticleEditor,
   onThreadClick,
-  onModeToggle,
   isPowerUserMode = false,
   testId = "corpus-landing",
 }) => {
@@ -123,6 +180,8 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
   >(GET_CORPUS_WITH_HISTORY, {
     variables: historyVariables,
   });
+
+  const hasArticle = hasArticleProp ?? false;
 
   // Fetch markdown content from URL
   useEffect(() => {
@@ -243,29 +302,6 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
                 </MetadataItem>
               </>
             )}
-
-            {onModeToggle && (
-              <>
-                <MetadataSeparator />
-                <PillToggle
-                  onClick={onModeToggle}
-                  title={
-                    isPowerUserMode
-                      ? "Switch to focused view"
-                      : "Switch to full corpus management view"
-                  }
-                  data-testid="power-user-toggle"
-                >
-                  <PillToggleLabel $active={!isPowerUserMode}>
-                    Focus
-                  </PillToggleLabel>
-                  <PillToggleLabel $active={isPowerUserMode}>
-                    <Zap aria-hidden="true" />
-                    Power
-                  </PillToggleLabel>
-                </PillToggle>
-              </>
-            )}
           </CenteredMetadataRow>
 
           {/* Corpus badge */}
@@ -319,6 +355,24 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
           )}
         </LandingHero>
 
+        {/* Create article CTA — shown when no Readme.CAML and user can edit */}
+        {!hasArticle && canEdit && onOpenArticleEditor && (
+          <CreateArticleCTA
+            onClick={onOpenArticleEditor}
+            data-testid={`${testId}-create-article-cta`}
+          >
+            <CTAIconCircle>
+              <BookOpen size={16} />
+            </CTAIconCircle>
+            <CTATextGroup>
+              <CTATitle>Create an introductory article</CTATitle>
+              <CTASubtitle>
+                Write a rich article for this corpus using CAML
+              </CTASubtitle>
+            </CTATextGroup>
+          </CreateArticleCTA>
+        )}
+
         {/* Chat section */}
         <ChatSection>
           <InlineChatBar
@@ -331,6 +385,18 @@ export const CorpusLandingView: React.FC<CorpusLandingViewProps> = ({
             testId={`${testId}-chat`}
           />
         </ChatSection>
+
+        {/* Read article — shown when Readme.CAML exists */}
+        {hasArticle && onViewArticle && (
+          <ViewDetailsButton
+            onClick={onViewArticle}
+            data-testid={`${testId}-view-article-btn`}
+          >
+            <BookOpen size={16} />
+            Read the article
+            <ArrowRight />
+          </ViewDetailsButton>
+        )}
 
         {/* Browse documents — subtle text link */}
         <ViewDetailsButton

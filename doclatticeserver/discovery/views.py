@@ -852,7 +852,7 @@ def _search_global(query: str, limit: int, user) -> JsonResponse:
             "id", flat=True
         )
         matching_docs = list(
-            Document.objects.visible_to_user(user)
+            Document.objects.visible_to_user(user, lightweight=True)
             .filter(
                 path_records__corpus_id__in=public_corpus_ids,
                 path_records__is_current=True,
