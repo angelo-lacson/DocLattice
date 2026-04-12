@@ -364,7 +364,9 @@ def import_document(
             )
             version = 1
             status = "created"
-            logger.info(f"Created new doc {doc.id} at {path} in corpus {corpus.id}")
+            logger.info(
+                "Created new doc %s at %s in corpus %s", doc.id, path, corpus.id
+            )
 
             # Create root of path tree (Rule P1)
             new_path = DocumentPath.objects.create(
@@ -725,7 +727,7 @@ def permanently_delete_document(
             document=document,
             corpus=corpus,
         ).delete()[0]
-        logger.debug(f"Deleted {summary_count} DocumentSummaryRevision records")
+        logger.debug("Deleted %s DocumentSummaryRevision records", summary_count)
 
         # Step 4: Delete user annotations (non-structural) for this document
         # Structural annotations live in StructuralAnnotationSet and are shared
@@ -744,15 +746,15 @@ def permanently_delete_document(
             Q(source_annotations__id__in=annotation_ids)
             | Q(target_annotations__id__in=annotation_ids)
         ).delete()[0]
-        logger.debug(f"Deleted {relationship_count} Relationship records")
+        logger.debug("Deleted %s Relationship records", relationship_count)
 
         # Step 6: Delete the user annotations
         annotation_count = user_annotations.delete()[0]
-        logger.debug(f"Deleted {annotation_count} user Annotation records")
+        logger.debug("Deleted %s user Annotation records", annotation_count)
 
         # Step 7: Delete all DocumentPath records for this document in corpus
         DocumentPath.objects.filter(id__in=path_ids).delete()
-        logger.debug(f"Deleted {len(path_ids)} DocumentPath records")
+        logger.debug("Deleted %s DocumentPath records", len(path_ids))
 
         # Step 8: Check if document should be deleted (Rule Q1 extended)
         # Document can be deleted if no other corpus has any reference to it

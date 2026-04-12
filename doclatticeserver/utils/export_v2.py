@@ -123,7 +123,9 @@ def package_structural_annotation_set(
 
     except Exception as e:
         logger.error(
-            f"Error packaging structural annotation set {structural_set.id}: {e}"
+            "Error packaging structural annotation set %s: %s",
+            structural_set.id,
+            e,
         )
         return None
 
@@ -202,7 +204,7 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
         # select_related on ingestion_source to avoid N+1 queries
         all_paths = (
             DocumentPath.objects.filter(corpus=corpus)
-            .select_related("ingestion_source")
+            .select_related("ingestion_source", "document", "folder", "parent")
             .order_by("path", "version_number")
         )
 
@@ -244,7 +246,7 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
                 entry["ingestion_source_name"] = doc_path.ingestion_source.name
             if doc_path.external_id:
                 entry["external_id"] = doc_path.external_id
-            if doc_path.ingestion_metadata is not None:
+            if doc_path.ingestion_metadata:
                 entry["ingestion_metadata"] = doc_path.ingestion_metadata
 
             paths_export.append(entry)
@@ -396,7 +398,9 @@ def package_md_description_revisions(
 
     except Exception as e:
         logger.error(
-            f"Error packaging markdown description for corpus {corpus.id}: {e}"
+            "Error packaging markdown description for corpus %s: %s",
+            corpus.id,
+            e,
         )
 
     return current_description, revisions_export

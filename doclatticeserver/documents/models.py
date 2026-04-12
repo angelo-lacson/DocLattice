@@ -733,6 +733,11 @@ class DocumentPath(TreeNode, BaseOCModel):
         related_name="document_paths",
         help_text="Source integration that produced this version (null = manual upload)",
     )
+    # db_index=True creates a standalone index for bare WHERE external_id = ?
+    # queries. The composite (ingestion_source, external_id) index in Meta
+    # serves a different pattern — lookups scoped to a specific source.
+    # PostgreSQL cannot use the composite index for standalone external_id
+    # lookups, so both are needed.
     external_id = django.db.models.CharField(
         max_length=512,
         blank=True,

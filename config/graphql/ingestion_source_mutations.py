@@ -10,7 +10,11 @@ from graphene.types.generic import GenericScalar
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
-from config.graphql.document_types import IngestionSourceType, IngestionSourceTypeEnum
+from config.graphql.document_types import (
+    INGESTION_SOURCE_GLOBAL_ID_TYPE,
+    IngestionSourceType,
+    IngestionSourceTypeEnum,
+)
 from doclatticeserver.documents.models import (
     IngestionSource,
     IngestionSourceCategory,
@@ -21,8 +25,6 @@ from doclatticeserver.utils.permissioning import (
 )
 
 logger = logging.getLogger(__name__)
-
-EXPECTED_GLOBAL_ID_TYPE = "IngestionSourceType"
 _NOT_FOUND_MSG = "Ingestion source not found"
 
 
@@ -37,7 +39,7 @@ def _parse_ingestion_source_global_id(
         type_name, pk = from_global_id(global_id)
     except (ValueError, TypeError):
         return None, _NOT_FOUND_MSG
-    if type_name != EXPECTED_GLOBAL_ID_TYPE:
+    if type_name != INGESTION_SOURCE_GLOBAL_ID_TYPE:
         return None, _NOT_FOUND_MSG
     return pk, None
 
@@ -85,7 +87,8 @@ class CreateIngestionSourceMutation(graphene.Mutation):
                 config=config or {},
                 creator=user,
             )
-        except IntegrityError:
+        except IntegrityError as exc:
+            logger.debug("IntegrityError on create, falling back to error: %s", exc)
             return CreateIngestionSourceMutation(
                 ok=False,
                 message=f"An ingestion source named '{name}' already exists",
@@ -157,7 +160,8 @@ class UpdateIngestionSourceMutation(graphene.Mutation):
             # constraint — consistent with CreateIngestionSourceMutation.
             try:
                 source.save(update_fields=update_fields)
-            except IntegrityError:
+            except IntegrityError as exc:
+                logger.debug("IntegrityError on update, name conflict: %s", exc)
                 new_name = kwargs.get("name", source.name)
                 return UpdateIngestionSourceMutation(
                     ok=False,

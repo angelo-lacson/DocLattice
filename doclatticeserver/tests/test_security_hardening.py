@@ -1183,21 +1183,12 @@ class TestDRFMutationValidationError(TestCase):
         """Dict-form ValidationError should be formatted with field names."""
         from rest_framework import serializers
 
+        from config.graphql.base import DRFMutation
+
         detail = {"name": ["This field is required."], "email": ["Invalid format."]}
         exc = serializers.ValidationError(detail)
 
-        # Simulate the formatting logic from DRFMutation
-        if isinstance(exc.detail, dict):
-            errors = "; ".join(
-                f"{field}: {', '.join(str(e) for e in errs)}"
-                for field, errs in exc.detail.items()
-            )
-        elif isinstance(exc.detail, list):
-            errors = "; ".join(str(e) for e in exc.detail)
-        else:
-            errors = str(exc.detail)
-
-        message = f"Mutation failed due to error: {errors}"
+        message = DRFMutation.format_validation_error(exc)
         self.assertIn("name:", message)
         self.assertIn("email:", message)
         self.assertIn("This field is required.", message)
@@ -1206,19 +1197,11 @@ class TestDRFMutationValidationError(TestCase):
         """List-form ValidationError should be joined with semicolons."""
         from rest_framework import serializers
 
+        from config.graphql.base import DRFMutation
+
         detail = ["Error one.", "Error two."]
         exc = serializers.ValidationError(detail)
 
-        if isinstance(exc.detail, dict):
-            errors = "; ".join(
-                f"{field}: {', '.join(str(e) for e in errs)}"
-                for field, errs in exc.detail.items()
-            )
-        elif isinstance(exc.detail, list):
-            errors = "; ".join(str(e) for e in exc.detail)
-        else:
-            errors = str(exc.detail)
-
-        message = f"Mutation failed due to error: {errors}"
+        message = DRFMutation.format_validation_error(exc)
         self.assertIn("Error one.", message)
         self.assertIn("Error two.", message)

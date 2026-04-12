@@ -11,6 +11,7 @@ from graphene_django.filter import DjangoFilterConnectionField
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
+from config.graphql.document_types import INGESTION_SOURCE_GLOBAL_ID_TYPE
 from config.graphql.filters import DocumentFilter, DocumentRelationshipFilter
 from config.graphql.graphene_types import (
     BulkDocumentUploadStatusType,
@@ -18,7 +19,6 @@ from config.graphql.graphene_types import (
     DocumentType,
     IngestionSourceType,
 )
-from config.graphql.ingestion_source_mutations import EXPECTED_GLOBAL_ID_TYPE
 from config.graphql.ratelimits import get_user_tier_rate, graphql_ratelimit_dynamic
 from doclatticeserver.constants.annotations import (
     DOCUMENT_RELATIONSHIP_QUERY_MAX_LIMIT,
@@ -308,7 +308,7 @@ class DocumentQueryMixin:
     def resolve_ingestion_source(self, info, id, **kwargs):
         try:
             type_name, pk = from_global_id(id)
-            if not pk or type_name != EXPECTED_GLOBAL_ID_TYPE:
+            if not pk or type_name != INGESTION_SOURCE_GLOBAL_ID_TYPE:
                 return None
         except (ValueError, TypeError):
             return None
