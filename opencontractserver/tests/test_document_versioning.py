@@ -1899,3 +1899,169 @@ class TextFileVersioningTestCase(TestCase):
         self.assertEqual(status2, "updated")
         self.assertEqual(path2.version_number, 2)
         self.assertEqual(doc2.parent_id, doc1.id)
+
+
+class PathHistoryFolderTrackingTestCase(TestCase):
+    """
+    Test Suite: get_path_history folder-awareness.
+
+    Validates that get_path_history() correctly detects folder-only moves
+    and includes folder_id in history entries.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="tester", password="test123")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        self.folder1 = CorpusFolder.objects.create(
+            name="Folder1", corpus=self.corpus, creator=self.user
+        )
+        self.folder2 = CorpusFolder.objects.create(
+            name="Folder2", corpus=self.corpus, creator=self.user
+        )
+
+    def test_path_history_includes_folder_id(self):
+        """History entries contain folder_id field."""
+        _, _, path1 = import_document(
+            corpus=self.corpus,
+            path="/doc.pdf",
+            content=b"Test",
+            user=self.user,
+            folder=self.folder1,
+        )
+
+        history = get_path_history(path1)
+        self.assertIn("folder_id", history[0])
+        self.assertEqual(history[0]["folder_id"], self.folder1.id)
+
+    def test_folder_only_move_detected_as_moved(self):
+        """A move that changes folder but not path is still detected as MOVED."""
+        # Create document in folder1
+        doc, _, path1 = import_document(
+            corpus=self.corpus,
+            path="/doc.pdf",
+            content=b"Test",
+            user=self.user,
+            folder=self.folder1,
+        )
+
+        # Manually create a move record that changes folder but keeps same path
+        path1.is_current = False
+        path1.save(update_fields=["is_current"])
+
+        path2 = DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            folder=self.folder2,
+            path="/doc.pdf",  # Same path
+            version_number=path1.version_number,
+            parent=path1,
+            is_current=True,
+            is_deleted=False,
+            creator=self.user,
+        )
+
+        history = get_path_history(path2)
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0]["action"], "CREATED")
+        self.assertEqual(history[1]["action"], "MOVED")
+
+    def test_path_and_folder_change_detected_as_moved(self):
+        """A move that changes both path and folder is detected as MOVED."""
+        _, _, path1 = import_document(
+            corpus=self.corpus,
+            path="/folder1/doc.pdf",
+            content=b"Test",
+            user=self.user,
+            folder=self.folder1,
+        )
+
+        path2 = move_document(
+            corpus=self.corpus,
+            old_path="/folder1/doc.pdf",
+            new_path="/folder2/doc.pdf",
+            user=self.user,
+            new_folder=self.folder2,
+        )
+
+        history = get_path_history(path2)
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[1]["action"], "MOVED")
+        self.assertEqual(history[0]["folder_id"], self.folder1.id)
+        self.assertEqual(history[1]["folder_id"], self.folder2.id)
+
+    def test_no_change_produces_unknown_action(self):
+        """A record with same path, folder, and document as parent yields UNKNOWN."""
+        doc, _, path1 = import_document(
+            corpus=self.corpus,
+            path="/doc.pdf",
+            content=b"Test",
+            user=self.user,
+            folder=self.folder1,
+        )
+
+        # Create a duplicate record (shouldn't happen normally, but tests the logic)
+        path1.is_current = False
+        path1.save(update_fields=["is_current"])
+
+        path2 = DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            folder=self.folder1,  # Same folder
+            path="/doc.pdf",  # Same path
+            version_number=path1.version_number,
+            parent=path1,
+            is_current=True,
+            is_deleted=False,
+            creator=self.user,
+        )
+
+        history = get_path_history(path2)
+        self.assertEqual(history[1]["action"], "UNKNOWN")
+
+    def test_full_lifecycle_with_folder_moves(self):
+        """Complete lifecycle with folder changes tracked in history."""
+        # Create
+        _, _, path1 = import_document(
+            corpus=self.corpus,
+            path="/doc.pdf",
+            content=b"v1",
+            user=self.user,
+        )
+
+        # Move (path change)
+        move_document(
+            corpus=self.corpus,
+            old_path="/doc.pdf",
+            new_path="/folder1/doc.pdf",
+            user=self.user,
+            new_folder=self.folder1,
+        )
+
+        # Update (content change via re-import at same path)
+        _, _, path3 = import_document(
+            corpus=self.corpus,
+            path="/folder1/doc.pdf",
+            content=b"v2",
+            user=self.user,
+            folder=self.folder1,
+        )
+
+        # Delete
+        delete_document(corpus=self.corpus, path="/folder1/doc.pdf", user=self.user)
+
+        # Restore
+        path5 = restore_document(
+            corpus=self.corpus, path="/folder1/doc.pdf", user=self.user
+        )
+
+        history = get_path_history(path5)
+        self.assertEqual(len(history), 5)
+
+        expected_actions = ["CREATED", "MOVED", "UPDATED", "DELETED", "RESTORED"]
+        actual_actions = [h["action"] for h in history]
+        self.assertEqual(actual_actions, expected_actions)
+
+        # Verify folder tracking through history
+        self.assertIsNone(history[0]["folder_id"])  # Created at root
+        self.assertEqual(history[1]["folder_id"], self.folder1.id)  # Moved to folder1
+        self.assertEqual(history[2]["folder_id"], self.folder1.id)  # Updated in folder1
