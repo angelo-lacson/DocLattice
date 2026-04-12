@@ -961,6 +961,9 @@ class DocumentFolderService:
         if folder is not None and folder.corpus_id != corpus.id:
             return False, "Target folder does not belong to this corpus"
 
+        # Outer transaction holds the select_for_update lock on `current`
+        # across the inner savepoint so no other operation can modify this
+        # path while we create the successor node.
         with transaction.atomic():
             current = (
                 DocumentPath.objects.select_for_update()

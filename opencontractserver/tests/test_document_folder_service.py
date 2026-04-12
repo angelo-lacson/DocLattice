@@ -3488,3 +3488,374 @@ class TestErrorPaths_BulkMoveAtomicRollback(DocumentFolderServiceTestBase):
         self.assertNotEqual(path1.path, path2.path)
         self.assertEqual(path1.folder_id, self.folder.id)
         self.assertEqual(path2.folder_id, self.folder.id)
+
+
+# =============================================================================
+# 10. COVERAGE GAP TESTS — edge cases for uncovered code paths
+# =============================================================================
+
+
+class TestCoverageGap_ComputeMovedPathTrailingSlash(TransactionTestCase):
+    """
+    SCENARIO: _compute_moved_path encounters a path with a trailing slash
+    (e.g. "/dir/") which produces an empty filename after rsplit.
+
+    BUSINESS RULE: The secondary guard must raise ValueError, not silently
+    produce a bad path.
+    """
+
+    def test_trailing_slash_raises_value_error(self):
+        """Path '/dir/' produces empty filename after rsplit — must raise."""
+        with self.assertRaises(ValueError) as ctx:
+            DocumentFolderService._compute_moved_path("/dir/", None)
+        self.assertIn("empty or root-only", str(ctx.exception))
+
+    def test_nested_trailing_slash_raises_value_error(self):
+        """Path '/a/b/c/' also has empty filename — must raise."""
+        with self.assertRaises(ValueError) as ctx:
+            DocumentFolderService._compute_moved_path("/a/b/c/", None)
+        self.assertIn("empty or root-only", str(ctx.exception))
+
+
+class TestCoverageGap_ComputeMovedPathWhitespace(TransactionTestCase):
+    """
+    SCENARIO: _compute_moved_path receives a whitespace-only path.
+
+    BUSINESS RULE: Whitespace-only paths are effectively empty and must
+    raise ValueError.
+    """
+
+    def test_whitespace_only_path_raises_value_error(self):
+        """Path '   ' is whitespace-only — must raise."""
+        with self.assertRaises(ValueError) as ctx:
+            DocumentFolderService._compute_moved_path("   ", None)
+        self.assertIn("empty or root-only", str(ctx.exception))
+
+    def test_whitespace_with_slash_raises_value_error(self):
+        """Path '  /  ' strips to '/' — must raise."""
+        with self.assertRaises(ValueError) as ctx:
+            DocumentFolderService._compute_moved_path("  /  ", None)
+        self.assertIn("empty or root-only", str(ctx.exception))
+
+
+class TestCoverageGap_DisambiguateNoSlashPath(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: _disambiguate_path is called with a path that has no slash
+    (e.g. "report.pdf" instead of "/report.pdf").
+
+    BUSINESS RULE: Even unusual path formats are handled correctly; the
+    directory="" and dir_part=None branches must not crash.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+
+    def test_no_slash_path_no_conflict(self):
+        """A no-slash path with no conflict returns unchanged."""
+        result = DocumentFolderService._disambiguate_path("report.pdf", self.corpus)
+        self.assertEqual(result, "report.pdf")
+
+    def test_no_slash_path_with_conflict_disambiguates(self):
+        """A no-slash path that conflicts gets a suffix."""
+        doc = Document.objects.create(
+            title="Existing", creator=self.owner, pdf_file="report.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="report.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        result = DocumentFolderService._disambiguate_path("report.pdf", self.corpus)
+        self.assertEqual(result, "report_1.pdf")
+
+    def test_no_slash_extensionless_path_with_conflict(self):
+        """A no-slash, extensionless path that conflicts gets a suffix."""
+        doc = Document.objects.create(
+            title="Existing", creator=self.owner, pdf_file="Makefile"
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="Makefile",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        result = DocumentFolderService._disambiguate_path("Makefile", self.corpus)
+        self.assertEqual(result, "Makefile_1")
+
+
+class TestCoverageGap_BulkMoveIntegrityErrorRollback(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: An IntegrityError during bulk move execution causes full
+    atomic rollback.
+
+    BUSINESS RULE: IntegrityError (e.g. from a concurrent path conflict
+    hitting the unique constraint) is caught alongside ValueError and
+    triggers the same all-or-nothing rollback.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+        self.folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Target"
+        )
+
+    def test_integrity_error_during_bulk_move_rolls_back(self):
+        """IntegrityError during create rolls back the entire batch."""
+        doc = Document.objects.create(
+            title="Doc 1", creator=self.owner, pdf_file="doc1.pdf"
+        )
+        original_path = DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/doc1.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        original_create = DocumentPath.objects.create
+
+        def failing_create(**kwargs):
+            if kwargs.get("parent") is not None:
+                raise IntegrityError("unique_active_path_per_corpus")
+            return original_create(**kwargs)
+
+        with patch.object(DocumentPath.objects, "create", side_effect=failing_create):
+            moved_count, error = DocumentFolderService.move_documents_to_folder(
+                user=self.owner,
+                document_ids=[doc.id],
+                corpus=self.corpus,
+                folder=self.folder,
+            )
+
+        self.assertEqual(moved_count, 0)
+        self.assertIn("rolled back", error)
+
+        # Original path must still be current
+        original_path.refresh_from_db()
+        self.assertTrue(original_path.is_current)
+        self.assertIsNone(original_path.folder_id)
+
+
+class TestCoverageGap_BulkMoveToRootRollback(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: Bulk move to root (folder=None) fails and rolls back.
+
+    BUSINESS RULE: The error handler's 'folder.id if folder else root'
+    branch is exercised when folder is None.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+        self.source_folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Source"
+        )
+
+    def test_bulk_move_to_root_integrity_error_rolls_back(self):
+        """IntegrityError when moving to root (folder=None) rolls back."""
+        doc = Document.objects.create(
+            title="Doc", creator=self.owner, pdf_file="doc.pdf"
+        )
+        original_path = DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=self.source_folder,
+            path="/Source/doc.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        original_create = DocumentPath.objects.create
+
+        def failing_create(**kwargs):
+            if kwargs.get("parent") is not None:
+                raise IntegrityError("unique_active_path_per_corpus")
+            return original_create(**kwargs)
+
+        with patch.object(DocumentPath.objects, "create", side_effect=failing_create):
+            moved_count, error = DocumentFolderService.move_documents_to_folder(
+                user=self.owner,
+                document_ids=[doc.id],
+                corpus=self.corpus,
+                folder=None,  # Move to root
+            )
+
+        self.assertEqual(moved_count, 0)
+        self.assertIn("rolled back", error)
+
+        original_path.refresh_from_db()
+        self.assertTrue(original_path.is_current)
+        self.assertEqual(original_path.folder_id, self.source_folder.id)
+
+
+class TestCoverageGap_DeleteFolderMultiDocHistory(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: Deleting a folder with multiple documents creates a history
+    node for each document.
+
+    BUSINESS RULE: Every document displaced by folder deletion gets its
+    own history entry with proper parent chain and version preservation.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+
+    def test_delete_folder_creates_history_for_multiple_documents(self):
+        """Each document in a deleted folder gets a proper history node."""
+        folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="ToDelete"
+        )
+
+        docs_and_paths = []
+        for i in range(3):
+            doc = Document.objects.create(
+                title=f"Doc {i}", creator=self.owner, pdf_file=f"doc{i}.pdf"
+            )
+            path = DocumentPath.objects.create(
+                document=doc,
+                corpus=self.corpus,
+                creator=self.owner,
+                folder=folder,
+                path=f"/ToDelete/doc{i}.pdf",
+                version_number=1,
+                is_current=True,
+                is_deleted=False,
+            )
+            docs_and_paths.append((doc, path))
+
+        success, error = DocumentFolderService.delete_folder(
+            user=self.owner, folder=folder
+        )
+        self.assertTrue(success)
+        self.assertEqual(error, "")
+
+        for doc, original_path in docs_and_paths:
+            # Each doc should have 2 path records (original + moved)
+            total = DocumentPath.objects.filter(
+                document=doc, corpus=self.corpus
+            ).count()
+            self.assertEqual(total, 2, f"Doc {doc.title} should have 2 paths")
+
+            # Current path should be at root with parent link
+            current = DocumentPath.objects.get(
+                document=doc, corpus=self.corpus, is_current=True, is_deleted=False
+            )
+            self.assertIsNone(current.folder_id)
+            self.assertEqual(current.parent_id, original_path.id)
+            self.assertEqual(current.version_number, 1)
+
+            # Original path should be marked not current
+            original_path.refresh_from_db()
+            self.assertFalse(original_path.is_current)
+
+
+class TestCoverageGap_BulkMoveVersionPreservation(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: Bulk move preserves version numbers and creates proper
+    parent chain for each document.
+
+    BUSINESS RULE: Moves do not bump version numbers, and each new
+    DocumentPath links back to its predecessor.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+        self.folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Target"
+        )
+
+    def test_bulk_move_preserves_version_and_parent_chain(self):
+        """Bulk move preserves version_number and sets parent correctly."""
+        docs = []
+        original_paths = []
+        for i in range(3):
+            doc = Document.objects.create(
+                title=f"Doc {i}", creator=self.owner, pdf_file=f"doc{i}.pdf"
+            )
+            path = DocumentPath.objects.create(
+                document=doc,
+                corpus=self.corpus,
+                creator=self.owner,
+                folder=None,
+                path=f"/doc{i}.pdf",
+                version_number=i + 1,  # Different versions
+                is_current=True,
+                is_deleted=False,
+            )
+            docs.append(doc)
+            original_paths.append(path)
+
+        moved_count, error = DocumentFolderService.move_documents_to_folder(
+            user=self.owner,
+            document_ids=[d.id for d in docs],
+            corpus=self.corpus,
+            folder=self.folder,
+        )
+
+        self.assertEqual(moved_count, 3)
+        self.assertEqual(error, "")
+
+        for i, (doc, original_path) in enumerate(zip(docs, original_paths)):
+            current = DocumentPath.objects.get(
+                document=doc, corpus=self.corpus, is_current=True, is_deleted=False
+            )
+            # Version preserved (not incremented)
+            self.assertEqual(
+                current.version_number,
+                i + 1,
+                f"Doc {i} version should be preserved",
+            )
+            # Parent chain links back
+            self.assertEqual(
+                current.parent_id,
+                original_path.id,
+                f"Doc {i} parent should link to original",
+            )
+            # Folder updated
+            self.assertEqual(current.folder_id, self.folder.id)
+            # Path updated
+            self.assertIn(f"/Target/doc{i}.pdf", current.path)
+
+            # Original marked not current
+            original_path.refresh_from_db()
+            self.assertFalse(original_path.is_current)
