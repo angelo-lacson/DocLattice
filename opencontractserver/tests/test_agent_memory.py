@@ -762,6 +762,11 @@ class TestAsuggestMemoryUpdate(TransactionTestCase):
     """Test asuggest_memory_update tool function."""
 
     def setUp(self):
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import (
+            set_permissions_for_obj_to_user,
+        )
+
         self.user = User.objects.create_user(
             username="tool_write_user",
             password="testpass123",
@@ -776,6 +781,15 @@ class TestAsuggestMemoryUpdate(TransactionTestCase):
             title="No Mem Write Corpus",
             creator=self.user,
             memory_enabled=False,
+        )
+        # Grant explicit CRUD permissions (required by the write permission check)
+        set_permissions_for_obj_to_user(
+            self.user, self.corpus, [PermissionTypes.CRUD, PermissionTypes.READ]
+        )
+        set_permissions_for_obj_to_user(
+            self.user,
+            self.corpus_no_mem,
+            [PermissionTypes.CRUD, PermissionTypes.READ],
         )
 
     def test_corpus_not_found_raises(self):
@@ -1117,7 +1131,7 @@ class TestCheckConversationsForCuration(TransactionTestCase):
         ChatMessage.objects.filter(pk=msg.pk).update(created_at=old_time)
 
         with patch(
-            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
+            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.apply_async"
         ) as mock_delay:
             from opencontractserver.tasks.memory_tasks import (
                 check_conversations_for_curation,
@@ -1126,7 +1140,7 @@ class TestCheckConversationsForCuration(TransactionTestCase):
             result = check_conversations_for_curation()
 
         self.assertEqual(result["dispatched"], 1)
-        mock_delay.assert_called_once_with(conv.pk)
+        mock_delay.assert_called_once_with(args=[conv.pk], queue="celery")
 
     def test_skips_already_curated(self):
         from datetime import timedelta
@@ -1154,7 +1168,7 @@ class TestCheckConversationsForCuration(TransactionTestCase):
         ChatMessage.objects.filter(pk=msg.pk).update(created_at=old_time)
 
         with patch(
-            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
+            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.apply_async"
         ) as mock_delay:
             from opencontractserver.tasks.memory_tasks import (
                 check_conversations_for_curation,
@@ -1190,7 +1204,7 @@ class TestCheckConversationsForCuration(TransactionTestCase):
         ChatMessage.objects.filter(pk=msg.pk).update(created_at=old_time)
 
         with patch(
-            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
+            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.apply_async"
         ) as mock_delay:
             from opencontractserver.tasks.memory_tasks import (
                 check_conversations_for_curation,
@@ -1226,7 +1240,7 @@ class TestCheckConversationsForCuration(TransactionTestCase):
         ChatMessage.objects.filter(pk=msg.pk).update(created_at=old_time)
 
         with patch(
-            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
+            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.apply_async"
         ) as mock_delay:
             from opencontractserver.tasks.memory_tasks import (
                 check_conversations_for_curation,
@@ -1254,7 +1268,7 @@ class TestCheckConversationsForCuration(TransactionTestCase):
         )
 
         with patch(
-            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
+            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.apply_async"
         ) as mock_delay:
             from opencontractserver.tasks.memory_tasks import (
                 check_conversations_for_curation,
@@ -1300,8 +1314,8 @@ class TestCheckConversationsForCuration(TransactionTestCase):
 
         with (
             patch(
-                "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
-            ) as mock_delay,
+                "opencontractserver.tasks.memory_tasks.curate_corpus_memory.apply_async"
+            ) as mock_apply,
             patch(
                 "opencontractserver.tasks.memory_tasks.MEMORY_CURATION_BATCH_LIMIT",
                 test_batch_limit,
@@ -1314,7 +1328,7 @@ class TestCheckConversationsForCuration(TransactionTestCase):
             result = check_conversations_for_curation()
 
         self.assertEqual(result["dispatched"], test_batch_limit)
-        self.assertEqual(mock_delay.call_count, test_batch_limit)
+        self.assertEqual(mock_apply.call_count, test_batch_limit)
 
 
 # ---------------------------------------------------------------------------
@@ -1523,18 +1537,50 @@ class TestCurateCorpusMemoryTask(TransactionTestCase):
         self.assertFalse(conv.memory_curated)
 
     def test_concurrent_claim_prevents_duplicate(self):
-        """If two tasks race, the second one should see already_claimed."""
+        """If two tasks race, the second one should see already_claimed.
+
+        Both tasks start with memory_curated=False so the early guard
+        (``if conversation.memory_curated``) passes.  We simulate the race
+        by letting the first caller's atomic UPDATE succeed, then verifying
+        the second caller gets ``already_claimed`` from the atomic claim
+        (not the initial guard).
+        """
         from opencontractserver.tasks.memory_tasks import (
             _curate_corpus_memory_async,
         )
 
         conv = self._create_conversation_with_messages(6)
-        # Manually mark as curated (simulating a concurrent claim)
-        Conversation.objects.filter(pk=conv.pk).update(memory_curated=True)
+        # Conversation starts with memory_curated=False (default)
+        self.assertFalse(conv.memory_curated)
 
-        result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+        # Simulate the first task winning the atomic claim: set
+        # memory_curated=True AFTER the initial guard would have passed
+        # (the DB row is False when select_related loads it, then the
+        # atomic UPDATE sets it to True).
+        # We need the initial ``conversation.memory_curated`` check to
+        # see False, but the atomic claim to see True (another task won).
+        # Achieve this by patching the atomic claim UPDATE to return 0.
+        original_update = Conversation.objects.filter
+
+        def _claim_lost_filter(*args, **kwargs):
+            qs = original_update(*args, **kwargs)
+            if kwargs.get("memory_curated") is False and "pk" in kwargs:
+                # The claim query: filter(pk=X, memory_curated=False).update(...)
+                # Return a queryset whose .update() returns 0
+                class _FakeQS:
+                    def update(self, **kw):
+                        return 0
+
+                return _FakeQS()
+            return qs
+
+        with patch.object(
+            Conversation.objects, "filter", side_effect=_claim_lost_filter
+        ):
+            result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+
         self.assertEqual(result["status"], "skipped")
-        self.assertEqual(result["reason"], "already_curated")
+        self.assertEqual(result["reason"], "already_claimed")
 
     def test_text_build_exception_releases_claim(self):
         """If building conversation text raises, the claim is released."""
@@ -1855,6 +1901,11 @@ class TestAsuggestMemoryUpdateEdgeCases(TransactionTestCase):
     """Test edge cases in asuggest_memory_update."""
 
     def setUp(self):
+        from opencontractserver.types.enums import PermissionTypes
+        from opencontractserver.utils.permissioning import (
+            set_permissions_for_obj_to_user,
+        )
+
         self.user = User.objects.create_user(
             username="tool_edge_user",
             password="testpass123",
@@ -1864,6 +1915,10 @@ class TestAsuggestMemoryUpdateEdgeCases(TransactionTestCase):
             title="Tool Edge Corpus",
             creator=self.user,
             memory_enabled=True,
+        )
+        # Grant explicit CRUD permissions (required by the write permission check)
+        set_permissions_for_obj_to_user(
+            self.user, self.corpus, [PermissionTypes.CRUD, PermissionTypes.READ]
         )
 
     def test_invalid_section_returns_error(self):
@@ -2427,7 +2482,7 @@ class TestCheckConversationsForCurationEdgeCases(TransactionTestCase):
         )
 
         with patch(
-            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
+            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.apply_async"
         ) as mock_delay:
             result = check_conversations_for_curation()
 

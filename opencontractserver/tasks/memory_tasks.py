@@ -145,12 +145,17 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
             line_tokens = [estimate_token_count(line) for line in conversation_lines]
             total_tokens = sum(line_tokens)
             # Drop lines from the beginning until budget is met.
+            # Use an index cursor instead of list.pop(0) to avoid O(n^2).
+            drop_idx = 0
+            remaining = len(conversation_lines)
             while (
                 total_tokens > MEMORY_CURATION_MAX_CONVERSATION_TOKENS
-                and len(conversation_lines) > MEMORY_CURATION_MIN_MESSAGES
+                and remaining > MEMORY_CURATION_MIN_MESSAGES
             ):
-                total_tokens -= line_tokens.pop(0)
-                conversation_lines.pop(0)
+                total_tokens -= line_tokens[drop_idx]
+                drop_idx += 1
+                remaining -= 1
+            conversation_lines = conversation_lines[drop_idx:]
             conversation_text = "[Earlier messages truncated]\n" + "\n".join(
                 conversation_lines
             )
@@ -166,7 +171,17 @@ async def _curate_corpus_memory_async(conversation_id: int) -> dict:
     # 4. Stage 1: Summarise conversation (privacy firewall)
     from opencontractserver.llms.agents.core_agents import get_default_config
 
-    model_name = get_default_config().model_name
+    try:
+        model_name = get_default_config().model_name
+    except Exception:
+        logger.warning(
+            "Failed to get default agent config for curation of conversation %s",
+            conversation_id,
+            exc_info=True,
+        )
+        await _release_claim()
+        return {"status": "error", "reason": "config_failed"}
+
     summarise_agent = PydanticAIAgent(
         model=model_name,
         instructions=MEMORY_SUMMARISE_SYSTEM_PROMPT,
@@ -309,7 +324,7 @@ def check_conversations_for_curation() -> dict:
 
     dispatched = 0
     for conv_id in eligible:
-        curate_corpus_memory.delay(conv_id)
+        curate_corpus_memory.apply_async(args=[conv_id], queue="celery")
         dispatched += 1
 
     if dispatched:

@@ -73,6 +73,14 @@ async def _inject_corpus_memory(corpus_obj, config) -> None:
     for section selection.  The user's actual question would be a better
     signal, but it is not available at factory-creation time.
 
+    **Security / prompt-injection warning**: Memory content is a user-editable
+    markdown Document.  Any corpus member can modify it via the UI, which means
+    its contents are untrusted user input injected verbatim into the system
+    prompt.  This is a prompt-injection vector: a malicious user could craft
+    memory entries that override agent behaviour.  The ToggleCorpusMemory
+    mutation warns users about this risk.  Future hardening should consider
+    sandboxing or sanitising memory content before injection.
+
     Args:
         corpus_obj: The Corpus instance (must have ``memory_enabled=True``).
         config: The AgentConfig whose ``system_prompt`` will be mutated.

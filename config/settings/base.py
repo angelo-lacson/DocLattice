@@ -686,6 +686,7 @@ CELERY_BEAT_SCHEDULE = {
     "memory-curate-idle-conversations": {
         "task": "opencontractserver.tasks.memory_tasks.check_conversations_for_curation",
         "schedule": MEMORY_CURATION_CHECK_INTERVAL_SECONDS,
+        "options": {"queue": "celery"},
     },
 }
 

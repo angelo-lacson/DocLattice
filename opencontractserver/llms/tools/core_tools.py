@@ -2929,6 +2929,18 @@ async def asuggest_memory_update(
             f"Corpus with id={corpus_id} does not exist or is not accessible."
         ) from exc
 
+    # visible_to_user only checks read access; writing to memory requires CRUD.
+    from opencontractserver.types.enums import PermissionTypes
+    from opencontractserver.utils.permissioning import user_has_permission_for_obj
+
+    has_write = await _db_sync_to_async(user_has_permission_for_obj)(
+        user, corpus, PermissionTypes.CRUD
+    )
+    if not has_write:
+        raise PermissionError(
+            f"User does not have write permission on corpus {corpus_id}."
+        )
+
     if not corpus.memory_enabled:
         return "Memory is not enabled for this corpus."
 
