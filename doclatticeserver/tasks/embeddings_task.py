@@ -672,10 +672,14 @@ def calculate_embeddings_for_annotation_batch(
                 f"Batch-embedding {len(text_only_annots)} text-only annotations "
                 f"with {embedder_path} (api_batch_size={EMBEDDING_API_BATCH_SIZE})"
             )
-            # Snapshot counts before batch embedding so we can correctly compute
-            # how many annotations remain unprocessed if a ValueError occurs.
-            # _batch_embed_text_annotations mutates result in-place, so we need
-            # these baselines to avoid double-counting already-recorded outcomes.
+            # Snapshot all three outcome counters before the batch call so we
+            # can compute how many text-only annotations were already accounted
+            # for if a ValueError interrupts _batch_embed_text_annotations
+            # mid-way. We need all three (skipped, failed, succeeded) because
+            # the helper mutates result in-place as it processes sub-batches:
+            # some annotations may have been skipped (empty text), some may
+            # have succeeded, and some may have failed before the ValueError.
+            # Without these baselines we'd double-count already-recorded outcomes.
             skipped_before_batch = result["skipped"]
             failed_before_batch = result["failed"]
             succeeded_before_batch = result["succeeded"]
@@ -703,7 +707,14 @@ def calculate_embeddings_for_annotation_batch(
                 result["failed"] += len(multimodal_annots)
                 return result
 
-        # Process multimodal annotations individually (need image extraction)
+        # Process multimodal annotations individually (need image extraction).
+        # NOTE: The single-text path (_embed_text_impl) returns None on 5xx
+        # rather than raising, so transient server errors for multimodal
+        # annotations are recorded as permanent failures instead of triggering
+        # Celery retry. This asymmetry with the batch path (which raises
+        # EmbeddingServerError on 5xx) predates this PR and is accepted
+        # because multimodal embedding involves image extraction that makes
+        # blanket retry less straightforward.
         for annot in multimodal_annots:
             try:
                 succeeded = _create_embedding_for_annotation(

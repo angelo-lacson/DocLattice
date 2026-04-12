@@ -207,6 +207,14 @@ class BaseEmbedder(PipelineComponentBase, ABC):
         Subclasses (e.g., microservice-based embedders) should override this to
         use a true batch API endpoint for better throughput.
 
+        .. warning::
+
+            The sequential fallback re-raises transient HTTP exceptions
+            (``requests.exceptions.Timeout``, ``requests.exceptions.ConnectionError``)
+            so that callers (e.g., Celery tasks) can trigger retries. Subclasses
+            that make HTTP calls should override this method to get the same
+            behaviour for any additional transient exception types they define.
+
         Args:
             texts: List of text strings to embed.
             **direct_kwargs: Additional keyword arguments passed to the embedder.
@@ -215,6 +223,8 @@ class BaseEmbedder(PipelineComponentBase, ABC):
             List of embedding vectors (or None per item on failure),
             or None if the entire batch fails.
         """
+        import requests as _requests
+
         if not self.supports_text:
             logger.warning(
                 f"{self.__class__.__name__} does not support text embeddings."
@@ -228,6 +238,12 @@ class BaseEmbedder(PipelineComponentBase, ABC):
         for text in texts:
             try:
                 results.append(self.embed_text(text, **direct_kwargs))
+            except (
+                _requests.exceptions.Timeout,
+                _requests.exceptions.ConnectionError,
+            ):
+                # Transient HTTP errors must propagate so callers can retry.
+                raise
             except Exception as e:
                 logger.error(
                     f"{self.__class__.__name__} failed to embed text "
