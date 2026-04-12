@@ -192,10 +192,7 @@ function formatCellValue(
   if (typeof data === "object") {
     const json = JSON.stringify(data);
     if (json.length > EXTRACT_GRID_CELL_TRUNCATE_LENGTH) {
-      return (
-        [...json].slice(0, EXTRACT_GRID_CELL_TRUNCATE_LENGTH).join("") +
-        "\u2026"
-      );
+      return json.substring(0, EXTRACT_GRID_CELL_TRUNCATE_LENGTH) + "\u2026";
     }
     return json;
   }
