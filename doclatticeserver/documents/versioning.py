@@ -562,6 +562,8 @@ def get_path_history(document_path: DocumentPath):
         # changes the path is primarily a move (the path change is the visible
         # user action), and callers can inspect document_id to detect the
         # replacement separately.
+        # folder_id can differ while path stays the same if a folder was
+        # deleted and recreated with the same name — treat that as a move.
         if current.path != previous.path or current.folder_id != previous.folder_id:
             return "MOVED"
         if current.document_id != previous.document_id:
