@@ -26,6 +26,29 @@ DEFAULT_DOCUMENT_PATH_PREFIX = "/documents"
 # Controls how many annotations are processed per Celery task to prevent queue flooding
 EMBEDDING_BATCH_SIZE = 100
 
+# Maximum number of texts to send in a single embedder API batch request.
+# This is the sub-batch size used *within* a Celery task when calling
+# embedder.embed_texts_batch(). Kept separate from EMBEDDING_BATCH_SIZE
+# (task-level grouping) because API limits may differ from task sizing.
+# Must be <= MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE (currently 100).
+EMBEDDING_API_BATCH_SIZE = 50
+
+# Maximum number of texts accepted by MicroserviceEmbedder.embed_texts_batch().
+# Exceeding this raises ValueError rather than silently truncating.
+MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE = 100
+
+# Validation that EMBEDDING_API_BATCH_SIZE <= MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE
+# is enforced via a Django system check in documents/checks.py (documents.E001)
+# rather than a bare raise here, so misconfiguration surfaces as a clear Django
+# check error during startup instead of an opaque import-time traceback.
+
+# HTTP request timeout (seconds) for single-text embedding calls.
+EMBEDDER_SINGLE_REQUEST_TIMEOUT_SECONDS = 30
+
+# HTTP request timeout (seconds) for batch embedding calls.
+# Larger than the single timeout because batches process multiple texts.
+EMBEDDER_BATCH_REQUEST_TIMEOUT_SECONDS = 60
+
 # Maximum number of embedding batch tasks to queue in a single reembed_corpus run.
 # For very large corpuses (millions of annotations), this prevents flooding the
 # Celery queue. Remaining annotations will be logged but not queued; re-running
