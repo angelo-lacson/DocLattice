@@ -202,7 +202,7 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
         # select_related on ingestion_source to avoid N+1 queries
         all_paths = (
             DocumentPath.objects.filter(corpus=corpus)
-            .select_related("ingestion_source")
+            .select_related("ingestion_source", "document", "folder", "parent")
             .order_by("path", "version_number")
         )
 

@@ -459,7 +459,8 @@ def _import_ingestion_sources(
                     "active": src.get("active", True),
                 },
             )
-        except IntegrityError:
+        except IntegrityError as exc:
+            logger.debug("IntegrityError on create, falling back to get: %s", exc)
             source = IngestionSource.objects.get(creator=user_obj, name=name)
             created = False
         source_map[name] = source
@@ -506,6 +507,14 @@ def _reconstruct_document_paths(
     all_folders = CorpusFolder.objects.filter(corpus=corpus_obj)
     folder_path_map = {f.get_path(): f for f in all_folders}
 
+    # Pre-build a document -> DocumentPath lookup to avoid N queries in the loop
+    path_by_doc_id = {
+        p.document_id: p
+        for p in DocumentPath.objects.filter(
+            corpus=corpus_obj, document__in=doc_hash_to_corpus_doc.values()
+        )
+    }
+
     for path_data in document_paths_data:
         # Only reconstruct current, non-deleted paths
         if not path_data.get("is_current", True) or path_data.get("is_deleted", False):
@@ -520,9 +529,7 @@ def _reconstruct_document_paths(
             continue
 
         # Find the DocumentPath created by add_document() for this corpus_doc
-        existing_path = DocumentPath.objects.filter(
-            corpus=corpus_obj, document=corpus_doc
-        ).first()
+        existing_path = path_by_doc_id.get(corpus_doc.pk)
         if not existing_path:
             continue
 
@@ -547,6 +554,12 @@ def _reconstruct_document_paths(
         source_name = path_data.get("ingestion_source_name")
         if source_name and source_name in source_name_map:
             updates["ingestion_source"] = source_name_map[source_name]
+        elif source_name:
+            logger.warning(
+                "DocumentPath references unknown ingestion source '%s' "
+                "— lineage not restored",
+                source_name,
+            )
 
         external_id = path_data.get("external_id")
         if external_id is not None:

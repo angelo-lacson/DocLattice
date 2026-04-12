@@ -87,7 +87,8 @@ class CreateIngestionSourceMutation(graphene.Mutation):
                 config=config or {},
                 creator=user,
             )
-        except IntegrityError:
+        except IntegrityError as exc:
+            logger.debug("IntegrityError on create, falling back to error: %s", exc)
             return CreateIngestionSourceMutation(
                 ok=False,
                 message=f"An ingestion source named '{name}' already exists",
@@ -159,7 +160,8 @@ class UpdateIngestionSourceMutation(graphene.Mutation):
             # constraint — consistent with CreateIngestionSourceMutation.
             try:
                 source.save(update_fields=update_fields)
-            except IntegrityError:
+            except IntegrityError as exc:
+                logger.debug("IntegrityError on update, name conflict: %s", exc)
                 new_name = kwargs.get("name", source.name)
                 return UpdateIngestionSourceMutation(
                     ok=False,
