@@ -232,6 +232,10 @@ def check_embedding_batch_size_configuration(app_configs, **kwargs):
     embedding tasks run. Surfacing it as a Django system check provides a
     clear error message during startup (``manage.py check``, ``runserver``,
     ``migrate``) instead of an opaque import-time traceback.
+
+    Note: ``app_configs`` is intentionally unused — this check validates
+    global constants, not per-app configuration. Consistent with the other
+    checks in this file.
     """
     from opencontractserver.constants.document_processing import (
         EMBEDDING_API_BATCH_SIZE,

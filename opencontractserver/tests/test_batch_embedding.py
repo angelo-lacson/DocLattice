@@ -827,7 +827,13 @@ class TestCalculateEmbeddingsForAnnotationBatch(unittest.TestCase):
         """Multimodal embedder partitions annotations into text-only batch + individual multimodal."""
 
         class MultimodalDummyEmbedder(DummyEmbedder384):
-            """Embedder that advertises multimodal support."""
+            """Embedder that advertises multimodal support.
+
+            NOTE: Uses class-attribute overrides for test brevity.
+            Production embedders should instead set
+            ``supported_modalities = {ContentModality.TEXT, ContentModality.IMAGE}``
+            so that ``is_multimodal`` / ``supports_images`` are derived automatically.
+            """
 
             is_multimodal = True
             supports_images = True
@@ -876,6 +882,8 @@ class TestCalculateEmbeddingsForAnnotationBatch(unittest.TestCase):
         """Multimodal annotation failure is recorded without failing text-only annotations."""
 
         class MultimodalDummyEmbedder(DummyEmbedder384):
+            # Class-attribute overrides for test brevity; see note in
+            # test_multimodal_partition_path for production guidance.
             is_multimodal = True
             supports_images = True
 
@@ -899,6 +907,51 @@ class TestCalculateEmbeddingsForAnnotationBatch(unittest.TestCase):
         self.assertEqual(result["succeeded"], 1)  # text-only succeeded
         self.assertEqual(result["failed"], 1)  # multimodal failed
         text_annot.add_embedding.assert_called_once()
+
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_transient_error_propagates_to_task(self, mock_ann_cls, mock_get_component):
+        """EmbeddingServerError escapes the full task for Celery retry.
+
+        _batch_embed_text_annotations re-raises transient errors, and
+        calculate_embeddings_for_annotation_batch must NOT catch them so
+        that the Celery autoretry_for=(Exception,) decorator can fire.
+        """
+
+        class RetriableEmbedder(DummyEmbedder384):
+            def embed_texts_batch(self, texts, **kw):
+                raise EmbeddingServerError("503 from upstream")
+
+        annots = [_make_mock_annotation(1, "Hello")]
+        mock_ann_cls.objects = self._mock_objects(annots)
+        mock_get_component.return_value = RetriableEmbedder
+
+        with self.assertRaises(EmbeddingServerError):
+            calculate_embeddings_for_annotation_batch(
+                annotation_ids=[1],
+                embedder_path="test.RetriableEmbedder",
+            )
+
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_transient_timeout_propagates_to_task(
+        self, mock_ann_cls, mock_get_component
+    ):
+        """requests.Timeout escapes the full task for Celery retry."""
+
+        class TimeoutEmbedder(DummyEmbedder384):
+            def embed_texts_batch(self, texts, **kw):
+                raise requests.exceptions.Timeout("timed out")
+
+        annots = [_make_mock_annotation(1, "Hello")]
+        mock_ann_cls.objects = self._mock_objects(annots)
+        mock_get_component.return_value = TimeoutEmbedder
+
+        with self.assertRaises(requests.exceptions.Timeout):
+            calculate_embeddings_for_annotation_batch(
+                annotation_ids=[1],
+                embedder_path="test.TimeoutEmbedder",
+            )
 
     @patch("opencontractserver.tasks.embeddings_task._apply_dual_embedding_strategy")
     @patch("opencontractserver.tasks.embeddings_task.Annotation")
