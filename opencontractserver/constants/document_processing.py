@@ -113,3 +113,11 @@ MAX_CHUNK_RETRY_BACKOFF_SECONDS = 30
 # Prevents unbounded loops in _disambiguate_path() if a corpus has hundreds
 # of documents sharing the same filename in the same folder.
 MAX_PATH_DISAMBIGUATION_SUFFIX = 1000
+
+# Maximum number of retries when DocumentPath.objects.create() raises
+# IntegrityError due to a TOCTOU race against the
+# `unique_active_path_per_corpus` partial unique constraint.  Each retry
+# re-runs _disambiguate_path() with the losing path added to the
+# in-memory occupied set, so a small number of retries is sufficient to
+# resolve transient concurrent collisions even under heavy load.
+MAX_PATH_CREATE_RETRIES = 5
