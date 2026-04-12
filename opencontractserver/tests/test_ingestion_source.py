@@ -1569,3 +1569,199 @@ class TestCorpusImportContentLineage(TestCase):
         self.assertEqual(path.ingestion_source, self.source)
         self.assertEqual(path.external_id, "ext-corpus-001")
         self.assertEqual(path.ingestion_metadata, {"import_job": "batch-42"})
+
+
+# ------------------------------------------------------------------ #
+# Corpus.add_document lineage kwargs passthrough
+# ------------------------------------------------------------------ #
+
+
+class TestCorpusAddDocumentLineage(TestCase):
+    """Test that Corpus.add_document passes lineage kwargs to DocumentPath."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        set_permissions_for_obj_to_user(self.user, self.corpus, [PermissionTypes.ALL])
+        self.source = IngestionSource.objects.create(
+            name="add_doc_source",
+            source_type=IngestionSourceCategory.API,
+            creator=self.user,
+        )
+
+    def test_add_document_with_lineage_kwargs(self):
+        """Corpus.add_document should extract lineage kwargs and pass to DocumentPath."""
+        original_doc = Document.objects.create(
+            title="Original Doc",
+            creator=self.user,
+            pdf_file="original.pdf",
+        )
+        corpus_doc, status, path = self.corpus.add_document(
+            document=original_doc,
+            user=self.user,
+            ingestion_source=self.source,
+            external_id="ext-add-001",
+            ingestion_metadata={"batch": "add-42"},
+        )
+        self.assertIsNotNone(path)
+        path.refresh_from_db()
+        self.assertEqual(path.ingestion_source, self.source)
+        self.assertEqual(path.external_id, "ext-add-001")
+        self.assertEqual(path.ingestion_metadata, {"batch": "add-42"})
+
+
+# ------------------------------------------------------------------ #
+# import_document update path with lineage kwargs
+# ------------------------------------------------------------------ #
+
+
+class TestImportDocumentUpdateLineage(TestCase):
+    """Test import_document update path (existing path) with lineage kwargs."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+        self.source = IngestionSource.objects.create(
+            name="update_source",
+            source_type=IngestionSourceCategory.CRAWLER,
+            creator=self.user,
+        )
+
+    def test_update_existing_path_with_lineage(self):
+        """Updating an existing path should store lineage kwargs on the new version."""
+        from opencontractserver.documents.versioning import import_document
+
+        # Create initial document at a path
+        content_v1 = b"%PDF-1.5 version 1"
+        doc_v1, status_v1, path_v1 = import_document(
+            corpus=self.corpus,
+            path="/documents/update_lineage.pdf",
+            content=content_v1,
+            user=self.user,
+        )
+        self.assertEqual(status_v1, "created")
+        self.assertIsNone(path_v1.ingestion_source)
+
+        # Update same path with new content and lineage kwargs
+        content_v2 = b"%PDF-1.5 version 2 different"
+        doc_v2, status_v2, path_v2 = import_document(
+            corpus=self.corpus,
+            path="/documents/update_lineage.pdf",
+            content=content_v2,
+            user=self.user,
+            ingestion_source=self.source,
+            external_id="ext-update-001",
+            ingestion_metadata={"crawl_run": "run-99"},
+        )
+        self.assertEqual(status_v2, "updated")
+        self.assertEqual(path_v2.ingestion_source, self.source)
+        self.assertEqual(path_v2.external_id, "ext-update-001")
+        self.assertEqual(path_v2.ingestion_metadata, {"crawl_run": "run-99"})
+
+
+# ------------------------------------------------------------------ #
+# Export document_ref fallback paths
+# ------------------------------------------------------------------ #
+
+
+class TestExportDocumentRefFallbacks(TestCase):
+    """Test package_document_paths document_ref fallback logic."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="testuser", password="testpass")
+        self.corpus = Corpus.objects.create(title="Test Corpus", creator=self.user)
+
+    def test_document_ref_uses_hash_when_available(self):
+        """document_ref should use pdf_file_hash when available."""
+        from opencontractserver.utils.export_v2 import package_document_paths
+
+        doc = Document.objects.create(
+            title="Hash Doc",
+            creator=self.user,
+            pdf_file="hash_doc.pdf",
+            pdf_file_hash="sha256_abc123",
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/hash_doc.pdf",
+            version_number=1,
+            creator=self.user,
+        )
+        exported = package_document_paths(self.corpus)
+        self.assertEqual(len(exported), 1)
+        self.assertEqual(exported[0]["document_ref"], "sha256_abc123")
+
+    def test_document_ref_falls_back_to_filename(self):
+        """document_ref should fall back to filename when hash is empty."""
+        from opencontractserver.utils.export_v2 import package_document_paths
+
+        doc = Document.objects.create(
+            title="No Hash Doc",
+            creator=self.user,
+            pdf_file="subdir/fallback_doc.pdf",
+            pdf_file_hash="",
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/fallback_doc.pdf",
+            version_number=1,
+            creator=self.user,
+        )
+        exported = package_document_paths(self.corpus)
+        self.assertEqual(len(exported), 1)
+        self.assertEqual(exported[0]["document_ref"], "fallback_doc.pdf")
+
+    def test_document_ref_falls_back_to_id(self):
+        """document_ref should fall back to str(id) when no hash and no file."""
+        from opencontractserver.utils.export_v2 import package_document_paths
+
+        doc = Document.objects.create(
+            title="No File Doc",
+            creator=self.user,
+            pdf_file_hash="",
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/no_file_doc.pdf",
+            version_number=1,
+            creator=self.user,
+        )
+        exported = package_document_paths(self.corpus)
+        self.assertEqual(len(exported), 1)
+        self.assertEqual(exported[0]["document_ref"], str(doc.id))
+
+    def test_export_parent_version_number(self):
+        """Exported paths should include parent_version_number when parent exists."""
+        from opencontractserver.utils.export_v2 import package_document_paths
+
+        doc = Document.objects.create(
+            title="Versioned Doc",
+            creator=self.user,
+            pdf_file="versioned.pdf",
+            pdf_file_hash="hash_versioned",
+        )
+        root_path = DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/versioned.pdf",
+            version_number=1,
+            is_current=False,
+            creator=self.user,
+        )
+        DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/versioned.pdf",
+            version_number=2,
+            parent=root_path,
+            is_current=True,
+            creator=self.user,
+        )
+        exported = package_document_paths(self.corpus)
+        self.assertEqual(len(exported), 2)
+        # Find the child entry
+        child_entry = next(e for e in exported if e["version_number"] == 2)
+        self.assertEqual(child_entry["parent_version_number"], 1)
