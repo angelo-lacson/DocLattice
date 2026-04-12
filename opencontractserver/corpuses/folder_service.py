@@ -36,6 +36,7 @@ Permission Model (from consolidated_permissioning_guide.md):
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -1142,21 +1143,17 @@ class DocumentFolderService:
                     # Note: _compute_moved_path extracts only the filename;
                     # intermediate directory segments are dropped.
                     new_path = cls._compute_moved_path(current.path, folder)
+                    # Always pass batch_claimed so disambiguation considers
+                    # both DB-occupied paths and paths already claimed by
+                    # earlier items in this batch.  Without this, two docs
+                    # sharing a filename that also conflicts with an existing
+                    # DB path would both resolve to the same suffix.
                     new_path = cls._disambiguate_path(
-                        new_path, corpus, exclude_pk=current.pk
+                        new_path,
+                        corpus,
+                        exclude_pk=current.pk,
+                        extra_occupied=batch_claimed,
                     )
-
-                    # Check within-batch conflict: if another document in
-                    # this batch already claimed this path, disambiguate
-                    # further by trying numeric suffixes against both the
-                    # DB-occupied set and the batch-claimed set.
-                    if new_path in batch_claimed:
-                        new_path = cls._disambiguate_path(
-                            new_path,
-                            corpus,
-                            exclude_pk=current.pk,
-                            extra_occupied=batch_claimed,
-                        )
 
                     batch_claimed.add(new_path)
                     planned_paths.append((current, new_path))
@@ -1328,7 +1325,9 @@ class DocumentFolderService:
         if directory == "/":
             qs = qs.filter(path__regex=r"^/[^/]+$")
         elif directory:
-            qs = qs.filter(path__startswith=directory)
+            # Match only immediate children (not nested subdirectories)
+            # to avoid pulling the entire subtree into memory.
+            qs = qs.filter(path__regex=rf"^{re.escape(directory)}[^/]+$")
         # else: directory == "" means no leading slash; match all (rare)
         if exclude_pk is not None:
             qs = qs.exclude(pk=exclude_pk)

@@ -3338,13 +3338,18 @@ class TestErrorPaths_BulkMoveAtomicRollback(DocumentFolderServiceTestBase):
         original_disambiguate = DocumentFolderService._disambiguate_path
         call_count = 0
 
-        def selective_fail(base_path, corpus, exclude_pk=None):
+        def selective_fail(base_path, corpus, exclude_pk=None, extra_occupied=None):
             nonlocal call_count
             call_count += 1
             # Fail on the second document only
             if call_count == 2:
                 raise ValueError("suffix exhausted")
-            return original_disambiguate(base_path, corpus, exclude_pk=exclude_pk)
+            return original_disambiguate(
+                base_path,
+                corpus,
+                exclude_pk=exclude_pk,
+                extra_occupied=extra_occupied,
+            )
 
         with patch.object(
             DocumentFolderService, "_disambiguate_path", staticmethod(selective_fail)
@@ -3488,6 +3493,87 @@ class TestErrorPaths_BulkMoveAtomicRollback(DocumentFolderServiceTestBase):
         self.assertNotEqual(path1.path, path2.path)
         self.assertEqual(path1.folder_id, self.folder.id)
         self.assertEqual(path2.folder_id, self.folder.id)
+
+    def test_bulk_move_two_docs_same_filename_both_conflict_with_existing(self):
+        """Two documents with the same filename moved to a folder that already
+        contains a file with that name should all get distinct disambiguated
+        paths (e.g. report_1.pdf, report_2.pdf)."""
+        # Pre-existing document at /Target/report.pdf
+        existing_doc = Document.objects.create(
+            title="Existing", creator=self.owner, pdf_file="existing.pdf"
+        )
+        DocumentPath.objects.create(
+            document=existing_doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=self.folder,
+            path="/Target/report.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Doc A named report.pdf at root
+        doc_a = Document.objects.create(
+            title="Report A", creator=self.owner, pdf_file="a.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc_a,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=None,
+            path="/report.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Doc B named report.pdf in a different source folder
+        source, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Source"
+        )
+        doc_b = Document.objects.create(
+            title="Report B", creator=self.owner, pdf_file="b.pdf"
+        )
+        DocumentPath.objects.create(
+            document=doc_b,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=source,
+            path="/Source/report.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        moved_count, error = DocumentFolderService.move_documents_to_folder(
+            user=self.owner,
+            document_ids=[doc_a.id, doc_b.id],
+            corpus=self.corpus,
+            folder=self.folder,
+        )
+
+        self.assertEqual(moved_count, 2)
+        self.assertEqual(error, "")
+
+        path_a = DocumentPath.objects.get(
+            document=doc_a, corpus=self.corpus, is_current=True
+        )
+        path_b = DocumentPath.objects.get(
+            document=doc_b, corpus=self.corpus, is_current=True
+        )
+        existing_path = DocumentPath.objects.get(
+            document=existing_doc, corpus=self.corpus, is_current=True
+        )
+
+        # All three paths must be distinct
+        all_paths = {existing_path.path, path_a.path, path_b.path}
+        self.assertEqual(len(all_paths), 3)
+        # The existing path is unchanged
+        self.assertEqual(existing_path.path, "/Target/report.pdf")
+        # Both new paths should be in /Target/ with _N suffixes
+        self.assertTrue(path_a.path.startswith("/Target/report_"))
+        self.assertTrue(path_b.path.startswith("/Target/report_"))
 
 
 # =============================================================================
