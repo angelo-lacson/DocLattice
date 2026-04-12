@@ -874,6 +874,32 @@ class TestExportWithLineageFields(TestCase):
         self.assertNotIn("external_id", entry)
         self.assertNotIn("ingestion_metadata", entry)
 
+    def test_export_omits_empty_dict_ingestion_metadata(self):
+        """Paths with default empty-dict ingestion_metadata should not export
+        the field, avoiding noise in the export output."""
+        doc = Document.objects.create(
+            title="Default Meta Doc", creator=self.user, pdf_file="doc.pdf"
+        )
+        # Create path without explicitly setting ingestion_metadata;
+        # the model default (jsonfield_default_value) produces {}.
+        path = DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            path="/documents/default_meta.pdf",
+            version_number=1,
+            creator=self.user,
+        )
+        # Confirm the default is indeed an empty dict
+        self.assertEqual(path.ingestion_metadata, {})
+
+        from opencontractserver.utils.export_v2 import package_document_paths
+
+        exported = package_document_paths(self.corpus)
+        self.assertEqual(len(exported), 1)
+        entry = exported[0]
+        # Empty dict should be omitted from export (truthiness check)
+        self.assertNotIn("ingestion_metadata", entry)
+
 
 # ------------------------------------------------------------------ #
 # Import with lineage fields

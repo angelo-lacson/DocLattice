@@ -10,7 +10,11 @@ from graphene.types.generic import GenericScalar
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
-from config.graphql.document_types import IngestionSourceType, IngestionSourceTypeEnum
+from config.graphql.document_types import (
+    EXPECTED_GLOBAL_ID_TYPE,
+    IngestionSourceType,
+    IngestionSourceTypeEnum,
+)
 from opencontractserver.documents.models import (
     IngestionSource,
     IngestionSourceCategory,
@@ -21,8 +25,6 @@ from opencontractserver.utils.permissioning import (
 )
 
 logger = logging.getLogger(__name__)
-
-EXPECTED_GLOBAL_ID_TYPE = "IngestionSourceType"
 _NOT_FOUND_MSG = "Ingestion source not found"
 
 

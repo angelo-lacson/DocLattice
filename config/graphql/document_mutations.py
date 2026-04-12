@@ -21,12 +21,12 @@ from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
 from config.graphql.base import DRFDeletion, DRFMutation
+from config.graphql.document_types import EXPECTED_GLOBAL_ID_TYPE
 from config.graphql.graphene_types import (
     CorpusType,
     DocumentType,
     UserExportType,
 )
-from config.graphql.ingestion_source_mutations import EXPECTED_GLOBAL_ID_TYPE
 from config.graphql.ratelimits import (
     RateLimits,
     get_user_tier_rate,

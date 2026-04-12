@@ -244,7 +244,7 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
                 entry["ingestion_source_name"] = doc_path.ingestion_source.name
             if doc_path.external_id:
                 entry["external_id"] = doc_path.external_id
-            if doc_path.ingestion_metadata is not None:
+            if doc_path.ingestion_metadata:
                 entry["ingestion_metadata"] = doc_path.ingestion_metadata
 
             paths_export.append(entry)

@@ -11,6 +11,7 @@ from graphene_django.filter import DjangoFilterConnectionField
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
+from config.graphql.document_types import EXPECTED_GLOBAL_ID_TYPE
 from config.graphql.filters import DocumentFilter, DocumentRelationshipFilter
 from config.graphql.graphene_types import (
     BulkDocumentUploadStatusType,
@@ -18,7 +19,6 @@ from config.graphql.graphene_types import (
     DocumentType,
     IngestionSourceType,
 )
-from config.graphql.ingestion_source_mutations import EXPECTED_GLOBAL_ID_TYPE
 from config.graphql.ratelimits import get_user_tier_rate, graphql_ratelimit_dynamic
 from opencontractserver.constants.annotations import (
     DOCUMENT_RELATIONSHIP_QUERY_MAX_LIMIT,
