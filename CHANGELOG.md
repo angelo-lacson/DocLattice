@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Backend coverage disappearing from Codecov dashboard** (`.codecov.yml`): Added a `backend` flag with `carryforward: true` (paths: `opencontractserver/`, `config/`), mirroring the pattern already in place for `frontend-unit` / `frontend-component`. Without carryforward, any commit whose backend `pytest` job fails or times out (e.g. the merge commit `f166a59`, where the push-to-main `pytest` check failed after PR #1213 merged) causes Codecov to record backend files at 0% for that commit, which then replaces the healthy ~90% backend coverage on the dashboard — making it look as if only frontend coverage (~39%) is being collected. With carryforward, a flaky/failing backend run inherits the parent commit's backend coverage so the dashboard continues to reflect both suites.
+
 - **Conversation pagination cache collisions** (PR #1206): Added `keyArgs` configuration for the `conversations` relay pagination cache entry in `frontend/src/graphql/cache.ts`. Previously `conversations` used `relayStylePagination()` with no key arguments, causing all conversation queries (across different corpora, documents, and conversation types) to share a single cache entry. This led to paginated results from one context bleeding into another. Now uses `["documentId", "corpusId", "conversationType", "hasCorpus", "hasDocument"]` to isolate cache entries by filter dimensions.
 
 - **GraphQL security hardening cleanup** (Issue #1198):
