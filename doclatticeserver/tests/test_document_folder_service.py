@@ -611,6 +611,82 @@ class TestFolderDelete_BasicOperations(DocumentFolderServiceTestBase):
         original_path.refresh_from_db()
         self.assertFalse(original_path.is_current)
 
+    def test_delete_folder_disambiguates_same_filename_from_subfolders(self):
+        """Two documents in different sub-paths under the same folder
+        share the same root filename (report.pdf). When the folder is
+        deleted both are relocated to root; the second should be
+        disambiguated (e.g. /report_1.pdf).
+
+        This exercises the sequential disambiguation in delete_folder:
+        each iteration writes the new DocumentPath row before the next
+        _disambiguate_path query, so extra_occupied is not needed.
+        """
+        folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="MyFolder"
+        )
+
+        # Two documents whose paths differ (satisfying the DB unique
+        # constraint) but share the same leaf filename.  Both belong
+        # to the same folder FK, simulating documents that were
+        # originally in different sub-directories.
+        doc_a = Document.objects.create(
+            title="Report A", creator=self.owner, pdf_file="report.pdf"
+        )
+        path_a = DocumentPath.objects.create(
+            document=doc_a,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=folder,
+            path="/MyFolder/SubA/report.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        doc_b = Document.objects.create(
+            title="Report B", creator=self.owner, pdf_file="report.pdf"
+        )
+        path_b = DocumentPath.objects.create(
+            document=doc_b,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=folder,
+            path="/MyFolder/SubB/report.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        # Delete the folder — both docs should move to root
+        success, error = DocumentFolderService.delete_folder(
+            user=self.owner, folder=folder
+        )
+
+        self.assertTrue(success, f"delete_folder failed: {error}")
+
+        # Both documents should now be at root with unique paths
+        current_a = DocumentPath.objects.get(
+            document=doc_a, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+        current_b = DocumentPath.objects.get(
+            document=doc_b, corpus=self.corpus, is_current=True, is_deleted=False
+        )
+
+        # Both should be at root (no folder)
+        self.assertIsNone(current_a.folder)
+        self.assertIsNone(current_b.folder)
+
+        # Paths should be distinct — one keeps the original name, the other
+        # gets a disambiguation suffix
+        paths = {current_a.path, current_b.path}
+        self.assertEqual(len(paths), 2, "Both paths should be unique")
+        self.assertIn("/report.pdf", paths)
+        self.assertIn("/report_1.pdf", paths)
+
+        # Verify history chain
+        self.assertEqual(current_a.parent_id, path_a.id)
+        self.assertEqual(current_b.parent_id, path_b.id)
+
     def test_delete_folder_without_permission_fails(self):
         """User without DELETE permission cannot delete folder."""
         reader = User.objects.create_user(
