@@ -22,6 +22,7 @@ import numpy as np
 import requests
 
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
+from opencontractserver.pipeline.base.exceptions import EmbeddingServerError
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.settings_schema import (
     PipelineSetting,
@@ -32,28 +33,6 @@ from opencontractserver.utils.cloud import maybe_add_cloud_run_auth
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-
-class EmbeddingClientError(Exception):
-    """
-    Raised for 4xx client errors from the embedding service.
-
-    These errors indicate invalid input (malformed request, bad data) and
-    should NOT be retried by Celery tasks.
-    """
-
-    pass
-
-
-class EmbeddingServerError(Exception):
-    """
-    Raised for 5xx server errors from the embedding service.
-
-    These errors indicate transient service issues and SHOULD be retried
-    by Celery tasks with exponential backoff.
-    """
-
-    pass
 
 
 class BaseMultimodalMicroserviceEmbedder(BaseEmbedder):

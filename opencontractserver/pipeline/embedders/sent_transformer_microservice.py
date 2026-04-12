@@ -11,13 +11,11 @@ from opencontractserver.constants.document_processing import (
     MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE,
 )
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
+from opencontractserver.pipeline.base.exceptions import EmbeddingServerError
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.settings_schema import (
     PipelineSetting,
     SettingType,
-)
-from opencontractserver.pipeline.embedders.multimodal_microservice import (
-    EmbeddingServerError,
 )
 from opencontractserver.utils.cloud import maybe_add_cloud_run_auth
 

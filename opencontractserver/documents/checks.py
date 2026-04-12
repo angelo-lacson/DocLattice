@@ -7,7 +7,7 @@ common misconfigurations.
 
 import logging
 
-from django.core.checks import Warning, register
+from django.core.checks import Error, Warning, register
 
 logger = logging.getLogger(__name__)
 
@@ -219,4 +219,37 @@ def check_configured_components_secrets(app_configs, **kwargs):
         # Don't fail startup if check can't run
         pass
 
+    return errors
+
+
+@register()
+def check_embedding_batch_size_configuration(app_configs, **kwargs):
+    """
+    Verify that EMBEDDING_API_BATCH_SIZE does not exceed
+    MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE.
+
+    A misconfiguration here would cause silently truncated batches when
+    embedding tasks run. Surfacing it as a Django system check provides a
+    clear error message during startup (``manage.py check``, ``runserver``,
+    ``migrate``) instead of an opaque import-time traceback.
+    """
+    from opencontractserver.constants.document_processing import (
+        EMBEDDING_API_BATCH_SIZE,
+        MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE,
+    )
+
+    errors = []
+    if EMBEDDING_API_BATCH_SIZE > MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE:
+        errors.append(
+            Error(
+                f"EMBEDDING_API_BATCH_SIZE ({EMBEDDING_API_BATCH_SIZE}) exceeds "
+                f"MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE ({MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE}).",
+                hint=(
+                    "Lower EMBEDDING_API_BATCH_SIZE or raise "
+                    "MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE in "
+                    "opencontractserver/constants/document_processing.py."
+                ),
+                id="documents.E001",
+            )
+        )
     return errors

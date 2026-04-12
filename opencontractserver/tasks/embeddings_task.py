@@ -11,9 +11,7 @@ from opencontractserver.constants.document_processing import EMBEDDING_API_BATCH
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
-from opencontractserver.pipeline.embedders.multimodal_microservice import (
-    EmbeddingServerError,
-)
+from opencontractserver.pipeline.base.exceptions import EmbeddingServerError
 from opencontractserver.pipeline.utils import (
     get_component_by_name,
     get_default_embedder,

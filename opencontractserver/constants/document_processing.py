@@ -29,16 +29,10 @@ EMBEDDING_API_BATCH_SIZE = 50
 # Exceeding this raises ValueError rather than silently truncating.
 MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE = 100
 
-# Import-time validation is intentional here: these constants are compile-time
-# configuration, not runtime state.  A misconfiguration (e.g., API batch size
-# exceeding the microservice limit) is a deployment error that should surface
-# immediately at process startup rather than silently producing truncated
-# batches hours later when the first embedding task runs.
-if EMBEDDING_API_BATCH_SIZE > MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE:
-    raise ValueError(
-        f"EMBEDDING_API_BATCH_SIZE ({EMBEDDING_API_BATCH_SIZE}) must not exceed "
-        f"MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE ({MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE})"
-    )
+# Validation that EMBEDDING_API_BATCH_SIZE <= MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE
+# is enforced via a Django system check in documents/checks.py (documents.E001)
+# rather than a bare raise here, so misconfiguration surfaces as a clear Django
+# check error during startup instead of an opaque import-time traceback.
 
 # HTTP request timeout (seconds) for single-text embedding calls.
 EMBEDDER_SINGLE_REQUEST_TIMEOUT_SECONDS = 30

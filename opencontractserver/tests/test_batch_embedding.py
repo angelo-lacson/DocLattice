@@ -18,10 +18,8 @@ from opencontractserver.constants.document_processing import (
     MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE,
 )
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
+from opencontractserver.pipeline.base.exceptions import EmbeddingServerError
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
-from opencontractserver.pipeline.embedders.multimodal_microservice import (
-    EmbeddingServerError,
-)
 from opencontractserver.pipeline.embedders.sent_transformer_microservice import (
     MicroserviceEmbedder,
 )
@@ -819,6 +817,88 @@ class TestCalculateEmbeddingsForAnnotationBatch(unittest.TestCase):
             any("Contract violation" in e for e in result["errors"]),
             f"Expected 'Contract violation' in errors: {result['errors']}",
         )
+
+    @patch("opencontractserver.tasks.embeddings_task._create_embedding_for_annotation")
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_multimodal_partition_path(
+        self, mock_ann_cls, mock_get_component, mock_create_embed
+    ):
+        """Multimodal embedder partitions annotations into text-only batch + individual multimodal."""
+
+        class MultimodalDummyEmbedder(DummyEmbedder384):
+            """Embedder that advertises multimodal support."""
+
+            is_multimodal = True
+            supports_images = True
+
+        text_annot_1 = _make_mock_annotation(1, "Pure text annotation")
+        text_annot_2 = _make_mock_annotation(2, "Another text annotation")
+        image_annot = _make_mock_annotation(
+            3,
+            "Annotation with image",
+            content_modalities=[
+                ContentModality.TEXT.value,
+                ContentModality.IMAGE.value,
+            ],
+        )
+
+        all_annots = [text_annot_1, text_annot_2, image_annot]
+        mock_ann_cls.objects = self._mock_objects(all_annots)
+        mock_get_component.return_value = MultimodalDummyEmbedder
+        mock_create_embed.return_value = True
+
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[1, 2, 3],
+            embedder_path="test.MultimodalDummyEmbedder",
+        )
+
+        self.assertEqual(result["total"], 3)
+        self.assertEqual(result["succeeded"], 3)
+        self.assertEqual(result["failed"], 0)
+
+        # Text-only annotations should go through batch path (add_embedding called)
+        text_annot_1.add_embedding.assert_called_once()
+        text_annot_2.add_embedding.assert_called_once()
+
+        # Multimodal annotation should go through _create_embedding_for_annotation
+        mock_create_embed.assert_called_once()
+        call_args = mock_create_embed.call_args
+        self.assertEqual(call_args[0][0], image_annot)
+        self.assertEqual(call_args[0][2], "test.MultimodalDummyEmbedder")
+
+    @patch("opencontractserver.tasks.embeddings_task._create_embedding_for_annotation")
+    @patch("opencontractserver.tasks.embeddings_task.get_component_by_name")
+    @patch("opencontractserver.tasks.embeddings_task.Annotation")
+    def test_multimodal_partition_individual_failure(
+        self, mock_ann_cls, mock_get_component, mock_create_embed
+    ):
+        """Multimodal annotation failure is recorded without failing text-only annotations."""
+
+        class MultimodalDummyEmbedder(DummyEmbedder384):
+            is_multimodal = True
+            supports_images = True
+
+        text_annot = _make_mock_annotation(1, "Pure text")
+        image_annot = _make_mock_annotation(
+            2,
+            "Image annotation",
+            content_modalities=[ContentModality.IMAGE.value],
+        )
+
+        mock_ann_cls.objects = self._mock_objects([text_annot, image_annot])
+        mock_get_component.return_value = MultimodalDummyEmbedder
+        mock_create_embed.return_value = False  # Multimodal embedding fails
+
+        result = calculate_embeddings_for_annotation_batch(
+            annotation_ids=[1, 2],
+            embedder_path="test.MultimodalDummyEmbedder",
+        )
+
+        self.assertEqual(result["total"], 2)
+        self.assertEqual(result["succeeded"], 1)  # text-only succeeded
+        self.assertEqual(result["failed"], 1)  # multimodal failed
+        text_annot.add_embedding.assert_called_once()
 
     @patch("opencontractserver.tasks.embeddings_task._apply_dual_embedding_strategy")
     @patch("opencontractserver.tasks.embeddings_task.Annotation")

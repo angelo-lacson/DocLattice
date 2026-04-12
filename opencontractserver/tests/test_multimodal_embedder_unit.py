@@ -16,9 +16,9 @@ from django.test import TestCase
 from PIL import Image
 from requests.exceptions import ConnectionError, Timeout
 
+from opencontractserver.pipeline.base.exceptions import EmbeddingServerError
 from opencontractserver.pipeline.embedders.multimodal_microservice import (
     CLIPMicroserviceEmbedder,
-    EmbeddingServerError,
 )
 from opencontractserver.types.enums import ContentModality
 
