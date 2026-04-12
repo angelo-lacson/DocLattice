@@ -62,8 +62,31 @@ class DatacellType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
 
 class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
-    full_datacell_list = graphene.List(DatacellType)
+    full_datacell_list = graphene.List(
+        DatacellType,
+        limit=graphene.Int(
+            description=(
+                "Maximum number of datacells to return. Use to bound payload size "
+                "for extracts with many documents and columns. Returns all visible "
+                "datacells if omitted."
+            )
+        ),
+        offset=graphene.Int(
+            description=(
+                "Number of datacells to skip before applying `limit`. Use together "
+                "with `limit` for client-driven pagination."
+            )
+        ),
+    )
     full_document_list = graphene.List(DocumentType)
+    datacell_count = graphene.Int(
+        description=(
+            "Total number of datacells in this extract visible to the current "
+            "user, ignoring any `limit`/`offset` applied to `fullDatacellList`. "
+            "Use together with `fullDatacellList(limit: ...)` to display "
+            "'showing N of M' indicators when the payload is bounded."
+        )
+    )
 
     @classmethod
     def get_node(cls, info, id):
@@ -82,12 +105,33 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         interfaces = [relay.Node]
         connection_class = CountableConnection
 
-    def resolve_full_datacell_list(self, info):
+    def resolve_full_datacell_list(self, info, limit=None, offset=None):
+        from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
+
+        qs = ExtractQueryOptimizer.get_extract_datacells(
+            self, info.context.user, document_id=None
+        )
+
+        # Apply a deterministic ordering so that `limit`/`offset` produce a
+        # stable window across requests. Without this, PostgreSQL is free to
+        # return rows in any order, which would make pagination indeterminate.
+        qs = qs.order_by("document_id", "column_id", "id")
+
+        start = offset or 0
+        if limit is not None:
+            if limit < 0:
+                limit = 0
+            return qs[start : start + limit]
+        if start:
+            return qs[start:]
+        return qs
+
+    def resolve_datacell_count(self, info) -> int:
         from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
 
         return ExtractQueryOptimizer.get_extract_datacells(
             self, info.context.user, document_id=None
-        )
+        ).count()
 
     def resolve_full_document_list(self, info):
         from opencontractserver.types.enums import PermissionTypes

@@ -142,3 +142,104 @@ class ExtractsQueryTestCase(TestCase):
         )
         self.assertEqual(result["data"]["datacell"]["data"], {"data": "TestData"})
         self.assertEqual(result["data"]["datacell"]["dataDefinition"], "str")
+
+    def test_full_datacell_list_limit_offset_and_count(self):
+        """
+        Covers the ExtractType.full_datacell_list pagination arguments (`limit`,
+        `offset`) and the `datacell_count` field introduced to resolve #1204.
+
+        Scenario: create 5 datacells on the extract, then verify that
+        - `fullDatacellList` with no args still returns all visible datacells
+        - `fullDatacellList(limit: 2)` returns exactly 2 cells
+        - `fullDatacellList(limit: 2, offset: 2)` returns the next 2 cells
+          (different from the first page)
+        - `datacellCount` reports the full total regardless of limit/offset
+        """
+        extract_id = to_global_id("ExtractType", self.extract.id)
+
+        # The setUp already created one datacell (self.row). Add four more so
+        # we have 5 cells total on the same extract+column+document (which is
+        # allowed because the uniqueness constraint only applies when
+        # extract is NULL).
+        for i in range(4):
+            Datacell.objects.create(
+                extract=self.extract,
+                column=self.column,
+                data={"data": f"TestData{i}"},
+                data_definition="str",
+                creator=self.user,
+                document=self.doc,
+            )
+
+        # Unbounded fetch should return all 5 cells and datacellCount=5.
+        result = self.client.execute("""
+            query {
+                extract(id: "%s") {
+                    id
+                    datacellCount
+                    fullDatacellList {
+                        id
+                    }
+                }
+            }
+            """ % extract_id)
+        self.assertIsNone(result.get("errors"))
+        extract_data = result["data"]["extract"]
+        self.assertEqual(extract_data["datacellCount"], 5)
+        self.assertEqual(len(extract_data["fullDatacellList"]), 5)
+
+        # First page: limit=2 → exactly 2 cells, datacellCount still 5.
+        result_page1 = self.client.execute("""
+            query {
+                extract(id: "%s") {
+                    datacellCount
+                    fullDatacellList(limit: 2) {
+                        id
+                    }
+                }
+            }
+            """ % extract_id)
+        self.assertIsNone(result_page1.get("errors"))
+        page1 = result_page1["data"]["extract"]
+        self.assertEqual(page1["datacellCount"], 5)
+        self.assertEqual(len(page1["fullDatacellList"]), 2)
+
+        # Second page: limit=2, offset=2 → next 2 cells, disjoint from page 1.
+        result_page2 = self.client.execute("""
+            query {
+                extract(id: "%s") {
+                    datacellCount
+                    fullDatacellList(limit: 2, offset: 2) {
+                        id
+                    }
+                }
+            }
+            """ % extract_id)
+        self.assertIsNone(result_page2.get("errors"))
+        page2 = result_page2["data"]["extract"]
+        self.assertEqual(page2["datacellCount"], 5)
+        self.assertEqual(len(page2["fullDatacellList"]), 2)
+
+        page1_ids = {cell["id"] for cell in page1["fullDatacellList"]}
+        page2_ids = {cell["id"] for cell in page2["fullDatacellList"]}
+        self.assertTrue(
+            page1_ids.isdisjoint(page2_ids),
+            "Pagination produced overlapping pages — offset is not applied.",
+        )
+
+        # Final page: limit=2, offset=4 → only 1 cell remains.
+        result_page3 = self.client.execute("""
+            query {
+                extract(id: "%s") {
+                    fullDatacellList(limit: 2, offset: 4) {
+                        id
+                    }
+                }
+            }
+            """ % extract_id)
+        self.assertIsNone(result_page3.get("errors"))
+        self.assertEqual(
+            len(result_page3["data"]["extract"]["fullDatacellList"]),
+            1,
+            "Expected 1 remaining cell after offset=4 on a 5-row list.",
+        )
