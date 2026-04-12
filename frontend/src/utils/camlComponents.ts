@@ -106,15 +106,15 @@ export function parseComponentMarker(
  * Build a `[component:...]` marker string from type and props.
  *
  * Used by the editor to insert markers at the cursor. Values containing
- * whitespace, double-quotes, backslashes, or equals signs are automatically
- * quoted, with internal backslashes and double-quotes escaped.
+ * whitespace, double-quotes, backslashes, equals signs, or closing brackets
+ * are automatically quoted, with internal backslashes and double-quotes escaped.
  */
 export function buildComponentMarker(
   type: string,
   props: CamlComponentProps
 ): string {
   const pairs = Object.entries(props).map(([k, v]) => {
-    const needsQuoting = /[\s"\\=]/.test(v);
+    const needsQuoting = /[\s"\\=\]]/.test(v);
     if (needsQuoting) {
       const escaped = v.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
       return `${k}="${escaped}"`;
