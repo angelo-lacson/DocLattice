@@ -25,6 +25,12 @@ import {
   getDirectiveHandler,
   DirectiveHandlerContext,
 } from "./directiveRegistry";
+import {
+  resolveComponentMarker,
+  type CamlComponentRegistry,
+} from "../../../utils/camlComponents";
+import { ErrorBoundary } from "../../widgets/ErrorBoundary";
+import { ComponentEmbedErrorFallback } from "../../widgets/ComponentEmbedErrorFallback";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +50,8 @@ export interface CamlDirectiveRendererProps {
   };
   /** Optional callback to resolve protocol URIs (e.g. corpus://icon) to image URLs */
   resolveImageSrc?: (src: string) => string | undefined;
+  /** Optional registry of embedded component types (e.g. extract-grid). */
+  componentRegistry?: CamlComponentRegistry;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,6 +78,7 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
   handlerContext,
   stats,
   resolveImageSrc,
+  componentRegistry,
 }) => {
   // Single pass: extract directives and build cleaned document simultaneously.
   // Each prose block is parsed once via extractInlineDirectives, producing both
@@ -137,6 +146,23 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
       const posKey = contentToPositionKey.get(`${trimmed}#${count}`);
       const directives = posKey ? positionToDirectives.get(posKey) : undefined;
 
+      // Check for embedded component markers (e.g. [component:extract-grid ...])
+      // Component-marker blocks are assumed to contain no inline directives.
+      if (componentRegistry) {
+        const resolved = resolveComponentMarker(md, componentRegistry);
+        if (resolved) {
+          return (
+            <ErrorBoundary
+              fallback={(error) => (
+                <ComponentEmbedErrorFallback error={error} />
+              )}
+            >
+              {resolved}
+            </ErrorBoundary>
+          );
+        }
+      }
+
       return (
         <>
           <MarkdownMessageRenderer content={md} />
@@ -152,7 +178,12 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
         </>
       );
     };
-  }, [contentToPositionKey, positionToDirectives, handlerContext]);
+  }, [
+    contentToPositionKey,
+    positionToDirectives,
+    handlerContext,
+    componentRegistry,
+  ]);
 
   return (
     <CamlThemeProvider>
