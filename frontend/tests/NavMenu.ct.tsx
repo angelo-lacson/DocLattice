@@ -4,7 +4,7 @@
  * Tests the refactored NavMenu component that uses @os-legal/ui NavBar.
  * Covers: navigation items, auth states, superuser features, responsive behavior.
  */
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { NavMenuTestWrapper } from "./NavMenuTestWrapper";
 
 // Define mock users locally to avoid import issues with Playwright CT

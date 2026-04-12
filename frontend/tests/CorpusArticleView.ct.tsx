@@ -6,7 +6,7 @@
  * 2. Toolbar with back button and edit button
  * 3. Documents drawer slide-out
  */
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { docScreenshot } from "./utils/docScreenshot";
 import { CorpusArticleViewTestWrapper } from "./CorpusArticleViewTestWrapper";
 

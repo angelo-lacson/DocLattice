@@ -1,6 +1,6 @@
 // Playwright Component Test for CorpusModal
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedProvider } from "@apollo/client/testing";
 import { CorpusModal } from "../src/components/corpuses/CorpusModal";
 import { GET_LABELSETS, GET_EMBEDDERS } from "../src/graphql/queries";

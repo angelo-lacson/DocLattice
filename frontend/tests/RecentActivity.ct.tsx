@@ -1,5 +1,5 @@
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { gql } from "@apollo/client";
 import { RecentActivity } from "../src/components/profile/RecentActivity";
