@@ -862,6 +862,7 @@ class TestExportWithLineageFields(TestCase):
             path="/documents/plain.pdf",
             version_number=1,
             creator=self.user,
+            ingestion_metadata=None,
         )
 
         from opencontractserver.utils.export_v2 import package_document_paths

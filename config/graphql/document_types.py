@@ -37,6 +37,7 @@ from opencontractserver.documents.models import (
     DocumentRelationship,
     DocumentSummaryRevision,
     IngestionSource,
+    IngestionSourceCategory,
 )
 
 User = get_user_model()
@@ -46,14 +47,9 @@ logger = logging.getLogger(__name__)
 # -------------------- Ingestion Source Types -------------------- #
 
 
-class IngestionSourceTypeEnum(graphene.Enum):
-    """Enum for ingestion source categories."""
-
-    MANUAL = "manual"
-    CRAWLER = "crawler"
-    API = "api"
-    PIPELINE = "pipeline"
-    SYNC = "sync"
+IngestionSourceTypeEnum = graphene.Enum.from_enum(
+    IngestionSourceCategory, name="IngestionSourceTypeEnum"
+)
 
 
 class IngestionSourceType(AnnotatePermissionsForReadMixin, DjangoObjectType):
@@ -76,16 +72,7 @@ class IngestionSourceType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     @classmethod
     def get_queryset(cls, queryset, info):
         """Only show sources owned by the current user, shared, or public."""
-        user = info.context.user
-        if user.is_anonymous:
-            return queryset.filter(is_public=True)
-        if user.is_superuser:
-            return queryset
-        return queryset.filter(
-            pk__in=IngestionSource.objects.visible_to_user(user).values_list(
-                "pk", flat=True
-            )
-        )
+        return IngestionSource.objects.visible_to_user(info.context.user)
 
 
 # -------------------- Document Path Types -------------------- #
