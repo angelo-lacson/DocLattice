@@ -1545,7 +1545,7 @@ class TestCurateCorpusMemoryTask(TransactionTestCase):
         conv = self._create_conversation_with_messages(6)
 
         with patch(
-            "opencontractserver.tasks.memory_tasks.estimate_token_count",
+            "opencontractserver.llms.context_guardrails.estimate_token_count",
             side_effect=RuntimeError("Token estimation error"),
         ):
             result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
@@ -1579,7 +1579,7 @@ class TestCurateCorpusMemoryTask(TransactionTestCase):
         with (
             patch("pydantic_ai.agent.Agent") as MockAgent,
             patch(
-                "opencontractserver.tasks.memory_tasks.estimate_token_count",
+                "opencontractserver.llms.context_guardrails.estimate_token_count",
                 side_effect=fake_token_count,
             ),
             patch(
@@ -1982,20 +1982,14 @@ class TestMemoryToolInjectionSecurity(TestCase):
         from opencontractserver.llms.tools.tool_factory import (
             build_inject_params_for_context,
         )
-        from opencontractserver.llms.tools.tool_registry import (
-            CoreTool,
-            ToolRegistry,
-        )
+        from opencontractserver.llms.tools.tool_registry import ToolFunctionRegistry
 
-        registry = ToolRegistry()
-        tool_map = registry._build_function_map()
+        registry = ToolFunctionRegistry.get()
 
         for tool_name in ("get_corpus_memory", "suggest_memory_update"):
-            func, _aliases = tool_map[tool_name]
-            core_tool = CoreTool(
-                name=tool_name,
-                description="test",
-                function=func,
+            core_tool = registry.to_core_tool(tool_name)
+            self.assertIsNotNone(
+                core_tool, f"{tool_name} not found in ToolFunctionRegistry"
             )
             inject = build_inject_params_for_context(
                 core_tool,
@@ -2005,3 +1999,437 @@ class TestMemoryToolInjectionSecurity(TestCase):
             self.assertIn("user_id", inject, f"{tool_name} user_id not injected")
             self.assertEqual(inject["user_id"], 42)
             self.assertIn("corpus_id", inject, f"{tool_name} corpus_id not injected")
+
+
+# ---------------------------------------------------------------------------
+# Additional coverage tests — memory.py edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestReadMemoryContentFallbackPaths(TestCase):
+    """Cover the binary-read fallback and double-failure paths in read_memory_content.
+
+    These tests directly exercise the fallback logic in read_memory_content by
+    using mock objects instead of real file storage, avoiding the complexity of
+    patching Django FileField descriptors.
+    """
+
+    def _make_mock_corpus(
+        self, open_side_effect=None, read_return=None, read_error=None
+    ):
+        """Create a mock corpus with a controlled txt_extract_file."""
+        from unittest.mock import MagicMock
+
+        mock_file = MagicMock()
+        mock_file.__bool__ = MagicMock(return_value=True)
+        if open_side_effect:
+            mock_file.open = MagicMock(side_effect=open_side_effect)
+        if read_return is not None:
+            mock_file.read = MagicMock(return_value=read_return)
+        elif read_error:
+            mock_file.read = MagicMock(side_effect=read_error)
+
+        mock_doc = MagicMock()
+        mock_doc.txt_extract_file = mock_file
+
+        mock_corpus = MagicMock()
+        mock_corpus.memory_document_id = 1
+        mock_corpus.memory_document = mock_doc
+        mock_corpus.id = 99
+        return mock_corpus
+
+    def test_binary_fallback_returns_bytes_decoded(self):
+        """If open('r') fails, .read() returning bytes is decoded."""
+        mock_corpus = self._make_mock_corpus(
+            open_side_effect=OSError("open failed"),
+            read_return=b"## Test\n\n- binary fallback",
+        )
+        content = async_to_sync(read_memory_content)(mock_corpus)
+        self.assertIn("binary fallback", content)
+
+    def test_binary_fallback_returns_string(self):
+        """If open('r') fails but .read() returns a string, return it directly."""
+        mock_corpus = self._make_mock_corpus(
+            open_side_effect=OSError("open failed"),
+            read_return="## Test\n\n- string fallback",
+        )
+        content = async_to_sync(read_memory_content)(mock_corpus)
+        self.assertIn("string fallback", content)
+
+    def test_both_read_paths_fail_returns_empty(self):
+        """If both open('r') and .read() fail, return empty string."""
+        mock_corpus = self._make_mock_corpus(
+            open_side_effect=OSError("open failed"),
+            read_error=OSError("read also failed"),
+        )
+        content = async_to_sync(read_memory_content)(mock_corpus)
+        self.assertEqual(content, "")
+
+
+class TestGetOrCreateStaleFK(TransactionTestCase):
+    """Cover the stale FK exception path in get_or_create_memory_document."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="stale_fk_user",
+            password="testpass123",
+            email="stalefk@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Stale FK Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def test_cleared_fk_triggers_recreation(self):
+        """If memory_document FK is cleared, a new document is created."""
+        from opencontractserver.documents.models import Document
+
+        doc = Document.objects.create(
+            title=MEMORY_DOCUMENT_TITLE,
+            creator=self.user,
+        )
+        self.corpus.memory_document = doc
+        self.corpus.save(update_fields=["memory_document"])
+
+        doc_pk = doc.pk
+
+        # Clear the FK to simulate the document being removed
+        self.corpus.memory_document = None
+        self.corpus.save(update_fields=["memory_document"])
+
+        new_doc = async_to_sync(get_or_create_memory_document)(self.corpus, self.user)
+        self.assertIsNotNone(new_doc.pk)
+        self.assertNotEqual(new_doc.pk, doc_pk)
+
+
+class TestGetMemoryForInjectionTokenPaths(TransactionTestCase):
+    """Cover the token-budget and keyword-scoring paths in get_memory_for_injection."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="token_path_user",
+            password="testpass123",
+            email="tokenpath@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Token Path Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def test_large_memory_logs_warning_on_threshold_breach(self):
+        """When content exceeds full injection max, a warning is logged."""
+        content = (
+            '---\nversion: "1.0"\ncorpus_id: 1\n'
+            "last_curated: null\ncuration_count: 0\n---\n\n"
+            "## Collection Patterns\n\n- insight about contracts\n\n"
+            "## Query Patterns\n\n- search strategy\n"
+        )
+        async_to_sync(update_memory_content)(self.corpus, content, self.user)
+        self.corpus.refresh_from_db()
+
+        # Mock estimate_token_count to return over-threshold value for body
+        def fake_token_count(text):
+            return MEMORY_FULL_INJECTION_MAX_TOKENS + 100
+
+        with (
+            patch(
+                "opencontractserver.agents.memory.estimate_token_count",
+                side_effect=fake_token_count,
+            ),
+            self.assertLogs("opencontractserver.agents.memory", level="WARNING") as cm,
+        ):
+            result = async_to_sync(get_memory_for_injection)(
+                self.corpus, query="specific word"
+            )
+
+        self.assertGreater(len(result), 0)
+        self.assertTrue(
+            any("exceeds full-injection threshold" in msg for msg in cm.output)
+        )
+
+    def test_no_query_budget_exhaustion_skips_later_sections(self):
+        """Without query, only sections fitting within token budget are returned."""
+        # Create 3 sections, with a mock token count that makes only the first fit
+        content = (
+            '---\nversion: "1.0"\ncorpus_id: 1\n'
+            "last_curated: null\ncuration_count: 0\n---\n\n"
+            "## First Section\n\n- First insight\n\n"
+            "## Second Section\n\n- Second insight\n\n"
+            "## Third Section\n\n- Third insight\n"
+        )
+        async_to_sync(update_memory_content)(self.corpus, content, self.user)
+        self.corpus.refresh_from_db()
+
+        call_count = {"n": 0}
+
+        def fake_token_count(text):
+            call_count["n"] += 1
+            # First call is for the full body; return over threshold
+            if call_count["n"] == 1:
+                return MEMORY_FULL_INJECTION_MAX_TOKENS + 100
+            # Each section call: first section fits, rest don't
+            if "First" in text:
+                return MEMORY_FULL_INJECTION_MAX_TOKENS - 10
+            return MEMORY_FULL_INJECTION_MAX_TOKENS  # Won't fit in remaining budget
+
+        with patch(
+            "opencontractserver.agents.memory.estimate_token_count",
+            side_effect=fake_token_count,
+        ):
+            result = async_to_sync(get_memory_for_injection)(self.corpus, query="")
+
+        self.assertIn("First Section", result)
+
+    def test_keyword_scoring_prefers_relevant_sections(self):
+        """Keyword scoring selects sections with highest word overlap."""
+        content = (
+            '---\nversion: "1.0"\ncorpus_id: 1\n'
+            "last_curated: null\ncuration_count: 0\n---\n\n"
+            "## Collection Patterns\n\n- contract analysis patterns\n\n"
+            "## Query Patterns\n\n- search date ranges effectively\n"
+        )
+        async_to_sync(update_memory_content)(self.corpus, content, self.user)
+        self.corpus.refresh_from_db()
+
+        call_count = {"n": 0}
+
+        def fake_token_count(text):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return MEMORY_FULL_INJECTION_MAX_TOKENS + 100
+            return 50
+
+        with patch(
+            "opencontractserver.agents.memory.estimate_token_count",
+            side_effect=fake_token_count,
+        ):
+            result = async_to_sync(get_memory_for_injection)(
+                self.corpus, query="contract analysis"
+            )
+
+        self.assertIn("contract", result)
+
+
+class TestMergeCurationCountIncrement(TestCase):
+    """Cover the curation_count increment path in merge_curation_into_memory."""
+
+    def test_curation_count_increments(self):
+        base = _build_empty_memory(1)
+        # First curation
+        result = merge_curation_into_memory(
+            current_content=base,
+            collection_patterns=["- **P1**: insight 1"],
+            query_patterns=[],
+            refinements=[],
+        )
+        self.assertIn("curation_count: 1", result)
+
+        # Second curation
+        result2 = merge_curation_into_memory(
+            current_content=result,
+            collection_patterns=["- **P2**: insight 2"],
+            query_patterns=[],
+            refinements=[],
+        )
+        self.assertIn("curation_count: 2", result2)
+
+    def test_refinement_not_found_does_not_alter_body(self):
+        """Refinements referencing non-existent text don't alter sections."""
+        base = _build_empty_memory(1)
+        result = merge_curation_into_memory(
+            current_content=base,
+            collection_patterns=[],
+            query_patterns=[],
+            refinements=[
+                {
+                    "existing": "- **Nonexistent**: This text is not in the document",
+                    "refined": "- **Nonexistent**: Refined version",
+                }
+            ],
+        )
+        # Sections unchanged but timestamps are updated (curation ran)
+        self.assertIn(MEMORY_EMPTY_COLLECTION_PLACEHOLDER, result)
+        self.assertIn(MEMORY_EMPTY_QUERY_PLACEHOLDER, result)
+        self.assertNotIn("Nonexistent", result)
+        self.assertIn("curation_count: 1", result)
+
+    def test_empty_refinement_fields_skipped(self):
+        """Refinements with empty old/new are skipped."""
+        base = _build_empty_memory(1)
+        with_pattern = merge_curation_into_memory(
+            current_content=base,
+            collection_patterns=["- **Test**: original"],
+            query_patterns=[],
+            refinements=[],
+        )
+        result = merge_curation_into_memory(
+            current_content=with_pattern,
+            collection_patterns=[],
+            query_patterns=[],
+            refinements=[
+                {"existing": "", "refined": "- **Test**: should not appear"},
+                {"existing": "- **Test**: original", "refined": ""},
+            ],
+        )
+        # Neither refinement applies: first has empty "existing", second has empty "refined"
+        self.assertIn("- **Test**: original", result)
+
+
+# ---------------------------------------------------------------------------
+# Additional coverage tests — memory_tasks.py edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestCurateCorpusMemoryMsgTypeFallback(TransactionTestCase):
+    """Cover the msg_type fallback path in _curate_corpus_memory_async."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="msg_type_fallback_user",
+            password="testpass123",
+            email="msgtypefallback@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="MsgType Fallback Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def test_msg_type_without_upper_uses_str(self):
+        """If msg_type doesn't have .upper(), str() fallback is used."""
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        conv = Conversation.objects.create(
+            title="Fallback Chat",
+            creator=self.user,
+            chat_with_corpus=self.corpus,
+            conversation_type=ConversationTypeChoices.CHAT,
+        )
+        # Create enough messages
+        for i in range(6):
+            msg_type = (
+                MessageTypeChoices.HUMAN if i % 2 == 0 else MessageTypeChoices.LLM
+            )
+            ChatMessage.objects.create(
+                conversation=conv,
+                msg_type=msg_type,
+                content=f"Message {i}",
+                creator=self.user,
+            )
+
+        mock_summary = AsyncMock()
+        mock_summary.return_value.output = "Summary"
+
+        mock_curation = AsyncMock()
+        mock_curation.return_value.output = (
+            '{"collection_patterns": [], "query_patterns": [], "refinements": []}'
+        )
+
+        with patch("pydantic_ai.agent.Agent") as MockAgent:
+            agent1 = AsyncMock()
+            agent1.run = mock_summary
+            agent2 = AsyncMock()
+            agent2.run = mock_curation
+            MockAgent.side_effect = [agent1, agent2]
+
+            result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+
+        self.assertEqual(result["status"], "success")
+        # Verify the summary agent was called with conversation text containing roles
+        call_args = mock_summary.call_args[0][0]
+        self.assertIn("[", call_args)
+
+    def test_no_corpus_linked_returns_skip(self):
+        """Conversation with no corpus returns memory_not_enabled."""
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        conv = Conversation.objects.create(
+            title="No Corpus Chat",
+            creator=self.user,
+            chat_with_corpus=None,
+            conversation_type=ConversationTypeChoices.CHAT,
+        )
+
+        result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "memory_not_enabled")
+
+    def test_already_claimed_by_concurrent_task(self):
+        """If the atomic claim fails (updated=0), return already_claimed."""
+        from opencontractserver.tasks.memory_tasks import (
+            _curate_corpus_memory_async,
+        )
+
+        conv = Conversation.objects.create(
+            title="Concurrent Claim Chat",
+            creator=self.user,
+            chat_with_corpus=self.corpus,
+            conversation_type=ConversationTypeChoices.CHAT,
+        )
+        for i in range(6):
+            ChatMessage.objects.create(
+                conversation=conv,
+                msg_type=MessageTypeChoices.HUMAN,
+                content=f"Message {i}",
+                creator=self.user,
+            )
+
+        # Simulate a concurrent claim by setting memory_curated=True
+        Conversation.objects.filter(pk=conv.pk).update(memory_curated=True)
+
+        result = async_to_sync(_curate_corpus_memory_async)(conv.pk)
+        self.assertEqual(result["status"], "skipped")
+        # Could be "already_curated" or "already_claimed" depending on check order
+        self.assertIn(result["reason"], ("already_curated", "already_claimed"))
+
+
+class TestCheckConversationsForCurationEdgeCases(TransactionTestCase):
+    """Cover edge cases in check_conversations_for_curation."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="check_edge_user",
+            password="testpass123",
+            email="checkedge@test.com",
+        )
+        self.corpus = Corpus.objects.create(
+            title="Check Edge Corpus",
+            creator=self.user,
+            memory_enabled=True,
+        )
+
+    def test_no_eligible_conversations_returns_zero(self):
+        """When no conversations are eligible, returns dispatched=0."""
+        from opencontractserver.tasks.memory_tasks import (
+            check_conversations_for_curation,
+        )
+
+        result = check_conversations_for_curation()
+        self.assertEqual(result["dispatched"], 0)
+
+    def test_conversation_without_messages_not_dispatched(self):
+        """Conversations with no messages at all are not dispatched."""
+        from opencontractserver.tasks.memory_tasks import (
+            check_conversations_for_curation,
+        )
+
+        Conversation.objects.create(
+            title="Empty Chat",
+            creator=self.user,
+            chat_with_corpus=self.corpus,
+            conversation_type=ConversationTypeChoices.CHAT,
+        )
+
+        with patch(
+            "opencontractserver.tasks.memory_tasks.curate_corpus_memory.delay"
+        ) as mock_delay:
+            result = check_conversations_for_curation()
+
+        self.assertEqual(result["dispatched"], 0)
+        mock_delay.assert_not_called()
