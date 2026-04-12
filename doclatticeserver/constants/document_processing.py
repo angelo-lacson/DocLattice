@@ -81,3 +81,12 @@ DEFAULT_CHUNK_RETRY_LIMIT = 1
 # Caps the exponential backoff (5s * 2^attempt) so that increasing
 # chunk_retry_limit doesn't block Celery workers excessively.
 MAX_CHUNK_RETRY_BACKOFF_SECONDS = 30
+
+# ---------------------------------------------------------------------------
+# Path disambiguation constants
+# ---------------------------------------------------------------------------
+
+# Hard cap on numeric suffix attempts when disambiguating document paths.
+# Prevents unbounded loops in _disambiguate_path() if a corpus has hundreds
+# of documents sharing the same filename in the same folder.
+MAX_PATH_DISAMBIGUATION_SUFFIX = 1000
