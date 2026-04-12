@@ -3,7 +3,7 @@
 // Tests the bulk ZIP import modal styling and step navigation.
 // Uses docScreenshot to capture the visual state of each step.
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { BulkImportModal } from "../src/components/widgets/modals/BulkImportModal";
 import { BulkImportTestWrapper } from "./wrappers/BulkImportTestWrapper";
 import { docScreenshot } from "./utils/docScreenshot";

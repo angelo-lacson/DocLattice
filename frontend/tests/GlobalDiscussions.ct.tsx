@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { GlobalDiscussions } from "../src/views/GlobalDiscussions";
 import { GET_CONVERSATIONS } from "../src/graphql/queries";
 import { GlobalDiscussionsTestWrapper } from "./GlobalDiscussionsTestWrapper";

@@ -1,5 +1,5 @@
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { ConfirmModal } from "../src/components/widgets/modals/ConfirmModal";
 import { docScreenshot } from "./utils/docScreenshot";
 

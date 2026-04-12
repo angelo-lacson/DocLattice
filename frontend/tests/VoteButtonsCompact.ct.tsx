@@ -7,7 +7,7 @@
  * - Smaller button size in compact mode
  * - All voting functionality still works
  */
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedResponse } from "@apollo/client/testing";
 import { VoteButtonsTestWrapper } from "./VoteButtonsTestWrapper";
 import {

@@ -16,7 +16,7 @@
  * Also tests mobile responsive behavior and tab navigation.
  */
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedResponse } from "@apollo/client/testing";
 import { CorpusesTestWrapper } from "./CorpusesTestWrapper";
 import { openedCorpus, selectedTab } from "../src/graphql/cache";
