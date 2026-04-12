@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Bulk move loop recomputed target folder path per document** (Issue #1202): `DocumentFolderService.move_documents_to_folder()` (`opencontractserver/corpuses/folder_service.py`) called `_compute_moved_path()` once per document, and each call invoked `target_folder.get_path()` — which walks ancestors via a recursive CTE query. For an N-document bulk move to the same folder, this issued N redundant CTE queries for an O(1) value. The target folder path is now resolved once before the loop and threaded through `_compute_moved_path()` via a new optional `target_folder_path` parameter.
+
 - **Document lineage fields dropped on move/delete/restore** (PR #1197): `move_document`, `delete_document`, and `restore_document` in `opencontractserver/documents/versioning.py` now forward `ingestion_source`, `external_id`, and `ingestion_metadata` from the parent path record to newly-created path nodes. Previously these fields were silently dropped, losing lineage provenance on any path operation.
 
 - **`ingestion_metadata` truthiness check** (PR #1197): Changed `if ingestion_metadata:` to `if ingestion_metadata is not None:` in `config/graphql/document_mutations.py` so that an empty dict `{}` is correctly stored rather than silently discarded.
