@@ -22,6 +22,7 @@ import numpy as np
 import requests
 
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
+from opencontractserver.pipeline.base.exceptions import EmbeddingServerError
 from opencontractserver.pipeline.base.file_types import FileTypeEnum
 from opencontractserver.pipeline.base.settings_schema import (
     PipelineSetting,
@@ -32,28 +33,6 @@ from opencontractserver.utils.cloud import maybe_add_cloud_run_auth
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-
-class EmbeddingClientError(Exception):
-    """
-    Raised for 4xx client errors from the embedding service.
-
-    These errors indicate invalid input (malformed request, bad data) and
-    should NOT be retried by Celery tasks.
-    """
-
-    pass
-
-
-class EmbeddingServerError(Exception):
-    """
-    Raised for 5xx server errors from the embedding service.
-
-    These errors indicate transient service issues and SHOULD be retried
-    by Celery tasks with exponential backoff.
-    """
-
-    pass
 
 
 class BaseMultimodalMicroserviceEmbedder(BaseEmbedder):
@@ -118,6 +97,17 @@ class BaseMultimodalMicroserviceEmbedder(BaseEmbedder):
     def _embed_text_impl(self, text: str, **all_kwargs) -> Optional[list[float]]:
         """
         Generate text embeddings via POST /embeddings.
+
+        Note on error handling asymmetry with batch methods:
+            This method returns None on ALL errors (including 5xx), because single
+            annotations are typically processed within Celery tasks that already
+            have their own retry logic. Raising here would abort processing of
+            remaining annotations in the task.
+
+            In contrast, ``embed_texts_batch()`` and ``embed_images_batch()`` raise
+            ``EmbeddingServerError`` on 5xx so the Celery task-level retry decorator
+            can fire, since a batch failure affects the entire sub-batch and there
+            is no remaining work to preserve.
 
         Args:
             text: The text content to embed.
@@ -321,6 +311,9 @@ class BaseMultimodalMicroserviceEmbedder(BaseEmbedder):
                 embeddings_array = np.array(response.json()["embeddings"])
                 # Squeeze to 2D if service returns 3D array (each embedding wrapped)
                 if embeddings_array.ndim == 3:
+                    if embeddings_array.shape[1] != 1:
+                        logger.error(f"Unexpected 3D shape {embeddings_array.shape}")
+                        return None
                     embeddings_array = embeddings_array.squeeze(axis=1)
                 if np.isnan(embeddings_array).any():
                     nan_indices = np.where(np.isnan(embeddings_array).any(axis=1))[0]
@@ -337,13 +330,23 @@ class BaseMultimodalMicroserviceEmbedder(BaseEmbedder):
                 )
                 return None
             else:
-                logger.error(
-                    f"Batch text embedding service returned status {response.status_code}. "
-                    f"This may be a transient error."
+                # Server errors (5xx) - retriable, re-raise for Celery retry
+                error_msg = (
+                    f"Batch text embedding service returned status "
+                    f"{response.status_code}. This may be a transient error."
                 )
-                return None
+                logger.error(error_msg)
+                raise EmbeddingServerError(error_msg)
 
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            EmbeddingServerError,
+        ):
+            # Transient HTTP errors: re-raise so Celery task retry can fire
+            raise
         except Exception as e:
+            # Non-retriable errors (malformed data, unexpected parsing, etc.)
             logger.error(f"Failed to generate batch text embeddings: {e}")
             return None
 
@@ -386,6 +389,9 @@ class BaseMultimodalMicroserviceEmbedder(BaseEmbedder):
                 embeddings_array = np.array(response.json()["embeddings"])
                 # Squeeze to 2D if service returns 3D array (each embedding wrapped)
                 if embeddings_array.ndim == 3:
+                    if embeddings_array.shape[1] != 1:
+                        logger.error(f"Unexpected 3D shape {embeddings_array.shape}")
+                        return None
                     embeddings_array = embeddings_array.squeeze(axis=1)
                 if np.isnan(embeddings_array).any():
                     nan_indices = np.where(np.isnan(embeddings_array).any(axis=1))[0]
@@ -402,13 +408,23 @@ class BaseMultimodalMicroserviceEmbedder(BaseEmbedder):
                 )
                 return None
             else:
-                logger.error(
-                    f"Batch image embedding service returned status {response.status_code}. "
-                    f"This may be a transient error."
+                # Server errors (5xx) - retriable, re-raise for Celery retry
+                error_msg = (
+                    f"Batch image embedding service returned status "
+                    f"{response.status_code}. This may be a transient error."
                 )
-                return None
+                logger.error(error_msg)
+                raise EmbeddingServerError(error_msg)
 
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            EmbeddingServerError,
+        ):
+            # Transient HTTP errors: re-raise so Celery task retry can fire
+            raise
         except Exception as e:
+            # Non-retriable errors (malformed data, unexpected parsing, etc.)
             logger.error(f"Failed to generate batch image embeddings: {e}")
             return None
 

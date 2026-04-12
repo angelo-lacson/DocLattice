@@ -1,14 +1,17 @@
 import logging
 from typing import Callable, Optional, Union
 
+import requests
 from celery import shared_task
 from celery.utils.log import get_task_logger
 from django.contrib.auth import get_user_model
 
 from opencontractserver.annotations.models import Annotation, Note
+from opencontractserver.constants.document_processing import EMBEDDING_API_BATCH_SIZE
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.pipeline.base.embedder import BaseEmbedder
+from opencontractserver.pipeline.base.exceptions import EmbeddingServerError
 from opencontractserver.pipeline.utils import (
     get_component_by_name,
     get_default_embedder,
@@ -152,6 +155,12 @@ def _create_embedding_for_annotation(
             )
     else:
         # Standard text-only embedding
+        if has_images and not can_embed_images:
+            logger.debug(
+                f"Annotation {annotation.id} has image content "
+                f"(modalities={modalities}) but embedder {embedder_path} "
+                f"does not support images; image content will be dropped."
+            )
         return _create_text_embedding(
             annotation,
             embedder,
@@ -420,6 +429,137 @@ def calculate_embedding_for_annotation_text(
     )
 
 
+def _batch_embed_text_annotations(
+    annotations: list[Annotation],
+    embedder: BaseEmbedder,
+    embedder_path: str,
+    api_batch_size: int,
+    result: dict,
+) -> None:
+    """
+    Embed a list of text-only annotations using batched API calls.
+
+    Groups annotation texts into sub-batches of ``api_batch_size``, calls
+    ``embedder.embed_texts_batch()`` for each sub-batch, and stores the
+    resulting vectors via ``add_embedding()``.
+
+    Annotations whose text is empty or whitespace-only are skipped.
+    Multimodal annotations should NOT be passed here — they require
+    per-annotation handling via ``_create_embedding_for_annotation()``.
+
+    Exception handling:
+        - ``ValueError``: Re-raised immediately (programming/contract error).
+        - ``requests.exceptions.Timeout``, ``requests.exceptions.ConnectionError``,
+          ``EmbeddingServerError``: Re-raised so Celery task-level retry fires.
+        - All other exceptions: Recorded as permanent per-annotation failures.
+
+    Args:
+        annotations: Ordered list of text-only Annotation objects.
+        embedder: The embedder instance (must support ``embed_texts_batch``).
+        embedder_path: Embedder path string stored alongside the vector.
+        api_batch_size: Max texts per ``embed_texts_batch`` call.
+        result: Mutable summary dict (keys: succeeded, failed, skipped, errors).
+    """
+    # Build (annotation, text) tuples, filtering out empties
+    items: list[tuple[Annotation, str]] = []
+    for annot in annotations:
+        text = annot.raw_text or ""
+        if not text.strip():
+            logger.debug(f"Annotation {annot.id} has no text to embed, skipping.")
+            result["skipped"] += 1
+            continue
+        items.append((annot, text))
+
+    if not items:
+        return
+
+    # Process in sub-batches
+    for chunk_start in range(0, len(items), api_batch_size):
+        chunk = items[chunk_start : chunk_start + api_batch_size]
+        texts = [text for _, text in chunk]
+
+        logger.info(
+            f"Calling embed_texts_batch for {len(texts)} texts "
+            f"(sub-batch {chunk_start // api_batch_size + 1}, "
+            f"embedder={embedder_path})"
+        )
+
+        try:
+            vectors = embedder.embed_texts_batch(texts)
+        except ValueError:
+            # ValueError indicates a caller contract violation (e.g., batch size
+            # exceeds embedder maximum). Re-raise rather than silently recording
+            # as an annotation failure so the programming error surfaces loudly.
+            raise
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            EmbeddingServerError,
+        ):
+            # Transient HTTP errors: re-raise so the task-level Celery
+            # autoretry_for=(Exception,) decorator can fire a retry.
+            raise
+        except Exception as e:
+            # Non-retriable errors (malformed response, unexpected data, etc.)
+            # are recorded as permanent per-annotation failures.
+            logger.error(f"embed_texts_batch failed: {e}")
+            for annot, _ in chunk:
+                result["failed"] += 1
+                result["errors"].append(
+                    f"Annotation {annot.id}: batch embed call failed: {e}"
+                )
+            continue
+
+        if vectors is None:
+            logger.error("embed_texts_batch returned None for entire sub-batch")
+            for annot, _ in chunk:
+                result["failed"] += 1
+                result["errors"].append(
+                    f"Annotation {annot.id}: batch embed returned None"
+                )
+            continue
+
+        if len(vectors) != len(chunk):
+            logger.error(
+                f"Vector count mismatch: sent {len(chunk)} texts, "
+                f"received {len(vectors)} vectors. Failing entire chunk."
+            )
+            for annot, _ in chunk:
+                result["failed"] += 1
+                result["errors"].append(
+                    f"Annotation {annot.id}: vector count mismatch "
+                    f"({len(vectors)} vectors for {len(chunk)} texts)"
+                )
+            continue
+
+        # Store each vector.
+        # add_embedding() is idempotent (upserts via store_embedding), so
+        # Celery retries of the whole task won't create duplicate records for
+        # annotations that already succeeded in a previous attempt.
+        for (annot, _), vector in zip(chunk, vectors):
+            if vector is None:
+                result["failed"] += 1
+                result["errors"].append(
+                    f"Annotation {annot.id}: individual vector was None in batch"
+                )
+                continue
+            try:
+                embedding = annot.add_embedding(embedder_path, vector)
+                if embedding:
+                    result["succeeded"] += 1
+                else:
+                    result["failed"] += 1
+                    result["errors"].append(
+                        f"Annotation {annot.id}: add_embedding returned None"
+                    )
+            except Exception as e:
+                logger.error(
+                    f"Failed to store embedding for annotation {annot.id}: {e}"
+                )
+                result["failed"] += 1
+                result["errors"].append(f"Annotation {annot.id}: store failed: {e}")
+
+
 @shared_task(
     bind=True,
     autoretry_for=(Exception,),
@@ -436,6 +576,28 @@ def calculate_embeddings_for_annotation_batch(
 
     This task processes multiple annotations in a single Celery task to prevent
     queue flooding when adding documents with many annotations to a corpus.
+
+    When an explicit ``embedder_path`` is provided, text-only annotations are
+    grouped and embedded via ``embed_texts_batch()`` for significantly better
+    throughput (one HTTP request per sub-batch instead of one per annotation).
+    Multimodal annotations (those with image content) are still processed
+    individually since they require special handling (image extraction,
+    weighted combination of text+image vectors).
+
+    Without an explicit ``embedder_path``, the dual embedding strategy is
+    applied per annotation (default + corpus-specific embedders).
+
+    Retry semantics:
+        - Transient HTTP errors (``requests.exceptions.Timeout``,
+          ``requests.exceptions.ConnectionError``, ``EmbeddingServerError``
+          from 5xx responses) propagate up and trigger the Celery
+          ``autoretry_for=(Exception,)`` decorator for automatic retry.
+        - Non-retriable operational errors (malformed response, NaN
+          values, count mismatch) are caught internally and recorded
+          in ``result["errors"]`` without re-raising.
+        - ``ValueError`` from contract violations (e.g., batch size
+          exceeds embedder maximum) is caught at the task level and
+          returned as an immediate failure without burning retries.
 
     Args:
         self: Celery task instance (passed automatically when bind=True)
@@ -481,44 +643,122 @@ def calculate_embeddings_for_annotation_batch(
 
     annotation_map = {a.pk: a for a in annotations}
 
-    for annotation_id in annotation_ids:
-        annotation = annotation_map.get(annotation_id)
+    # --- Explicit embedder path: use batch embedding for text-only annotations ---
+    if embedder_path and embedder:
+        can_embed_images = embedder.is_multimodal and embedder.supports_images
 
-        if not annotation:
-            logger.warning(f"Annotation {annotation_id} not found, skipping")
-            result["skipped"] += 1
-            continue
+        # Partition annotations into text-only vs multimodal
+        text_only_annots: list[Annotation] = []
+        multimodal_annots: list[Annotation] = []
 
-        try:
-            if embedder_path and embedder:
-                # Use explicit embedder (bypass dual embedding)
+        for annotation_id in annotation_ids:
+            annot = annotation_map.get(annotation_id)
+            if not annot:
+                logger.warning(f"Annotation {annotation_id} not found, skipping")
+                result["skipped"] += 1
+                continue
+
+            modalities = annot.content_modalities or [ContentModality.TEXT.value]
+            has_images = ContentModality.IMAGE.value in modalities
+
+            if can_embed_images and has_images:
+                multimodal_annots.append(annot)
+            else:
+                text_only_annots.append(annot)
+
+        # Batch-embed text-only annotations
+        if text_only_annots:
+            logger.info(
+                f"Batch-embedding {len(text_only_annots)} text-only annotations "
+                f"with {embedder_path} (api_batch_size={EMBEDDING_API_BATCH_SIZE})"
+            )
+            # Snapshot all three outcome counters before the batch call so we
+            # can compute how many text-only annotations were already accounted
+            # for if a ValueError interrupts _batch_embed_text_annotations
+            # mid-way. We need all three (skipped, failed, succeeded) because
+            # the helper mutates result in-place as it processes sub-batches:
+            # some annotations may have been skipped (empty text), some may
+            # have succeeded, and some may have failed before the ValueError.
+            # Without these baselines we'd double-count already-recorded outcomes.
+            skipped_before_batch = result["skipped"]
+            failed_before_batch = result["failed"]
+            succeeded_before_batch = result["succeeded"]
+            try:
+                _batch_embed_text_annotations(
+                    text_only_annots,
+                    embedder,
+                    embedder_path,
+                    EMBEDDING_API_BATCH_SIZE,
+                    result,
+                )
+            except ValueError as e:
+                # Programming error (e.g., batch size misconfiguration).
+                # Fail fast without burning Celery retries.
+                logger.error(f"Contract violation in batch embedding: {e}")
+                result["errors"].append(f"Contract violation: {e}")
+                # Count how many text-only annotations were already accounted for
+                # by _batch_embed_text_annotations before it raised.
+                batch_skipped = result["skipped"] - skipped_before_batch
+                batch_failed = result["failed"] - failed_before_batch
+                batch_succeeded = result["succeeded"] - succeeded_before_batch
+                already_accounted = batch_skipped + batch_failed + batch_succeeded
+                result["failed"] += len(text_only_annots) - already_accounted
+                # Multimodal annotations were never processed; count as failed.
+                result["failed"] += len(multimodal_annots)
+                return result
+
+        # Process multimodal annotations individually (need image extraction).
+        # NOTE: The single-text path (_embed_text_impl) returns None on 5xx
+        # rather than raising, so transient server errors for multimodal
+        # annotations are recorded as permanent failures instead of triggering
+        # Celery retry. This asymmetry with the batch path (which raises
+        # EmbeddingServerError on 5xx) predates this PR and is accepted
+        # because multimodal embedding involves image extraction that makes
+        # blanket retry less straightforward.
+        for annot in multimodal_annots:
+            try:
                 succeeded = _create_embedding_for_annotation(
-                    annotation, embedder, embedder_path
+                    annot, embedder, embedder_path
                 )
                 if succeeded:
                     result["succeeded"] += 1
                 else:
                     result["failed"] += 1
                     result["errors"].append(
-                        f"Annotation {annotation_id}: embedding generation returned False"
+                        f"Annotation {annot.id}: multimodal embedding returned False"
                     )
-            else:
-                # Use dual embedding strategy
+            except Exception as e:
+                logger.error(f"Failed to embed multimodal annotation {annot.id}: {e}")
+                result["failed"] += 1
+                result["errors"].append(f"Annotation {annot.id}: {str(e)}")
+
+    # --- No explicit embedder: dual embedding strategy (per-annotation) ---
+    else:
+        for annotation_id in annotation_ids:
+            annotation = annotation_map.get(annotation_id)
+
+            if not annotation:
+                logger.warning(f"Annotation {annotation_id} not found, skipping")
+                result["skipped"] += 1
+                continue
+
+            try:
                 effective_corpus_id = corpus_id or annotation.corpus_id
                 _apply_dual_embedding_strategy(
                     obj=annotation,
                     text=annotation.raw_text or "",
-                    corpus_id=int(effective_corpus_id) if effective_corpus_id else None,
+                    corpus_id=(
+                        int(effective_corpus_id) if effective_corpus_id else None
+                    ),
                     obj_type="annotation",
                     obj_id=annotation.id,
                     embed_func=_create_embedding_for_annotation,
                 )
                 result["succeeded"] += 1
-
-        except Exception as e:
-            logger.error(f"Failed to embed annotation {annotation_id}: {e}")
-            result["failed"] += 1
-            result["errors"].append(f"Annotation {annotation_id}: {str(e)}")
+            except Exception as e:
+                logger.error(f"Failed to embed annotation {annotation_id}: {e}")
+                result["failed"] += 1
+                result["errors"].append(f"Annotation {annotation_id}: {str(e)}")
 
     logger.info(
         f"Batch embedding complete: {result['succeeded']} succeeded, "

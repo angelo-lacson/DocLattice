@@ -197,6 +197,61 @@ class BaseEmbedder(PipelineComponentBase, ABC):
         )
         return self._embed_image_impl(image_base64, image_format, **merged_kwargs)
 
+    def embed_texts_batch(
+        self, texts: list[str], **direct_kwargs
+    ) -> Optional[list[Optional[list[float]]]]:
+        """
+        Generate embeddings for multiple texts in one call.
+
+        The default implementation calls embed_text() sequentially for each text.
+        Subclasses (e.g., microservice-based embedders) should override this to
+        use a true batch API endpoint for better throughput.
+
+        .. warning::
+
+            The sequential fallback re-raises transient HTTP exceptions
+            (``requests.exceptions.Timeout``, ``requests.exceptions.ConnectionError``)
+            so that callers (e.g., Celery tasks) can trigger retries. Subclasses
+            that make HTTP calls should override this method to get the same
+            behaviour for any additional transient exception types they define.
+
+        Args:
+            texts: List of text strings to embed.
+            **direct_kwargs: Additional keyword arguments passed to the embedder.
+
+        Returns:
+            List of embedding vectors (or None per item on failure),
+            or None if the entire batch fails.
+        """
+        import requests as _requests
+
+        if not self.supports_text:
+            logger.warning(
+                f"{self.__class__.__name__} does not support text embeddings."
+            )
+            return None
+
+        if not texts:
+            return []
+
+        results: list[Optional[list[float]]] = []
+        for text in texts:
+            try:
+                results.append(self.embed_text(text, **direct_kwargs))
+            except (
+                _requests.exceptions.Timeout,
+                _requests.exceptions.ConnectionError,
+            ):
+                # Transient HTTP errors must propagate so callers can retry.
+                raise
+            except Exception as e:
+                logger.error(
+                    f"{self.__class__.__name__} failed to embed text "
+                    f"(length={len(text)}): {e}"
+                )
+                results.append(None)
+        return results
+
     def embed_text_and_image(
         self,
         text: str,
