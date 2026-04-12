@@ -1,5 +1,5 @@
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MetadataTestWrapper } from "./MetadataTestWrapper";
 import { DocumentMetadataGrid } from "../src/components/documents/DocumentMetadataGrid";
 import { CorpusDocumentCards } from "../src/components/documents/CorpusDocumentCards";

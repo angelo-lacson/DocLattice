@@ -1,7 +1,7 @@
 // Playwright Component Test for ChatMessage Processing Indicator
 // Tests the processing indicator feature added in issue #687
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { ChatMessage } from "../src/components/widgets/chat/ChatMessage";
 import { ChatMessageTestWrapper } from "./ChatMessageTestWrapper";
 

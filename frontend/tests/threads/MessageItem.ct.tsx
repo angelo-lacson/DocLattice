@@ -5,7 +5,7 @@
  * introduced in Issue #688.
  */
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "../utils/coverage";
 import { MessageItem } from "../../src/components/threads/MessageItem";
 import { ThreadTestWrapper } from "./utils/ThreadTestWrapper";
 import { createMockMessage } from "./utils/mockThreadData";

@@ -9,7 +9,7 @@
  * 4. Error state renders visible error chip
  * 5. Accessibility: aria-label on chip button
  */
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { docScreenshot } from "./utils/docScreenshot";
 import { CamlCitationChipTestWrapper } from "./CamlCitationChipTestWrapper";
 import {
