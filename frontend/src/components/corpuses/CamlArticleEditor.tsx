@@ -500,7 +500,18 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
         // NOTE: Relies on `finished` and `fullDocumentList` being present in the
         // GET_EXTRACTS query response. If those fields are ever removed from
         // the query, this filter silently degrades to `e.finished` only.
-        .filter((e) => e.finished || (e.fullDocumentList?.length ?? 0) > 0)
+        .filter((e) => {
+          if (
+            process.env.NODE_ENV === "development" &&
+            e.finished === undefined &&
+            e.fullDocumentList === undefined
+          ) {
+            console.warn(
+              "[CamlArticleEditor] GET_EXTRACTS missing finished/fullDocumentList — extract picker filter degraded"
+            );
+          }
+          return e.finished || (e.fullDocumentList?.length ?? 0) > 0;
+        })
     );
   }, [extractsData]);
 
@@ -535,6 +546,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
         const pos = cursorPos >= 0 ? cursorPos : prev.length;
         return prev.slice(0, pos) + fence + prev.slice(pos);
       });
+      setHasChanges(true);
 
       // Restore cursor position after React re-renders the textarea
       requestAnimationFrame(() => {
@@ -547,9 +559,9 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
         }
       });
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setContent (from
-    // useState) is guaranteed stable; textareaRef.current is read at call-time
-    // through the ref object, not captured at creation time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setContent and
+    // setHasChanges (from useState) are guaranteed stable; textareaRef.current
+    // is read at call-time through the ref object, not captured at creation time.
     []
   );
 
@@ -592,7 +604,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
                     setShowExtractPicker((v) => !v);
                   }}
                   onMouseDown={(e) => e.stopPropagation()}
-                  title="Insert extract grid table"
+                  aria-label="Insert extract grid table"
                 >
                   <Table2 size={12} />
                   Insert Extract Grid

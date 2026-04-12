@@ -199,6 +199,16 @@ describe("buildComponentMarker()", () => {
     const parsed = parseComponentMarker(marker);
     expect(parsed).toEqual(original);
   });
+
+  it("quotes values containing closing brackets", () => {
+    const marker = buildComponentMarker("widget", { expr: "arr[0]" });
+    expect(marker).toBe('[component:widget expr="arr[0]"]');
+    const parsed = parseComponentMarker(marker);
+    expect(parsed).toEqual({
+      type: "widget",
+      props: { expr: "arr[0]" },
+    });
+  });
 });
 
 describe("buildComponentProseFence()", () => {
