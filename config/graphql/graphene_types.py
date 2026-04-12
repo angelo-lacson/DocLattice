@@ -65,6 +65,8 @@ from config.graphql.document_types import (  # noqa: F401
     DocumentSummaryRevisionType,
     DocumentType,
     DocumentTypeConnection,
+    IngestionSourceType,
+    IngestionSourceTypeEnum,
 )
 from config.graphql.extract_types import (  # noqa: F401
     AnalysisType,
