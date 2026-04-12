@@ -147,6 +147,7 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
       const directives = posKey ? positionToDirectives.get(posKey) : undefined;
 
       // Check for embedded component markers (e.g. [component:extract-grid ...])
+      // Component-marker blocks are assumed to contain no inline directives.
       if (componentRegistry) {
         const resolved = resolveComponentMarker(md, componentRegistry);
         if (resolved) {

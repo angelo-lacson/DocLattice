@@ -192,7 +192,10 @@ function formatCellValue(
   if (typeof data === "object") {
     const json = JSON.stringify(data);
     if (json.length > EXTRACT_GRID_CELL_TRUNCATE_LENGTH) {
-      return json.slice(0, EXTRACT_GRID_CELL_TRUNCATE_LENGTH) + "\u2026";
+      return (
+        [...json].slice(0, EXTRACT_GRID_CELL_TRUNCATE_LENGTH).join("") +
+        "\u2026"
+      );
     }
     return json;
   }
@@ -425,11 +428,11 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
                               sources[0].id,
                               extract.corpus
                             )}
-                            title={`View source (p.${sources[0].page})`}
+                            title={`View source (p.${sources[0].page ?? 1})`}
                           >
                             <ExternalLink size={10} />
-                            {/* Annotation.page is 1-based (default=1 in model) */}
-                            p.{sources[0].page}
+                            {/* Annotation.page is 1-based (default=1 in model); guard null/0 */}
+                            p.{sources[0].page || 1}
                           </SourceChip>
                           {sources.length > 1 && (
                             <OverflowBadge
