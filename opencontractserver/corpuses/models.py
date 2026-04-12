@@ -761,6 +761,12 @@ class Corpus(TreeNode):
             else:
                 path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/doc_{document.pk}"
 
+        # Extract path-level lineage kwargs before they hit Document.objects.create()
+        path_kwargs = {}
+        for key in ("ingestion_source", "external_id", "ingestion_metadata"):
+            if key in doc_kwargs:
+                path_kwargs[key] = doc_kwargs.pop(key)
+
         with transaction.atomic():
             # Always create corpus-isolated copy (no content-based deduplication)
             # Each add_document() call creates a new document regardless of content hash
@@ -863,6 +869,7 @@ class Corpus(TreeNode):
                 is_current=True,
                 is_deleted=False,
                 creator=user,
+                **path_kwargs,
             )
 
             logger.info(

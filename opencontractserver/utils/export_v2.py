@@ -26,12 +26,13 @@ from opencontractserver.corpuses.models import (
     Corpus,
     CorpusDescriptionRevision,
 )
-from opencontractserver.documents.models import DocumentPath
+from opencontractserver.documents.models import DocumentPath, IngestionSource
 from opencontractserver.types.dicts import (
     AgentConfigExport,
     CorpusFolderExport,
     DescriptionRevisionExport,
     DocumentPathExport,
+    IngestionSourceExport,
     OpenContractsRelationshipPythonType,
     StructuralAnnotationSetExport,
 )
@@ -122,7 +123,9 @@ def package_structural_annotation_set(
 
     except Exception as e:
         logger.error(
-            f"Error packaging structural annotation set {structural_set.id}: {e}"
+            "Error packaging structural annotation set %s: %s",
+            structural_set.id,
+            e,
         )
         return None
 
@@ -176,7 +179,7 @@ def package_corpus_folders(corpus: Corpus) -> list[CorpusFolderExport]:
             )
 
     except Exception as e:
-        logger.error(f"Error packaging corpus folders for corpus {corpus.id}: {e}")
+        logger.error("Error packaging corpus folders for corpus %s: %s", corpus.id, e)
 
     return folders_export
 
@@ -186,6 +189,7 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
     Package DocumentPath version trees for export.
 
     Exports complete version history including deleted versions.
+    Includes ingestion lineage fields when present.
 
     Args:
         corpus: Corpus instance
@@ -197,8 +201,11 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
 
     try:
         # Get all DocumentPath records for this corpus (including non-current)
-        all_paths = DocumentPath.objects.filter(corpus=corpus).order_by(
-            "path", "version_number"
+        # select_related on ingestion_source to avoid N+1 queries
+        all_paths = (
+            DocumentPath.objects.filter(corpus=corpus)
+            .select_related("ingestion_source", "document", "folder", "parent")
+            .order_by("path", "version_number")
         )
 
         for doc_path in all_paths:
@@ -223,23 +230,68 @@ def package_document_paths(corpus: Corpus) -> list[DocumentPathExport]:
             else:
                 document_ref = str(doc_path.document.id)
 
-            paths_export.append(
-                {
-                    "document_ref": document_ref,
-                    "folder_path": folder_path,
-                    "path": doc_path.path,
-                    "version_number": doc_path.version_number,
-                    "parent_version_number": parent_version_number,
-                    "is_current": doc_path.is_current,
-                    "is_deleted": doc_path.is_deleted,
-                    "created": doc_path.created.isoformat(),
-                }
-            )
+            entry: DocumentPathExport = {
+                "document_ref": document_ref,
+                "folder_path": folder_path,
+                "path": doc_path.path,
+                "version_number": doc_path.version_number,
+                "parent_version_number": parent_version_number,
+                "is_current": doc_path.is_current,
+                "is_deleted": doc_path.is_deleted,
+                "created": doc_path.created.isoformat(),
+            }
+
+            # Include ingestion lineage fields when present.
+            if doc_path.ingestion_source_id:
+                entry["ingestion_source_name"] = doc_path.ingestion_source.name
+            if doc_path.external_id:
+                entry["external_id"] = doc_path.external_id
+            if doc_path.ingestion_metadata:
+                entry["ingestion_metadata"] = doc_path.ingestion_metadata
+
+            paths_export.append(entry)
 
     except Exception as e:
-        logger.error(f"Error packaging document paths for corpus {corpus.id}: {e}")
+        logger.error("Error packaging document paths for corpus %s: %s", corpus.id, e)
 
     return paths_export
+
+
+def package_ingestion_sources(corpus: Corpus) -> list[IngestionSourceExport]:
+    """
+    Package IngestionSource records referenced by this corpus's DocumentPaths.
+
+    Only exports sources that are actually used by at least one DocumentPath
+    in this corpus (not all sources owned by the creator).
+
+    Args:
+        corpus: Corpus instance
+
+    Returns:
+        List of IngestionSourceExport dicts
+    """
+    try:
+        sources = IngestionSource.objects.filter(
+            document_paths__corpus=corpus
+        ).distinct()
+        return [
+            {
+                "name": source.name,
+                "source_type": source.source_type,
+                # Config is intentionally omitted from exports because it may
+                # contain credentials (API keys, tokens, connection strings).
+                # Importers should reconfigure sources after import.
+                "config": {},
+                "active": source.active,
+            }
+            for source in sources
+        ]
+
+    except Exception as e:
+        logger.error(
+            "Error packaging ingestion sources for corpus %s: %s", corpus.id, e
+        )
+        return []
 
 
 def package_relationships(
@@ -284,7 +336,7 @@ def package_relationships(
             )
 
     except Exception as e:
-        logger.error(f"Error packaging relationships for corpus {corpus.id}: {e}")
+        logger.error("Error packaging relationships for corpus %s: %s", corpus.id, e)
 
     return relationships_export
 
@@ -346,7 +398,9 @@ def package_md_description_revisions(
 
     except Exception as e:
         logger.error(
-            f"Error packaging markdown description for corpus {corpus.id}: {e}"
+            "Error packaging markdown description for corpus %s: %s",
+            corpus.id,
+            e,
         )
 
     return current_description, revisions_export
@@ -493,7 +547,7 @@ def package_conversations(
             )
 
     except Exception as e:
-        logger.error(f"Error packaging conversations for corpus {corpus.id}: {e}")
+        logger.error("Error packaging conversations for corpus %s: %s", corpus.id, e)
 
     return conversations_export, messages_export, votes_export
 

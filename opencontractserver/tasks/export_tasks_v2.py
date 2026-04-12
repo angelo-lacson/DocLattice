@@ -35,6 +35,7 @@ from opencontractserver.utils.export_v2 import (
     package_conversations,
     package_corpus_folders,
     package_document_paths,
+    package_ingestion_sources,
     package_md_description_revisions,
     package_relationships,
     package_structural_annotation_set,
@@ -74,7 +75,7 @@ def package_corpus_export_v2(
         annotation_filter_mode: How to filter annotations
     """
     try:
-        logger.info(f"Starting V2 export for corpus {corpus_pk}")
+        logger.info("Starting V2 export for corpus %s", corpus_pk)
 
         corpus = Corpus.objects.get(pk=corpus_pk)
         export = UserExport.objects.get(pk=export_id)
@@ -105,7 +106,7 @@ def package_corpus_export_v2(
         structural_sets_seen = set()
 
         for doc in documents:
-            logger.info(f"Exporting document {doc.id}")
+            logger.info("Exporting document %s", doc.id)
 
             # Build document export (V1 style)
             (
@@ -123,7 +124,7 @@ def package_corpus_export_v2(
             )
 
             if not doc_filename or not doc_export_data:
-                logger.warning(f"Skipping document {doc.id} - export failed")
+                logger.warning("Skipping document %s - export failed", doc.id)
                 continue
 
             # Add structural set reference if present
@@ -147,7 +148,7 @@ def package_corpus_export_v2(
         structural_annotation_sets = {}
 
         for struct_set in structural_sets_seen:
-            logger.info(f"Exporting structural set {struct_set.content_hash}")
+            logger.info("Exporting structural set %s", struct_set.content_hash)
             struct_export = package_structural_annotation_set(struct_set)
             if struct_export:
                 structural_annotation_sets[struct_set.content_hash] = struct_export
@@ -159,8 +160,9 @@ def package_corpus_export_v2(
         # ===== PART 4: Export Folders =====
         folders_export = package_corpus_folders(corpus)
 
-        # ===== PART 5: Export DocumentPath Trees =====
+        # ===== PART 5: Export DocumentPath Trees & Ingestion Sources =====
         document_paths_export = package_document_paths(corpus)
+        ingestion_sources_export = package_ingestion_sources(corpus)
 
         # ===== PART 6: Export Relationships =====
         relationships_export = package_relationships(corpus, document_ids)
@@ -213,6 +215,7 @@ def package_corpus_export_v2(
             "md_description": md_description,
             "md_description_revisions": md_revisions,
             "post_processors": corpus.post_processors or [],
+            "ingestion_sources": ingestion_sources_export,
         }
 
         # Add conversations if requested
@@ -238,10 +241,10 @@ def package_corpus_export_v2(
             output_bytes,
             corpus.title,
         )
-        logger.info(f"V2 export {export_id} completed successfully")
+        logger.info("V2 export %s completed successfully", export_id)
 
     except Exception as e:
-        logger.error(f"Error in V2 export for corpus {corpus_pk}: {str(e)}")
+        logger.error("Error in V2 export for corpus %s: %s", corpus_pk, e)
         # Mark export as failed
         try:
             export = UserExport.objects.get(pk=export_id)
