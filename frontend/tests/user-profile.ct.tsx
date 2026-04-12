@@ -1,6 +1,6 @@
 // Playwright Component Test for User Profile Page (Issue #611)
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedProvider } from "@apollo/client/testing";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { UserProfileRoute } from "../src/components/routes/UserProfileRoute";

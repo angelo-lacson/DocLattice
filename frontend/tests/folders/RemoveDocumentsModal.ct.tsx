@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "../utils/coverage";
 import { FolderTestWrapper } from "./utils/FolderTestWrapper";
 import { RemoveDocumentsModalFixture } from "./utils/testFixtures";
 import { docScreenshot } from "../utils/docScreenshot";

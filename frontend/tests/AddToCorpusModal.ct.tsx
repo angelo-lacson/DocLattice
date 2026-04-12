@@ -1,7 +1,7 @@
 // Playwright Component Test for AddToCorpusModal
 // Tests the modal for adding documents to a corpus with search and multi-step flow.
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedProvider } from "@apollo/client/testing";
 import { gql } from "@apollo/client";
 import { AddToCorpusModal } from "../src/components/modals/AddToCorpusModal";

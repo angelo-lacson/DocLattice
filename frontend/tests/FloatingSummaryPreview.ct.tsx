@@ -1,5 +1,5 @@
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedResponse } from "@apollo/client/testing";
 import { FloatingSummaryPreviewTestWrapper } from "./FloatingSummaryPreviewTestWrapper";
 import { GET_DOCUMENT_SUMMARY_VERSIONS } from "../src/components/knowledge_base/document/floating_summary_preview/graphql/documentSummaryQueries";

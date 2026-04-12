@@ -71,8 +71,9 @@ yarn test:ct --reporter=list -g "test name pattern"
 # Run E2E tests
 yarn test:e2e
 
-# Coverage report
-yarn test:coverage
+# Coverage reports (unit tests via Vitest, component tests via Playwright + Istanbul)
+yarn test:coverage:unit
+yarn test:coverage:ct
 
 # Linting and formatting
 yarn lint

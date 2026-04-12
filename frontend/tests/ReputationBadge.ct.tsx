@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { ReputationBadge } from "../src/components/threads/ReputationBadge";
 
 test.describe("ReputationBadge", () => {

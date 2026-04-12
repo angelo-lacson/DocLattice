@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { DocumentVersionSelectorTestWrapper } from "./DocumentVersionSelectorTestWrapper";
 import { DocumentVersionSelector } from "../src/components/documents/DocumentVersionSelector";
 import { GET_CORPUS_VERSIONS } from "../src/graphql/queries";

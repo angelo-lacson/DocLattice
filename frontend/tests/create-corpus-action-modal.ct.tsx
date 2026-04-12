@@ -1,7 +1,7 @@
 // Playwright Component Test for CreateCorpusActionModal
 // Tests the new thread/message trigger options for automated moderation
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedProvider } from "@apollo/client/testing";
 import { CreateCorpusActionModal } from "../src/components/corpuses/CreateCorpusActionModal";
 import {

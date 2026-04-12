@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { Provider as JotaiProvider } from "jotai";
 import { ThreadFilterToggles } from "../src/components/threads/ThreadFilterToggles";
 
