@@ -1,6 +1,6 @@
 // Playwright Component Test for Badge System
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedProvider } from "@apollo/client/testing";
 import { Badge } from "../src/components/badges/Badge";
 import { UserBadges } from "../src/components/badges/UserBadges";

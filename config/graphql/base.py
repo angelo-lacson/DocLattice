@@ -136,6 +136,25 @@ class DRFMutation(graphene.Mutation):
     message = graphene.String()
     obj_id = graphene.ID()
 
+    @staticmethod
+    def format_validation_error(ve):
+        """Surface validation errors with clean formatting.
+
+        ``str(ValidationError)`` renders as
+        ``[ErrorDetail(string='...', code='invalid')]`` which leaks internal
+        structure.  This method produces a human-readable string instead.
+        """
+        if isinstance(ve.detail, dict):
+            errors = "; ".join(
+                f"{field}: {', '.join(str(e) for e in errs)}"
+                for field, errs in ve.detail.items()
+            )
+        elif isinstance(ve.detail, list):
+            errors = "; ".join(str(e) for e in ve.detail)
+        else:
+            errors = str(ve.detail)
+        return f"Mutation failed due to error: {errors}"
+
     @classmethod
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
@@ -249,19 +268,8 @@ class DRFMutation(graphene.Mutation):
 
         except serializers.ValidationError as ve:
             logger.warning(f"Validation error in mutation: {ve.detail}")
-            # Surface validation errors with clean formatting — str(ValidationError)
-            # renders as [ErrorDetail(string='...', code='invalid')] which leaks
-            # internal structure.
-            if isinstance(ve.detail, dict):
-                errors = "; ".join(
-                    f"{field}: {', '.join(str(e) for e in errs)}"
-                    for field, errs in ve.detail.items()
-                )
-            elif isinstance(ve.detail, list):
-                errors = "; ".join(str(e) for e in ve.detail)
-            else:
-                errors = str(ve.detail)
-            message = f"Mutation failed due to error: {errors}"
+            message = cls.format_validation_error(ve)
+
         except Exception:
             logger.error(traceback.format_exc())
             message = "Mutation failed due to an internal error."

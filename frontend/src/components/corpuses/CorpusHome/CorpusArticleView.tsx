@@ -28,6 +28,7 @@ import {
 } from "../caml/directiveRegistry";
 import { useCiteHandler } from "../caml/useCiteHandler";
 import { ArticleDocumentsDrawer } from "./ArticleDocumentsDrawer";
+import { CAML_COMPONENTS } from "../../../utils/camlComponentRegistry";
 
 // ---------------------------------------------------------------------------
 // Styled components
@@ -61,7 +62,7 @@ const ToolbarButton = styled.button`
   border: none;
   border-radius: 9999px;
   background: transparent;
-  color: #64748b;
+  color: ${OS_LEGAL_COLORS.textSecondary};
   font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
@@ -72,8 +73,8 @@ const ToolbarButton = styled.button`
   }
 
   &:hover {
-    background: #f1f5f9;
-    color: #334155;
+    background: ${OS_LEGAL_COLORS.surfaceLight};
+    color: ${OS_LEGAL_COLORS.textPrimary};
   }
 
   &:active {
@@ -88,17 +89,17 @@ const BackButtonStyled = styled(ToolbarButton)`
 `;
 
 const EditButtonStyled = styled(ToolbarButton)`
-  color: #0f766e;
+  color: ${OS_LEGAL_COLORS.accent};
 
   &:hover {
-    background: #f0fdfa;
-    color: #115e59;
+    background: ${OS_LEGAL_COLORS.accentSurface};
+    color: ${OS_LEGAL_COLORS.accentHover};
   }
 `;
 
 const ToolbarTitle = styled.span`
   font-size: 0.8125rem;
-  color: #94a3b8;
+  color: ${OS_LEGAL_COLORS.textMuted};
   font-weight: 400;
   letter-spacing: 0.01em;
 `;
@@ -239,6 +240,9 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
 
   // Resolve CAML image protocol URIs to actual URLs.
   // "corpus://icon" resolves to the corpus's icon URL.
+  // "corpus://current" is an alias for "corpus://icon" — both resolve to the
+  // active corpus's icon. The alias exists for semantic clarity in CAML content
+  // where "current" refers to the corpus being viewed.
   const resolveImageSrc = useCallback(
     (src: string): string | undefined => {
       if (src === "corpus://icon" || src === "corpus://current") {
@@ -341,6 +345,7 @@ export const CorpusArticleView: React.FC<CorpusArticleViewProps> = ({
         handlerContext={handlerContext}
         stats={stats}
         resolveImageSrc={resolveImageSrc}
+        componentRegistry={CAML_COMPONENTS}
       />
     </ArticleViewContainer>
   );

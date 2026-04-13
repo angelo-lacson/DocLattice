@@ -1,3 +1,5 @@
+import { OS_LEGAL_COLORS } from "./osLegalStyles";
+
 export const VERSION_TAG = "v3.0.0.rc1";
 export const MOBILE_VIEW_BREAKPOINT = 600;
 // Tablet breakpoint - used for sidebar collapse behavior (larger than mobile)
@@ -342,6 +344,24 @@ export const MESSAGE_COUNT_COLORS = {
 
 // Warning color for partially supported file types (amber/yellow)
 export const PARTIALLY_SUPPORTED_WARNING_COLOR = "#D69E2E";
+
+// Extract grid embed display limits
+/** Maximum character length for cell values before truncation in ExtractGridEmbed. */
+export const EXTRACT_GRID_CELL_TRUNCATE_LENGTH = 100;
+/**
+ * Maximum number of document rows shown in an ExtractGridEmbed before a
+ * warning is displayed instead of the full table. fullDatacellList is
+ * unbounded (see #1204) so this guards against excessively large payloads.
+ */
+export const EXTRACT_GRID_EMBED_MAX_ROWS = 200;
+
+// Datacell status indicator colors (used in ExtractGridEmbed status dots).
+// Values reference OS_LEGAL_COLORS design tokens for consistency.
+export const DATACELL_STATUS_COLORS = {
+  FAILED: OS_LEGAL_COLORS.danger,
+  COMPLETE: OS_LEGAL_COLORS.green,
+  PENDING: OS_LEGAL_COLORS.textMuted,
+} as const;
 
 // Processing failure UI colors (used in DocumentItem, ModernDocumentItem)
 export const FAILURE_COLORS = {

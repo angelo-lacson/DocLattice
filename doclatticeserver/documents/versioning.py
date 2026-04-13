@@ -158,7 +158,13 @@ def import_document(
         pdf_file: Optional Django file object for binary files
         txt_file: Optional Django file object for text files
         **doc_kwargs: Additional keyword arguments for Document creation
-            - file_type: MIME type (determines storage field)
+            - file_type (str): MIME type (determines storage field)
+            - ingestion_source (IngestionSource | None): Source that produced
+              this document (stored on DocumentPath)
+            - external_id (str | None): External system identifier (stored on
+              DocumentPath)
+            - ingestion_metadata (dict | None): Arbitrary source metadata such
+              as URL, crawl job ID, etc. (stored on DocumentPath)
 
     Returns:
         Tuple of (document, status, path_record) where status is one of:
@@ -168,6 +174,12 @@ def import_document(
     Note: No content-based deduplication is performed. Each upload creates
     a new document regardless of content hash.
     """
+    # Extract path-level lineage kwargs before they hit Document.objects.create()
+    path_kwargs = {}
+    for key in ("ingestion_source", "external_id", "ingestion_metadata"):
+        if key in doc_kwargs:
+            path_kwargs[key] = doc_kwargs.pop(key)
+
     content_hash = compute_sha256(content)
     # Handle file_type - use default if None or missing
     file_type = doc_kwargs.get("file_type") or "application/pdf"
@@ -269,6 +281,7 @@ def import_document(
                 is_current=True,  # Rule P3
                 is_deleted=False,
                 creator=user,
+                **path_kwargs,
             )
 
             logger.info(
@@ -351,7 +364,9 @@ def import_document(
             )
             version = 1
             status = "created"
-            logger.info(f"Created new doc {doc.id} at {path} in corpus {corpus.id}")
+            logger.info(
+                "Created new doc %s at %s in corpus %s", doc.id, path, corpus.id
+            )
 
             # Create root of path tree (Rule P1)
             new_path = DocumentPath.objects.create(
@@ -364,6 +379,7 @@ def import_document(
                 is_current=True,
                 is_deleted=False,
                 creator=user,
+                **path_kwargs,
             )
 
             # Trigger corpus actions if document is ready (not still processing)
@@ -432,6 +448,9 @@ def move_document(
             is_current=True,
             is_deleted=False,
             creator=user,
+            ingestion_source=current.ingestion_source,
+            external_id=current.external_id,
+            ingestion_metadata=current.ingestion_metadata,
         )
 
         logger.info(
@@ -466,6 +485,9 @@ def delete_document(corpus: Corpus, path: str, user: User) -> DocumentPath:
             is_deleted=True,  # Soft delete
             is_current=True,
             creator=user,
+            ingestion_source=current.ingestion_source,
+            external_id=current.external_id,
+            ingestion_metadata=current.ingestion_metadata,
         )
 
         logger.info(
@@ -500,6 +522,9 @@ def restore_document(corpus: Corpus, path: str, user: User) -> DocumentPath:
             is_deleted=False,  # Not deleted
             is_current=True,
             creator=user,
+            ingestion_source=deleted.ingestion_source,
+            external_id=deleted.external_id,
+            ingestion_metadata=deleted.ingestion_metadata,
         )
 
         logger.info(
@@ -558,7 +583,13 @@ def get_path_history(document_path: DocumentPath):
             return "DELETED"
         if not current.is_deleted and previous.is_deleted:
             return "RESTORED"
-        if current.path != previous.path:
+        # MOVED takes priority over UPDATED: a document replacement that also
+        # changes the path is primarily a move (the path change is the visible
+        # user action), and callers can inspect document_id to detect the
+        # replacement separately.
+        # folder_id can differ while path stays the same if a folder was
+        # deleted and recreated with the same name — treat that as a move.
+        if current.path != previous.path or current.folder_id != previous.folder_id:
             return "MOVED"
         if current.document_id != previous.document_id:
             return "UPDATED"
@@ -572,6 +603,7 @@ def get_path_history(document_path: DocumentPath):
                 "id": current.id,
                 "timestamp": current.created,
                 "path": current.path,
+                "folder_id": current.folder_id,
                 "version": current.version_number,
                 "deleted": current.is_deleted,
                 "document_id": current.document_id,
@@ -695,7 +727,7 @@ def permanently_delete_document(
             document=document,
             corpus=corpus,
         ).delete()[0]
-        logger.debug(f"Deleted {summary_count} DocumentSummaryRevision records")
+        logger.debug("Deleted %s DocumentSummaryRevision records", summary_count)
 
         # Step 4: Delete user annotations (non-structural) for this document
         # Structural annotations live in StructuralAnnotationSet and are shared
@@ -714,15 +746,15 @@ def permanently_delete_document(
             Q(source_annotations__id__in=annotation_ids)
             | Q(target_annotations__id__in=annotation_ids)
         ).delete()[0]
-        logger.debug(f"Deleted {relationship_count} Relationship records")
+        logger.debug("Deleted %s Relationship records", relationship_count)
 
         # Step 6: Delete the user annotations
         annotation_count = user_annotations.delete()[0]
-        logger.debug(f"Deleted {annotation_count} user Annotation records")
+        logger.debug("Deleted %s user Annotation records", annotation_count)
 
         # Step 7: Delete all DocumentPath records for this document in corpus
         DocumentPath.objects.filter(id__in=path_ids).delete()
-        logger.debug(f"Deleted {len(path_ids)} DocumentPath records")
+        logger.debug("Deleted %s DocumentPath records", len(path_ids))
 
         # Step 8: Check if document should be deleted (Rule Q1 extended)
         # Document can be deleted if no other corpus has any reference to it

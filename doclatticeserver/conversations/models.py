@@ -713,6 +713,13 @@ class Conversation(BaseOCModel, HasEmbeddingMixin):
         ),
     )
 
+    # Agent memory curation
+    memory_curated = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Whether this conversation has been curated for corpus memory.",
+    )
+
     # Managers
     objects = ConversationManager()  # Default manager with vector search support
     all_objects = models.Manager()  # Access all objects including soft-deleted

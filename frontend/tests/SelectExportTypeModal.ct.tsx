@@ -6,7 +6,7 @@
 // as default subtitle. Integration with the reactive var is tested
 // via the Corpuses view tests.
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedProvider } from "@apollo/client/testing";
 import { SelectExportTypeModal } from "../src/components/widgets/modals/SelectExportTypeModal";
 import { GET_POST_PROCESSORS } from "../src/graphql/queries";
