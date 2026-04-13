@@ -133,11 +133,15 @@ class TestGroundingPipelineIntegration(TestCase):
             Extract,
             Fieldset,
         )
+        from opencontractserver.notifications.models import Notification
 
         User = get_user_model()
         self.user = User.objects.create_user(
             username="grounding_test_user", password="testpass"
         )
+
+        # Clear any auto-created notifications from signal handlers
+        Notification.objects.filter(recipient=self.user).delete()
 
         # Create corpus
         self.corpus = Corpus.objects.create(
@@ -195,7 +199,7 @@ class TestGroundingPipelineIntegration(TestCase):
             ground_extraction_to_annotations,
         )
 
-        annotations = asyncio.get_event_loop().run_until_complete(
+        annotations = asyncio.run(
             ground_extraction_to_annotations(
                 datacell=self.datacell,
                 document=self.document,
@@ -234,7 +238,7 @@ class TestGroundingPipelineIntegration(TestCase):
             ground_extraction_to_annotations,
         )
 
-        annotations = asyncio.get_event_loop().run_until_complete(
+        annotations = asyncio.run(
             ground_extraction_to_annotations(
                 datacell=self.datacell,
                 document=self.document,
@@ -254,7 +258,7 @@ class TestGroundingPipelineIntegration(TestCase):
             ground_extraction_to_annotations,
         )
 
-        annotations = asyncio.get_event_loop().run_until_complete(
+        annotations = asyncio.run(
             ground_extraction_to_annotations(
                 datacell=self.datacell,
                 document=self.document,
@@ -276,7 +280,7 @@ class TestGroundingPipelineIntegration(TestCase):
         self.datacell.data = {}
         self.datacell.save()
 
-        annotations = asyncio.get_event_loop().run_until_complete(
+        annotations = asyncio.run(
             ground_extraction_to_annotations(
                 datacell=self.datacell,
                 document=self.document,
@@ -298,7 +302,7 @@ class TestGroundingPipelineIntegration(TestCase):
         self.datacell.data = {"data": ["Totally nonexistent company name XYZ123"]}
         self.datacell.save()
 
-        annotations = asyncio.get_event_loop().run_until_complete(
+        annotations = asyncio.run(
             ground_extraction_to_annotations(
                 datacell=self.datacell,
                 document=self.document,

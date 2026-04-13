@@ -19,20 +19,16 @@ from uuid import uuid4
 
 from asgiref.sync import sync_to_async
 
+from opencontractserver.constants.extraction import (
+    MAX_GROUNDABLE_STRINGS,
+    MIN_GROUNDABLE_LENGTH,
+)
 from opencontractserver.utils.text_alignment import (
     AlignmentResult,
     align_text_to_document,
 )
 
 logger = logging.getLogger(__name__)
-
-# Minimum length for a string to be worth grounding.
-# Very short strings (e.g. "Yes", "42") produce noisy/ambiguous matches.
-_MIN_GROUNDABLE_LENGTH = 5
-
-# Maximum number of strings to attempt grounding for per datacell.
-# Prevents runaway cost on cells that extract hundreds of items.
-_MAX_GROUNDABLE_STRINGS = 50
 
 
 # ---------------------------------------------------------------------------
@@ -48,24 +44,24 @@ def extract_groundable_strings(data: Any) -> list[str]:
     source document.
 
     Filters out:
-    - Strings shorter than ``_MIN_GROUNDABLE_LENGTH``
+    - Strings shorter than ``MIN_GROUNDABLE_LENGTH``
     - Pure numeric strings
     - Boolean-like strings ("true", "false", "yes", "no")
 
-    Returns at most ``_MAX_GROUNDABLE_STRINGS`` unique strings, preserving
+    Returns at most ``MAX_GROUNDABLE_STRINGS`` unique strings, preserving
     insertion order.
     """
     seen: set[str] = set()
     results: list[str] = []
 
     def _walk(obj: Any) -> None:
-        if len(results) >= _MAX_GROUNDABLE_STRINGS:
+        if len(results) >= MAX_GROUNDABLE_STRINGS:
             return
 
         if isinstance(obj, str):
             stripped = obj.strip()
             if (
-                len(stripped) >= _MIN_GROUNDABLE_LENGTH
+                len(stripped) >= MIN_GROUNDABLE_LENGTH
                 and stripped not in seen
                 and not _is_non_groundable(stripped)
             ):
@@ -75,13 +71,13 @@ def extract_groundable_strings(data: Any) -> list[str]:
         elif isinstance(obj, dict):
             for value in obj.values():
                 _walk(value)
-                if len(results) >= _MAX_GROUNDABLE_STRINGS:
+                if len(results) >= MAX_GROUNDABLE_STRINGS:
                     return
 
         elif isinstance(obj, (list, tuple)):
             for item in obj:
                 _walk(item)
-                if len(results) >= _MAX_GROUNDABLE_STRINGS:
+                if len(results) >= MAX_GROUNDABLE_STRINGS:
                     return
 
     _walk(data)
@@ -172,7 +168,6 @@ def _create_grounding_annotations(
     creator_id: int,
     pdf_layer,
     annotation_type: str,
-    doc_text: str,
 ) -> list:
     """Create Annotation objects for each alignment result.
 
@@ -393,7 +388,6 @@ async def ground_extraction_to_annotations(
         creator_id=user_id,
         pdf_layer=pdf_layer,
         annotation_type=annotation_type,
-        doc_text=doc_text,
     )
 
     # 5. Link to datacell

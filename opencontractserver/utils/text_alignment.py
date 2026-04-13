@@ -17,8 +17,13 @@ from __future__ import annotations
 
 import dataclasses
 import difflib
+import logging
 import re
 from enum import Enum
+
+from opencontractserver.constants.extraction import MAX_DOC_LENGTH_FOR_FUZZY
+
+logger = logging.getLogger(__name__)
 
 
 class MatchType(str, Enum):
@@ -231,8 +236,12 @@ def align_text_to_document(
             # Map back to original character positions
             orig_start = char_map[norm_pos]
             norm_end = norm_pos + len(norm_query)
-            # char_map might be shorter if trailing whitespace was stripped
-            orig_end = char_map[min(norm_end - 1, len(char_map) - 1)] + 1
+            # Use the *next* char_map entry as the exclusive end to avoid
+            # an off-by-one when the match ends on collapsed whitespace.
+            if norm_end < len(char_map):
+                orig_end = char_map[norm_end]
+            else:
+                orig_end = len(document_text)
             matched = document_text[orig_start:orig_end]
 
             results.append(
@@ -249,6 +258,15 @@ def align_text_to_document(
 
         # --- Tier 3: Fuzzy match ---
         if enable_fuzzy and len(query) >= min_query_length:
+            if len(document_text) > MAX_DOC_LENGTH_FOR_FUZZY:
+                logger.debug(
+                    "Skipping fuzzy match for query %r: document length "
+                    "%d exceeds MAX_DOC_LENGTH_FOR_FUZZY (%d)",
+                    query[:50],
+                    len(document_text),
+                    MAX_DOC_LENGTH_FOR_FUZZY,
+                )
+                continue
             fuzzy_result = _fuzzy_find(query, document_text, fuzzy_threshold)
             if fuzzy_result is not None:
                 results.append(fuzzy_result)
