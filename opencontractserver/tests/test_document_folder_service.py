@@ -2174,7 +2174,7 @@ class TestDocumentPathHistory_ComputeMovedPath(_DocumentPathHistoryTestBase):
         self.assertEqual(precomputed, "/Cached/report.pdf")
 
     def test_precomputed_target_folder_path_takes_precedence(self):
-        """Pre-computed target_folder_path is used over the folder's actual path."""
+        """The pre-computed value is used over the folder's actual path."""
         folder, _ = DocumentFolderService.create_folder(
             user=self.owner, corpus=self.corpus, name="RealName"
         )
@@ -2184,13 +2184,13 @@ class TestDocumentPathHistory_ComputeMovedPath(_DocumentPathHistoryTestBase):
         )
         self.assertEqual(result, "/Override/Path/doc.pdf")
 
-    def test_precomputed_empty_string_falls_back_to_get_path(self):
-        """An empty-string target_folder_path is treated as unset (falls back to get_path)."""
+    def test_none_target_folder_path_falls_back_to_get_path(self):
+        """Only None triggers the on-demand get_path() fallback."""
         folder, _ = DocumentFolderService.create_folder(
             user=self.owner, corpus=self.corpus, name="Fallback"
         )
         result = DocumentFolderService._compute_moved_path(
-            "/doc.pdf", folder, target_folder_path=""
+            "/doc.pdf", folder, target_folder_path=None
         )
         self.assertEqual(result, "/Fallback/doc.pdf")
 
