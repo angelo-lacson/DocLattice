@@ -346,7 +346,8 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
   const totalCellCount = extract.datacellCount ?? fetchedCellCount;
   const cellsTruncated = fetchedCellCount < totalCellCount;
 
-  const rowsTruncated = rows.length > EXTRACT_GRID_EMBED_MAX_ROWS;
+  const totalRowCount = rows.length;
+  const rowsTruncated = totalRowCount > EXTRACT_GRID_EMBED_MAX_ROWS;
   const visibleRows = rowsTruncated
     ? rows.slice(0, EXTRACT_GRID_EMBED_MAX_ROWS)
     : rows;
@@ -455,9 +456,10 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
           <AlertCircle size={14} color={OS_LEGAL_COLORS.textMuted} />
           {rowsTruncated
             ? cellsTruncated
-              ? `Showing ${visibleRows.length} of ${rows.length} fetched documents (${fetchedCellCount} of ${totalCellCount} total cells loaded). ` +
+              ? `Showing ${visibleRows.length} of ${totalRowCount} documents. ` +
+                `${fetchedCellCount} of ${totalCellCount} total cells loaded. ` +
                 "View the full extract in the Extracts panel."
-              : `Showing ${visibleRows.length} of ${rows.length} documents. ` +
+              : `Showing ${visibleRows.length} of ${totalRowCount} documents. ` +
                 "View the full extract in the Extracts panel."
             : `Showing ${fetchedCellCount} of ${totalCellCount} cells. ` +
               "View the full extract in the Extracts panel."}
