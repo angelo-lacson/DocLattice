@@ -127,7 +127,12 @@ class TestGroundingPipelineIntegration(TestCase):
 
         from opencontractserver.corpuses.models import Corpus
         from opencontractserver.documents.models import Document
-        from opencontractserver.extracts.models import Column, Datacell, Extract, Fieldset
+        from opencontractserver.extracts.models import (
+            Column,
+            Datacell,
+            Extract,
+            Fieldset,
+        )
 
         User = get_user_model()
         self.user = User.objects.create_user(
@@ -143,8 +148,8 @@ class TestGroundingPipelineIntegration(TestCase):
         self.doc_text = (
             "ASSET PURCHASE AGREEMENT\n\n"
             "This Agreement is entered into as of March 15, 2024, "
-            "by and between Acme Holdings, Inc. (\"Seller\") and "
-            "Global Acquisitions LLC (\"Buyer\").\n\n"
+            'by and between Acme Holdings, Inc. ("Seller") and '
+            'Global Acquisitions LLC ("Buyer").\n\n'
             "The Purchase Price shall be Fifty Million Dollars ($50,000,000.00)."
         )
         self.document = Document.objects.create(
@@ -158,9 +163,7 @@ class TestGroundingPipelineIntegration(TestCase):
         self.corpus.add_document(document=self.document, user=self.user)
 
         # Create extraction infrastructure
-        self.fieldset = Fieldset.objects.create(
-            name="Test Fieldset", creator=self.user
-        )
+        self.fieldset = Fieldset.objects.create(name="Test Fieldset", creator=self.user)
         self.column = Column.objects.create(
             fieldset=self.fieldset,
             name="Party Names",
@@ -179,9 +182,7 @@ class TestGroundingPipelineIntegration(TestCase):
             column=self.column,
             document=self.document,
             creator=self.user,
-            data={
-                "data": ["Acme Holdings, Inc.", "Global Acquisitions LLC"]
-            },
+            data={"data": ["Acme Holdings, Inc.", "Global Acquisitions LLC"]},
         )
 
     def test_ground_text_document(self):
@@ -211,23 +212,19 @@ class TestGroundingPipelineIntegration(TestCase):
             self.assertEqual(annot.document, self.document)
             self.assertEqual(annot.corpus, self.corpus)
             self.assertFalse(annot.structural)
-            self.assertEqual(
-                annot.annotation_label.text, OC_EXTRACT_SOURCE_LABEL
-            )
+            self.assertEqual(annot.annotation_label.text, OC_EXTRACT_SOURCE_LABEL)
 
             # Verify span data
             self.assertIn("start", annot.json)
             self.assertIn("end", annot.json)
             self.assertEqual(
-                self.doc_text[annot.json["start"]:annot.json["end"]],
+                self.doc_text[annot.json["start"] : annot.json["end"]],
                 annot.raw_text,
             )
 
         # Verify datacell sources were linked
         self.datacell.refresh_from_db()
-        self.assertEqual(
-            self.datacell.sources.count(), len(annotations)
-        )
+        self.assertEqual(self.datacell.sources.count(), len(annotations))
 
     def test_ground_with_corpus_id(self):
         """Test that passing corpus as int (ID) works."""

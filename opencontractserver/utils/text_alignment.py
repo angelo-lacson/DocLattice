@@ -114,7 +114,9 @@ def _fuzzy_find(
     # Step size: skip by 1/4 of query length for speed, min 1
     step = max(1, query_len // 4)
 
-    for window_size in range(min_window, max_window + 1, max(1, (max_window - min_window) // 3)):
+    for window_size in range(
+        min_window, max_window + 1, max(1, (max_window - min_window) // 3)
+    ):
         for start in range(0, len(doc_text) - window_size + 1, step):
             end = start + window_size
             candidate = doc_text[start:end]
@@ -132,10 +134,17 @@ def _fuzzy_find(
     refine_start = max(0, best_start - step)
     refine_end_limit = min(len(doc_text), best_end + step)
 
-    for window_size in (best_end - best_start - 1, best_end - best_start, best_end - best_start + 1):
+    for window_size in (
+        best_end - best_start - 1,
+        best_end - best_start,
+        best_end - best_start + 1,
+    ):
         if window_size < 1:
             continue
-        for start in range(refine_start, min(refine_end_limit - window_size + 1, refine_start + 2 * step)):
+        for start in range(
+            refine_start,
+            min(refine_end_limit - window_size + 1, refine_start + 2 * step),
+        ):
             end = start + window_size
             candidate = doc_text[start:end]
             ratio = difflib.SequenceMatcher(None, query, candidate).ratio()
@@ -232,9 +241,7 @@ def align_text_to_document(
                     matched_text=matched,
                     char_start=orig_start,
                     char_end=orig_end,
-                    match_quality=difflib.SequenceMatcher(
-                        None, query, matched
-                    ).ratio(),
+                    match_quality=difflib.SequenceMatcher(None, query, matched).ratio(),
                     match_type=MatchType.NORMALIZED,
                 )
             )

@@ -187,9 +187,7 @@ def _create_grounding_annotations(
     from opencontractserver.annotations.models import (
         SPAN_LABEL,
         TOKEN_LABEL,
-        Annotation,
     )
-
     from opencontractserver.constants.annotations import OC_EXTRACT_SOURCE_LABEL
 
     if not alignment_results:
@@ -346,13 +344,13 @@ async def ground_extraction_to_annotations(
             return []
 
     # 1. Extract groundable strings
-    raw_data = datacell.data.get("data") if isinstance(datacell.data, dict) else datacell.data
+    raw_data = (
+        datacell.data.get("data") if isinstance(datacell.data, dict) else datacell.data
+    )
     groundable = extract_groundable_strings(raw_data)
 
     if not groundable:
-        logger.debug(
-            "No groundable strings found in datacell %d", datacell.id
-        )
+        logger.debug("No groundable strings found in datacell %d", datacell.id)
         return []
 
     logger.info(
@@ -362,9 +360,7 @@ async def ground_extraction_to_annotations(
     )
 
     # 2. Load document text + optional PDF layer
-    doc_text, pdf_layer, annotation_type = await _load_document_text_and_layer(
-        document
-    )
+    doc_text, pdf_layer, annotation_type = await _load_document_text_and_layer(document)
 
     # 3. Align strings to document
     alignments = align_text_to_document(

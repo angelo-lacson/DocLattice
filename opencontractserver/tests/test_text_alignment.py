@@ -7,7 +7,6 @@ These are pure Python tests with no Django dependencies.
 from django.test import SimpleTestCase
 
 from opencontractserver.utils.text_alignment import (
-    AlignmentResult,
     MatchType,
     align_text_to_document,
 )
@@ -92,9 +91,7 @@ class TestAlignTextToDocument(SimpleTestCase):
         doc = "The Seller shall deliver the goods within thirty days."
         query = "Seller shall deliver goods within thirty days."
         # This has a word removed ("the") so exact/normalized won't match
-        results = align_text_to_document(
-            [query], doc, enable_fuzzy=False
-        )
+        results = align_text_to_document([query], doc, enable_fuzzy=False)
         # May or may not match via normalized depending on the diff —
         # but should not use fuzzy
         for r in results:
@@ -103,9 +100,7 @@ class TestAlignTextToDocument(SimpleTestCase):
     def test_multiple_occurrences_returns_first(self):
         """align_text_to_document returns the first occurrence."""
         doc = "Party A and Party B agree. Party A shall pay Party B."
-        results = align_text_to_document(
-            ["Party"], doc, min_query_length=3
-        )
+        results = align_text_to_document(["Party"], doc, min_query_length=3)
         # Should find first occurrence
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].char_start, 0)
@@ -135,15 +130,15 @@ class TestAlignTextContract(SimpleTestCase):
 
     SAMPLE_CONTRACT = (
         "ASSET PURCHASE AGREEMENT\n\n"
-        "This Asset Purchase Agreement (this \"Agreement\") is entered into as of "
+        'This Asset Purchase Agreement (this "Agreement") is entered into as of '
         "March 15, 2024, by and between Acme Holdings, Inc., a Delaware corporation "
-        "(\"Seller\"), and Global Acquisitions LLC, a New York limited liability "
-        "company (\"Buyer\").\n\n"
+        '("Seller"), and Global Acquisitions LLC, a New York limited liability '
+        'company ("Buyer").\n\n'
         "ARTICLE I - DEFINITIONS\n\n"
-        "1.1 \"Purchased Assets\" means all of the assets, properties, and rights "
+        '1.1 "Purchased Assets" means all of the assets, properties, and rights '
         "of every type and description, real and personal, tangible and intangible, "
         "owned by Seller.\n\n"
-        "1.2 \"Purchase Price\" means the sum of Fifty Million Dollars "
+        '1.2 "Purchase Price" means the sum of Fifty Million Dollars '
         "($50,000,000.00), subject to adjustment as set forth in Section 2.3.\n\n"
         "ARTICLE II - PURCHASE AND SALE\n\n"
         "2.1 Purchase and Sale. Subject to the terms and conditions of this Agreement, "
@@ -152,7 +147,7 @@ class TestAlignTextContract(SimpleTestCase):
         "Encumbrances, all of Seller's right, title and interest in and to the "
         "Purchased Assets.\n\n"
         "2.2 Closing Date. The closing of the transactions contemplated by this "
-        "Agreement (the \"Closing\") shall take place on April 30, 2024."
+        'Agreement (the "Closing") shall take place on April 30, 2024.'
     )
 
     def test_extract_party_names(self):
@@ -191,6 +186,4 @@ class TestAlignTextContract(SimpleTestCase):
         query = "ARTICLE II - PURCHASE AND SALE 2.1 Purchase and Sale."
         results = align_text_to_document([query], self.SAMPLE_CONTRACT)
         self.assertEqual(len(results), 1)
-        self.assertIn(
-            results[0].match_type, (MatchType.NORMALIZED, MatchType.FUZZY)
-        )
+        self.assertIn(results[0].match_type, (MatchType.NORMALIZED, MatchType.FUZZY))
