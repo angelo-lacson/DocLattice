@@ -884,7 +884,10 @@ class DocumentFolderService:
                     # IntegrityError from concurrent path conflicts on the
                     # unique_active_path_per_corpus partial unique index.
                     base_path = cls._compute_moved_path(current.path, None)
-                    cls._create_successor_path_with_retry(
+                    # Return value intentionally discarded: delete_folder
+                    # does not track batch_claimed because intra-transaction
+                    # visibility handles within-batch disambiguation.
+                    _ = cls._create_successor_path_with_retry(
                         current=current,
                         corpus=current.corpus,
                         folder=None,  # Moved to root
@@ -1452,22 +1455,12 @@ class DocumentFolderService:
         last_exc: IntegrityError | None = None
 
         for attempt in range(MAX_PATH_CREATE_RETRIES + 1):
-            # Only forward extra_occupied when non-empty so that callers
-            # which never collide preserve the legacy 3-arg call shape
-            # (kept for test mocks that intentionally subset the signature).
-            if occupied_after_loss:
-                new_path = cls._disambiguate_path(
-                    base_path,
-                    corpus,
-                    exclude_pk=current.pk,
-                    extra_occupied=occupied_after_loss,
-                )
-            else:
-                new_path = cls._disambiguate_path(
-                    base_path,
-                    corpus,
-                    exclude_pk=current.pk,
-                )
+            new_path = cls._disambiguate_path(
+                base_path,
+                corpus,
+                exclude_pk=current.pk,
+                extra_occupied=occupied_after_loss,
+            )
             try:
                 # Savepoint: both the deactivation and the create must
                 # succeed together, or neither commits.  An IntegrityError
@@ -1516,9 +1509,14 @@ class DocumentFolderService:
             current.document_id,
             corpus.id,
         )
-        # last_exc is guaranteed non-None here (the loop runs at least once
-        # and only exits via return-on-success or except-on-failure).
-        assert last_exc is not None
+        # last_exc is guaranteed non-None here: the loop runs at least once
+        # and only exits via return-on-success or via the except block which
+        # always sets last_exc.  Guard defensively so ``python -O`` doesn't
+        # silently turn this into ``raise None``.
+        if last_exc is None:
+            raise RuntimeError(
+                "Unreachable: retry loop exited without setting last_exc"
+            )
         raise last_exc
 
     @classmethod

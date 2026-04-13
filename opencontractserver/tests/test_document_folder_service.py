@@ -3122,12 +3122,17 @@ class TestErrorPaths_DeleteFolderAtomicRollback(DocumentFolderServiceTestBase):
         original_disambiguate = DocumentFolderService._disambiguate_path
         call_count = 0
 
-        def fail_on_second(base_path, corpus, exclude_pk=None):
+        def fail_on_second(base_path, corpus, exclude_pk=None, extra_occupied=None):
             nonlocal call_count
             call_count += 1
             if call_count == 2:
                 raise ValueError("suffix exhausted")
-            return original_disambiguate(base_path, corpus, exclude_pk=exclude_pk)
+            return original_disambiguate(
+                base_path,
+                corpus,
+                exclude_pk=exclude_pk,
+                extra_occupied=extra_occupied,
+            )
 
         with patch.object(
             DocumentFolderService,
