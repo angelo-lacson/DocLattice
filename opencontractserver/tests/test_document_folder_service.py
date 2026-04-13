@@ -2174,7 +2174,7 @@ class TestDocumentPathHistory_ComputeMovedPath(_DocumentPathHistoryTestBase):
         self.assertEqual(precomputed, "/Cached/report.pdf")
 
     def test_precomputed_target_folder_path_takes_precedence(self):
-        """When target_folder_path is provided, get_path() is NOT called."""
+        """Pre-computed target_folder_path is used over the folder's actual path."""
         folder, _ = DocumentFolderService.create_folder(
             user=self.owner, corpus=self.corpus, name="RealName"
         )
@@ -4054,6 +4054,7 @@ class TestCoverageGap_BulkMoveGetPathCallCount(DocumentFolderServiceTestBase):
     """
 
     def setUp(self):
+        super().setUp()
         self.owner = User.objects.create_user(
             username="owner", email="owner@test.com", password="test"
         )
@@ -4086,7 +4087,7 @@ class TestCoverageGap_BulkMoveGetPathCallCount(DocumentFolderServiceTestBase):
         original_get_path = CorpusFolder.get_path
 
         with patch.object(
-            CorpusFolder, "get_path", side_effect=original_get_path
+            CorpusFolder, "get_path", autospec=True, side_effect=original_get_path
         ) as mock_get_path:
             moved_count, error = DocumentFolderService.move_documents_to_folder(
                 user=self.owner,
