@@ -21,6 +21,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.db import IntegrityError
 from django.test import TransactionTestCase
 
+from doclatticeserver.constants.document_processing import PATH_CONFLICT_MSG
 from doclatticeserver.corpuses.folder_service import DocumentFolderService
 from doclatticeserver.corpuses.models import (
     Corpus,
@@ -3304,7 +3305,7 @@ class TestErrorPaths_MoveDocumentIntegrityError(DocumentFolderServiceTestBase):
             )
 
         self.assertFalse(success)
-        self.assertIn("Path conflict", error)
+        self.assertIn(PATH_CONFLICT_MSG, error)
 
     def test_integrity_error_preserves_old_path_as_current(self):
         """IntegrityError must not orphan the document by leaving no active path.
@@ -4002,7 +4003,7 @@ class TestRetry_MoveDocumentIntegrityRecovery(DocumentFolderServiceTestBase):
             )
 
         self.assertFalse(success)
-        self.assertIn("Path conflict", error)
+        self.assertIn(PATH_CONFLICT_MSG, error)
         # All MAX_PATH_CREATE_RETRIES + 1 attempts must have run
         from doclatticeserver.constants.document_processing import (
             MAX_PATH_CREATE_RETRIES,
