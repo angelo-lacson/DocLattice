@@ -18,3 +18,8 @@ MAX_GROUNDABLE_STRINGS = 50
 # length, so it becomes prohibitively expensive on very large documents.
 # Documents exceeding this threshold fall back to exact + normalized only.
 MAX_DOC_LENGTH_FOR_FUZZY = 500_000
+
+# Top-level key in datacell.data that holds the extraction result payload.
+# This is the standard output format used by data_extract_tasks.py:
+# datacell.data = {"data": <extraction_result>}
+DATACELL_DATA_KEY = "data"

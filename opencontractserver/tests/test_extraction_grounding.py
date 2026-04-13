@@ -115,6 +115,39 @@ class TestExtractGroundableStrings(SimpleTestCase):
         self.assertIn("State of Delaware", result)
 
 
+class TestIsNonGroundable(SimpleTestCase):
+    """Direct tests for _is_non_groundable() edge cases."""
+
+    def setUp(self):
+        from opencontractserver.utils.extraction_grounding import _is_non_groundable
+
+        self.is_non_groundable = _is_non_groundable
+
+    def test_boolean_strings(self):
+        for val in ("true", "false", "yes", "no", "None", "null", "n/a"):
+            self.assertTrue(self.is_non_groundable(val), f"{val!r} should be excluded")
+
+    def test_pure_integer_string(self):
+        self.assertTrue(self.is_non_groundable("42"))
+
+    def test_pure_float_string(self):
+        self.assertTrue(self.is_non_groundable("3.14"))
+
+    def test_comma_separated_number(self):
+        # "50,000,000" parses as float after comma removal -> excluded
+        self.assertTrue(self.is_non_groundable("50,000,000"))
+
+    def test_dollar_amount_is_groundable(self):
+        # "$50,000,000.00" has a dollar sign so float() fails -> groundable
+        self.assertFalse(self.is_non_groundable("$50,000,000.00"))
+
+    def test_normal_text_is_groundable(self):
+        self.assertFalse(self.is_non_groundable("Acme Holdings, Inc."))
+
+    def test_sentence_with_numbers_is_groundable(self):
+        self.assertFalse(self.is_non_groundable("Section 4.2 of the Agreement"))
+
+
 class TestGroundingPipelineIntegration(TestCase):
     """Integration tests for the full grounding pipeline with Django models.
 

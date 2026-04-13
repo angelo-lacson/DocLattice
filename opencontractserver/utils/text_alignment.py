@@ -125,7 +125,9 @@ def _fuzzy_find(
         for start in range(0, len(doc_text) - window_size + 1, step):
             end = start + window_size
             candidate = doc_text[start:end]
-            ratio = difflib.SequenceMatcher(None, query, candidate).ratio()
+            ratio = difflib.SequenceMatcher(
+                None, query, candidate, autojunk=False
+            ).ratio()
 
             if ratio > best_ratio:
                 best_ratio = ratio
@@ -152,7 +154,9 @@ def _fuzzy_find(
         ):
             end = start + window_size
             candidate = doc_text[start:end]
-            ratio = difflib.SequenceMatcher(None, query, candidate).ratio()
+            ratio = difflib.SequenceMatcher(
+                None, query, candidate, autojunk=False
+            ).ratio()
             if ratio > best_ratio:
                 best_ratio = ratio
                 best_start = start
@@ -250,7 +254,9 @@ def align_text_to_document(
                     matched_text=matched,
                     char_start=orig_start,
                     char_end=orig_end,
-                    match_quality=difflib.SequenceMatcher(None, query, matched).ratio(),
+                    match_quality=difflib.SequenceMatcher(
+                        None, query, matched, autojunk=False
+                    ).ratio(),
                     match_type=MatchType.NORMALIZED,
                 )
             )

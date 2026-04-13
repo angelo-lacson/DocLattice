@@ -20,6 +20,7 @@ from uuid import uuid4
 from asgiref.sync import sync_to_async
 
 from opencontractserver.constants.extraction import (
+    DATACELL_DATA_KEY,
     MAX_GROUNDABLE_STRINGS,
     MIN_GROUNDABLE_LENGTH,
 )
@@ -197,9 +198,9 @@ def _create_grounding_annotations(
 
     annotations = []
 
-    with transaction.atomic():
-        for result in alignment_results:
-            try:
+    for result in alignment_results:
+        try:
+            with transaction.atomic():
                 if annotation_type == TOKEN_LABEL and pdf_layer is not None:
                     annot = _create_pdf_annotation(
                         result, document, corpus, creator_id, pdf_layer, label_obj
@@ -214,16 +215,16 @@ def _create_grounding_annotations(
                 annot.save()
                 annotations.append(annot)
 
-            except Exception:
-                logger.warning(
-                    "Failed to create grounding annotation for %r "
-                    "at [%d:%d] in document %d",
-                    result.query_text[:50],
-                    result.char_start,
-                    result.char_end,
-                    document.id,
-                    exc_info=True,
-                )
+        except Exception:
+            logger.warning(
+                "Failed to create grounding annotation for %r "
+                "at [%d:%d] in document %d",
+                result.query_text[:50],
+                result.char_start,
+                result.char_end,
+                document.id,
+                exc_info=True,
+            )
 
     return annotations
 
@@ -243,9 +244,20 @@ def _create_pdf_annotation(result, document, corpus, creator_id, pdf_layer, labe
     span_annotation = SpanAnnotation(span=span, annotation_label=label_obj.text)
     oc_ann = pdf_layer.create_opencontract_annotation_from_span(span_annotation)
 
+    page = oc_ann.get("page")
+    if page is None:
+        logger.warning(
+            "PlasmaPDF annotation missing 'page' key for span [%d:%d] "
+            "in document %d; defaulting to page 1",
+            result.char_start,
+            result.char_end,
+            document.id,
+        )
+        page = 1
+
     return Annotation(
         raw_text=oc_ann["rawText"],
-        page=oc_ann.get("page", 1),
+        page=page,
         json=oc_ann["annotation_json"],
         annotation_label=label_obj,
         document=document,
@@ -339,9 +351,17 @@ async def ground_extraction_to_annotations(
             return []
 
     # 1. Extract groundable strings
-    raw_data = (
-        datacell.data.get("data") if isinstance(datacell.data, dict) else datacell.data
-    )
+    if isinstance(datacell.data, dict):
+        raw_data = datacell.data.get(DATACELL_DATA_KEY)
+        if raw_data is None and datacell.data:
+            logger.debug(
+                "Datacell %d data dict has no %r key; available keys: %s",
+                datacell.id,
+                DATACELL_DATA_KEY,
+                list(datacell.data.keys()),
+            )
+    else:
+        raw_data = datacell.data
     groundable = extract_groundable_strings(raw_data)
 
     if not groundable:
