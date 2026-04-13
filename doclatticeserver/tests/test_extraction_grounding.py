@@ -5,6 +5,7 @@ Tests extract_groundable_strings (unit) and the full grounding pipeline
 (integration with Django models).
 """
 
+from asgiref.sync import async_to_sync
 from django.test import SimpleTestCase, TestCase
 
 from doclatticeserver.utils.extraction_grounding import extract_groundable_strings
@@ -114,6 +115,39 @@ class TestExtractGroundableStrings(SimpleTestCase):
         self.assertIn("State of Delaware", result)
 
 
+class TestIsNonGroundable(SimpleTestCase):
+    """Direct tests for _is_non_groundable() edge cases."""
+
+    def setUp(self):
+        from doclatticeserver.utils.extraction_grounding import _is_non_groundable
+
+        self.is_non_groundable = _is_non_groundable
+
+    def test_boolean_strings(self):
+        for val in ("true", "false", "yes", "no", "None", "null", "n/a"):
+            self.assertTrue(self.is_non_groundable(val), f"{val!r} should be excluded")
+
+    def test_pure_integer_string(self):
+        self.assertTrue(self.is_non_groundable("42"))
+
+    def test_pure_float_string(self):
+        self.assertTrue(self.is_non_groundable("3.14"))
+
+    def test_comma_separated_number(self):
+        # "50,000,000" parses as float after comma removal -> excluded
+        self.assertTrue(self.is_non_groundable("50,000,000"))
+
+    def test_dollar_amount_is_groundable(self):
+        # "$50,000,000.00" has a dollar sign so float() fails -> groundable
+        self.assertFalse(self.is_non_groundable("$50,000,000.00"))
+
+    def test_normal_text_is_groundable(self):
+        self.assertFalse(self.is_non_groundable("Acme Holdings, Inc."))
+
+    def test_sentence_with_numbers_is_groundable(self):
+        self.assertFalse(self.is_non_groundable("Section 4.2 of the Agreement"))
+
+
 class TestGroundingPipelineIntegration(TestCase):
     """Integration tests for the full grounding pipeline with Django models.
 
@@ -127,12 +161,21 @@ class TestGroundingPipelineIntegration(TestCase):
 
         from doclatticeserver.corpuses.models import Corpus
         from doclatticeserver.documents.models import Document
-        from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
+        from doclatticeserver.extracts.models import (
+            Column,
+            Datacell,
+            Extract,
+            Fieldset,
+        )
+        from doclatticeserver.notifications.models import Notification
 
         User = get_user_model()
         self.user = User.objects.create_user(
             username="grounding_test_user", password="testpass"
         )
+
+        # Clear any auto-created notifications from signal handlers
+        Notification.objects.filter(recipient=self.user).delete()
 
         # Create corpus
         self.corpus = Corpus.objects.create(
@@ -143,8 +186,8 @@ class TestGroundingPipelineIntegration(TestCase):
         self.doc_text = (
             "ASSET PURCHASE AGREEMENT\n\n"
             "This Agreement is entered into as of March 15, 2024, "
-            "by and between Acme Holdings, Inc. (\"Seller\") and "
-            "Global Acquisitions LLC (\"Buyer\").\n\n"
+            'by and between Acme Holdings, Inc. ("Seller") and '
+            'Global Acquisitions LLC ("Buyer").\n\n'
             "The Purchase Price shall be Fifty Million Dollars ($50,000,000.00)."
         )
         self.document = Document.objects.create(
@@ -158,9 +201,7 @@ class TestGroundingPipelineIntegration(TestCase):
         self.corpus.add_document(document=self.document, user=self.user)
 
         # Create extraction infrastructure
-        self.fieldset = Fieldset.objects.create(
-            name="Test Fieldset", creator=self.user
-        )
+        self.fieldset = Fieldset.objects.create(name="Test Fieldset", creator=self.user)
         self.column = Column.objects.create(
             fieldset=self.fieldset,
             name="Party Names",
@@ -179,29 +220,23 @@ class TestGroundingPipelineIntegration(TestCase):
             column=self.column,
             document=self.document,
             creator=self.user,
-            data={
-                "data": ["Acme Holdings, Inc.", "Global Acquisitions LLC"]
-            },
+            data={"data": ["Acme Holdings, Inc.", "Global Acquisitions LLC"]},
         )
 
     def test_ground_text_document(self):
         """Test grounding on a text/plain document creates SPAN_LABEL annotations."""
-        import asyncio
-
         from doclatticeserver.annotations.models import SPAN_LABEL
         from doclatticeserver.constants.annotations import OC_EXTRACT_SOURCE_LABEL
         from doclatticeserver.utils.extraction_grounding import (
             ground_extraction_to_annotations,
         )
 
-        annotations = asyncio.get_event_loop().run_until_complete(
-            ground_extraction_to_annotations(
-                datacell=self.datacell,
-                document=self.document,
-                corpus=self.corpus,
-                user_id=self.user.id,
-                enable_fuzzy=False,
-            )
+        annotations = async_to_sync(ground_extraction_to_annotations)(
+            datacell=self.datacell,
+            document=self.document,
+            corpus=self.corpus,
+            user_id=self.user.id,
+            enable_fuzzy=False,
         )
 
         self.assertGreater(len(annotations), 0)
@@ -211,67 +246,53 @@ class TestGroundingPipelineIntegration(TestCase):
             self.assertEqual(annot.document, self.document)
             self.assertEqual(annot.corpus, self.corpus)
             self.assertFalse(annot.structural)
-            self.assertEqual(
-                annot.annotation_label.text, OC_EXTRACT_SOURCE_LABEL
-            )
+            self.assertEqual(annot.annotation_label.text, OC_EXTRACT_SOURCE_LABEL)
 
             # Verify span data
             self.assertIn("start", annot.json)
             self.assertIn("end", annot.json)
             self.assertEqual(
-                self.doc_text[annot.json["start"]:annot.json["end"]],
+                self.doc_text[annot.json["start"] : annot.json["end"]],
                 annot.raw_text,
             )
 
         # Verify datacell sources were linked
         self.datacell.refresh_from_db()
-        self.assertEqual(
-            self.datacell.sources.count(), len(annotations)
-        )
+        self.assertEqual(self.datacell.sources.count(), len(annotations))
 
     def test_ground_with_corpus_id(self):
         """Test that passing corpus as int (ID) works."""
-        import asyncio
-
         from doclatticeserver.utils.extraction_grounding import (
             ground_extraction_to_annotations,
         )
 
-        annotations = asyncio.get_event_loop().run_until_complete(
-            ground_extraction_to_annotations(
-                datacell=self.datacell,
-                document=self.document,
-                corpus=self.corpus.id,
-                user_id=self.user.id,
-                enable_fuzzy=False,
-            )
+        annotations = async_to_sync(ground_extraction_to_annotations)(
+            datacell=self.datacell,
+            document=self.document,
+            corpus=self.corpus.id,
+            user_id=self.user.id,
+            enable_fuzzy=False,
         )
 
         self.assertGreater(len(annotations), 0)
 
     def test_ground_no_corpus_returns_empty(self):
         """Without a corpus, grounding should return empty (no label creation)."""
-        import asyncio
-
         from doclatticeserver.utils.extraction_grounding import (
             ground_extraction_to_annotations,
         )
 
-        annotations = asyncio.get_event_loop().run_until_complete(
-            ground_extraction_to_annotations(
-                datacell=self.datacell,
-                document=self.document,
-                corpus=None,
-                user_id=self.user.id,
-            )
+        annotations = async_to_sync(ground_extraction_to_annotations)(
+            datacell=self.datacell,
+            document=self.document,
+            corpus=None,
+            user_id=self.user.id,
         )
 
         self.assertEqual(len(annotations), 0)
 
     def test_ground_empty_data_returns_empty(self):
         """Datacell with no data should return empty."""
-        import asyncio
-
         from doclatticeserver.utils.extraction_grounding import (
             ground_extraction_to_annotations,
         )
@@ -279,21 +300,17 @@ class TestGroundingPipelineIntegration(TestCase):
         self.datacell.data = {}
         self.datacell.save()
 
-        annotations = asyncio.get_event_loop().run_until_complete(
-            ground_extraction_to_annotations(
-                datacell=self.datacell,
-                document=self.document,
-                corpus=self.corpus,
-                user_id=self.user.id,
-            )
+        annotations = async_to_sync(ground_extraction_to_annotations)(
+            datacell=self.datacell,
+            document=self.document,
+            corpus=self.corpus,
+            user_id=self.user.id,
         )
 
         self.assertEqual(len(annotations), 0)
 
     def test_ground_no_matches_returns_empty(self):
         """When extracted values don't appear in document, no annotations created."""
-        import asyncio
-
         from doclatticeserver.utils.extraction_grounding import (
             ground_extraction_to_annotations,
         )
@@ -301,14 +318,12 @@ class TestGroundingPipelineIntegration(TestCase):
         self.datacell.data = {"data": ["Totally nonexistent company name XYZ123"]}
         self.datacell.save()
 
-        annotations = asyncio.get_event_loop().run_until_complete(
-            ground_extraction_to_annotations(
-                datacell=self.datacell,
-                document=self.document,
-                corpus=self.corpus,
-                user_id=self.user.id,
-                enable_fuzzy=False,
-            )
+        annotations = async_to_sync(ground_extraction_to_annotations)(
+            datacell=self.datacell,
+            document=self.document,
+            corpus=self.corpus,
+            user_id=self.user.id,
+            enable_fuzzy=False,
         )
 
         self.assertEqual(len(annotations), 0)

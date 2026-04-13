@@ -17,8 +17,13 @@ from __future__ import annotations
 
 import dataclasses
 import difflib
+import logging
 import re
 from enum import Enum
+
+from doclatticeserver.constants.extraction import MAX_DOC_LENGTH_FOR_FUZZY
+
+logger = logging.getLogger(__name__)
 
 
 class MatchType(str, Enum):
@@ -114,11 +119,15 @@ def _fuzzy_find(
     # Step size: skip by 1/4 of query length for speed, min 1
     step = max(1, query_len // 4)
 
-    for window_size in range(min_window, max_window + 1, max(1, (max_window - min_window) // 3)):
+    for window_size in range(
+        min_window, max_window + 1, max(1, (max_window - min_window) // 3)
+    ):
         for start in range(0, len(doc_text) - window_size + 1, step):
             end = start + window_size
             candidate = doc_text[start:end]
-            ratio = difflib.SequenceMatcher(None, query, candidate).ratio()
+            ratio = difflib.SequenceMatcher(
+                None, query, candidate, autojunk=False
+            ).ratio()
 
             if ratio > best_ratio:
                 best_ratio = ratio
@@ -132,13 +141,22 @@ def _fuzzy_find(
     refine_start = max(0, best_start - step)
     refine_end_limit = min(len(doc_text), best_end + step)
 
-    for window_size in (best_end - best_start - 1, best_end - best_start, best_end - best_start + 1):
+    for window_size in (
+        best_end - best_start - 1,
+        best_end - best_start,
+        best_end - best_start + 1,
+    ):
         if window_size < 1:
             continue
-        for start in range(refine_start, min(refine_end_limit - window_size + 1, refine_start + 2 * step)):
+        for start in range(
+            refine_start,
+            min(refine_end_limit - window_size + 1, refine_start + 2 * step),
+        ):
             end = start + window_size
             candidate = doc_text[start:end]
-            ratio = difflib.SequenceMatcher(None, query, candidate).ratio()
+            ratio = difflib.SequenceMatcher(
+                None, query, candidate, autojunk=False
+            ).ratio()
             if ratio > best_ratio:
                 best_ratio = ratio
                 best_start = start
@@ -222,8 +240,12 @@ def align_text_to_document(
             # Map back to original character positions
             orig_start = char_map[norm_pos]
             norm_end = norm_pos + len(norm_query)
-            # char_map might be shorter if trailing whitespace was stripped
-            orig_end = char_map[min(norm_end - 1, len(char_map) - 1)] + 1
+            # Use the *next* char_map entry as the exclusive end to avoid
+            # an off-by-one when the match ends on collapsed whitespace.
+            if norm_end < len(char_map):
+                orig_end = char_map[norm_end]
+            else:
+                orig_end = len(document_text)
             matched = document_text[orig_start:orig_end]
 
             results.append(
@@ -233,7 +255,7 @@ def align_text_to_document(
                     char_start=orig_start,
                     char_end=orig_end,
                     match_quality=difflib.SequenceMatcher(
-                        None, query, matched
+                        None, query, matched, autojunk=False
                     ).ratio(),
                     match_type=MatchType.NORMALIZED,
                 )
@@ -242,6 +264,15 @@ def align_text_to_document(
 
         # --- Tier 3: Fuzzy match ---
         if enable_fuzzy and len(query) >= min_query_length:
+            if len(document_text) > MAX_DOC_LENGTH_FOR_FUZZY:
+                logger.debug(
+                    "Skipping fuzzy match for query %r: document length "
+                    "%d exceeds MAX_DOC_LENGTH_FOR_FUZZY (%d)",
+                    query[:50],
+                    len(document_text),
+                    MAX_DOC_LENGTH_FOR_FUZZY,
+                )
+                continue
             fuzzy_result = _fuzzy_find(query, document_text, fuzzy_threshold)
             if fuzzy_result is not None:
                 results.append(fuzzy_result)

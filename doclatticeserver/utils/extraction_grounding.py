@@ -19,20 +19,17 @@ from uuid import uuid4
 
 from asgiref.sync import sync_to_async
 
+from doclatticeserver.constants.extraction import (
+    DATACELL_DATA_KEY,
+    MAX_GROUNDABLE_STRINGS,
+    MIN_GROUNDABLE_LENGTH,
+)
 from doclatticeserver.utils.text_alignment import (
     AlignmentResult,
     align_text_to_document,
 )
 
 logger = logging.getLogger(__name__)
-
-# Minimum length for a string to be worth grounding.
-# Very short strings (e.g. "Yes", "42") produce noisy/ambiguous matches.
-_MIN_GROUNDABLE_LENGTH = 5
-
-# Maximum number of strings to attempt grounding for per datacell.
-# Prevents runaway cost on cells that extract hundreds of items.
-_MAX_GROUNDABLE_STRINGS = 50
 
 
 # ---------------------------------------------------------------------------
@@ -48,24 +45,24 @@ def extract_groundable_strings(data: Any) -> list[str]:
     source document.
 
     Filters out:
-    - Strings shorter than ``_MIN_GROUNDABLE_LENGTH``
+    - Strings shorter than ``MIN_GROUNDABLE_LENGTH``
     - Pure numeric strings
     - Boolean-like strings ("true", "false", "yes", "no")
 
-    Returns at most ``_MAX_GROUNDABLE_STRINGS`` unique strings, preserving
+    Returns at most ``MAX_GROUNDABLE_STRINGS`` unique strings, preserving
     insertion order.
     """
     seen: set[str] = set()
     results: list[str] = []
 
     def _walk(obj: Any) -> None:
-        if len(results) >= _MAX_GROUNDABLE_STRINGS:
+        if len(results) >= MAX_GROUNDABLE_STRINGS:
             return
 
         if isinstance(obj, str):
             stripped = obj.strip()
             if (
-                len(stripped) >= _MIN_GROUNDABLE_LENGTH
+                len(stripped) >= MIN_GROUNDABLE_LENGTH
                 and stripped not in seen
                 and not _is_non_groundable(stripped)
             ):
@@ -75,13 +72,13 @@ def extract_groundable_strings(data: Any) -> list[str]:
         elif isinstance(obj, dict):
             for value in obj.values():
                 _walk(value)
-                if len(results) >= _MAX_GROUNDABLE_STRINGS:
+                if len(results) >= MAX_GROUNDABLE_STRINGS:
                     return
 
         elif isinstance(obj, (list, tuple)):
             for item in obj:
                 _walk(item)
-                if len(results) >= _MAX_GROUNDABLE_STRINGS:
+                if len(results) >= MAX_GROUNDABLE_STRINGS:
                     return
 
     _walk(data)
@@ -172,7 +169,6 @@ def _create_grounding_annotations(
     creator_id: int,
     pdf_layer,
     annotation_type: str,
-    doc_text: str,
 ) -> list:
     """Create Annotation objects for each alignment result.
 
@@ -187,9 +183,7 @@ def _create_grounding_annotations(
     from doclatticeserver.annotations.models import (
         SPAN_LABEL,
         TOKEN_LABEL,
-        Annotation,
     )
-
     from doclatticeserver.constants.annotations import OC_EXTRACT_SOURCE_LABEL
 
     if not alignment_results:
@@ -204,9 +198,9 @@ def _create_grounding_annotations(
 
     annotations = []
 
-    with transaction.atomic():
-        for result in alignment_results:
-            try:
+    for result in alignment_results:
+        try:
+            with transaction.atomic():
                 if annotation_type == TOKEN_LABEL and pdf_layer is not None:
                     annot = _create_pdf_annotation(
                         result, document, corpus, creator_id, pdf_layer, label_obj
@@ -221,16 +215,16 @@ def _create_grounding_annotations(
                 annot.save()
                 annotations.append(annot)
 
-            except Exception:
-                logger.warning(
-                    "Failed to create grounding annotation for %r "
-                    "at [%d:%d] in document %d",
-                    result.query_text[:50],
-                    result.char_start,
-                    result.char_end,
-                    document.id,
-                    exc_info=True,
-                )
+        except Exception:
+            logger.warning(
+                "Failed to create grounding annotation for %r "
+                "at [%d:%d] in document %d",
+                result.query_text[:50],
+                result.char_start,
+                result.char_end,
+                document.id,
+                exc_info=True,
+            )
 
     return annotations
 
@@ -250,9 +244,20 @@ def _create_pdf_annotation(result, document, corpus, creator_id, pdf_layer, labe
     span_annotation = SpanAnnotation(span=span, annotation_label=label_obj.text)
     oc_ann = pdf_layer.create_doclattice_annotation_from_span(span_annotation)
 
+    page = oc_ann.get("page")
+    if page is None:
+        logger.warning(
+            "PlasmaPDF annotation missing 'page' key for span [%d:%d] "
+            "in document %d; defaulting to page 1",
+            result.char_start,
+            result.char_end,
+            document.id,
+        )
+        page = 1
+
     return Annotation(
         raw_text=oc_ann["rawText"],
-        page=oc_ann.get("page", 1),
+        page=page,
         json=oc_ann["annotation_json"],
         annotation_label=label_obj,
         document=document,
@@ -346,13 +351,21 @@ async def ground_extraction_to_annotations(
             return []
 
     # 1. Extract groundable strings
-    raw_data = datacell.data.get("data") if isinstance(datacell.data, dict) else datacell.data
+    if isinstance(datacell.data, dict):
+        raw_data = datacell.data.get(DATACELL_DATA_KEY)
+        if raw_data is None and datacell.data:
+            logger.debug(
+                "Datacell %d data dict has no %r key; available keys: %s",
+                datacell.id,
+                DATACELL_DATA_KEY,
+                list(datacell.data.keys()),
+            )
+    else:
+        raw_data = datacell.data
     groundable = extract_groundable_strings(raw_data)
 
     if not groundable:
-        logger.debug(
-            "No groundable strings found in datacell %d", datacell.id
-        )
+        logger.debug("No groundable strings found in datacell %d", datacell.id)
         return []
 
     logger.info(
@@ -362,9 +375,7 @@ async def ground_extraction_to_annotations(
     )
 
     # 2. Load document text + optional PDF layer
-    doc_text, pdf_layer, annotation_type = await _load_document_text_and_layer(
-        document
-    )
+    doc_text, pdf_layer, annotation_type = await _load_document_text_and_layer(document)
 
     # 3. Align strings to document
     alignments = align_text_to_document(
@@ -397,7 +408,6 @@ async def ground_extraction_to_annotations(
         creator_id=user_id,
         pdf_layer=pdf_layer,
         annotation_type=annotation_type,
-        doc_text=doc_text,
     )
 
     # 5. Link to datacell

@@ -9,6 +9,9 @@ from doclatticeserver.annotations.compact_json import iter_page_annotations
 from doclatticeserver.extracts.models import Datacell
 from doclatticeserver.shared.decorators import celery_task_with_async_to_sync
 from doclatticeserver.utils.compact_pawls import expand_pawls_pages
+from doclatticeserver.utils.extraction_grounding import (
+    ground_extraction_to_annotations,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -317,10 +320,6 @@ async def doc_extract_query_task(
             # Auto-ground: find extracted text values in the source document
             # and create linked source annotations with PDF/text coordinates.
             try:
-                from doclatticeserver.utils.extraction_grounding import (
-                    ground_extraction_to_annotations,
-                )
-
                 grounding_annotations = await ground_extraction_to_annotations(
                     datacell=datacell,
                     document=document,
