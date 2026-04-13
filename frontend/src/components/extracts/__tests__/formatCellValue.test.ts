@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { EXTRACT_GRID_CELL_TRUNCATE_LENGTH } from "../../../assets/configurations/constants";
-import { formatCellValue } from "../ExtractGridEmbed";
+import { formatCellValue } from "../../../utils/formatters";
 
 describe("formatCellValue", () => {
   it("returns em-dash for null", () => {

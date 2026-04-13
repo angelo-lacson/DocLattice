@@ -105,18 +105,27 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         interfaces = [relay.Node]
         connection_class = CountableConnection
 
+    def _get_datacell_qs(self, user):
+        """Return the permission-filtered, deterministically ordered queryset.
+
+        Cached on the instance so that ``resolve_full_datacell_list`` and
+        ``resolve_datacell_count`` share a single queryset build when both
+        fields are requested in the same GraphQL query.
+        """
+        if not hasattr(self, "_datacell_qs"):
+            from opencontractserver.annotations.query_optimizer import (
+                ExtractQueryOptimizer,
+            )
+
+            self._datacell_qs = ExtractQueryOptimizer.get_extract_datacells(
+                self, user, document_id=None
+            ).order_by("document_id", "column_id", "id")
+        return self._datacell_qs
+
     def resolve_full_datacell_list(self, info, limit=None, offset=None):
-        from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
         from opencontractserver.constants.extracts import MAX_FULL_DATACELL_LIST_LIMIT
 
-        qs = ExtractQueryOptimizer.get_extract_datacells(
-            self, info.context.user, document_id=None
-        )
-
-        # Apply a deterministic ordering so that `limit`/`offset` produce a
-        # stable window across requests. Without this, PostgreSQL is free to
-        # return rows in any order, which would make pagination indeterminate.
-        qs = qs.order_by("document_id", "column_id", "id")
+        qs = self._get_datacell_qs(info.context.user)
 
         # Guard against negative offset — Django does not support negative
         # indexing on querysets and would raise AssertionError.
@@ -132,17 +141,7 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         return qs
 
     def resolve_datacell_count(self, info) -> int:
-        # TODO: this builds the same permission-filtered queryset as
-        # resolve_full_datacell_list.  If both fields are requested in the
-        # same GraphQL query, Django evaluates two separate DB round-trips.
-        # Consider caching the base queryset on the ExtractType instance or
-        # folding the count into the pagination resolver when both fields
-        # are fetched together.
-        from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
-
-        return ExtractQueryOptimizer.get_extract_datacells(
-            self, info.context.user, document_id=None
-        ).count()
+        return self._get_datacell_qs(info.context.user).count()
 
     def resolve_full_document_list(self, info):
         from opencontractserver.types.enums import PermissionTypes

@@ -2206,6 +2206,8 @@ export const GET_EXTRACT_GRID_EMBED = gql`
       # Bounded payload: the server applies the limit arg to cap datacells
       # returned, and datacellCount reports the total visible cells so the
       # client can show a "showing N of M" indicator. Resolves #1204.
+      # Note: the server also accepts an offset argument for client-driven
+      # pagination, but the embed currently fetches only the first page.
       datacellCount
       fullDatacellList(limit: $limit) {
         id
