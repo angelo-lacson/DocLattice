@@ -186,6 +186,33 @@ test.describe("ExtractGridEmbed - Partial (server-side limit)", () => {
   });
 });
 
+test.describe("ExtractGridEmbed - Both Truncated", () => {
+  test("should show combined banner when both row clip and server-side limit apply", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <ExtractGridEmbedTestWrapper state="both-truncated" />
+    );
+
+    await expect(page.getByText("Both Truncated Extract")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // The combined banner should mention the fetched cell count and total
+    // cell count from datacellCount, covering the branch where both
+    // cellsTruncated and rowsTruncated are true.
+    await expect(
+      page.getByText(/Showing 200 documents from a bounded payload/)
+    ).toBeVisible();
+    await expect(page.getByText(/201 of 1000 total cells/)).toBeVisible();
+
+    await docScreenshot(page, "caml--extract-grid-embed--both-truncated");
+
+    await component.unmount();
+  });
+});
+
 test.describe("ExtractGridEmbed - Missing ID", () => {
   test("should show missing-id message when no extractId is provided", async ({
     mount,

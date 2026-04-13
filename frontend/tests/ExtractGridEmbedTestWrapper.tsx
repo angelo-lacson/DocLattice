@@ -389,6 +389,64 @@ const partialExtractMock: MockedResponse = {
   },
 };
 
+/**
+ * Mock: both truncation paths fire simultaneously. The fetched payload has
+ * 201 cells (one per document, 1 column) but `datacellCount` is 1000,
+ * meaning the server bounded the payload. The component also clips the
+ * rendered rows at EXTRACT_GRID_EMBED_MAX_ROWS (200). The combined banner
+ * should mention both the document clip and the cell bound.
+ */
+const bothTruncatedExtractMock: MockedResponse = {
+  request: {
+    query: GET_EXTRACT_GRID_EMBED,
+    variables: MOCK_VARS,
+  },
+  result: {
+    data: {
+      extract: {
+        __typename: "ExtractType",
+        id: TEST_EXTRACT_ID,
+        name: "Both Truncated Extract",
+        corpus: {
+          __typename: "CorpusType",
+          id: "Q29ycHVzVHlwZTox",
+          slug: "supply-chain-analysis",
+          creator: { __typename: "UserType", slug: "test-user" },
+        },
+        fieldset: {
+          __typename: "FieldsetType",
+          id: "fieldset-1",
+          fullColumnList: [
+            { __typename: "ColumnType", id: "col-1", name: "Term" },
+          ],
+        },
+        datacellCount: 1000,
+        fullDatacellList: Array.from({ length: 201 }, (_, i) => ({
+          __typename: "DatacellType" as const,
+          id: `both-cell-${i}`,
+          column: {
+            __typename: "ColumnType" as const,
+            id: "col-1",
+            name: "Term",
+          },
+          document: {
+            __typename: "DocumentType" as const,
+            id: `doc-${i}`,
+            title: `Document ${i}`,
+            slug: `document-${i}`,
+            creator: { __typename: "UserType" as const, slug: "test-user" },
+          },
+          data: `value-${i}`,
+          correctedData: null,
+          completed: "2024-03-01T12:00:00Z",
+          failed: null,
+          fullSourceList: [],
+        })),
+      },
+    },
+  },
+};
+
 /** Mock: GraphQL error */
 const errorExtractMock: MockedResponse = {
   request: {
@@ -414,7 +472,8 @@ export type ExtractGridEmbedState =
   | "missing-id"
   | "loading"
   | "too-many-rows"
-  | "partial";
+  | "partial"
+  | "both-truncated";
 
 export interface ExtractGridEmbedTestWrapperProps {
   state?: ExtractGridEmbedState;
@@ -434,6 +493,7 @@ export const ExtractGridEmbedTestWrapper: React.FC<
     loading: loadingExtractMock,
     "too-many-rows": tooManyRowsExtractMock,
     partial: partialExtractMock,
+    "both-truncated": bothTruncatedExtractMock,
   };
 
   const extractId = state === "missing-id" ? undefined : TEST_EXTRACT_ID;
