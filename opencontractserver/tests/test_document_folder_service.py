@@ -4040,3 +4040,67 @@ class TestCoverageGap_BulkMoveVersionPreservation(DocumentFolderServiceTestBase)
             # Original marked not current
             original_path.refresh_from_db()
             self.assertFalse(original_path.is_current)
+
+
+class TestCoverageGap_BulkMoveGetPathCallCount(DocumentFolderServiceTestBase):
+    """
+    SCENARIO: Bulk move caches the target folder path before the loop.
+
+    BUSINESS RULE: CorpusFolder.get_path() issues a recursive CTE query per
+    invocation.  The bulk-move method must resolve the target folder's path
+    exactly once, regardless of how many documents are moved.  This test
+    locks in that performance invariant so a future refactor cannot
+    accidentally regress to O(N) CTE queries.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@test.com", password="test"
+        )
+        self.corpus = Corpus.objects.create(
+            title="Test Corpus", creator=self.owner, is_public=False
+        )
+        self.folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Target"
+        )
+
+    def test_bulk_move_calls_get_path_once(self):
+        """get_path() is called at most once during a bulk move (cached path)."""
+        docs = []
+        for i in range(5):
+            doc = Document.objects.create(
+                title=f"Doc {i}", creator=self.owner, pdf_file=f"doc{i}.pdf"
+            )
+            DocumentPath.objects.create(
+                document=doc,
+                corpus=self.corpus,
+                creator=self.owner,
+                folder=None,
+                path=f"/doc{i}.pdf",
+                version_number=1,
+                is_current=True,
+                is_deleted=False,
+            )
+            docs.append(doc)
+
+        original_get_path = CorpusFolder.get_path
+
+        with patch.object(
+            CorpusFolder, "get_path", side_effect=original_get_path
+        ) as mock_get_path:
+            moved_count, error = DocumentFolderService.move_documents_to_folder(
+                user=self.owner,
+                document_ids=[d.id for d in docs],
+                corpus=self.corpus,
+                folder=self.folder,
+            )
+
+        self.assertEqual(moved_count, 5)
+        self.assertEqual(error, "")
+        self.assertEqual(
+            mock_get_path.call_count,
+            1,
+            f"get_path() should be called exactly once for a bulk move of "
+            f"{len(docs)} documents, but was called {mock_get_path.call_count} "
+            f"times — the cached path optimisation may have regressed",
+        )
