@@ -132,6 +132,12 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         return qs
 
     def resolve_datacell_count(self, info) -> int:
+        # TODO: this builds the same permission-filtered queryset as
+        # resolve_full_datacell_list.  If both fields are requested in the
+        # same GraphQL query, Django evaluates two separate DB round-trips.
+        # Consider caching the base queryset on the ExtractType instance or
+        # folding the count into the pagination resolver when both fields
+        # are fetched together.
         from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
 
         return ExtractQueryOptimizer.get_extract_datacells(

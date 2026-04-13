@@ -2180,7 +2180,7 @@ export interface GetExtractGridEmbedOutput {
     };
     fullDatacellList: ExtractGridEmbedCell[];
     /** Total cells visible to the user, ignoring the `limit` applied above. */
-    datacellCount: number;
+    datacellCount?: number | null;
   } | null;
 }
 

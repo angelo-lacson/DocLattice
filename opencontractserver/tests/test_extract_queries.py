@@ -276,9 +276,12 @@ class ExtractsQueryTestCase(TestCase):
     def test_full_datacell_list_limit_capped_at_server_max(self):
         """
         A ``limit`` exceeding ``MAX_FULL_DATACELL_LIST_LIMIT`` must be
-        silently capped to the server maximum. We verify by requesting a
-        limit far above the cap and checking we still get a bounded result
-        (the test fixture only has 1 cell, so we just assert no error).
+        silently capped to the server maximum rather than producing a 500
+        error. This test verifies no server error occurs.
+
+        Note: the test fixture only has a handful of cells (well below the
+        cap), so this test cannot verify that the cap *reduces* the result
+        count. It only confirms the over-sized limit is accepted gracefully.
         """
         from opencontractserver.constants.extracts import MAX_FULL_DATACELL_LIST_LIMIT
 
