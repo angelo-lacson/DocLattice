@@ -36,16 +36,69 @@ from opencontractserver.documents.models import (
     DocumentProcessingStatus,
     DocumentRelationship,
     DocumentSummaryRevision,
+    IngestionSource,
+    IngestionSourceCategory,
 )
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
+# -------------------- Ingestion Source Types -------------------- #
+
+INGESTION_SOURCE_GLOBAL_ID_TYPE = "IngestionSourceType"
+
+IngestionSourceTypeEnum = graphene.Enum.from_enum(
+    IngestionSourceCategory, name="IngestionSourceTypeEnum"
+)
+
+
+class IngestionSourceType(AnnotatePermissionsForReadMixin, DjangoObjectType):
+    """GraphQL type for IngestionSource - a named integration that produces documents."""
+
+    config = GenericScalar(
+        description=(
+            "Source configuration (connection details, etc.). "
+            "WARNING: This field is returned to the owning user verbatim. "
+            "Store secret-manager key paths or references here, never raw "
+            "credentials (API keys, tokens, passwords)."
+        )
+    )
+
+    class Meta:
+        model = IngestionSource
+        interfaces = [relay.Node]
+        connection_class = CountableConnection
+        # Explicit allowlist: do NOT expose ``user_lock`` (leaks username of
+        # the user holding the lock), ``backend_lock``, or ``is_public`` from
+        # the BaseOCModel parent.  Keep the API surface limited to the
+        # source's descriptive + lifecycle fields.
+        fields = (
+            "id",
+            "name",
+            "source_type",
+            "config",
+            "active",
+            "created",
+            "modified",
+        )
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        """Only show sources owned by the current user, shared, or public."""
+        return IngestionSource.objects.visible_to_user(info.context.user)
+
+
+# -------------------- Document Path Types -------------------- #
+
+
 class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     """GraphQL type for DocumentPath model - represents filesystem lifecycle events."""
 
     action = graphene.Field(PathActionEnum, description="Inferred action type")
+    ingestion_metadata = GenericScalar(
+        description="Arbitrary source-specific metadata (URL, crawl job ID, etc.)"
+    )
 
     def resolve_action(self, info):
         """Infer action type from path state."""

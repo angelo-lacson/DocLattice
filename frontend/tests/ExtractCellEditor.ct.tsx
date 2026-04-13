@@ -1,5 +1,5 @@
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { ExtractCellEditor } from "../src/components/extracts/datagrid/ExtractCellEditor";
 import { docScreenshot } from "./utils/docScreenshot";
 

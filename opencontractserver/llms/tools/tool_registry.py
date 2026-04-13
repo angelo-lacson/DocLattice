@@ -33,6 +33,7 @@ class ToolCategory(str, Enum):
     MODERATION = "moderation"
     IMAGE = "image"
     WEB = "web"
+    MEMORY = "memory"
 
 
 @dataclass(frozen=True)
@@ -354,6 +355,34 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         requires_write_permission=True,
         parameters=(("new_content", "Full markdown content", True),),
     ),
+    ToolDefinition(
+        name="move_document",
+        description=(
+            "Move a document to a different folder within the current corpus. "
+            "Pass target_folder_id to specify the destination folder, or omit "
+            "it to move the document to the corpus root."
+        ),
+        # CORPUS (not DOCUMENT) because this manipulates the corpus folder
+        # hierarchy, not the document's own content or metadata.  It is only
+        # available to corpus-level agents where the LLM picks which document
+        # to move; document-scoped agents operate on a single fixed document.
+        category=ToolCategory.CORPUS,
+        requires_corpus=True,
+        requires_approval=True,
+        requires_write_permission=True,
+        parameters=(
+            (
+                "document_id",
+                "ID of the document to move",
+                True,
+            ),
+            (
+                "target_folder_id",
+                "ID of the destination folder, or omit for corpus root",
+                False,
+            ),
+        ),
+    ),
     # -------------------------------------------------------------------------
     # COORDINATION TOOLS (for corpus agents)
     # -------------------------------------------------------------------------
@@ -611,6 +640,49 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
             ("entity_id", "The primary key (ID) of the entity", True),
         ),
     ),
+    # -------------------------------------------------------------------------
+    # MEMORY TOOLS
+    # -------------------------------------------------------------------------
+    ToolDefinition(
+        name="get_corpus_memory",
+        description=(
+            "Read accumulated insights about this corpus from previous interactions. "
+            "Returns patterns about document structure, effective search strategies, "
+            "and common question types learned over time."
+        ),
+        category=ToolCategory.MEMORY,
+        requires_corpus=True,
+        parameters=(
+            (
+                "section",
+                "Optional section to filter to (e.g., 'Collection Patterns' or 'Query Patterns')",
+                False,
+            ),
+        ),
+    ),
+    ToolDefinition(
+        name="suggest_memory_update",
+        description=(
+            "Suggest a new insight to add to corpus memory for future interactions. "
+            "Use this when you discover a useful pattern about the document collection "
+            "or an effective search strategy."
+        ),
+        category=ToolCategory.MEMORY,
+        requires_corpus=True,
+        requires_write_permission=True,
+        parameters=(
+            (
+                "section",
+                "Which section: 'collection_patterns' or 'query_patterns'",
+                True,
+            ),
+            (
+                "insight",
+                "The insight text, formatted as '- **Title**: Description'",
+                True,
+            ),
+        ),
+    ),
 )
 
 
@@ -805,6 +877,7 @@ class ToolFunctionRegistry:
             acreate_markdown_link,
             aduplicate_annotations_with_label,
             aget_corpus_description,
+            aget_corpus_memory,
             aget_document_description,
             aget_document_summary,
             aget_document_summary_diff,
@@ -814,8 +887,10 @@ class ToolFunctionRegistry:
             aget_page_image,
             aload_document_md_summary,
             aload_document_txt_extract,
+            amove_document,
             asearch_document_notes,
             asearch_exact_text_as_sources,
+            asuggest_memory_update,
             aupdate_corpus_description,
             aupdate_document_description,
             aupdate_document_note,
@@ -884,6 +959,7 @@ class ToolFunctionRegistry:
             # Corpus tools
             "get_corpus_description": (aget_corpus_description, ()),
             "update_corpus_description": (aupdate_corpus_description, ()),
+            "move_document": (amove_document, ()),
             # Image tools
             "list_document_images": (alist_document_images, ()),
             "get_document_image": (aget_document_image, ()),
@@ -902,6 +978,9 @@ class ToolFunctionRegistry:
             "create_markdown_link": (acreate_markdown_link, ()),
             # Web tools
             "web_search": (aweb_search, ("search_web",)),
+            # Memory tools
+            "get_corpus_memory": (aget_corpus_memory, ()),
+            "suggest_memory_update": (asuggest_memory_update, ()),
         }
         # NOTE: similarity_search, get_document_text_length, list_documents,
         # and ask_document are NOT in FUNCTION_MAP because they require

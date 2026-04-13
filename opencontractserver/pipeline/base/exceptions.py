@@ -63,3 +63,25 @@ class DocumentThumbnailError(Exception):
         """
         super().__init__(message)
         self.is_transient = is_transient
+
+
+class EmbeddingClientError(Exception):
+    """
+    Raised for 4xx client errors from the embedding service.
+
+    These errors indicate invalid input (malformed request, bad data) and
+    should NOT be retried by Celery tasks.
+    """
+
+    pass
+
+
+class EmbeddingServerError(Exception):
+    """
+    Raised for 5xx server errors from the embedding service.
+
+    These errors indicate transient service issues and SHOULD be retried
+    by Celery tasks with exponential backoff.
+    """
+
+    pass

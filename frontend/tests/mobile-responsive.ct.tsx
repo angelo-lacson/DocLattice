@@ -1,5 +1,5 @@
 // Playwright Component Tests for Mobile Responsive Behavior (#690)
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { Badge } from "../src/components/badges/Badge";
 import UserBadgesTestWrapper from "./UserBadgesTestWrapper";
 import GlobalSettingsPanelTestWrapper from "./GlobalSettingsPanelTestWrapper";

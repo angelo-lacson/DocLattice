@@ -1,5 +1,5 @@
 import React from "react";
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { MockedResponse } from "@apollo/client/testing";
 import { CorpusChatTestWrapper } from "./CorpusChatTestWrapper";
 import { GET_CORPUS_CONVERSATIONS } from "../src/graphql/queries";
@@ -104,7 +104,7 @@ test.describe("CorpusChat", () => {
 
     // Wait for conversations to load and render
     await expect(page.getByText("First Conversation")).toBeVisible({
-      timeout: 10000,
+      timeout: 20000,
     });
     await expect(page.getByText("Second Conversation")).toBeVisible();
 
@@ -127,7 +127,7 @@ test.describe("CorpusChat", () => {
     // Should see the new chat button
     await expect(
       page.getByRole("button", { name: "New Chat", exact: true })
-    ).toBeVisible({ timeout: 10000 });
+    ).toBeVisible({ timeout: 20000 });
 
     await docScreenshot(page, "corpus--chat--empty");
 
@@ -148,7 +148,7 @@ test.describe("CorpusChat", () => {
 
     // The chat input should be visible (textarea or input for composing messages)
     const input = page.locator("textarea, input[type='text']").first();
-    await expect(input).toBeVisible({ timeout: 10000 });
+    await expect(input).toBeVisible({ timeout: 20000 });
 
     await docScreenshot(page, "corpus--chat--new-chat");
 

@@ -62,6 +62,50 @@ async def _user_has_write_permission(
     )
 
 
+async def _inject_corpus_memory(corpus_obj, config) -> None:
+    """Inject corpus memory into the agent's system prompt if available.
+
+    Reads the memory document for the given corpus and appends the
+    formatted memory content to ``config.system_prompt``.  Silently
+    logs and skips on any failure so agent creation is never blocked.
+
+    Note: ``query=config.system_prompt`` is used as the relevance signal
+    for section selection.  The user's actual question would be a better
+    signal, but it is not available at factory-creation time.
+
+    **Security / prompt-injection warning**: Memory content is a user-editable
+    markdown Document.  Any corpus member can modify it via the UI, which means
+    its contents are untrusted user input injected verbatim into the system
+    prompt.  This is a prompt-injection vector: a malicious user could craft
+    memory entries that override agent behaviour.  The ToggleCorpusMemory
+    mutation warns users about this risk.  Future hardening should consider
+    sandboxing or sanitising memory content before injection.
+
+    Args:
+        corpus_obj: The Corpus instance (must have ``memory_enabled=True``).
+        config: The AgentConfig whose ``system_prompt`` will be mutated.
+    """
+    try:
+        from opencontractserver.agents.memory import (
+            format_memory_for_prompt,
+            get_memory_for_injection,
+        )
+
+        memory_content = await get_memory_for_injection(
+            corpus_obj, query=config.system_prompt or ""
+        )
+        if memory_content:
+            config.system_prompt = (
+                config.system_prompt or ""
+            ) + format_memory_for_prompt(memory_content)
+    except Exception:
+        logger.warning(
+            "Failed to inject corpus memory for corpus %s",
+            corpus_obj.id,
+            exc_info=True,
+        )
+
+
 class UnifiedAgentFactory:
     """Factory that creates agents using different frameworks with a common interface."""
 
@@ -186,6 +230,10 @@ class UnifiedAgentFactory:
             # For other exceptions (e.g., network errors), default to private
             doc_obj = None
             corpus_obj = None
+
+        # Corpus memory injection
+        if corpus_obj and getattr(corpus_obj, "memory_enabled", False):
+            await _inject_corpus_memory(corpus_obj, config)
 
         public_context = _is_public(doc_obj) or (corpus_obj and _is_public(corpus_obj))
 
@@ -359,6 +407,10 @@ class UnifiedAgentFactory:
         except Exception:
             # For other exceptions (e.g., network errors), default to private
             corpus_obj = None
+
+        # Corpus memory injection
+        if corpus_obj and getattr(corpus_obj, "memory_enabled", False):
+            await _inject_corpus_memory(corpus_obj, config)
 
         public_context = _is_public(corpus_obj)
 

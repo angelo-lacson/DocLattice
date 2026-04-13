@@ -197,6 +197,27 @@ class Corpus(TreeNode):
         ),
     )
 
+    # Agent memory
+    memory_enabled = django.db.models.BooleanField(
+        default=False,
+        help_text=(
+            "Enable agent memory system for this corpus. When enabled, agents "
+            "accumulate reusable insights from conversations into a memory document."
+        ),
+    )
+    # NOTE: on_delete=SET_NULL means deleting the memory Document leaves
+    # memory_enabled=True.  This is intentional — get_or_create_memory_document
+    # will transparently recreate the document on the next agent interaction,
+    # preserving the "memory stays enabled across disable/enable cycles" design.
+    memory_document = django.db.models.OneToOneField(
+        "documents.Document",
+        on_delete=django.db.models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="memory_for_corpus",
+        help_text="The Document storing accumulated agent memory for this corpus.",
+    )
+
     # Licensing
     license = django.db.models.CharField(
         max_length=LICENSE_SPDX_MAX_LENGTH,
@@ -740,6 +761,12 @@ class Corpus(TreeNode):
             else:
                 path = f"{DEFAULT_DOCUMENT_PATH_PREFIX}/doc_{document.pk}"
 
+        # Extract path-level lineage kwargs before they hit Document.objects.create()
+        path_kwargs = {}
+        for key in ("ingestion_source", "external_id", "ingestion_metadata"):
+            if key in doc_kwargs:
+                path_kwargs[key] = doc_kwargs.pop(key)
+
         with transaction.atomic():
             # Always create corpus-isolated copy (no content-based deduplication)
             # Each add_document() call creates a new document regardless of content hash
@@ -842,6 +869,7 @@ class Corpus(TreeNode):
                 is_current=True,
                 is_deleted=False,
                 creator=user,
+                **path_kwargs,
             )
 
             logger.info(

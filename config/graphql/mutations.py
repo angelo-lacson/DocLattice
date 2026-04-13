@@ -83,6 +83,7 @@ from config.graphql.corpus_mutations import (
     RunCorpusAction,
     SetCorpusVisibility,
     StartCorpusFork,
+    ToggleCorpusMemory,
     UpdateCorpusAction,
     UpdateCorpusDescription,
     UpdateCorpusMutation,
@@ -136,6 +137,13 @@ from config.graphql.extract_mutations import (
     UpdateColumnMutation,
     UpdateExtractMutation,
     UpdateMetadataColumn,
+)
+
+# Import ingestion source mutations
+from config.graphql.ingestion_source_mutations import (
+    CreateIngestionSourceMutation,
+    DeleteIngestionSourceMutation,
+    UpdateIngestionSourceMutation,
 )
 
 # Import label mutations
@@ -297,6 +305,7 @@ class Mutation(graphene.ObjectType):
     delete_corpus_action = DeleteCorpusAction.Field()
     run_corpus_action = RunCorpusAction.Field()
     add_template_to_corpus = AddTemplateToCorpus.Field()
+    toggle_corpus_memory = ToggleCorpusMemory.Field()
 
     # CORPUS FOLDER MUTATIONS ##################################################
     create_corpus_folder = CreateCorpusFolderMutation.Field()
@@ -396,6 +405,11 @@ class Mutation(graphene.ObjectType):
     create_agent_configuration = CreateAgentConfigurationMutation.Field()
     update_agent_configuration = UpdateAgentConfigurationMutation.Field()
     delete_agent_configuration = DeleteAgentConfigurationMutation.Field()
+
+    # INGESTION SOURCE MUTATIONS ###################################################
+    create_ingestion_source = CreateIngestionSourceMutation.Field()
+    update_ingestion_source = UpdateIngestionSourceMutation.Field()
+    delete_ingestion_source = DeleteIngestionSourceMutation.Field()
 
     # PIPELINE SETTINGS MUTATIONS (Superuser only) ###############################
     update_pipeline_settings = UpdatePipelineSettingsMutation.Field()

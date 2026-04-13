@@ -11,17 +11,23 @@ from graphene_django.filter import DjangoFilterConnectionField
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
+from config.graphql.document_types import INGESTION_SOURCE_GLOBAL_ID_TYPE
 from config.graphql.filters import DocumentFilter, DocumentRelationshipFilter
 from config.graphql.graphene_types import (
     BulkDocumentUploadStatusType,
     DocumentRelationshipType,
     DocumentType,
+    IngestionSourceType,
 )
 from config.graphql.ratelimits import get_user_tier_rate, graphql_ratelimit_dynamic
 from opencontractserver.constants.annotations import (
     DOCUMENT_RELATIONSHIP_QUERY_MAX_LIMIT,
 )
-from opencontractserver.documents.models import Document, DocumentRelationship
+from opencontractserver.documents.models import (
+    Document,
+    DocumentRelationship,
+    IngestionSource,
+)
 from opencontractserver.documents.query_optimizer import (
     DocumentRelationshipQueryOptimizer,
 )
@@ -267,3 +273,46 @@ class DocumentQueryMixin:
                 completed=False,
                 errors=[f"Error checking status: {str(e)}"],
             )
+
+    # INGESTION SOURCE RESOLVERS ###########################################
+
+    # NOTE: Uses graphene.List (not ConnectionField) intentionally.
+    # Ingestion sources are owner-scoped and expected to be a small set
+    # per user (< 50). Relay pagination adds complexity without benefit here.
+    ingestion_sources = graphene.List(
+        IngestionSourceType,
+        active_only=graphene.Boolean(
+            required=False,
+            default_value=False,
+            description="If true, only return active sources",
+        ),
+        description="List ingestion sources owned by the current user",
+    )
+
+    @login_required
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_ingestion_sources(self, info, active_only=False, **kwargs):
+        qs = IngestionSource.objects.visible_to_user(info.context.user)
+        if active_only:
+            qs = qs.filter(active=True)
+        return qs.order_by("name")
+
+    ingestion_source = graphene.Field(
+        IngestionSourceType,
+        id=graphene.ID(required=True),
+        description="Get a single ingestion source by ID",
+    )
+
+    @login_required
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_ingestion_source(self, info, id, **kwargs):
+        try:
+            type_name, pk = from_global_id(id)
+            if not pk or type_name != INGESTION_SOURCE_GLOBAL_ID_TYPE:
+                return None
+        except (ValueError, TypeError):
+            return None
+        try:
+            return IngestionSource.objects.visible_to_user(info.context.user).get(pk=pk)
+        except (IngestionSource.DoesNotExist, ValueError, TypeError):
+            return None

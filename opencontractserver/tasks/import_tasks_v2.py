@@ -13,6 +13,7 @@ import logging
 import zipfile
 
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 
 from config import celery_app
 from opencontractserver.annotations.models import (
@@ -23,7 +24,11 @@ from opencontractserver.annotations.models import (
     StructuralAnnotationSet,
 )
 from opencontractserver.corpuses.models import TemporaryFileHandle
-from opencontractserver.documents.models import Document
+from opencontractserver.documents.models import (
+    Document,
+    IngestionSource,
+    IngestionSourceCategory,
+)
 from opencontractserver.types.enums import PermissionTypes
 from opencontractserver.utils.import_v2 import (
     import_agent_config,
@@ -71,7 +76,7 @@ def import_corpus_v2(
         Corpus ID on success, None on failure
     """
     try:
-        logger.info(f"import_corpus_v2() - for user_id: {user_id}")
+        logger.info("import_corpus_v2() - for user_id: %s", user_id)
 
         temporary_file_handle = TemporaryFileHandle.objects.get(
             id=temporary_file_handle_id
@@ -82,7 +87,7 @@ def import_corpus_v2(
             import_file, mode="r"
         ) as import_zip:
             files = import_zip.namelist()
-            logger.info(f"import_corpus_v2() - Files in ZIP: {len(files)}")
+            logger.info("import_corpus_v2() - Files in ZIP: %s", len(files))
 
             if "data.json" not in files:
                 logger.error("import_corpus_v2() - data.json not found in ZIP")
@@ -94,14 +99,14 @@ def import_corpus_v2(
 
             # Detect version - both share the unified import path
             version = data_json.get("version", "1.0")
-            logger.info(f"Detected export format version: {version}")
+            logger.info("Detected export format version: %s", version)
 
             return _import_corpus(
                 data_json, import_zip, user_obj, seed_corpus_id, version
             )
 
     except Exception as e:
-        logger.error(f"import_corpus_v2() - Exception: {e}", exc_info=True)
+        logger.error("import_corpus_v2() - Exception: %s", e, exc_info=True)
         return None
 
 
@@ -120,7 +125,7 @@ def _setup_corpus_and_labels(
     label_set_data.pop("id", None)
 
     labelset_obj = unpack_label_set_from_export(label_set_data, user_obj)
-    logger.info(f"LabelSet created: {labelset_obj}")
+    logger.info("LabelSet created: %s", labelset_obj)
 
     corpus_data = {**data_json["corpus"]}
     corpus_data.pop("id", None)
@@ -131,7 +136,7 @@ def _setup_corpus_and_labels(
         label_set_id=labelset_obj.id,
         corpus_id=seed_corpus_id if seed_corpus_id else None,
     )
-    logger.info(f"Created corpus: {corpus_obj}")
+    logger.info("Created corpus: %s", corpus_obj)
 
     label_lookup, doc_label_lookup = prepare_import_labels(
         data_json, user_obj.id, labelset_obj
@@ -215,7 +220,7 @@ def _import_document_with_annotations(
             return corpus_doc, annot_id_map
 
     except Exception as e:
-        logger.error(f"Error importing document {doc_filename}: {e}")
+        logger.error("Error importing document %s: %s", doc_filename, e)
         return None, {}
 
 
@@ -234,7 +239,7 @@ def _import_corpus(
     agent config, markdown descriptions, and conversations.
     """
     is_v2 = version == "2.0"
-    logger.info(f"Using {'V2' if is_v2 else 'V1'} import format")
+    logger.info("Using %s import format", "V2" if is_v2 else "V1")
 
     try:
         # ===== Shared: Setup corpus, labelset, and labels =====
@@ -260,7 +265,7 @@ def _import_corpus(
                 )
                 if struct_set:
                     structural_sets[content_hash] = struct_set
-            logger.info(f"Imported {len(structural_sets)} structural annotation sets")
+            logger.info("Imported %s structural annotation sets", len(structural_sets))
 
         # ===== Shared: Import documents =====
         all_annot_id_maps = {}  # aggregated old_id -> new_id across all docs
@@ -268,7 +273,7 @@ def _import_corpus(
         doc_hash_to_corpus_doc: dict[str, Document] = {}
 
         for doc_filename, doc_data in data_json["annotated_docs"].items():
-            logger.info(f"Importing document: {doc_filename}")
+            logger.info("Importing document: %s", doc_filename)
             corpus_doc, annot_id_map = _import_document_with_annotations(
                 doc_filename=doc_filename,
                 doc_data=doc_data,
@@ -296,13 +301,19 @@ def _import_corpus(
             folders_data = data_json.get("folders", [])
             import_corpus_folders(folders_data, corpus_obj, user_obj)
 
-            # Reconstruct DocumentPaths from exported version trees
+            # Import ingestion sources and reconstruct DocumentPaths
+            ingestion_sources_data = data_json.get("ingestion_sources", [])
+            source_name_map = _import_ingestion_sources(
+                ingestion_sources_data, user_obj
+            )
+
             document_paths_data = data_json.get("document_paths", [])
             if document_paths_data:
                 _reconstruct_document_paths(
                     document_paths_data,
                     corpus_obj,
                     doc_hash_to_corpus_doc,
+                    source_name_map,
                 )
 
             # Import relationships (corpus-level, non-structural)
@@ -343,11 +354,11 @@ def _import_corpus(
                     doc_hash_to_doc=doc_hash_to_corpus_doc,
                 )
 
-        logger.info(f"Import completed successfully for corpus {corpus_obj.id}")
+        logger.info("Import completed successfully for corpus %s", corpus_obj.id)
         return corpus_obj.id
 
     except Exception as e:
-        logger.error(f"Import failed: {e}", exc_info=True)
+        logger.error("Import failed: %s", e, exc_info=True)
         return None
 
 
@@ -372,7 +383,7 @@ def _import_v2_relationships(
         label_text = rel_data.get("relationshipLabel", "")
         label_obj = label_lookup.get((label_text, RELATIONSHIP_LABEL))
         if not label_obj:
-            logger.warning(f"Relationship label '{label_text}' not found")
+            logger.warning("Relationship label '%s' not found", label_text)
             continue
 
         # Map annotation IDs
@@ -404,14 +415,88 @@ def _import_v2_relationships(
             set_permissions_for_obj_to_user(user_obj, rel, [PermissionTypes.ALL])
 
 
+def _import_ingestion_sources(
+    sources_data: list[dict],
+    user_obj,
+) -> dict[str, IngestionSource]:
+    """
+    Import or get-or-create IngestionSource records from exported data.
+
+    Uses get_or_create keyed on (creator, name) so re-importing the same
+    corpus doesn't duplicate sources.
+
+    Note: ``get_or_create`` only applies ``source_type``, ``config``, and
+    ``active`` on *creation*.  If a source with the same (creator, name)
+    already exists locally, its current field values are preserved — the
+    export's values are intentionally not applied ("don't clobber local
+    changes").  This avoids surprises when a re-import would silently
+    reactivate a source the user deactivated, or overwrite a config they
+    customised after the initial import.
+
+    Args:
+        sources_data: List of IngestionSourceExport dicts from data.json.
+        user_obj: The importing user (becomes creator of new sources).
+
+    Returns:
+        Mapping of source name -> IngestionSource instance.
+    """
+    source_map: dict[str, IngestionSource] = {}
+
+    for src in sources_data:
+        name = src.get("name")
+        if not name:
+            continue
+
+        try:
+            with transaction.atomic():
+                source, created = IngestionSource.objects.get_or_create(
+                    creator=user_obj,
+                    name=name,
+                    defaults={
+                        "source_type": src.get(
+                            "source_type", IngestionSourceCategory.MANUAL
+                        ),
+                        "config": src.get("config") or {},
+                        "active": src.get("active", True),
+                    },
+                )
+        except IntegrityError as exc:
+            logger.debug("IntegrityError on create, falling back to get: %s", exc)
+            # Guard the fallback: in the rare case where a concurrent request
+            # created-then-deleted the row between the IntegrityError and this
+            # .get(), skip the source rather than aborting the entire corpus
+            # import with an unhandled DoesNotExist.
+            try:
+                source = IngestionSource.objects.get(creator=user_obj, name=name)
+            except IngestionSource.DoesNotExist:
+                logger.warning(
+                    "IngestionSource '%s' for user %s vanished between "
+                    "IntegrityError and fallback get; skipping.",
+                    name,
+                    user_obj.id,
+                )
+                continue
+            created = False
+        source_map[name] = source
+
+        if created:
+            set_permissions_for_obj_to_user(user_obj, source, [PermissionTypes.CRUD])
+            logger.debug("Created IngestionSource '%s' for user %s", name, user_obj.id)
+        else:
+            logger.debug("Reusing existing IngestionSource '%s'", name)
+
+    return source_map
+
+
 def _reconstruct_document_paths(
     document_paths_data: list[dict],
     corpus_obj,
     doc_hash_to_corpus_doc: dict[str, Document],
+    source_name_map: dict[str, IngestionSource] | None = None,
 ) -> None:
     """
     Update DocumentPaths created by corpus.add_document() to match the exported
-    path, version_number, and folder assignments.
+    path, version_number, folder assignments, and ingestion lineage.
 
     Only current, non-deleted paths from the export are applied since historical
     versions don't have file content in the export. This ensures the document
@@ -422,14 +507,27 @@ def _reconstruct_document_paths(
         corpus_obj: The target corpus.
         doc_hash_to_corpus_doc: Mapping of document_ref (hash or old ID) to
             the imported corpus-isolated Document.
+        source_name_map: Mapping of source name -> IngestionSource instance
+            (from _import_ingestion_sources).
     """
     from opencontractserver.corpuses.models import CorpusFolder
     from opencontractserver.documents.models import DocumentPath
+
+    if source_name_map is None:
+        source_name_map = {}
 
     # Pre-build a folder path lookup to avoid repeated DB queries + linear
     # scans inside the loop.
     all_folders = CorpusFolder.objects.filter(corpus=corpus_obj)
     folder_path_map = {f.get_path(): f for f in all_folders}
+
+    # Pre-build a document -> DocumentPath lookup to avoid N queries in the loop
+    path_by_doc_id = {
+        p.document_id: p
+        for p in DocumentPath.objects.filter(
+            corpus=corpus_obj, document__in=doc_hash_to_corpus_doc.values()
+        )
+    }
 
     for path_data in document_paths_data:
         # Only reconstruct current, non-deleted paths
@@ -440,14 +538,12 @@ def _reconstruct_document_paths(
         corpus_doc = doc_hash_to_corpus_doc.get(doc_ref)
         if not corpus_doc:
             logger.debug(
-                f"DocumentPath reconstruction: no matching doc for ref {doc_ref}"
+                "DocumentPath reconstruction: no matching doc for ref %s", doc_ref
             )
             continue
 
         # Find the DocumentPath created by add_document() for this corpus_doc
-        existing_path = DocumentPath.objects.filter(
-            corpus=corpus_obj, document=corpus_doc
-        ).first()
+        existing_path = path_by_doc_id.get(corpus_doc.pk)
         if not existing_path:
             continue
 
@@ -468,8 +564,32 @@ def _reconstruct_document_paths(
             if folder:
                 updates["folder"] = folder
 
+        # Restore ingestion lineage fields
+        source_name = path_data.get("ingestion_source_name")
+        if source_name and source_name in source_name_map:
+            updates["ingestion_source"] = source_name_map[source_name]
+        elif source_name:
+            logger.warning(
+                "DocumentPath references unknown ingestion source '%s' "
+                "— lineage not restored",
+                source_name,
+            )
+
+        external_id = path_data.get("external_id")
+        if external_id is not None:
+            updates["external_id"] = external_id
+
+        # Asymmetry note: export omits ``ingestion_metadata`` entirely when
+        # the value is falsy (see ``package_document_paths``), so a missing
+        # key here is the expected "empty" signal.  An explicit ``None`` is
+        # treated the same as absent — we only restore a dict payload when
+        # the exporter actually wrote one.
+        ingestion_metadata = path_data.get("ingestion_metadata")
+        if ingestion_metadata is not None:
+            updates["ingestion_metadata"] = ingestion_metadata
+
         if updates:
             for key, value in updates.items():
                 setattr(existing_path, key, value)
             existing_path.save(update_fields=list(updates.keys()))
-            logger.debug(f"Updated DocumentPath for doc {corpus_doc.id}: {updates}")
+            logger.debug("Updated DocumentPath for doc %s: %s", corpus_doc.id, updates)

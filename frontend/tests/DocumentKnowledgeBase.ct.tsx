@@ -11,7 +11,7 @@ import fs from "fs";
  * See: https://github.com/microsoft/playwright/issues/14681
  */
 
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 
 // Keep query/mutation imports needed for mocks
 

@@ -16,6 +16,10 @@ from django.test import TestCase
 from PIL import Image
 from requests.exceptions import ConnectionError, Timeout
 
+from opencontractserver.pipeline.base.exceptions import (
+    EmbeddingClientError,
+    EmbeddingServerError,
+)
 from opencontractserver.pipeline.embedders.multimodal_microservice import (
     CLIPMicroserviceEmbedder,
 )
@@ -341,14 +345,19 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
     )
     def test_embed_texts_batch_bad_status_code(self, mock_post):
-        """Test batch text embedding handles bad status codes."""
+        """Test batch text embedding raises EmbeddingServerError on 5xx.
+
+        Unlike single-text embed_text() which returns None on all errors,
+        batch methods intentionally raise EmbeddingServerError on 5xx so
+        that Celery task-level retry can fire. See _embed_text_impl() vs
+        embed_texts_batch() for the asymmetry rationale.
+        """
         mock_post.return_value = MockResponse(500, {"error": "Server error"})
 
-        result = self.embedder.embed_texts_batch(
-            ["Text 1"], multimodal_embedder_url="http://test:8000"
-        )
-
-        self.assertIsNone(result)
+        with self.assertRaises(EmbeddingServerError):
+            self.embedder.embed_texts_batch(
+                ["Text 1"], multimodal_embedder_url="http://test:8000"
+            )
 
     @patch(
         "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
@@ -381,6 +390,21 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         self.assertEqual(len(result), 2)
         for embedding in result:
             self.assertEqual(len(embedding), 768)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
+    )
+    def test_embed_texts_batch_3d_array_bad_shape(self, mock_post):
+        """Test batch text embedding returns None for 3D array with shape[1] != 1."""
+        # Each embedding wrapped in a list of 2 elements (unsqueezable)
+        embeddings_3d_bad = [[[0.1] * 768, [0.2] * 768], [[0.3] * 768, [0.4] * 768]]
+        mock_post.return_value = MockResponse(200, {"embeddings": embeddings_3d_bad})
+
+        result = self.embedder.embed_texts_batch(
+            ["Text 1", "Text 2"], multimodal_embedder_url="http://test:8000"
+        )
+
+        self.assertIsNone(result)
 
     @patch(
         "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
@@ -451,14 +475,18 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
     )
     def test_embed_images_batch_bad_status_code(self, mock_post):
-        """Test batch image embedding handles bad status codes."""
+        """Test batch image embedding raises EmbeddingServerError on 5xx.
+
+        Unlike single-image embed_image() which returns None on all errors,
+        batch methods intentionally raise EmbeddingServerError on 5xx so
+        that Celery task-level retry can fire.
+        """
         mock_post.return_value = MockResponse(500, {"error": "Server error"})
 
-        result = self.embedder.embed_images_batch(
-            [create_test_image_base64()], multimodal_embedder_url="http://test:8000"
-        )
-
-        self.assertIsNone(result)
+        with self.assertRaises(EmbeddingServerError):
+            self.embedder.embed_images_batch(
+                [create_test_image_base64()], multimodal_embedder_url="http://test:8000"
+            )
 
     @patch(
         "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
@@ -493,6 +521,22 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         self.assertEqual(len(result), 2)
         for embedding in result:
             self.assertEqual(len(embedding), 768)
+
+    @patch(
+        "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
+    )
+    def test_embed_images_batch_3d_array_bad_shape(self, mock_post):
+        """Test batch image embedding returns None for 3D array with shape[1] != 1."""
+        # Each embedding wrapped in a list of 2 elements (unsqueezable)
+        embeddings_3d_bad = [[[0.1] * 768, [0.2] * 768], [[0.3] * 768, [0.4] * 768]]
+        mock_post.return_value = MockResponse(200, {"embeddings": embeddings_3d_bad})
+
+        result = self.embedder.embed_images_batch(
+            [create_test_image_base64(), create_test_image_base64()],
+            multimodal_embedder_url="http://test:8000",
+        )
+
+        self.assertIsNone(result)
 
     @patch(
         "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
@@ -637,27 +681,34 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
     )
     def test_embed_texts_batch_client_error_4xx(self, mock_post):
-        """Test batch text embedding handles 4xx client errors."""
+        """Test batch text embedding raises EmbeddingClientError on 4xx.
+
+        Batch methods raise EmbeddingClientError on 4xx so callers can
+        distinguish a client-side failure from a parsing error (which
+        still returns None). The batch task helper swallows it and
+        records permanent failures without triggering Celery retry.
+        """
         mock_post.return_value = MockResponse(413, {"error": "Payload too large"})
 
-        result = self.embedder.embed_texts_batch(
-            ["Text 1", "Text 2"], multimodal_embedder_url="http://test:8000"
-        )
-
-        self.assertIsNone(result)
+        with self.assertRaises(EmbeddingClientError):
+            self.embedder.embed_texts_batch(
+                ["Text 1", "Text 2"], multimodal_embedder_url="http://test:8000"
+            )
 
     @patch(
         "opencontractserver.pipeline.embedders.multimodal_microservice.requests.post"
     )
     def test_embed_images_batch_client_error_4xx(self, mock_post):
-        """Test batch image embedding handles 4xx client errors."""
+        """Test batch image embedding raises EmbeddingClientError on 4xx.
+
+        Same asymmetry rationale as ``test_embed_texts_batch_client_error_4xx``.
+        """
         mock_post.return_value = MockResponse(400, {"error": "Bad request"})
 
-        result = self.embedder.embed_images_batch(
-            [create_test_image_base64()], multimodal_embedder_url="http://test:8000"
-        )
-
-        self.assertIsNone(result)
+        with self.assertRaises(EmbeddingClientError):
+            self.embedder.embed_images_batch(
+                [create_test_image_base64()], multimodal_embedder_url="http://test:8000"
+            )
 
     # =========================================================================
     # New-Style Service Config Tests (clip_embedder_url, clip_embedder_api_key)
