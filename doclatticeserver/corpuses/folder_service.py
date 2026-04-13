@@ -1252,6 +1252,10 @@ class DocumentFolderService:
                 folder (e.g. inside a bulk move loop) to avoid repeated O(depth)
                 ancestor traversals — ``get_path()`` issues a recursive CTE
                 query on every call.  Ignored when ``target_folder`` is ``None``.
+                When ``None`` (the default), the path is computed on demand via
+                ``target_folder.get_path()``.  The value need not be pre-stripped
+                of leading/trailing slashes — ``.strip("/")`` is applied
+                internally.
 
         Returns:
             New path string (e.g. "/Legal/report.pdf" or "/report.pdf")
@@ -1277,11 +1281,7 @@ class DocumentFolderService:
             )
 
         if target_folder:
-            folder_path = (
-                target_folder_path
-                if target_folder_path is not None
-                else target_folder.get_path()
-            ).strip("/")
+            folder_path = (target_folder_path or target_folder.get_path()).strip("/")
             return f"/{folder_path}/{filename}"
         else:
             return f"/{filename}"
