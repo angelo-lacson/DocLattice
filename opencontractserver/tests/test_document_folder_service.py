@@ -2158,6 +2158,42 @@ class TestDocumentPathHistory_ComputeMovedPath(_DocumentPathHistoryTestBase):
         result = DocumentFolderService._compute_moved_path("documents/report.pdf", None)
         self.assertEqual(result, "/report.pdf")
 
+    def test_precomputed_target_folder_path_matches_on_demand(self):
+        """Passing target_folder_path produces the same result as on-demand computation."""
+        folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Cached"
+        )
+        current_path = "/old/dir/report.pdf"
+
+        on_demand = DocumentFolderService._compute_moved_path(current_path, folder)
+        precomputed = DocumentFolderService._compute_moved_path(
+            current_path, folder, target_folder_path=folder.get_path()
+        )
+
+        self.assertEqual(on_demand, precomputed)
+        self.assertEqual(precomputed, "/Cached/report.pdf")
+
+    def test_precomputed_target_folder_path_takes_precedence(self):
+        """When target_folder_path is provided, get_path() is NOT called."""
+        folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="RealName"
+        )
+        # Pass a different path to verify the pre-computed value wins.
+        result = DocumentFolderService._compute_moved_path(
+            "/doc.pdf", folder, target_folder_path="Override/Path"
+        )
+        self.assertEqual(result, "/Override/Path/doc.pdf")
+
+    def test_precomputed_empty_string_falls_back_to_get_path(self):
+        """An empty-string target_folder_path is treated as unset (falls back to get_path)."""
+        folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Fallback"
+        )
+        result = DocumentFolderService._compute_moved_path(
+            "/doc.pdf", folder, target_folder_path=""
+        )
+        self.assertEqual(result, "/Fallback/doc.pdf")
+
 
 class TestDocumentPathHistory_PathConflicts(_DocumentPathHistoryTestBase):
     """
