@@ -300,3 +300,60 @@ class ExtractsQueryTestCase(TestCase):
         self.assertIsNone(result.get("errors"))
         # Only 1 cell exists; the important thing is no 500 error.
         self.assertEqual(len(result["data"]["extract"]["fullDatacellList"]), 1)
+
+    def test_full_datacell_list_offset_only_without_limit(self):
+        """
+        Providing ``offset`` without ``limit`` should skip the first N cells
+        and return the remainder. This exercises the resolver's
+        ``if start: return qs[start:]`` branch, which is distinct from the
+        ``limit+offset`` slicing and the unbounded ``return qs`` fallback.
+        """
+        extract_id = to_global_id("ExtractType", self.extract.id)
+
+        # Create extra datacells so we have enough to see the offset effect.
+        # setUp already created 1; add 4 more for 5 total.
+        for i in range(4):
+            Datacell.objects.create(
+                extract=self.extract,
+                column=self.column,
+                data={"data": f"OffsetOnly{i}"},
+                data_definition="str",
+                creator=self.user,
+                document=self.doc,
+            )
+
+        # Unbounded fetch: all 5 cells.
+        result_all = self.client.execute("""
+            query {
+                extract(id: "%s") {
+                    fullDatacellList {
+                        id
+                    }
+                }
+            }
+            """ % extract_id)
+        self.assertIsNone(result_all.get("errors"))
+        all_ids = [c["id"] for c in result_all["data"]["extract"]["fullDatacellList"]]
+        self.assertEqual(len(all_ids), 5)
+
+        # Offset-only: skip the first 2 cells, no limit.
+        result_offset = self.client.execute("""
+            query {
+                extract(id: "%s") {
+                    fullDatacellList(offset: 2) {
+                        id
+                    }
+                }
+            }
+            """ % extract_id)
+        self.assertIsNone(result_offset.get("errors"))
+        offset_ids = [
+            c["id"] for c in result_offset["data"]["extract"]["fullDatacellList"]
+        ]
+        self.assertEqual(
+            len(offset_ids),
+            3,
+            "Expected 3 cells after skipping the first 2 of 5.",
+        )
+        # The returned ids should match the last 3 from the unbounded result.
+        self.assertEqual(offset_ids, all_ids[2:])
