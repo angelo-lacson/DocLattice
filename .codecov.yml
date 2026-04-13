@@ -12,6 +12,11 @@ coverage:
     changes: false
 
 flags:
+  backend:
+    paths:
+      - doclatticeserver/
+      - config/
+    carryforward: true
   frontend-unit:
     paths:
       - frontend/src/
