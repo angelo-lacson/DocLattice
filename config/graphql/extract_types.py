@@ -111,16 +111,26 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Cached on the instance so that ``resolve_full_datacell_list`` and
         ``resolve_datacell_count`` share a single queryset build when both
         fields are requested in the same GraphQL query.
+
+        The cache key includes ``user.pk`` so that if this pattern is ever
+        reused in a context where the same ``ExtractType`` instance serves
+        multiple users (e.g. a DataLoader), one user's permission-filtered
+        queryset cannot leak to another.
         """
-        if not hasattr(self, "_datacell_qs"):
+        cache_attr = f"_datacell_qs_{user.pk}"
+        if not hasattr(self, cache_attr):
             from opencontractserver.annotations.query_optimizer import (
                 ExtractQueryOptimizer,
             )
 
-            self._datacell_qs = ExtractQueryOptimizer.get_extract_datacells(
-                self, user, document_id=None
-            ).order_by("document_id", "column_id", "id")
-        return self._datacell_qs
+            setattr(
+                self,
+                cache_attr,
+                ExtractQueryOptimizer.get_extract_datacells(
+                    self, user, document_id=None
+                ).order_by("document_id", "column_id", "id"),
+            )
+        return getattr(self, cache_attr)
 
     def resolve_full_datacell_list(self, info, limit=None, offset=None):
         from opencontractserver.constants.extracts import MAX_FULL_DATACELL_LIST_LIMIT
