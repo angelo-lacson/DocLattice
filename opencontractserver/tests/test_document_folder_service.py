@@ -21,7 +21,11 @@ from django.contrib.auth.models import AnonymousUser
 from django.db import IntegrityError
 from django.test import TransactionTestCase
 
-from opencontractserver.constants.document_processing import PATH_CONFLICT_MSG
+from opencontractserver.constants.document_processing import (
+    MAX_PATH_CREATE_RETRIES,
+    MAX_PATH_DISAMBIGUATION_SUFFIX,
+    PATH_CONFLICT_MSG,
+)
 from opencontractserver.corpuses.folder_service import DocumentFolderService
 from opencontractserver.corpuses.models import (
     Corpus,
@@ -2421,10 +2425,6 @@ class TestDocumentPathHistory_PathConflicts(_DocumentPathHistoryTestBase):
         """_disambiguate_path raises ValueError when suffix cap is exhausted."""
         from unittest.mock import patch
 
-        from opencontractserver.constants.document_processing import (
-            MAX_PATH_DISAMBIGUATION_SUFFIX,
-        )
-
         # Build a set of all candidate paths the disambiguation loop will try.
         # _disambiguate_path pre-fetches occupied paths with a single query;
         # we patch that queryset's values_list to return every candidate so
@@ -4041,10 +4041,6 @@ class TestRetry_MoveDocumentIntegrityRecovery(DocumentFolderServiceTestBase):
         self.assertFalse(success)
         self.assertIn(PATH_CONFLICT_MSG, error)
         # All MAX_PATH_CREATE_RETRIES + 1 attempts must have run
-        from opencontractserver.constants.document_processing import (
-            MAX_PATH_CREATE_RETRIES,
-        )
-
         self.assertEqual(attempts["count"], MAX_PATH_CREATE_RETRIES + 1)
 
         # The original path must still be the active one — savepoint
@@ -4117,8 +4113,8 @@ class TestRetry_BulkMoveIntegrityRecovery(DocumentFolderServiceTestBase):
 
         self.assertEqual(moved_count, 2, f"Both should move, got error: {error}")
         self.assertEqual(error, "")
-        # First doc retried (2 attempts) + second doc (1 attempt) = 3 inserts
-        self.assertGreaterEqual(attempts["count"], 3)
+        # First doc retried (2 attempts) + second doc (1 attempt) = exactly 3 inserts
+        self.assertEqual(attempts["count"], 3)
 
         # All docs should now live in the target folder
         for doc in docs:
