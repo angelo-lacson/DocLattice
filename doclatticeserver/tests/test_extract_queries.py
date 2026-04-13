@@ -9,6 +9,8 @@ from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
 from doclatticeserver.tests.fixtures import SAMPLE_PDF_FILE_TWO_PATH
+from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()
 
@@ -57,6 +59,12 @@ class ExtractsQueryTestCase(TestCase):
             pdf_file=pdf_file,
             backend_lock=True,
         )
+
+        # Associate the document with the extract and grant the user read
+        # permission so that the permission-aware datacell resolver returns
+        # results for non-superuser queries.
+        self.extract.documents.add(self.doc)
+        set_permissions_for_obj_to_user(self.user, self.doc, [PermissionTypes.READ])
 
         self.row = Datacell.objects.create(
             extract=self.extract,
@@ -268,9 +276,12 @@ class ExtractsQueryTestCase(TestCase):
     def test_full_datacell_list_limit_capped_at_server_max(self):
         """
         A ``limit`` exceeding ``MAX_FULL_DATACELL_LIST_LIMIT`` must be
-        silently capped to the server maximum. We verify by requesting a
-        limit far above the cap and checking we still get a bounded result
-        (the test fixture only has 1 cell, so we just assert no error).
+        silently capped to the server maximum rather than producing a 500
+        error. This test verifies no server error occurs.
+
+        Note: the test fixture only has a handful of cells (well below the
+        cap), so this test cannot verify that the cap *reduces* the result
+        count. It only confirms the over-sized limit is accepted gracefully.
         """
         from doclatticeserver.constants.extracts import MAX_FULL_DATACELL_LIST_LIMIT
 
