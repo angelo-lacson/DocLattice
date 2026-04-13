@@ -1146,6 +1146,12 @@ class DocumentFolderService:
                 # are resolved against each other (not just against
                 # pre-existing DB rows).
                 #
+                # Resolve the target folder's path once up front.  Each
+                # invocation of CorpusFolder.get_path() walks ancestors via
+                # a recursive CTE query, so doing it inside the loop would
+                # cost O(N) round trips for an O(1) value.
+                target_folder_path = folder.get_path() if folder is not None else None
+
                 # TODO(perf): O(N) queries — consider bulk_update/bulk_create
                 # for large batches. Blocked on per-document disambiguation
                 # and parent link assignment which require sequential
@@ -1155,7 +1161,11 @@ class DocumentFolderService:
                 for current in paths_to_move:
                     # Note: _compute_moved_path extracts only the filename;
                     # intermediate directory segments are dropped.
-                    base_path = cls._compute_moved_path(current.path, folder)
+                    base_path = cls._compute_moved_path(
+                        current.path,
+                        folder,
+                        target_folder_path=target_folder_path,
+                    )
 
                     # Helper performs disambiguation + create with retry on
                     # IntegrityError.  Passing batch_claimed ensures the
@@ -1193,7 +1203,9 @@ class DocumentFolderService:
 
     @staticmethod
     def _compute_moved_path(
-        current_path: str, target_folder: CorpusFolder | None
+        current_path: str,
+        target_folder: CorpusFolder | None,
+        target_folder_path: str | None = None,
     ) -> str:
         """
         Compute the new path string when moving a document to a different folder.
@@ -1215,6 +1227,16 @@ class DocumentFolderService:
         Args:
             current_path: Current DocumentPath.path value (e.g. "/documents/report.pdf")
             target_folder: Target folder (None = corpus root)
+            target_folder_path: Pre-computed value of ``target_folder.get_path()``.
+                Pass this when invoking the method many times for the same target
+                folder (e.g. inside a bulk move loop) to avoid repeated O(depth)
+                ancestor traversals — ``get_path()`` issues a recursive CTE
+                query on every call.  Ignored when ``target_folder`` is ``None``.
+                When ``None`` (the default), the path is computed on demand via
+                ``target_folder.get_path()``.  Only ``None`` triggers the
+                fallback — any other value (including empty string) is used
+                as-is.  The value need not be pre-stripped of leading/trailing
+                slashes — ``.strip("/")`` is applied internally.
 
         Returns:
             New path string (e.g. "/Legal/report.pdf" or "/report.pdf")
@@ -1240,7 +1262,11 @@ class DocumentFolderService:
             )
 
         if target_folder:
-            folder_path = target_folder.get_path().strip("/")
+            folder_path = (
+                target_folder.get_path()
+                if target_folder_path is None
+                else target_folder_path
+            ).strip("/")
             return f"/{folder_path}/{filename}"
         else:
             return f"/{filename}"
