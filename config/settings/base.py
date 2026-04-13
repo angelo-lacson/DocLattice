@@ -158,6 +158,7 @@ LOCAL_APPS = [
     "doclatticeserver.agents",
     "doclatticeserver.worker_uploads",
     "doclatticeserver.discovery",
+    "doclatticeserver.benchmarks",
 ]
 
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
