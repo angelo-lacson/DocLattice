@@ -201,9 +201,11 @@ test.describe("ExtractGridEmbed - Both Truncated", () => {
 
     // The combined banner should mention documents and cell counts, covering
     // the branch where both cellsTruncated and rowsTruncated are true.
-    await expect(page.getByText(/Showing 200 of 201 documents/)).toBeVisible();
     await expect(
-      page.getByText(/payload bounded to 201 of 1000 total cells/)
+      page.getByText(/Showing 200 of 201 fetched documents/)
+    ).toBeVisible();
+    await expect(
+      page.getByText(/201 of 1000 total cells loaded/)
     ).toBeVisible();
 
     await docScreenshot(page, "caml--extract-grid-embed--both-truncated");
