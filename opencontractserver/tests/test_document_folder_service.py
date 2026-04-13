@@ -3905,7 +3905,7 @@ class TestCoverageGap_BulkMoveToRootRollback(DocumentFolderServiceTestBase):
         self.assertEqual(original_path.folder_id, self.source_folder.id)
 
 
-class TestRetry_MoveDocumentIntegrityRecovery(DocumentFolderServiceTestBase):
+class TestMoveDocumentIntegrityRecovery(DocumentFolderServiceTestBase):
     """
     SCENARIO: A transient IntegrityError on the
     ``unique_active_path_per_corpus`` partial unique index — caused by a
@@ -4049,8 +4049,34 @@ class TestRetry_MoveDocumentIntegrityRecovery(DocumentFolderServiceTestBase):
         self.assertTrue(self.original_path.is_current)
         self.assertIsNone(self.original_path.folder_id)
 
+    def test_non_constraint_integrity_error_is_not_retried(self):
+        """An IntegrityError that does NOT mention the partial unique
+        constraint should propagate immediately without retry."""
+        original_create = DocumentPath.objects.create
+        attempts = {"count": 0}
 
-class TestRetry_BulkMoveIntegrityRecovery(DocumentFolderServiceTestBase):
+        def fk_violation_create(**kwargs):
+            if kwargs.get("parent") is not None:
+                attempts["count"] += 1
+                raise IntegrityError("null value in column 'corpus_id'")
+            return original_create(**kwargs)
+
+        with patch.object(
+            DocumentPath.objects, "create", side_effect=fk_violation_create
+        ):
+            success, error = DocumentFolderService.move_document_to_folder(
+                user=self.owner,
+                document=self.document,
+                corpus=self.corpus,
+                folder=self.folder,
+            )
+
+        # Should fail immediately on the first attempt (no retries)
+        self.assertEqual(attempts["count"], 1)
+        self.assertFalse(success)
+
+
+class TestBulkMoveIntegrityRecovery(DocumentFolderServiceTestBase):
     """
     SCENARIO: Bulk move automatically recovers from a transient
     IntegrityError on the partial unique index for an individual document
@@ -4124,7 +4150,7 @@ class TestRetry_BulkMoveIntegrityRecovery(DocumentFolderServiceTestBase):
             self.assertEqual(current.folder_id, self.folder.id)
 
 
-class TestRetry_DeleteFolderIntegrityRecovery(DocumentFolderServiceTestBase):
+class TestDeleteFolderIntegrityRecovery(DocumentFolderServiceTestBase):
     """
     SCENARIO: ``delete_folder`` relocates documents to root via the same
     helper, so it inherits the IntegrityError retry behavior.
@@ -4188,6 +4214,59 @@ class TestRetry_DeleteFolderIntegrityRecovery(DocumentFolderServiceTestBase):
             document=doc, corpus=self.corpus, is_current=True, is_deleted=False
         )
         self.assertIsNone(current.folder_id)
+
+    def test_persistent_failure_preserves_folder_and_documents(self):
+        """If every retry attempt fails, the folder is NOT deleted and
+        all documents remain in their original locations."""
+        folder, _ = DocumentFolderService.create_folder(
+            user=self.owner, corpus=self.corpus, name="Sticky"
+        )
+        doc = Document.objects.create(
+            title="Stuck Doc", creator=self.owner, pdf_file="stuck.pdf"
+        )
+        original_path = DocumentPath.objects.create(
+            document=doc,
+            corpus=self.corpus,
+            creator=self.owner,
+            folder=folder,
+            path="/Sticky/stuck.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=False,
+        )
+
+        original_create = DocumentPath.objects.create
+        attempts = {"count": 0}
+
+        def always_failing_create(**kwargs):
+            if kwargs.get("parent") is not None:
+                attempts["count"] += 1
+                raise IntegrityError("unique_active_path_per_corpus")
+            return original_create(**kwargs)
+
+        with patch.object(
+            DocumentPath.objects, "create", side_effect=always_failing_create
+        ):
+            success, error = DocumentFolderService.delete_folder(
+                user=self.owner, folder=folder
+            )
+
+        self.assertFalse(success)
+        self.assertIn("rolled back", error)
+
+        from opencontractserver.constants.document_processing import (
+            MAX_PATH_CREATE_RETRIES,
+        )
+
+        self.assertEqual(attempts["count"], MAX_PATH_CREATE_RETRIES + 1)
+
+        # Folder must still exist
+        self.assertTrue(CorpusFolder.objects.filter(pk=folder.pk).exists())
+
+        # Document's original path must still be current and in the folder
+        original_path.refresh_from_db()
+        self.assertTrue(original_path.is_current)
+        self.assertEqual(original_path.folder_id, folder.id)
 
 
 class TestCoverageGap_DeleteFolderMultiDocHistory(DocumentFolderServiceTestBase):

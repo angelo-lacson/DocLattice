@@ -1476,11 +1476,12 @@ class DocumentFolderService:
             IntegrityError: If ``MAX_PATH_CREATE_RETRIES`` consecutive
                 INSERT attempts all lose the race.
         """
+        # Deferred to break circular import (documents -> corpuses -> documents).
         from opencontractserver.documents.models import DocumentPath
 
         # Track paths we've attempted unsuccessfully so disambiguation
         # avoids them on subsequent retries within the same call.
-        occupied_after_loss: set[str] = set(extra_occupied or set())
+        occupied_after_loss: set[str] = set(extra_occupied or ())
         last_exc: IntegrityError | None = None
 
         for attempt in range(MAX_PATH_CREATE_RETRIES + 1):
@@ -1512,6 +1513,11 @@ class DocumentFolderService:
                     )
                     return new_record, new_path
             except IntegrityError as exc:
+                # Only retry for the specific partial-unique constraint;
+                # other IntegrityErrors (null, FK) are real bugs and
+                # should not be retried.
+                if "unique_active_path_per_corpus" not in str(exc):
+                    raise
                 last_exc = exc
                 occupied_after_loss.add(new_path)
                 # The savepoint rollback restored ``current.is_current=True``
