@@ -9,6 +9,8 @@ from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 from opencontractserver.extracts.models import Column, Datacell, Extract, Fieldset
 from opencontractserver.tests.fixtures import SAMPLE_PDF_FILE_TWO_PATH
+from opencontractserver.types.enums import PermissionTypes
+from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()
 
@@ -57,6 +59,12 @@ class ExtractsQueryTestCase(TestCase):
             pdf_file=pdf_file,
             backend_lock=True,
         )
+
+        # Associate the document with the extract and grant the user read
+        # permission so that the permission-aware datacell resolver returns
+        # results for non-superuser queries.
+        self.extract.documents.add(self.doc)
+        set_permissions_for_obj_to_user(self.user, self.doc, [PermissionTypes.READ])
 
         self.row = Datacell.objects.create(
             extract=self.extract,
