@@ -121,3 +121,8 @@ MAX_PATH_DISAMBIGUATION_SUFFIX = 1000
 # in-memory occupied set, so a small number of retries is sufficient to
 # resolve transient concurrent collisions even under heavy load.
 MAX_PATH_CREATE_RETRIES = 5
+
+# Human-readable prefix for path-uniqueness collision messages.
+# Used in both user-facing error strings and log messages when
+# _disambiguate_path() detects a naming conflict.
+PATH_CONFLICT_MSG = "Path conflict"

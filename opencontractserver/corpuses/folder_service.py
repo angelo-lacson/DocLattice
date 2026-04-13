@@ -46,6 +46,7 @@ from django.db.models import Q, QuerySet
 from opencontractserver.constants.document_processing import (
     MAX_PATH_CREATE_RETRIES,
     MAX_PATH_DISAMBIGUATION_SUFFIX,
+    PATH_CONFLICT_MSG,
 )
 from opencontractserver.pipeline.registry import get_allowed_mime_types
 from opencontractserver.types.enums import PermissionTypes
@@ -1026,7 +1027,7 @@ class DocumentFolderService:
                     corpus.id,
                     exc,
                 )
-                return False, f"Path conflict, please retry: {exc}"
+                return False, f"{PATH_CONFLICT_MSG}, please retry: {exc}"
 
             logger.info(
                 f"Moved document {document.id} to folder {folder.id if folder else 'root'} "
@@ -1364,7 +1365,9 @@ class DocumentFolderService:
             candidate = f"{stem}_{counter}{ext}"
             if candidate not in occupied:
                 log_prefix = (
-                    "Within-batch path conflict" if extra_occupied else "Path conflict"
+                    f"Within-batch {PATH_CONFLICT_MSG.lower()}"
+                    if extra_occupied
+                    else PATH_CONFLICT_MSG
                 )
                 logger.warning(
                     "%s for %r in corpus %s — disambiguated to %r",
