@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **Frontend dead styled components in `knowledge_base/document/styled/`** (Issue #1241): Removed unused styled-components from the `frontend/src/components/knowledge_base/document/styled/` folder. None of the deleted exports are referenced by any production code, test wrapper, or `.ct.tsx` test:
+  - **`Relationships.tsx` deleted entirely** — all 3 exports (`RelationshipPanel`, `RelationshipCard`, `RelationshipType`) were unused. Note: a GraphQL type with the same name `RelationshipType` lives in `types/graphql-api.ts` and is unaffected.
+  - **`LoadingStates.tsx`**: removed `DocumentLoadingContainer` (truly dead — no internal or external use). The other exports (`PlaceholderBase`, `PlaceholderItem`, `SummaryPlaceholder`, `NotePlaceholder`, `RelationshipPlaceholder`) are kept because they are used internally by `LoadingPlaceholders` in the same file.
+  - **`RightPanel.tsx`**: removed 5 unused exports (`ControlButtonGroupLeft`, `ControlButtonWrapper`, `ControlButton`, `ChatIndicator`, `ControlButtonGroup`). Kept the only consumed exports: `ConnectionStatus` and `SlidingPanel`.
+  - **`styled/index.ts`** barrel pruned to drop the dead re-exports listed above.
+  - Verification: `yarn build` succeeds, `yarn test:unit` passes (927/927), `yarn test:ct -g "DocumentKnowledgeBase" --reporter=list` passes (62/62).
+  - **Deferred to a follow-up**: dead exports in `ResizeControls.tsx` (`ResizeHandleControl`, `ResizeHandleButton`, `WidthControlBar`, `WidthControlMenu`, `WidthControlToggle`, `WidthButton`, `AutoMinimizeToggle`) — although these are also unreferenced anywhere in the tree, deleting them deterministically exposes a pre-existing race in `tests/DocumentKnowledgeBase.ct.tsx:348 "fullscreen modal covers the entire viewport"` when the suite runs in parallel. The test passes in isolation but fails in the full suite, suggesting the deletion shifts bundle ordering enough to alter timing for the modal mount/measure window. Will be addressed in a separate PR that either patches the test to wait for the modal animation to settle, or finds the underlying race.
+
 ### Added
 
 - **Agent memory system**: Per-corpus memory that lets agents accumulate reusable insights from conversations. Memory is stored as a first-class markdown Document in the corpus (visible and editable by users). Features include:
