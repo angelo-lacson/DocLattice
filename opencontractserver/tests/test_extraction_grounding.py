@@ -5,6 +5,7 @@ Tests extract_groundable_strings (unit) and the full grounding pipeline
 (integration with Django models).
 """
 
+from asgiref.sync import async_to_sync
 from django.test import SimpleTestCase, TestCase
 
 from opencontractserver.utils.extraction_grounding import extract_groundable_strings
@@ -191,22 +192,18 @@ class TestGroundingPipelineIntegration(TestCase):
 
     def test_ground_text_document(self):
         """Test grounding on a text/plain document creates SPAN_LABEL annotations."""
-        import asyncio
-
         from opencontractserver.annotations.models import SPAN_LABEL
         from opencontractserver.constants.annotations import OC_EXTRACT_SOURCE_LABEL
         from opencontractserver.utils.extraction_grounding import (
             ground_extraction_to_annotations,
         )
 
-        annotations = asyncio.run(
-            ground_extraction_to_annotations(
-                datacell=self.datacell,
-                document=self.document,
-                corpus=self.corpus,
-                user_id=self.user.id,
-                enable_fuzzy=False,
-            )
+        annotations = async_to_sync(ground_extraction_to_annotations)(
+            datacell=self.datacell,
+            document=self.document,
+            corpus=self.corpus,
+            user_id=self.user.id,
+            enable_fuzzy=False,
         )
 
         self.assertGreater(len(annotations), 0)
@@ -232,47 +229,37 @@ class TestGroundingPipelineIntegration(TestCase):
 
     def test_ground_with_corpus_id(self):
         """Test that passing corpus as int (ID) works."""
-        import asyncio
-
         from opencontractserver.utils.extraction_grounding import (
             ground_extraction_to_annotations,
         )
 
-        annotations = asyncio.run(
-            ground_extraction_to_annotations(
-                datacell=self.datacell,
-                document=self.document,
-                corpus=self.corpus.id,
-                user_id=self.user.id,
-                enable_fuzzy=False,
-            )
+        annotations = async_to_sync(ground_extraction_to_annotations)(
+            datacell=self.datacell,
+            document=self.document,
+            corpus=self.corpus.id,
+            user_id=self.user.id,
+            enable_fuzzy=False,
         )
 
         self.assertGreater(len(annotations), 0)
 
     def test_ground_no_corpus_returns_empty(self):
         """Without a corpus, grounding should return empty (no label creation)."""
-        import asyncio
-
         from opencontractserver.utils.extraction_grounding import (
             ground_extraction_to_annotations,
         )
 
-        annotations = asyncio.run(
-            ground_extraction_to_annotations(
-                datacell=self.datacell,
-                document=self.document,
-                corpus=None,
-                user_id=self.user.id,
-            )
+        annotations = async_to_sync(ground_extraction_to_annotations)(
+            datacell=self.datacell,
+            document=self.document,
+            corpus=None,
+            user_id=self.user.id,
         )
 
         self.assertEqual(len(annotations), 0)
 
     def test_ground_empty_data_returns_empty(self):
         """Datacell with no data should return empty."""
-        import asyncio
-
         from opencontractserver.utils.extraction_grounding import (
             ground_extraction_to_annotations,
         )
@@ -280,21 +267,17 @@ class TestGroundingPipelineIntegration(TestCase):
         self.datacell.data = {}
         self.datacell.save()
 
-        annotations = asyncio.run(
-            ground_extraction_to_annotations(
-                datacell=self.datacell,
-                document=self.document,
-                corpus=self.corpus,
-                user_id=self.user.id,
-            )
+        annotations = async_to_sync(ground_extraction_to_annotations)(
+            datacell=self.datacell,
+            document=self.document,
+            corpus=self.corpus,
+            user_id=self.user.id,
         )
 
         self.assertEqual(len(annotations), 0)
 
     def test_ground_no_matches_returns_empty(self):
         """When extracted values don't appear in document, no annotations created."""
-        import asyncio
-
         from opencontractserver.utils.extraction_grounding import (
             ground_extraction_to_annotations,
         )
@@ -302,14 +285,12 @@ class TestGroundingPipelineIntegration(TestCase):
         self.datacell.data = {"data": ["Totally nonexistent company name XYZ123"]}
         self.datacell.save()
 
-        annotations = asyncio.run(
-            ground_extraction_to_annotations(
-                datacell=self.datacell,
-                document=self.document,
-                corpus=self.corpus,
-                user_id=self.user.id,
-                enable_fuzzy=False,
-            )
+        annotations = async_to_sync(ground_extraction_to_annotations)(
+            datacell=self.datacell,
+            document=self.document,
+            corpus=self.corpus,
+            user_id=self.user.id,
+            enable_fuzzy=False,
         )
 
         self.assertEqual(len(annotations), 0)
