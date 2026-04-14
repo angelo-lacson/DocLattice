@@ -5,7 +5,7 @@
  * 1. Renders the generic error message
  * 2. Shows error.message in development mode
  */
-import { test, expect } from "@playwright/experimental-ct-react";
+import { test, expect } from "./utils/coverage";
 import { Provider } from "jotai";
 import React from "react";
 
