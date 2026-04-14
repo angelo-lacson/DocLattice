@@ -38,6 +38,23 @@ from opencontractserver.utils.permissioning import set_permissions_for_obj_to_us
 User = get_user_model()
 
 
+def _make_constraint_error(
+    message: str = "unique_active_path_per_corpus",
+) -> IntegrityError:
+    """Create an IntegrityError that mimics real Django/psycopg2 constraint violations.
+
+    Production IntegrityErrors from psycopg2 have a ``__cause__`` with a
+    ``pgcode`` attribute (``"23505"`` for UniqueViolation).  The service
+    layer's ``_create_successor_path_with_retry`` guards on this pgcode
+    before retrying, so test mocks must chain the cause correctly.
+    """
+    cause = Exception()
+    cause.pgcode = "23505"  # PostgreSQL UniqueViolation
+    exc = IntegrityError(message)
+    exc.__cause__ = cause
+    return exc
+
+
 # =============================================================================
 # BASE TEST CLASS - Disconnects signals to prevent Celery tasks
 # =============================================================================
@@ -3329,7 +3346,7 @@ class TestErrorPaths_MoveDocumentIntegrityError(DocumentFolderServiceTestBase):
 
         def failing_create(**kwargs):
             if kwargs.get("parent") is not None:
-                raise IntegrityError("unique_active_path_per_corpus")
+                raise _make_constraint_error()
             return original_create(**kwargs)
 
         with patch.object(DocumentPath.objects, "create", side_effect=failing_create):
@@ -3355,7 +3372,7 @@ class TestErrorPaths_MoveDocumentIntegrityError(DocumentFolderServiceTestBase):
 
         def failing_create(**kwargs):
             if kwargs.get("parent") is not None:
-                raise IntegrityError("unique_active_path_per_corpus")
+                raise _make_constraint_error()
             return original_create(**kwargs)
 
         with patch.object(DocumentPath.objects, "create", side_effect=failing_create):
@@ -3827,7 +3844,7 @@ class TestCoverageGapBulkMoveIntegrityErrorRollback(DocumentFolderServiceTestBas
 
         def failing_create(**kwargs):
             if kwargs.get("parent") is not None:
-                raise IntegrityError("unique_active_path_per_corpus")
+                raise _make_constraint_error()
             return original_create(**kwargs)
 
         with patch.object(DocumentPath.objects, "create", side_effect=failing_create):
@@ -3886,7 +3903,7 @@ class TestCoverageGapBulkMoveToRootRollback(DocumentFolderServiceTestBase):
 
         def failing_create(**kwargs):
             if kwargs.get("parent") is not None:
-                raise IntegrityError("unique_active_path_per_corpus")
+                raise _make_constraint_error()
             return original_create(**kwargs)
 
         with patch.object(DocumentPath.objects, "create", side_effect=failing_create):
@@ -3956,7 +3973,7 @@ class TestMoveDocumentIntegrityRecovery(DocumentFolderServiceTestBase):
             if kwargs.get("parent") is not None:
                 attempts["count"] += 1
                 if attempts["count"] == 1:
-                    raise IntegrityError("unique_active_path_per_corpus")
+                    raise _make_constraint_error()
             return original_create(**kwargs)
 
         with patch.object(DocumentPath.objects, "create", side_effect=flaky_create):
@@ -3996,7 +4013,7 @@ class TestMoveDocumentIntegrityRecovery(DocumentFolderServiceTestBase):
             if kwargs.get("parent") is not None:
                 observed_paths.append(kwargs["path"])
                 if len(observed_paths) == 1:
-                    raise IntegrityError("unique_active_path_per_corpus")
+                    raise _make_constraint_error()
             return original_create(**kwargs)
 
         with patch.object(DocumentPath.objects, "create", side_effect=flaky_create):
@@ -4025,7 +4042,7 @@ class TestMoveDocumentIntegrityRecovery(DocumentFolderServiceTestBase):
         def always_failing_create(**kwargs):
             if kwargs.get("parent") is not None:
                 attempts["count"] += 1
-                raise IntegrityError("unique_active_path_per_corpus")
+                raise _make_constraint_error()
             return original_create(**kwargs)
 
         with patch.object(
@@ -4130,7 +4147,7 @@ class TestBulkMoveIntegrityRecovery(DocumentFolderServiceTestBase):
             if kwargs.get("parent") is not None:
                 attempts["count"] += 1
                 if attempts["count"] == 1:
-                    raise IntegrityError("unique_active_path_per_corpus")
+                    raise _make_constraint_error()
             return original_create(**kwargs)
 
         with patch.object(DocumentPath.objects, "create", side_effect=flaky_create):
@@ -4198,7 +4215,7 @@ class TestDeleteFolderIntegrityRecovery(DocumentFolderServiceTestBase):
             if kwargs.get("parent") is not None:
                 attempts["count"] += 1
                 if attempts["count"] == 1:
-                    raise IntegrityError("unique_active_path_per_corpus")
+                    raise _make_constraint_error()
             return original_create(**kwargs)
 
         with patch.object(DocumentPath.objects, "create", side_effect=flaky_create):
@@ -4246,7 +4263,7 @@ class TestDeleteFolderIntegrityRecovery(DocumentFolderServiceTestBase):
         def always_failing_create(**kwargs):
             if kwargs.get("parent") is not None:
                 attempts["count"] += 1
-                raise IntegrityError("unique_active_path_per_corpus")
+                raise _make_constraint_error()
             return original_create(**kwargs)
 
         with patch.object(
