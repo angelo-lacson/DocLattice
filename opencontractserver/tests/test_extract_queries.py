@@ -417,3 +417,25 @@ class ExtractsQueryTestCase(TestCase):
         self.assertEqual(len(result["data"]["extract"]["fullDatacellList"]), 0)
         # datacellCount should still reflect the true total (1 from setUp).
         self.assertEqual(result["data"]["extract"]["datacellCount"], 1)
+
+    def test_full_datacell_list_negative_limit_clamped_to_zero(self):
+        """
+        A negative ``limit`` is clamped to 0 via ``max(0, ...)`` and returns
+        an empty list, mirroring the ``limit=0`` behaviour.
+        """
+        extract_id = to_global_id("ExtractType", self.extract.id)
+
+        query = """
+            query GetExtract($extractId: ID!, $limit: Int) {
+                extract(id: $extractId) {
+                    fullDatacellList(limit: $limit) {
+                        id
+                    }
+                }
+            }
+        """
+        result = self.client.execute(
+            query, variables={"extractId": extract_id, "limit": -1}
+        )
+        self.assertIsNone(result.get("errors"))
+        self.assertEqual(len(result["data"]["extract"]["fullDatacellList"]), 0)

@@ -13,6 +13,7 @@ from config.graphql.permissioning.permission_annotator.mixins import (
     AnnotatePermissionsForReadMixin,
 )
 from opencontractserver.analyzer.models import Analysis, Analyzer, GremlinEngine
+from opencontractserver.constants.extracts import MAX_FULL_DATACELL_LIST_LIMIT
 from opencontractserver.extracts.models import Column, Datacell, Extract, Fieldset
 
 
@@ -64,30 +65,16 @@ class DatacellType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 def _get_datacell_qs(extract, user):
     """Return the permission-filtered, deterministically ordered queryset.
 
-    Cached on the model instance so that ``resolve_full_datacell_list`` and
-    ``resolve_datacell_count`` share a single queryset build when both
-    fields are requested in the same GraphQL query.
-
-    The cache key includes ``user.pk`` so that one user's
-    permission-filtered queryset cannot leak to another.
-
     Note: this is a module-level function because Graphene-Django resolvers
     receive the Django model instance as ``self``, not the GraphQL type.
     """
-    cache_attr = f"_datacell_qs_{user.pk}"
-    if not hasattr(extract, cache_attr):
-        from opencontractserver.annotations.query_optimizer import (
-            ExtractQueryOptimizer,
-        )
+    from opencontractserver.annotations.query_optimizer import (
+        ExtractQueryOptimizer,
+    )
 
-        setattr(
-            extract,
-            cache_attr,
-            ExtractQueryOptimizer.get_extract_datacells(
-                extract, user, document_id=None
-            ).order_by("document_id", "column_id", "id"),
-        )
-    return getattr(extract, cache_attr)
+    return ExtractQueryOptimizer.get_extract_datacells(
+        extract, user, document_id=None
+    ).order_by("document_id", "column_id", "id")
 
 
 class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
@@ -135,8 +122,6 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         connection_class = CountableConnection
 
     def resolve_full_datacell_list(self, info, limit=None, offset=None):
-        from opencontractserver.constants.extracts import MAX_FULL_DATACELL_LIST_LIMIT
-
         qs = _get_datacell_qs(self, info.context.user)
 
         # Guard against negative offset — Django does not support negative
