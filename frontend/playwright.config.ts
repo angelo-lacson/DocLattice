@@ -100,7 +100,7 @@ export default defineConfig({
       REACT_APP_USE_AUTH0: "false",
       REACT_APP_USE_ANALYZERS: "false",
       REACT_APP_ALLOW_IMPORTS: "false",
-      REACT_APP_API_ROOT_URL: "http://localhost:8000",
+      REACT_APP_API_ROOT_URL: "http://127.0.0.1:8000",
       // Pass through coverage flag for vite-plugin-istanbul.
       ...(process.env.COVERAGE ? { COVERAGE: process.env.COVERAGE } : {}),
     },

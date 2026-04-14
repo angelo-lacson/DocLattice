@@ -154,30 +154,23 @@ export async function expectViewVisible(
       return;
     }
     case "anyText": {
-      // Race: at least one of the candidate texts must become visible.
-      // We poll because expect() can't natively race multiple locators.
-      const start = Date.now();
-      let lastError: unknown = null;
-      while (Date.now() - start < timeoutMs) {
+      // At least one of the candidate texts must become visible.
+      // Uses Playwright's built-in retry via expect().toPass().
+      await expect(async () => {
         for (const text of matcher.texts) {
-          const found = await page
-            .getByText(text)
-            .first()
-            .isVisible()
-            .catch((err) => {
-              lastError = err;
-              return false;
-            });
-          if (found) return;
+          if (
+            await page
+              .getByText(text)
+              .first()
+              .isVisible()
+              .catch(() => false)
+          ) {
+            return;
+          }
         }
-        await page.waitForTimeout(250);
-      }
-      throw new Error(
-        `expectViewVisible: none of [${matcher.texts.join(
-          ", "
-        )}] became visible within ${timeoutMs}ms` +
-          (lastError ? ` (last error: ${String(lastError)})` : "")
-      );
+        throw new Error(`none of [${matcher.texts.join(", ")}] visible yet`);
+      }).toPass({ timeout: timeoutMs, intervals: [250] });
+      return;
     }
     case "selector": {
       await expect(page.locator(matcher.selector).first()).toBeVisible({
@@ -230,6 +223,11 @@ export async function loginViaUI(
  * a `popstate` event so the @remix-run/router BrowserHistory listener
  * picks up the change and re-renders. CentralRouteManager then syncs
  * Apollo reactive vars from the new URL.
+ *
+ * FRAGILITY NOTE: This relies on @remix-run/router (used by react-router v6)
+ * listening to popstate events. If React Router changes how BrowserHistory
+ * subscribes to navigation events, this will break silently. Verify after
+ * any react-router upgrade.
  */
 export async function spaNavigate(page: Page, path: string): Promise<void> {
   await page.evaluate((targetPath) => {
