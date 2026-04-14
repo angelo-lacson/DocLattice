@@ -1180,6 +1180,13 @@ class DocumentFolderService:
                         extra_occupied=batch_claimed,
                     )
 
+                    # Only the *committed* path is added to batch_claimed —
+                    # failed intermediate paths (rolled back by the savepoint)
+                    # are not in the DB, so subsequent batch items can
+                    # naturally reuse them without a conflict.  The helper
+                    # tracks those losing paths internally in
+                    # ``occupied_after_loss`` for the duration of a single
+                    # document's retry loop.
                     batch_claimed.add(committed_path)
                     moved_count += 1
 
@@ -1516,7 +1523,16 @@ class DocumentFolderService:
                 # Only retry for the specific partial-unique constraint;
                 # other IntegrityErrors (null, FK) are real bugs and
                 # should not be retried.
-                if "unique_active_path_per_corpus" not in str(exc):
+                #
+                # Guard order: first check the psycopg2 pgcode so we only
+                # inspect the error message for UniqueViolation errors
+                # (pgcode 23505); then confirm the constraint name.  This
+                # avoids retrying on unrelated IntegrityErrors that happen
+                # to contain the constraint name as a substring, and also
+                # avoids matching on non-English Postgres error messages.
+                cause = getattr(exc, "__cause__", None)
+                pgcode = getattr(cause, "pgcode", None)
+                if pgcode != "23505" or "unique_active_path_per_corpus" not in str(exc):
                     raise
                 last_exc = exc
                 occupied_after_loss.add(new_path)
