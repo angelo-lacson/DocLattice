@@ -199,9 +199,8 @@ test.describe("ExtractGridEmbed - Both Truncated", () => {
       timeout: 10000,
     });
 
-    // The combined banner should mention both the document clip and the
-    // fetched-vs-total cell count, covering the branch where both
-    // cellsTruncated and rowsTruncated are true.
+    // The combined banner should mention documents and cell counts, covering
+    // the branch where both cellsTruncated and rowsTruncated are true.
     await expect(
       page.getByText(/Showing 200 of 201 fetched documents/)
     ).toBeVisible();

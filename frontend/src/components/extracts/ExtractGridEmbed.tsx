@@ -19,7 +19,6 @@ import styled, { keyframes } from "styled-components";
 
 import {
   DATACELL_STATUS_COLORS,
-  EXTRACT_GRID_CELL_TRUNCATE_LENGTH,
   EXTRACT_GRID_EMBED_CELL_LIMIT,
   EXTRACT_GRID_EMBED_MAX_ROWS,
 } from "../../assets/configurations/constants";
@@ -31,6 +30,7 @@ import {
   ExtractGridEmbedCell,
   ExtractGridEmbedColumn,
 } from "../../graphql/queries";
+import { formatCellValue } from "../../utils/formatters";
 import { getDocumentUrl, buildQueryParams } from "../../utils/navigationUtils";
 
 // ---------------------------------------------------------------------------
@@ -201,22 +201,6 @@ const OverflowFooter = styled.div`
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Format a datacell value for display, truncating long objects. */
-export function formatCellValue(
-  data: string | number | boolean | Record<string, unknown> | null | undefined
-): string {
-  if (data === null || data === undefined) return "\u2014";
-  if (typeof data === "boolean") return data ? "Yes" : "No";
-  if (typeof data === "object") {
-    const json = JSON.stringify(data);
-    if (json.length > EXTRACT_GRID_CELL_TRUNCATE_LENGTH) {
-      return json.substring(0, EXTRACT_GRID_CELL_TRUNCATE_LENGTH) + "\u2026";
-    }
-    return json;
-  }
-  return String(data);
-}
-
 /** Build a link to the document viewer at a specific source annotation. */
 function buildSourceLink(
   cell: ExtractGridEmbedCell,
@@ -358,12 +342,12 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
   // the rendered row count to `EXTRACT_GRID_EMBED_MAX_ROWS` as a defensive
   // display bound on extracts with many documents; the same banner surfaces
   // that truncation as a "showing X of Y documents" message.
-  const totalCellCount =
-    extract.datacellCount ?? extract.fullDatacellList.length;
   const fetchedCellCount = extract.fullDatacellList?.length ?? 0;
+  const totalCellCount = extract.datacellCount ?? fetchedCellCount;
   const cellsTruncated = fetchedCellCount < totalCellCount;
 
-  const rowsTruncated = rows.length > EXTRACT_GRID_EMBED_MAX_ROWS;
+  const totalRowCount = rows.length;
+  const rowsTruncated = totalRowCount > EXTRACT_GRID_EMBED_MAX_ROWS;
   const visibleRows = rowsTruncated
     ? rows.slice(0, EXTRACT_GRID_EMBED_MAX_ROWS)
     : rows;
@@ -472,10 +456,10 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
           <AlertCircle size={14} color={OS_LEGAL_COLORS.textMuted} />
           {rowsTruncated
             ? cellsTruncated
-              ? `Showing ${visibleRows.length} of ${rows.length} fetched documents ` +
-                `(${fetchedCellCount} of ${totalCellCount} total cells loaded). ` +
+              ? `Showing ${visibleRows.length} of ${totalRowCount} documents. ` +
+                `${fetchedCellCount} of ${totalCellCount} total cells loaded. ` +
                 "View the full extract in the Extracts panel."
-              : `Showing ${visibleRows.length} of ${rows.length} documents. ` +
+              : `Showing ${visibleRows.length} of ${totalRowCount} documents. ` +
                 "View the full extract in the Extracts panel."
             : `Showing ${fetchedCellCount} of ${totalCellCount} cells. ` +
               "View the full extract in the Extracts panel."}
