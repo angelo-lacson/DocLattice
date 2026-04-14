@@ -67,7 +67,14 @@ def _get_datacell_qs(extract, user):
 
     Note: this is a module-level function because Graphene-Django resolvers
     receive the Django model instance as ``self``, not the GraphQL type.
+
+    Graphene-Django creates a fresh model instance per resolved object per
+    request, so both ``resolve_full_datacell_list`` and ``resolve_datacell_count``
+    call this with the same ``(extract, user)`` pair within a single query.
+    The queryset itself is lazy (no DB hit until evaluated), so constructing
+    it twice is cheap.
     """
+    # Inline import to avoid circular dependency with the annotations module.
     from opencontractserver.annotations.query_optimizer import (
         ExtractQueryOptimizer,
     )
@@ -128,19 +135,22 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         # indexing on querysets and would raise AssertionError.
         start = max(0, offset) if offset is not None else 0
 
-        # Limit + offset: return a bounded slice of the queryset.
         if limit is not None:
             # Clamp to [0, MAX_FULL_DATACELL_LIST_LIMIT] so callers cannot
             # bypass the intended payload cap via the GraphQL API.
             limit = max(0, min(limit, MAX_FULL_DATACELL_LIST_LIMIT))
             return qs[start : start + limit]
-        # Offset only: skip the first N cells, return the rest.
+        # Offset without limit: apply the server cap to prevent callers
+        # from bypassing the payload bound by omitting `limit`.
         if start:
-            return qs[start:]
-        # Unbounded: return the full queryset as-is.
+            return qs[start : start + MAX_FULL_DATACELL_LIST_LIMIT]
+        # Unbounded (no limit, no offset): backward-compatible full list.
         return qs
 
     def resolve_datacell_count(self, info) -> int:
+        # N+1 warning: issues a COUNT(*) per ExtractType instance. Safe for
+        # the single-extract embed query; add a DataLoader before exposing
+        # this field on list queries.
         return _get_datacell_qs(self, info.context.user).count()
 
     def resolve_full_document_list(self, info):

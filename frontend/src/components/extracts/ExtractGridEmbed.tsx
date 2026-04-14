@@ -454,13 +454,13 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
       {(cellsTruncated || rowsTruncated) && (
         <OverflowFooter>
           <AlertCircle size={14} color={OS_LEGAL_COLORS.textMuted} />
-          {rowsTruncated
-            ? cellsTruncated
-              ? `Showing ${visibleRows.length} of ${totalRowCount} documents. ` +
-                `${fetchedCellCount} of ${totalCellCount} total cells loaded. ` +
-                "View the full extract in the Extracts panel."
-              : `Showing ${visibleRows.length} of ${totalRowCount} documents. ` +
-                "View the full extract in the Extracts panel."
+          {rowsTruncated && cellsTruncated
+            ? `Showing ${visibleRows.length} of ${totalRowCount} documents ` +
+              `(payload bounded to ${fetchedCellCount} of ${totalCellCount} total cells). ` +
+              "View the full extract in the Extracts panel."
+            : rowsTruncated
+            ? `Showing ${visibleRows.length} of ${totalRowCount} documents. ` +
+              "View the full extract in the Extracts panel."
             : `Showing ${fetchedCellCount} of ${totalCellCount} cells. ` +
               "View the full extract in the Extracts panel."}
         </OverflowFooter>
