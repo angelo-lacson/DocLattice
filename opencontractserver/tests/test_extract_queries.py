@@ -179,10 +179,9 @@ class ExtractsQueryTestCase(TestCase):
                 document=self.doc,
             )
 
-        # Unbounded fetch should return all 5 cells and datacellCount=5.
-        result = self.client.execute("""
-            query {
-                extract(id: "%s") {
+        unbounded_query = """
+            query GetExtract($extractId: ID!) {
+                extract(id: $extractId) {
                     id
                     datacellCount
                     fullDatacellList {
@@ -190,39 +189,41 @@ class ExtractsQueryTestCase(TestCase):
                     }
                 }
             }
-            """ % extract_id)
+        """
+        paginated_query = """
+            query GetExtract($extractId: ID!, $limit: Int, $offset: Int) {
+                extract(id: $extractId) {
+                    datacellCount
+                    fullDatacellList(limit: $limit, offset: $offset) {
+                        id
+                    }
+                }
+            }
+        """
+
+        # Unbounded fetch should return all 5 cells and datacellCount=5.
+        result = self.client.execute(
+            unbounded_query, variables={"extractId": extract_id}
+        )
         self.assertIsNone(result.get("errors"))
         extract_data = result["data"]["extract"]
         self.assertEqual(extract_data["datacellCount"], 5)
         self.assertEqual(len(extract_data["fullDatacellList"]), 5)
 
         # First page: limit=2 → exactly 2 cells, datacellCount still 5.
-        result_page1 = self.client.execute("""
-            query {
-                extract(id: "%s") {
-                    datacellCount
-                    fullDatacellList(limit: 2) {
-                        id
-                    }
-                }
-            }
-            """ % extract_id)
+        result_page1 = self.client.execute(
+            paginated_query, variables={"extractId": extract_id, "limit": 2}
+        )
         self.assertIsNone(result_page1.get("errors"))
         page1 = result_page1["data"]["extract"]
         self.assertEqual(page1["datacellCount"], 5)
         self.assertEqual(len(page1["fullDatacellList"]), 2)
 
         # Second page: limit=2, offset=2 → next 2 cells, disjoint from page 1.
-        result_page2 = self.client.execute("""
-            query {
-                extract(id: "%s") {
-                    datacellCount
-                    fullDatacellList(limit: 2, offset: 2) {
-                        id
-                    }
-                }
-            }
-            """ % extract_id)
+        result_page2 = self.client.execute(
+            paginated_query,
+            variables={"extractId": extract_id, "limit": 2, "offset": 2},
+        )
         self.assertIsNone(result_page2.get("errors"))
         page2 = result_page2["data"]["extract"]
         self.assertEqual(page2["datacellCount"], 5)
@@ -236,15 +237,10 @@ class ExtractsQueryTestCase(TestCase):
         )
 
         # Final page: limit=2, offset=4 → only 1 cell remains.
-        result_page3 = self.client.execute("""
-            query {
-                extract(id: "%s") {
-                    fullDatacellList(limit: 2, offset: 4) {
-                        id
-                    }
-                }
-            }
-            """ % extract_id)
+        result_page3 = self.client.execute(
+            paginated_query,
+            variables={"extractId": extract_id, "limit": 2, "offset": 4},
+        )
         self.assertIsNone(result_page3.get("errors"))
         self.assertEqual(
             len(result_page3["data"]["extract"]["fullDatacellList"]),
@@ -260,15 +256,19 @@ class ExtractsQueryTestCase(TestCase):
         """
         extract_id = to_global_id("ExtractType", self.extract.id)
 
-        result = self.client.execute("""
-            query {
-                extract(id: "%s") {
-                    fullDatacellList(limit: 10, offset: -5) {
+        query = """
+            query GetExtract($extractId: ID!, $limit: Int, $offset: Int) {
+                extract(id: $extractId) {
+                    fullDatacellList(limit: $limit, offset: $offset) {
                         id
                     }
                 }
             }
-            """ % extract_id)
+        """
+        result = self.client.execute(
+            query,
+            variables={"extractId": extract_id, "limit": 10, "offset": -5},
+        )
         self.assertIsNone(result.get("errors"))
         # With offset clamped to 0, the single existing datacell is returned.
         self.assertEqual(len(result["data"]["extract"]["fullDatacellList"]), 1)
@@ -276,30 +276,58 @@ class ExtractsQueryTestCase(TestCase):
     def test_full_datacell_list_limit_capped_at_server_max(self):
         """
         A ``limit`` exceeding ``MAX_FULL_DATACELL_LIST_LIMIT`` must be
-        silently capped to the server maximum rather than producing a 500
-        error. This test verifies no server error occurs.
-
-        Note: the test fixture only has a handful of cells (well below the
-        cap), so this test cannot verify that the cap *reduces* the result
-        count. It only confirms the over-sized limit is accepted gracefully.
+        silently capped to the server maximum. Verifies both:
+        1. No server error when an over-sized limit is passed.
+        2. The returned count does not exceed ``MAX_FULL_DATACELL_LIST_LIMIT``
+           even when more cells exist.
         """
         from opencontractserver.constants.extracts import MAX_FULL_DATACELL_LIST_LIMIT
 
         extract_id = to_global_id("ExtractType", self.extract.id)
-        huge_limit = MAX_FULL_DATACELL_LIST_LIMIT + 9999
 
-        result = self.client.execute("""
-            query {{
-                extract(id: "{}") {{
-                    fullDatacellList(limit: {}) {{
+        # Create enough datacells to exceed the cap. setUp already created 1,
+        # so we need MAX_FULL_DATACELL_LIST_LIMIT more to have cap + 1 total.
+        Datacell.objects.bulk_create(
+            [
+                Datacell(
+                    extract=self.extract,
+                    column=self.column,
+                    data={"data": f"Cap{i}"},
+                    data_definition="str",
+                    creator=self.user,
+                    document=self.doc,
+                )
+                for i in range(MAX_FULL_DATACELL_LIST_LIMIT)
+            ]
+        )
+        total_cells = Datacell.objects.filter(extract=self.extract).count()
+        self.assertGreater(total_cells, MAX_FULL_DATACELL_LIST_LIMIT)
+
+        query = """
+            query GetExtract($extractId: ID!, $limit: Int) {
+                extract(id: $extractId) {
+                    datacellCount
+                    fullDatacellList(limit: $limit) {
                         id
-                    }}
-                }}
-            }}
-            """.format(extract_id, huge_limit))
+                    }
+                }
+            }
+        """
+        huge_limit = MAX_FULL_DATACELL_LIST_LIMIT + 9999
+        result = self.client.execute(
+            query,
+            variables={"extractId": extract_id, "limit": huge_limit},
+        )
         self.assertIsNone(result.get("errors"))
-        # Only 1 cell exists; the important thing is no 500 error.
-        self.assertEqual(len(result["data"]["extract"]["fullDatacellList"]), 1)
+        returned = len(result["data"]["extract"]["fullDatacellList"])
+        self.assertEqual(
+            returned,
+            MAX_FULL_DATACELL_LIST_LIMIT,
+            f"Expected server to cap at {MAX_FULL_DATACELL_LIST_LIMIT}, "
+            f"got {returned} (total cells: {total_cells}).",
+        )
+        # datacellCount should reflect the true total, not the capped limit.
+        self.assertEqual(result["data"]["extract"]["datacellCount"], total_cells)
 
     def test_full_datacell_list_offset_only_without_limit(self):
         """
@@ -322,30 +350,37 @@ class ExtractsQueryTestCase(TestCase):
                 document=self.doc,
             )
 
-        # Unbounded fetch: all 5 cells.
-        result_all = self.client.execute("""
-            query {
-                extract(id: "%s") {
+        unbounded_query = """
+            query GetExtract($extractId: ID!) {
+                extract(id: $extractId) {
                     fullDatacellList {
                         id
                     }
                 }
             }
-            """ % extract_id)
+        """
+        offset_query = """
+            query GetExtract($extractId: ID!, $offset: Int) {
+                extract(id: $extractId) {
+                    fullDatacellList(offset: $offset) {
+                        id
+                    }
+                }
+            }
+        """
+
+        # Unbounded fetch: all 5 cells.
+        result_all = self.client.execute(
+            unbounded_query, variables={"extractId": extract_id}
+        )
         self.assertIsNone(result_all.get("errors"))
         all_ids = [c["id"] for c in result_all["data"]["extract"]["fullDatacellList"]]
         self.assertEqual(len(all_ids), 5)
 
         # Offset-only: skip the first 2 cells, no limit.
-        result_offset = self.client.execute("""
-            query {
-                extract(id: "%s") {
-                    fullDatacellList(offset: 2) {
-                        id
-                    }
-                }
-            }
-            """ % extract_id)
+        result_offset = self.client.execute(
+            offset_query, variables={"extractId": extract_id, "offset": 2}
+        )
         self.assertIsNone(result_offset.get("errors"))
         offset_ids = [
             c["id"] for c in result_offset["data"]["extract"]["fullDatacellList"]
@@ -357,3 +392,28 @@ class ExtractsQueryTestCase(TestCase):
         )
         # The returned ids should match the last 3 from the unbounded result.
         self.assertEqual(offset_ids, all_ids[2:])
+
+    def test_full_datacell_list_limit_zero_returns_empty(self):
+        """
+        ``limit=0`` should return an empty list rather than crashing.
+        The resolver clamps limit to ``max(0, ...)`` so zero is valid.
+        """
+        extract_id = to_global_id("ExtractType", self.extract.id)
+
+        query = """
+            query GetExtract($extractId: ID!, $limit: Int) {
+                extract(id: $extractId) {
+                    datacellCount
+                    fullDatacellList(limit: $limit) {
+                        id
+                    }
+                }
+            }
+        """
+        result = self.client.execute(
+            query, variables={"extractId": extract_id, "limit": 0}
+        )
+        self.assertIsNone(result.get("errors"))
+        self.assertEqual(len(result["data"]["extract"]["fullDatacellList"]), 0)
+        # datacellCount should still reflect the true total (1 from setUp).
+        self.assertEqual(result["data"]["extract"]["datacellCount"], 1)

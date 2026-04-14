@@ -61,6 +61,35 @@ class DatacellType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         connection_class = CountableConnection
 
 
+def _get_datacell_qs(extract, user):
+    """Return the permission-filtered, deterministically ordered queryset.
+
+    Cached on the model instance so that ``resolve_full_datacell_list`` and
+    ``resolve_datacell_count`` share a single queryset build when both
+    fields are requested in the same GraphQL query.
+
+    The cache key includes ``user.pk`` so that one user's
+    permission-filtered queryset cannot leak to another.
+
+    Note: this is a module-level function because Graphene-Django resolvers
+    receive the Django model instance as ``self``, not the GraphQL type.
+    """
+    cache_attr = f"_datacell_qs_{user.pk}"
+    if not hasattr(extract, cache_attr):
+        from opencontractserver.annotations.query_optimizer import (
+            ExtractQueryOptimizer,
+        )
+
+        setattr(
+            extract,
+            cache_attr,
+            ExtractQueryOptimizer.get_extract_datacells(
+                extract, user, document_id=None
+            ).order_by("document_id", "column_id", "id"),
+        )
+    return getattr(extract, cache_attr)
+
+
 class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     full_datacell_list = graphene.List(
         DatacellType,
@@ -105,51 +134,29 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         interfaces = [relay.Node]
         connection_class = CountableConnection
 
-    def _get_datacell_qs(self, user):
-        """Return permission-filtered, deterministically ordered datacell queryset.
-
-        Cached on the instance keyed by ``user.pk`` so that both
-        ``resolve_full_datacell_list`` and ``resolve_datacell_count`` share a
-        single queryset build when fetched in the same GraphQL request.
-
-        Note: Graphene creates a fresh ``ExtractType`` instance per resolved
-        object, so the cache lives only for the duration of one request. The
-        user key guards against hypothetical future scenarios (e.g. DataLoader)
-        where an instance might serve multiple users.
-        """
-        from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
-
-        cache_attr = f"_datacell_qs_{user.pk}"
-        if not hasattr(self, cache_attr):
-            qs = ExtractQueryOptimizer.get_extract_datacells(
-                self, user, document_id=None
-            ).order_by("document_id", "column_id", "id")
-            setattr(self, cache_attr, qs)
-        return getattr(self, cache_attr)
-
     def resolve_full_datacell_list(self, info, limit=None, offset=None):
         from opencontractserver.constants.extracts import MAX_FULL_DATACELL_LIST_LIMIT
 
-        qs = self._get_datacell_qs(info.context.user)
+        qs = _get_datacell_qs(self, info.context.user)
 
         # Guard against negative offset — Django does not support negative
         # indexing on querysets and would raise AssertionError.
         start = max(0, offset) if offset is not None else 0
 
-        # Branch: limit + offset — return a bounded window.
+        # Limit + offset: return a bounded slice of the queryset.
         if limit is not None:
             # Clamp to [0, MAX_FULL_DATACELL_LIST_LIMIT] so callers cannot
             # bypass the intended payload cap via the GraphQL API.
             limit = max(0, min(limit, MAX_FULL_DATACELL_LIST_LIMIT))
             return qs[start : start + limit]
-        # Branch: offset only (no limit) — skip N rows, return remainder.
+        # Offset only: skip the first N cells, return the rest.
         if start:
             return qs[start:]
-        # Branch: unbounded — no limit or offset, return all visible cells.
+        # Unbounded: return the full queryset as-is.
         return qs
 
     def resolve_datacell_count(self, info) -> int:
-        return self._get_datacell_qs(info.context.user).count()
+        return _get_datacell_qs(self, info.context.user).count()
 
     def resolve_full_document_list(self, info):
         from opencontractserver.types.enums import PermissionTypes
