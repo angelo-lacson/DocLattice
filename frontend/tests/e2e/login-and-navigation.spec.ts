@@ -61,7 +61,7 @@ test.describe("Frontend integration", () => {
       });
       await expect(page.getByPlaceholder("Password")).toBeVisible();
       await expect(
-        page.getByRole("button", { name: /^login$/i }),
+        page.getByRole("button", { name: /^login$/i })
       ).toBeVisible();
     });
 

@@ -144,7 +144,7 @@ export const TEST_USER = {
 export async function expectViewVisible(
   page: Page,
   matcher: ViewMatcher,
-  timeoutMs = 20_000,
+  timeoutMs = 20_000
 ): Promise<void> {
   switch (matcher.kind) {
     case "text": {
@@ -174,9 +174,9 @@ export async function expectViewVisible(
       }
       throw new Error(
         `expectViewVisible: none of [${matcher.texts.join(
-          ", ",
+          ", "
         )}] became visible within ${timeoutMs}ms` +
-          (lastError ? ` (last error: ${String(lastError)})` : ""),
+          (lastError ? ` (last error: ${String(lastError)})` : "")
       );
     }
     case "selector": {
@@ -202,7 +202,7 @@ export async function expectViewVisible(
 export async function loginViaUI(
   page: Page,
   username: string = TEST_USER.username,
-  password: string = TEST_USER.password,
+  password: string = TEST_USER.password
 ): Promise<void> {
   await page.goto("/login");
 
