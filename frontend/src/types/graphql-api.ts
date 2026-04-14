@@ -1393,7 +1393,7 @@ export interface ExtractType extends Node {
    * `limit`/`offset` applied to `fullDatacellList`. Used alongside a bounded
    * `fullDatacellList` to render "showing N of M" indicators (see #1204).
    */
-  datacellCount?: number;
+  datacellCount?: number | null;
   myPermissions?: PermissionTypes[];
 }
 

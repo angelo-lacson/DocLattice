@@ -360,7 +360,7 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
   // that truncation as a "showing X of Y documents" message.
   const totalCellCount =
     extract.datacellCount ?? extract.fullDatacellList.length;
-  const fetchedCellCount = extract.fullDatacellList.length;
+  const fetchedCellCount = extract.fullDatacellList?.length ?? 0;
   const cellsTruncated = fetchedCellCount < totalCellCount;
 
   const rowsTruncated = rows.length > EXTRACT_GRID_EMBED_MAX_ROWS;
@@ -472,7 +472,8 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
           <AlertCircle size={14} color={OS_LEGAL_COLORS.textMuted} />
           {rowsTruncated
             ? cellsTruncated
-              ? `Showing ${visibleRows.length} documents from a bounded payload of ${fetchedCellCount} of ${totalCellCount} total cells. ` +
+              ? `Showing ${visibleRows.length} of ${rows.length} fetched documents ` +
+                `(${fetchedCellCount} of ${totalCellCount} total cells loaded). ` +
                 "View the full extract in the Extracts panel."
               : `Showing ${visibleRows.length} of ${rows.length} documents. ` +
                 "View the full extract in the Extracts panel."
