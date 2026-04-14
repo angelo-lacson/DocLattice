@@ -124,7 +124,10 @@ jobs:
 
       - name: Verify admin superuser exists
         run: |
-          docker compose -f test.yml exec -T django python manage.py shell -c "
+          docker compose -f test.yml exec -T django python -c "
+          import django, os
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.test')
+          django.setup()
           from django.contrib.auth import get_user_model
           User = get_user_model()
           assert User.objects.filter(username='admin').exists(), 'admin user missing - migration 0003 did not run'
