@@ -105,44 +105,51 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         interfaces = [relay.Node]
         connection_class = CountableConnection
 
-    def resolve_full_datacell_list(self, info, limit=None, offset=None):
+    def _get_datacell_qs(self, user):
+        """Return permission-filtered, deterministically ordered datacell queryset.
+
+        Cached on the instance keyed by ``user.pk`` so that both
+        ``resolve_full_datacell_list`` and ``resolve_datacell_count`` share a
+        single queryset build when fetched in the same GraphQL request.
+
+        Note: Graphene creates a fresh ``ExtractType`` instance per resolved
+        object, so the cache lives only for the duration of one request. The
+        user key guards against hypothetical future scenarios (e.g. DataLoader)
+        where an instance might serve multiple users.
+        """
         from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
+
+        cache_attr = f"_datacell_qs_{user.pk}"
+        if not hasattr(self, cache_attr):
+            qs = ExtractQueryOptimizer.get_extract_datacells(
+                self, user, document_id=None
+            ).order_by("document_id", "column_id", "id")
+            setattr(self, cache_attr, qs)
+        return getattr(self, cache_attr)
+
+    def resolve_full_datacell_list(self, info, limit=None, offset=None):
         from opencontractserver.constants.extracts import MAX_FULL_DATACELL_LIST_LIMIT
 
-        qs = ExtractQueryOptimizer.get_extract_datacells(
-            self, info.context.user, document_id=None
-        )
-
-        # Apply a deterministic ordering so that `limit`/`offset` produce a
-        # stable window across requests. Without this, PostgreSQL is free to
-        # return rows in any order, which would make pagination indeterminate.
-        qs = qs.order_by("document_id", "column_id", "id")
+        qs = self._get_datacell_qs(info.context.user)
 
         # Guard against negative offset — Django does not support negative
         # indexing on querysets and would raise AssertionError.
         start = max(0, offset) if offset is not None else 0
 
+        # Branch: limit + offset — return a bounded window.
         if limit is not None:
             # Clamp to [0, MAX_FULL_DATACELL_LIST_LIMIT] so callers cannot
             # bypass the intended payload cap via the GraphQL API.
             limit = max(0, min(limit, MAX_FULL_DATACELL_LIST_LIMIT))
             return qs[start : start + limit]
+        # Branch: offset only (no limit) — skip N rows, return remainder.
         if start:
             return qs[start:]
+        # Branch: unbounded — no limit or offset, return all visible cells.
         return qs
 
     def resolve_datacell_count(self, info) -> int:
-        # TODO: this builds the same permission-filtered queryset as
-        # resolve_full_datacell_list.  If both fields are requested in the
-        # same GraphQL query, Django evaluates two separate DB round-trips.
-        # Consider caching the base queryset on the ExtractType instance or
-        # folding the count into the pagination resolver when both fields
-        # are fetched together.
-        from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
-
-        return ExtractQueryOptimizer.get_extract_datacells(
-            self, info.context.user, document_id=None
-        ).count()
+        return self._get_datacell_qs(info.context.user).count()
 
     def resolve_full_document_list(self, info):
         from opencontractserver.types.enums import PermissionTypes
