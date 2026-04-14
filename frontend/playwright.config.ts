@@ -23,8 +23,9 @@ export default defineConfig({
    * older `*.spec.tsx` files (DocumentPermissionFlow, route-state-sync-slug) run
    * inside the component-test runner via Vite, not here. */
   testMatch: ["e2e/**/*.spec.ts"],
-  /* Run files in parallel locally; CI pins to a single worker so the
-   * shared backend container is not slammed with concurrent logins. */
+  /* Tests within a file run sequentially to preserve in-memory auth state.
+   * CI also pins to a single worker so the shared backend container is
+   * not slammed with concurrent logins. */
   fullyParallel: false,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
