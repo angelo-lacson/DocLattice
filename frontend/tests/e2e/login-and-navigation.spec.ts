@@ -72,11 +72,12 @@ test.describe("Frontend integration", () => {
       await page.getByRole("button", { name: /^login$/i }).click();
 
       // The Login view shows a toast "ERROR! Could not log you in!" when
-      // the GraphQL mutation returns an error. We only assert that the
-      // user did NOT navigate away from /login — the toast text varies
-      // by env (test runs use react-toastify which is not deterministic
-      // about timing), so URL is the most stable signal.
-      await page.waitForTimeout(2_000);
+      // the GraphQL mutation returns an error. Wait for the form to be
+      // re-enabled (submit button clickable) as the stable signal that
+      // the failed mutation has completed, then verify we stayed on /login.
+      await expect(page.getByRole("button", { name: /^login$/i })).toBeEnabled({
+        timeout: 10_000,
+      });
       await expect(page).toHaveURL(/\/login$/);
     });
   });
