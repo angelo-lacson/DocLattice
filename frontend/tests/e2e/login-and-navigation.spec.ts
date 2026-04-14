@@ -44,10 +44,10 @@ test.describe("Frontend integration", () => {
   test.describe("anonymous user", () => {
     for (const view of VIEWS.filter((v) => !v.requiresAuth)) {
       test(`renders ${view.name} (${view.path})`, async ({ page }) => {
-        // Don't fail tests on console errors or uncaught page errors —
-        // many views log GraphQL "could not fetch X" warnings when the
-        // database has no data. The only failure we care about is the
-        // view itself never rendering.
+        // Note: Playwright does not fail on console errors by default.
+        // Many views log GraphQL "could not fetch X" warnings when the
+        // database has no data — this is expected. The only failure
+        // signal we care about is the view itself never rendering.
         await page.goto(view.path);
         await expectViewVisible(page, view.matcher);
       });
@@ -99,7 +99,8 @@ test.describe("Frontend integration", () => {
 
       // Verify we have an authenticated session by checking that the
       // discover landing page shows one of its sentinels.
-      await expectViewVisible(page, VIEWS[0].matcher);
+      const landing = VIEWS.find((v) => v.path === "/")!;
+      await expectViewVisible(page, landing.matcher);
 
       for (const view of VIEWS) {
         if (view.path === "/") continue; // already verified above
