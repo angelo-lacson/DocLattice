@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Frontend E2E integration tests with coverage**: Added a Playwright integration spec (`frontend/tests/e2e/login-and-navigation.spec.ts`) that exercises the full Vite + Django + Postgres stack. The spec logs in via the password form against a real backend and walks every routed view in `src/views/` (Discovery, Corpuses, Documents, LabelSets, Annotations, Extracts, GlobalDiscussions, ThreadSearchRoute, PrivacyPolicy, TermsOfService, UserProfile, Login). New supporting files:
+  - `frontend/tests/e2e/fixtures.ts` — Playwright fixture that dumps `window.__coverage__` to `frontend/coverage/e2e/.nyc_output/` after every test (mirrors the CT pattern in `tests/utils/coverage.ts`).
+  - `frontend/tests/e2e/helpers.ts` — `VIEWS` catalog, `loginViaUI`, `spaNavigate`, and `expectViewVisible` helpers. Uses `history.pushState` + `popstate` dispatch for SPA navigation so the in-memory `authToken` reactive var survives between routes.
+  - `frontend/playwright.config.ts` — Rewritten to manage a `webServer` block that boots vite with `COVERAGE=true` and `REACT_APP_USE_AUTH0=false`, runs the chromium project against `http://127.0.0.1:5173`, and matches `tests/e2e/**/*.spec.ts` (existing `*.spec.tsx` files under `tests/` keep running inside the CT runner).
+  - `frontend/package.json` — New `test:e2e:coverage` script that runs the spec with Istanbul instrumentation and merges the per-test JSON dumps into `coverage/e2e/lcov.info` via `nyc report`.
+  - `.github/workflows/frontend-e2e.yml` — New CI job that builds the django image from `test.yml`, brings up postgres + redis + django with `--no-deps` (skipping the multi-GB parser/embedder images), waits on `/api/health/`, verifies migration `0003_create_initial_superuser` produced the `admin` user, then runs `yarn test:e2e:coverage` and uploads the lcov to Codecov under the `frontend-e2e` flag.
+
 - **Agent memory system**: Per-corpus memory that lets agents accumulate reusable insights from conversations. Memory is stored as a first-class markdown Document in the corpus (visible and editable by users). Features include:
   - Corpus model fields: `memory_enabled` toggle and `memory_document` FK (`opencontractserver/corpuses/models.py`)
   - Memory CRUD utilities with hybrid retrieval (full injection for small memory, keyword-scored section filtering for large) (`opencontractserver/agents/memory.py`)
