@@ -3682,7 +3682,7 @@ class TestErrorPaths_BulkMoveAtomicRollback(DocumentFolderServiceTestBase):
 # =============================================================================
 
 
-class TestCoverageGap_ComputeMovedPathTrailingSlash(TransactionTestCase):
+class TestCoverageGapComputeMovedPathTrailingSlash(TransactionTestCase):
     """
     SCENARIO: _compute_moved_path encounters a path with a trailing slash
     (e.g. "/dir/") which produces an empty filename after rsplit.
@@ -3704,7 +3704,7 @@ class TestCoverageGap_ComputeMovedPathTrailingSlash(TransactionTestCase):
         self.assertIn("empty or root-only", str(ctx.exception))
 
 
-class TestCoverageGap_ComputeMovedPathWhitespace(TransactionTestCase):
+class TestCoverageGapComputeMovedPathWhitespace(TransactionTestCase):
     """
     SCENARIO: _compute_moved_path receives a whitespace-only path.
 
@@ -3725,7 +3725,7 @@ class TestCoverageGap_ComputeMovedPathWhitespace(TransactionTestCase):
         self.assertIn("empty or root-only", str(ctx.exception))
 
 
-class TestCoverageGap_DisambiguateNoSlashPath(DocumentFolderServiceTestBase):
+class TestCoverageGapDisambiguateNoSlashPath(DocumentFolderServiceTestBase):
     """
     SCENARIO: _disambiguate_path is called with a path that has no slash
     (e.g. "report.pdf" instead of "/report.pdf").
@@ -3786,7 +3786,7 @@ class TestCoverageGap_DisambiguateNoSlashPath(DocumentFolderServiceTestBase):
         self.assertEqual(result, "Makefile_1")
 
 
-class TestCoverageGap_BulkMoveIntegrityErrorRollback(DocumentFolderServiceTestBase):
+class TestCoverageGapBulkMoveIntegrityErrorRollback(DocumentFolderServiceTestBase):
     """
     SCENARIO: An IntegrityError during bulk move execution causes full
     atomic rollback.
@@ -3847,7 +3847,7 @@ class TestCoverageGap_BulkMoveIntegrityErrorRollback(DocumentFolderServiceTestBa
         self.assertIsNone(original_path.folder_id)
 
 
-class TestCoverageGap_BulkMoveToRootRollback(DocumentFolderServiceTestBase):
+class TestCoverageGapBulkMoveToRootRollback(DocumentFolderServiceTestBase):
     """
     SCENARIO: Bulk move to root (folder=None) fails and rolls back.
 
@@ -3969,8 +3969,8 @@ class TestMoveDocumentIntegrityRecovery(DocumentFolderServiceTestBase):
 
         self.assertTrue(success, f"Retry should succeed, got error: {error}")
         self.assertEqual(error, "")
-        # The retry must have actually run a second create
-        self.assertGreaterEqual(attempts["count"], 2)
+        # The mock fails on attempt 1 and succeeds on attempt 2 — exactly 2 creates.
+        self.assertEqual(attempts["count"], 2)
 
         # The new path should be committed and live in the target folder
         new_path = DocumentPath.objects.get(
@@ -4074,6 +4074,10 @@ class TestMoveDocumentIntegrityRecovery(DocumentFolderServiceTestBase):
         # Should fail immediately on the first attempt (no retries)
         self.assertEqual(attempts["count"], 1)
         self.assertFalse(success)
+        # The non-constraint IntegrityError is re-raised from the helper and
+        # caught by move_document_to_folder's outer IntegrityError handler,
+        # which formats a PATH_CONFLICT_MSG error string.
+        self.assertIn(PATH_CONFLICT_MSG, error)
 
 
 class TestBulkMoveIntegrityRecovery(DocumentFolderServiceTestBase):
@@ -4206,7 +4210,8 @@ class TestDeleteFolderIntegrityRecovery(DocumentFolderServiceTestBase):
             success, f"delete_folder should retry and succeed, got error: {error}"
         )
         self.assertEqual(error, "")
-        self.assertGreaterEqual(attempts["count"], 2)
+        # The mock fails on attempt 1 and succeeds on attempt 2 — exactly 2 creates.
+        self.assertEqual(attempts["count"], 2)
 
         # Folder removed and document is now at corpus root
         self.assertFalse(CorpusFolder.objects.filter(pk=folder.pk).exists())
@@ -4254,10 +4259,6 @@ class TestDeleteFolderIntegrityRecovery(DocumentFolderServiceTestBase):
         self.assertFalse(success)
         self.assertIn("rolled back", error)
 
-        from opencontractserver.constants.document_processing import (
-            MAX_PATH_CREATE_RETRIES,
-        )
-
         self.assertEqual(attempts["count"], MAX_PATH_CREATE_RETRIES + 1)
 
         # Folder must still exist
@@ -4269,7 +4270,7 @@ class TestDeleteFolderIntegrityRecovery(DocumentFolderServiceTestBase):
         self.assertEqual(original_path.folder_id, folder.id)
 
 
-class TestCoverageGap_DeleteFolderMultiDocHistory(DocumentFolderServiceTestBase):
+class TestCoverageGapDeleteFolderMultiDocHistory(DocumentFolderServiceTestBase):
     """
     SCENARIO: Deleting a folder with multiple documents creates a history
     node for each document.
@@ -4335,7 +4336,7 @@ class TestCoverageGap_DeleteFolderMultiDocHistory(DocumentFolderServiceTestBase)
             self.assertFalse(original_path.is_current)
 
 
-class TestCoverageGap_BulkMoveVersionPreservation(DocumentFolderServiceTestBase):
+class TestCoverageGapBulkMoveVersionPreservation(DocumentFolderServiceTestBase):
     """
     SCENARIO: Bulk move preserves version numbers and creates proper
     parent chain for each document.
@@ -4412,7 +4413,7 @@ class TestCoverageGap_BulkMoveVersionPreservation(DocumentFolderServiceTestBase)
             self.assertFalse(original_path.is_current)
 
 
-class TestCoverageGap_BulkMoveGetPathCallCount(DocumentFolderServiceTestBase):
+class TestCoverageGapBulkMoveGetPathCallCount(DocumentFolderServiceTestBase):
     """
     SCENARIO: Bulk move caches the target folder path before the loop.
 
