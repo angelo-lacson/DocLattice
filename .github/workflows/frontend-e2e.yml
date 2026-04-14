@@ -126,6 +126,11 @@ jobs:
         run: |
           docker compose -f test.yml exec -T django python -c "
           import django, os
+          # DATABASE_URL is constructed by /entrypoint at container start but is
+          # not visible to processes spawned by 'docker compose exec'. Build it
+          # from the individual POSTGRES_* vars that are injected via env_file.
+          pg = {k: os.environ[k] for k in ('POSTGRES_USER','POSTGRES_PASSWORD','POSTGRES_HOST','POSTGRES_PORT','POSTGRES_DB')}
+          os.environ.setdefault('DATABASE_URL', 'postgres://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}'.format(**pg))
           os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.test')
           django.setup()
           from django.contrib.auth import get_user_model

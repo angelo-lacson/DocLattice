@@ -103,8 +103,10 @@ test.describe("Frontend integration", () => {
 
       for (const view of VIEWS) {
         if (view.path === "/") continue; // already verified above
-        await spaNavigate(page, view.path);
-        await expectViewVisible(page, view.matcher);
+        await test.step(`navigate to ${view.name}`, async () => {
+          await spaNavigate(page, view.path);
+          await expectViewVisible(page, view.matcher);
+        });
       }
     });
   });

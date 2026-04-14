@@ -127,14 +127,24 @@ export const VIEWS: ViewSpec[] = [
 ];
 
 /**
- * Public credentials baked into the initial superuser created by
+ * Credentials for the initial superuser created by
  * `opencontractserver/users/migrations/0003_create_initial_superuser.py`.
- * The CI workflow points the django container at the same env file so
- * these values are guaranteed to exist on a freshly migrated database.
+ * The CI workflow sets E2E_TEST_USERNAME and E2E_TEST_PASSWORD via the
+ * `env:` block on the Playwright step; local callers must export them or
+ * the test will fail with a clear message.
  */
 export const TEST_USER = {
   username: process.env.E2E_TEST_USERNAME || "admin",
-  password: process.env.E2E_TEST_PASSWORD || "Openc0ntracts_def@ult",
+  password: (() => {
+    const pw = process.env.E2E_TEST_PASSWORD;
+    if (!pw) {
+      throw new Error(
+        "E2E_TEST_PASSWORD environment variable is not set. " +
+          "Set it to the superuser password before running E2E tests."
+      );
+    }
+    return pw;
+  })(),
 };
 
 /**
@@ -158,13 +168,7 @@ export async function expectViewVisible(
       // Uses Playwright's built-in retry via expect().toPass().
       await expect(async () => {
         for (const text of matcher.texts) {
-          if (
-            await page
-              .getByText(text)
-              .first()
-              .isVisible()
-              .catch(() => false)
-          ) {
+          if (await page.getByText(text).first().isVisible()) {
             return;
           }
         }
@@ -234,4 +238,9 @@ export async function spaNavigate(page: Page, path: string): Promise<void> {
     window.history.pushState({}, "", targetPath);
     window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
   }, path);
+
+  // Assert the URL actually changed to catch silent navigation failures.
+  await expect(page).toHaveURL(
+    new RegExp(`${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`)
+  );
 }
