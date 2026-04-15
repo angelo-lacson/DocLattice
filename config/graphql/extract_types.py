@@ -140,11 +140,12 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             # bypass the intended payload cap via the GraphQL API.
             limit = max(0, min(limit, MAX_FULL_DATACELL_LIST_LIMIT))
             return qs[start : start + limit]
-        # Offset without limit: apply the server cap to prevent callers
-        # from bypassing the payload bound by omitting `limit`.
+        # Offset without limit: apply the server cap so callers cannot
+        # bypass the payload bound by providing only an offset.
         if start:
             return qs[start : start + MAX_FULL_DATACELL_LIST_LIMIT]
-        # Unbounded (no limit, no offset): backward-compatible full list.
+        # No limit, no offset: backward-compatible full list for callers
+        # that need all visible cells (e.g., the Extracts panel).
         return qs
 
     def resolve_datacell_count(self, info) -> int:
