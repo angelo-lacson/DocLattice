@@ -125,7 +125,7 @@ export const App = () => {
   // is permanently true — guarding with REACT_APP_USE_AUTH0 matches the
   // pattern used by AuthGate and useNavMenu for the same reason.
   const { isLoading: auth0Loading } = useAuth0();
-  const isLoading = REACT_APP_USE_AUTH0 && auth0Loading;
+  const isLoading = REACT_APP_USE_AUTH0 ? auth0Loading : false;
 
   const [tryUpdateDocument] = useMutation<
     UpdateDocumentOutputs,
