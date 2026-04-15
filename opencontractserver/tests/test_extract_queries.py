@@ -332,9 +332,13 @@ class ExtractsQueryTestCase(TestCase):
     def test_full_datacell_list_offset_only_without_limit(self):
         """
         Providing ``offset`` without ``limit`` should skip the first N cells
-        and return the remainder. This exercises the resolver's
-        ``if start: return qs[start:]`` branch, which is distinct from the
-        ``limit+offset`` slicing and the unbounded ``return qs`` fallback.
+        and return up to ``MAX_FULL_DATACELL_LIST_LIMIT`` of the remainder.
+        This exercises the resolver's offset-only branch, which applies the
+        server cap to prevent unbounded payloads when ``limit`` is omitted.
+
+        Note: the test dataset (5 cells) is smaller than the cap so all
+        remaining cells are returned; the cap is separately verified by
+        ``test_full_datacell_list_limit_capped_at_server_max``.
         """
         extract_id = to_global_id("ExtractType", self.extract.id)
 

@@ -203,7 +203,7 @@ test.describe("ExtractGridEmbed - Both Truncated", () => {
     // the branch where both cellsTruncated and rowsTruncated are true.
     await expect(page.getByText(/Showing 200 of 201 documents/)).toBeVisible();
     await expect(
-      page.getByText(/payload bounded to 201 of 1000 total cells/)
+      page.getByText(/201 of 1000 total cells loaded/)
     ).toBeVisible();
 
     await docScreenshot(page, "caml--extract-grid-embed--both-truncated");

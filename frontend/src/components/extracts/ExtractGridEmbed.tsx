@@ -455,8 +455,8 @@ export const ExtractGridEmbed: React.FC<ExtractGridEmbedProps> = ({
         <OverflowFooter>
           <AlertCircle size={14} color={OS_LEGAL_COLORS.textMuted} />
           {rowsTruncated && cellsTruncated
-            ? `Showing ${visibleRows.length} of ${totalRowCount} documents ` +
-              `(payload bounded to ${fetchedCellCount} of ${totalCellCount} total cells). ` +
+            ? `Showing ${visibleRows.length} of ${totalRowCount} documents. ` +
+              `${fetchedCellCount} of ${totalCellCount} total cells loaded. ` +
               "View the full extract in the Extracts panel."
             : rowsTruncated
             ? `Showing ${visibleRows.length} of ${totalRowCount} documents. ` +
