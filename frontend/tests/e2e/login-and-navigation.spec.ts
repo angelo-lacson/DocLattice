@@ -78,7 +78,7 @@ test.describe("Frontend integration", () => {
       await expect(page.getByRole("button", { name: /^login$/i })).toBeEnabled({
         timeout: 10_000,
       });
-      await expect(page).toHaveURL(/\/login$/);
+      await expect(page).toHaveURL(/\/login(\?.*)?$/);
     });
   });
 
@@ -105,7 +105,7 @@ test.describe("Frontend integration", () => {
       for (const view of VIEWS) {
         if (view.path === "/") continue; // already verified above
         await test.step(`navigate to ${view.name}`, async () => {
-          await spaNavigate(page, view.path);
+          await spaNavigate(page, view.path, view.redirects);
           await expectViewVisible(page, view.matcher);
         });
       }

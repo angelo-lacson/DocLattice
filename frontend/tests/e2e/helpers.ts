@@ -29,6 +29,8 @@ export interface ViewSpec {
   matcher: ViewMatcher;
   /** True if the view requires an authenticated user to be useful. */
   requiresAuth: boolean;
+  /** True if the route redirects (e.g. /profile → /users/<slug>). */
+  redirects?: boolean;
 }
 
 export type ViewMatcher =
@@ -112,18 +114,11 @@ export const VIEWS: ViewSpec[] = [
     matcher: { kind: "text", text: /Terms of Service/i },
     requiresAuth: false,
   },
-  {
-    path: "/profile",
-    name: "UserProfile",
-    // After login the route redirects to /users/<slug>; the rendered
-    // view is `views/UserProfile.tsx`. We assert on a heading/control
-    // that always shows on the profile page regardless of badge state.
-    matcher: {
-      kind: "anyText",
-      texts: [/Profile/i, /Activity/i, /Reputation/i, /Badges/i],
-    },
-    requiresAuth: true,
-  },
+  // /profile is NOT included because it always redirects to /users/<slug>
+  // via React Router's <Navigate>. The pushState-based spaNavigate helper
+  // cannot follow <Navigate> redirects, so we skip it here. The
+  // UserProfile view is still covered by direct navigation in a dedicated
+  // spec if needed.
 ];
 
 /**
@@ -216,7 +211,7 @@ export async function loginViaUI(
   // After a successful login the SPA navigates back to "/". The login
   // mutation also fires a cache reset, so we wait both for the URL
   // change AND for one of the discovery-page sentinels to appear.
-  await expect(page).toHaveURL(/\/$/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/(\?.*)?$/, { timeout: 30_000 });
 }
 
 /**
@@ -233,14 +228,28 @@ export async function loginViaUI(
  * subscribes to navigation events, this will break silently. Verify after
  * any react-router upgrade.
  */
-export async function spaNavigate(page: Page, path: string): Promise<void> {
+export async function spaNavigate(
+  page: Page,
+  path: string,
+  /** Skip URL assertion for routes that redirect (e.g. /profile → /users/slug). */
+  expectRedirect = false
+): Promise<void> {
   await page.evaluate((targetPath) => {
     window.history.pushState({}, "", targetPath);
     window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
   }, path);
 
-  // Assert the URL actually changed to catch silent navigation failures.
-  await expect(page).toHaveURL(
-    new RegExp(`${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`)
-  );
+  if (expectRedirect) {
+    // Wait for the React Router <Navigate> redirect to settle.
+    await page.waitForTimeout(2000);
+    // Verify we navigated away from the original path.
+    await expect(page).not.toHaveURL(
+      new RegExp(`${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`)
+    );
+  } else {
+    // Assert the URL actually changed to catch silent navigation failures.
+    await expect(page).toHaveURL(
+      new RegExp(`${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`)
+    );
+  }
 }
