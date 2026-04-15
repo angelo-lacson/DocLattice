@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Bounded `fullDatacellList` payload for extract grid embeds** (Issue #1204): `ExtractType.fullDatacellList` now accepts optional `limit` and `offset` arguments, and a new `ExtractType.datacellCount` field returns the total visible datacell count ignoring pagination. Resolver `resolve_full_datacell_list` applies a deterministic `order_by("document_id", "column_id", "id")` before slicing so limits/offsets produce stable windows across requests (`config/graphql/extract_types.py`, `schema.graphql`). Frontend `GET_EXTRACT_GRID_EMBED` (`frontend/src/graphql/queries.ts`) now passes `limit: EXTRACT_GRID_EMBED_CELL_LIMIT` (500) and fetches `datacellCount`; `ExtractGridEmbed` (`frontend/src/components/extracts/ExtractGridEmbed.tsx`) renders a "Showing N of M cells" / "Showing N of M documents" partial-data footer instead of the previous hard "exceeds limit" error screen. Adds the `EXTRACT_GRID_EMBED_CELL_LIMIT` constant (`frontend/src/assets/configurations/constants.ts`), a new `partial` state to `ExtractGridEmbedTestWrapper`, and backend coverage in `test_extract_queries.py::test_full_datacell_list_limit_offset_and_count`.
+
 - **Agent memory system**: Per-corpus memory that lets agents accumulate reusable insights from conversations. Memory is stored as a first-class markdown Document in the corpus (visible and editable by users). Features include:
   - Corpus model fields: `memory_enabled` toggle and `memory_document` FK (`opencontractserver/corpuses/models.py`)
   - Memory CRUD utilities with hybrid retrieval (full injection for small memory, keyword-scored section filtering for large) (`opencontractserver/agents/memory.py`)
