@@ -6,6 +6,7 @@ import os
 from asgiref.sync import sync_to_async
 
 from doclatticeserver.annotations.compact_json import iter_page_annotations
+from doclatticeserver.constants.extraction import DEFAULT_EXTRACT_MODEL
 from doclatticeserver.extracts.models import Datacell
 from doclatticeserver.shared.decorators import celery_task_with_async_to_sync
 from doclatticeserver.utils.compact_pawls import expand_pawls_pages
@@ -286,7 +287,7 @@ async def doc_extract_query_task(
                     framework=AgentFramework.PYDANTIC_AI,
                     temperature=0.3,  # Low temperature for consistent extraction
                     similarity_top_k=similarity_top_k,
-                    model=model_override or "openai:gpt-4o-mini",
+                    model=model_override or DEFAULT_EXTRACT_MODEL,
                     user_id=datacell.creator.id,
                 )
 
