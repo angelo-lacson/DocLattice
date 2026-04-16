@@ -25,6 +25,10 @@ flags:
     paths:
       - frontend/src/
     carryforward: true
+  frontend-e2e:
+    paths:
+      - frontend/src/
+    carryforward: true
 
 parsers:
   gcov:
