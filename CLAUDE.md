@@ -149,7 +149,7 @@ docker compose -f production.yml up
 
 1. **State Management - Jotai Atoms**:
    - **Global state via atoms** in `frontend/src/atoms/` (NOT Redux/Context)
-   - Key atoms: `selectedCorpusIdAtom`, `selectedFolderIdAtom`, `currentThreadIdAtom`
+   - Key atoms: `selectedFolderIdAtom`, `folderCorpusIdAtom`, `selectedMessageIdAtom`
    - Derived atoms automatically update when dependencies change
    - Apollo reactive vars in `frontend/src/graphql/cache.ts` for UI state
    - AuthGate pattern ensures auth completes before rendering
