@@ -217,6 +217,7 @@ jobs:
           flags: frontend-e2e
           name: frontend-e2e-coverage
           fail_ci_if_error: false
+          disable_search: true
 
       - name: Upload backend E2E coverage to Codecov
         if: success() || failure()
@@ -227,6 +228,7 @@ jobs:
           flags: backend-e2e
           name: backend-e2e-coverage
           fail_ci_if_error: false
+          disable_search: true
 
       - name: Tear down backend stack
         if: always()
