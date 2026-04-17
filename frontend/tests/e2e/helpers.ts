@@ -253,3 +253,116 @@ export async function spaNavigate(
     );
   }
 }
+
+/**
+ * Admin views that require superuser access. Separated from the main
+ * VIEWS catalog because the navigation spec runs on an empty database
+ * where these are not relevant.
+ */
+export const ADMIN_VIEWS: ViewSpec[] = [
+  {
+    path: "/admin/settings",
+    name: "GlobalSettings",
+    matcher: { kind: "text", text: /Global Settings/i },
+    requiresAuth: true,
+  },
+  {
+    path: "/system_settings",
+    name: "SystemSettings",
+    matcher: { kind: "text", text: /System Settings/i },
+    requiresAuth: true,
+  },
+];
+
+/**
+ * Create a corpus via the UI by clicking the Add button on /corpuses,
+ * filling the modal, and submitting. Waits for the success toast.
+ *
+ * Caller must already be authenticated and on a page where spaNavigate works.
+ */
+export async function createCorpusViaUI(
+  page: Page,
+  title: string,
+  description: string
+): Promise<void> {
+  await spaNavigate(page, "/corpuses");
+  await expectViewVisible(page, { kind: "text", text: /Your\s+corpuses/i });
+
+  // Open the Add dropdown and click "Create Corpus"
+  await page.getByLabel("Add").click();
+  await page.getByText("Create Corpus").click();
+
+  // Fill the modal form
+  await expect(page.locator("#corpus-title")).toBeVisible({ timeout: 10_000 });
+  await page.fill("#corpus-title", title);
+  await page.fill("#corpus-description", description);
+
+  // Submit — the button text "Create Corpus" appears twice (menu item + modal button).
+  // Target the one inside the modal footer.
+  await page
+    .locator(".oc-modal-footer button", { hasText: /Create Corpus/i })
+    .click();
+
+  // Wait for the success toast and modal to close
+  await expect(page.getByText(/Created corpus/i)).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.locator("#corpus-title")).not.toBeVisible({
+    timeout: 5_000,
+  });
+}
+
+/**
+ * Upload a plain-text document from the /documents view. Opens the upload
+ * modal, attaches a file created from `content`, fills title/description,
+ * and submits. Waits for the upload to complete.
+ *
+ * Caller must already be authenticated.
+ */
+export async function uploadDocumentViaUI(
+  page: Page,
+  filename: string,
+  content: string,
+  title: string,
+  description: string
+): Promise<void> {
+  await spaNavigate(page, "/documents");
+  await expectViewVisible(page, { kind: "text", text: /Your\s+documents/i });
+
+  // Click the "Upload" button
+  await page.getByRole("button", { name: /^Upload$/i }).click();
+
+  // Wait for the upload modal's file dropzone
+  await expect(page.getByTestId("file-dropzone")).toBeVisible({
+    timeout: 10_000,
+  });
+
+  // Create a text file buffer and attach it via the hidden file input
+  const buffer = Buffer.from(content, "utf-8");
+  const fileInput = page.locator('input[type="file"]');
+  await fileInput.setInputFiles({
+    name: filename,
+    mimeType: "text/plain",
+    buffer,
+  });
+
+  // Wait for the "Details" step to appear
+  await expect(page.locator("#document-title")).toBeVisible({
+    timeout: 10_000,
+  });
+  await page.fill("#document-title", title);
+  await page.fill("#document-description", description);
+
+  // Click Upload (skip corpus step since we upload from /documents)
+  // The button may say "Upload" or "Skip Corpus" + "Upload"
+  await page
+    .getByRole("button", { name: /^Upload$/i })
+    .last()
+    .click();
+
+  // Wait for upload to complete — the modal shows a progress state then closes
+  // or shows a success state. Wait for the modal to disappear.
+  await expect(page.getByTestId("file-dropzone")).not.toBeVisible({
+    timeout: 30_000,
+  });
+}
