@@ -288,9 +288,11 @@ export async function createCorpusViaUI(
   await spaNavigate(page, "/corpuses");
   await expectViewVisible(page, { kind: "text", text: /Your\s+corpuses/i });
 
-  // Open the Add dropdown and click "Create Corpus"
-  await page.getByLabel("Add").click();
-  await page.getByText("Create Corpus").click();
+  // Click the "New Corpus" button (or "Create Your First Corpus" on empty state)
+  const createBtn = page.getByRole("button", {
+    name: /New Corpus|Create Your First Corpus/i,
+  });
+  await createBtn.first().click();
 
   // Fill the modal form
   await expect(page.locator("#corpus-title")).toBeVisible({ timeout: 10_000 });
@@ -339,12 +341,15 @@ export async function uploadDocumentViaUI(
 
   // Create a text file buffer and attach it via the hidden file input
   const buffer = Buffer.from(content, "utf-8");
-  const fileInput = page.locator('input[type="file"]');
+  const fileInput = page.locator('input[type="file"]').first();
   await fileInput.setInputFiles({
     name: filename,
     mimeType: "text/plain",
     buffer,
   });
+
+  // Click "Continue" to move from Select step to Details step
+  await page.getByRole("button", { name: /Continue/i }).click();
 
   // Wait for the "Details" step to appear
   await expect(page.locator("#document-title")).toBeVisible({
@@ -353,16 +358,12 @@ export async function uploadDocumentViaUI(
   await page.fill("#document-title", title);
   await page.fill("#document-description", description);
 
-  // Click Upload (skip corpus step since we upload from /documents)
-  // The button may say "Upload" or "Skip Corpus" + "Upload"
-  await page
-    .getByRole("button", { name: /^Upload$/i })
-    .last()
-    .click();
+  // Click "Skip Corpus" to upload without corpus association.
+  // This skips the corpus selection step and starts the upload immediately.
+  await page.getByRole("button", { name: /Skip Corpus/i }).click();
 
-  // Wait for upload to complete — the modal shows a progress state then closes
-  // or shows a success state. Wait for the modal to disappear.
-  await expect(page.getByTestId("file-dropzone")).not.toBeVisible({
-    timeout: 30_000,
+  // Wait for upload to complete — the modal closes or shows a completion state
+  await expect(page.locator("#document-title")).not.toBeVisible({
+    timeout: 60_000,
   });
 }

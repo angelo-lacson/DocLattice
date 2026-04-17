@@ -63,13 +63,15 @@ test.describe("Corpus workflow", () => {
     // ── Step 4: Verify document appears in list ────────────────────
     await test.step("verify document in document list", async () => {
       await spaNavigate(page, "/documents");
-      await expect(page.getByText(DOC_TITLE)).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(DOC_TITLE).first()).toBeVisible({
+        timeout: 15_000,
+      });
     });
 
     // ── Step 5: Navigate to corpus list, find our corpus ───────────
     await test.step("navigate to corpus and verify detail page", async () => {
       await spaNavigate(page, "/corpuses");
-      await expect(page.getByText(CORPUS_TITLE)).toBeVisible({
+      await expect(page.getByText(CORPUS_TITLE).first()).toBeVisible({
         timeout: 15_000,
       });
 
