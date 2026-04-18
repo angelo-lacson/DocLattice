@@ -24,7 +24,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'opencontractserver/**'
+              - 'config/**'
+              - '*.py'
+              - 'requirements/**'
+              - 'test.yml'
+              - 'compose/**'
+              - '.pre-commit-config.yaml'
+              - 'setup.cfg'
+              - '.github/workflows/backend.yml'
+
   linter:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -47,29 +73,8 @@ jobs:
       - name: Run pre-commit
         run: pre-commit run --all-files
 
-  changes:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            backend:
-              - 'opencontractserver/**'
-              - '**/*.py'
-              - 'requirements/**'
-              - 'test.yml'
-              - 'compose/**'
-              - '.github/workflows/backend.yml'
-
   pytest:
-    needs: changes
+    needs: [changes, linter]
     if: needs.changes.outputs.backend == 'true'
     runs-on: yuge
     timeout-minutes: 180
