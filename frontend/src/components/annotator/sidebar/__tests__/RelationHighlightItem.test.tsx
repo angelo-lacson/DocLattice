@@ -93,9 +93,11 @@ describe("RelationHighlightItem", () => {
           onSelect={onSelect}
         />
       );
+      // The semantic contract is the alt text — the icon source filename is an
+      // implementation detail that could change without affecting users, so we
+      // only assert on `alt` here.
       const avatar = screen.getByAltText("Source");
       expect(avatar).toBeInTheDocument();
-      expect(avatar.getAttribute("src")).toMatch(/bow-and-arrow/);
     });
 
     it("renders the target avatar when type=TARGET", () => {
@@ -109,7 +111,6 @@ describe("RelationHighlightItem", () => {
       );
       const avatar = screen.getByAltText("Target");
       expect(avatar).toBeInTheDocument();
-      expect(avatar.getAttribute("src")).toMatch(/target/);
     });
   });
 

@@ -124,6 +124,15 @@ function defaultState(overrides: Partial<State> = {}): State {
 }
 
 function primeMocks(state: State): void {
+  // NOTE: In production, `useAllAnnotations` returns a de-duplicated UNION of
+  // `pdfAnnotations.annotations` and the structural annotations atom, while
+  // `pdfAnnotations.annotations` holds only the PDF annotations. These tests
+  // pass the same fixture array to both because the hook under test consumes
+  // `useAllAnnotations` for the visibility predicate and `pdfAnnotations.relations`
+  // (not `pdfAnnotations.annotations`) for the relation-forced-visibility logic,
+  // so the two sources never interact in this test's reads. Collapsing them
+  // keeps fixtures simple; don't copy this conflation into tests that assert on
+  // dedup behavior.
   (useAllAnnotations as any).mockReturnValue(state.annotations);
   (usePdfAnnotations as any).mockReturnValue({
     pdfAnnotations: {

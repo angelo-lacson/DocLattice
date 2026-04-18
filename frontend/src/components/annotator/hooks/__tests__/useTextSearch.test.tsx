@@ -157,6 +157,13 @@ describe("useTextSearch", () => {
 
   describe("first-render no-op", () => {
     it("does NOT run the search on the initial render (refs are seeded from current state)", () => {
+      // NOTE: This test pins an implementation invariant (refs-for-change-detection)
+      // rather than a purely external behavior contract. If the hook migrates to a
+      // different change-detection strategy (e.g. useEffect dependency comparison)
+      // this test may need to be rewritten in terms of observable outcomes. The
+      // ref-seeding pattern is intentionally pinned because it is load-bearing for
+      // preventing spurious first-render search dispatches.
+      //
       // The hook initializes previousSearchTextRef / previousSelectedDocumentRef
       // with the CURRENT values, so on first render the 'has changed' guard
       // evaluates to false and the effect bails. A search only fires when
