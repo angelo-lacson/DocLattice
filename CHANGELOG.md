@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Frontend error-path test coverage** (Issue #1270): Added targeted unit tests covering error boundaries, the Apollo error link, and `catch` blocks in utility modules. Previously these branches were effectively untested, leaving regressions in auth error handling, file download failures, and error boundary fallback UI undetectable in CI.
+  - `frontend/src/components/widgets/__tests__/ErrorBoundary.test.tsx` — 7 new tests for `ErrorBoundary.tsx`: default fallback UI on child-thrown errors, `onError` callback invocation, console logging in `componentDidCatch`, custom `fallback` render prop, recovery via the reset button, and persistent error state when the child keeps throwing.
+  - `frontend/src/graphql/errorLink.test.ts` — Rewrote the existing smoke test (which only toggled reactive vars) into a full suite that executes the real `errorLink` through an `ApolloLink.from([errorLink, terminating])` chain. Now asserts all auth-error branches (401/403/`UNAUTHENTICATED`, message-based detection, JWT-expired reload via `setTimeout` + `window.location.reload`), the non-auth logging fall-through, and both network-error branches (401/403 vs generic).
+  - `frontend/src/utils/__tests__/files.test.ts` — Added tests for `downloadFile` success path (axios → Blob → anchor click) and its `catch (e)` branch (rejects with the original error and logs before re-throwing), plus `toBase64` success and `FileReader.onerror` rejection path.
+  - `frontend/src/utils/graphqlGuards.test.ts` — Added explicit coverage for `createSafeQueryExecutor`'s `catch (error)` branch (line 129, logs via `console.error` and surfaces the error) and the validation-blocked `console.warn` branch.
+  - Verification: 49/49 new + updated tests pass via `yarn vitest run` on all four files; `tsc --noEmit` and `prettier --check` both clean.
+
 ### Removed
 
 - **Frontend dead Jotai atoms and Apollo reactive vars** (Issue #1243): Removed unused state management exports after triple-verifying each against both `frontend/src/` and `frontend/tests/` — atoms consumed only by test wrappers (e.g. `hideLabelsAtom`, `rawPermissionsAtom`, the deprecated `showAnnotation*Atom` set) were left in place per the issue's scope-correction note.
