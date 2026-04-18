@@ -60,9 +60,38 @@ parsers:
       macro: no
 
 comment:
-  layout: "reach,diff,flags,files,footer"
+  layout: "reach,diff,flags,components,files,footer"
   behavior: default
   require_changes: no
+
+# Components group flags into logical areas for reporting and PR status.
+# Flags alone can't express "frontend union" because the three frontend
+# flags overlap on the same paths. Components merge them so PR comments
+# and the Codecov UI show a single backend number and a single frontend
+# number instead of five flag numbers that users must mentally combine.
+component_management:
+  default_rules:
+    statuses:
+      - type: project
+        target: auto
+        threshold: 1%
+      - type: patch
+        target: auto
+        threshold: 1%
+  individual_components:
+    - component_id: backend
+      name: Backend
+      paths:
+        - opencontractserver/**
+        - config/**
+      flag_regexes:
+        - backend.*
+    - component_id: frontend
+      name: Frontend
+      paths:
+        - frontend/src/**
+      flag_regexes:
+        - frontend-.*
 
 ignore:
   - "opencontractserver/tasks/data_extract_tasks.py"
