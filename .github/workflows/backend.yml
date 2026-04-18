@@ -24,7 +24,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'opencontractserver/**'
+              - 'config/**'
+              - '*.py'
+              - 'requirements/**'
+              - 'test.yml'
+              - 'compose/**'
+              - '.pre-commit-config.yaml'
+              - 'setup.cfg'
+              - 'pyproject.toml'
+              - '.github/workflows/backend.yml'
+
   linter:
+    needs: changes
+    # Always run on push to protected branches so the post-merge "ground truth"
+    # run is never gated by path filter; path gating only applies to PRs.
+    if: needs.changes.outputs.backend == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,6 +77,8 @@ jobs:
         run: pre-commit run --all-files
 
   pytest:
+    needs: [changes, linter]
+    if: needs.changes.outputs.backend == 'true' || github.event_name == 'push'
     runs-on: yuge
     timeout-minutes: 180
     permissions:
