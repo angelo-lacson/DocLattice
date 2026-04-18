@@ -46,6 +46,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Frontend unit tests for utils and hooks** (Issue #1267): Added 14 new `*.test.ts(x)` files covering previously-untested utilities and hooks to raise `frontend-unit` coverage on high-ROI pure functions:
+  - **Utils**: `formatters.test.ts`, `arrayUtils.test.ts`, `colorUtils.test.ts`, `parseOutputType.test.ts`, `annotationGuards.test.ts`, `env.test.ts`, `extractUtils.test.ts`, `layout.test.ts`, `persistentVar.test.ts`, `routingLogger.test.ts`, `navigationCircuitBreaker.test.ts`, `performance.test.ts`, `jobNotificationCacheUpdates.test.ts`, `compactAnnotationJson.test.ts`.
+  - **Hooks**: `useAuthReady.test.tsx`, `useFeatureAvailability.test.ts`, `useMessageBadges.test.tsx`, `useBadgeCelebration.test.tsx` (render-hook based with vi.useFakeTimers/MockedProvider).
+  - Adds ~210 new assertions across file-size/date/initial formatting, hex→RGB(A) conversions, Pydantic output-type parsing, per-annotation runtime guards, runtime env coercion, extract status, viewport clamping, session-storage-backed reactive vars, debug logger toggling, navigation circuit breaker tripping/reset/window pruning, performance monitor metric lifecycle, Apollo cache field-level mutation dispatch for job notifications, and v1↔v2 compact annotation JSON round-tripping.
+  - Verification: full unit suite passes (1118/1118) and `tsc --noEmit` is clean.
+
 - **Unit tests for Jotai atoms and Apollo reactive vars** (Issue #1268): Added vitest coverage for the global state layer per the ROI audit in PR #1266.
   - **`frontend/src/atoms/__tests__/folderAtoms.test.ts`**: 46 tests covering every primitive atom (initial value + write), every derived atom (`folderTreeAtom`, `folderBreadcrumbAtom`, `folderMapAtom`, `canCreateFoldersAtom`) across multiple dependency states, every write-only action atom (toggle/expand/open/close helpers), and `atomWithStorage` persistence paths (Set ↔ JSON round-trip, malformed-JSON fallback, SSR-safe `sidebarCollapsedAtom` default for mobile vs desktop viewports).
   - **`frontend/src/atoms/__tests__/threadAtoms.test.ts`**: 9 tests covering all five atoms plus a localStorage round-trip and re-hydration path for `threadContextSidebarExpandedAtom`.
