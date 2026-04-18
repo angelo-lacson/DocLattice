@@ -7,8 +7,16 @@ coverage:
   range: "70...100"
 
   status:
-    project: true
-    patch: true
+    project:
+      default:
+        target: auto
+        # informational: true forces the status to always post, even
+        # without a baseline on main. Once a baseline is established,
+        # this can be removed and the status will start gating PRs.
+        informational: true
+    patch:
+      default:
+        target: auto
     changes: false
 
 flags:
@@ -28,6 +36,11 @@ flags:
   frontend-e2e:
     paths:
       - frontend/src/
+    carryforward: true
+  backend-e2e:
+    paths:
+      - opencontractserver/
+      - config/
     carryforward: true
 
 parsers:
