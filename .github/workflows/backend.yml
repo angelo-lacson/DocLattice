@@ -47,7 +47,30 @@ jobs:
       - name: Run pre-commit
         run: pre-commit run --all-files
 
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'opencontractserver/**'
+              - '**/*.py'
+              - 'requirements/**'
+              - 'test.yml'
+              - 'compose/**'
+              - '.github/workflows/backend.yml'
+
   pytest:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: yuge
     timeout-minutes: 180
     permissions:
