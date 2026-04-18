@@ -37,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Frontend unit tests for utils and hooks** (Issue #1267): Added 14 new `*.test.ts(x)` files covering previously-untested utilities and hooks to raise `frontend-unit` coverage on high-ROI pure functions:
+  - **Utils**: `formatters.test.ts`, `arrayUtils.test.ts`, `colorUtils.test.ts`, `parseOutputType.test.ts`, `annotationGuards.test.ts`, `env.test.ts`, `extractUtils.test.ts`, `layout.test.ts`, `persistentVar.test.ts`, `routingLogger.test.ts`, `navigationCircuitBreaker.test.ts`, `performance.test.ts`, `jobNotificationCacheUpdates.test.ts`, `compactAnnotationJson.test.ts`.
+  - **Hooks**: `useAuthReady.test.tsx`, `useFeatureAvailability.test.ts`, `useMessageBadges.test.tsx`, `useBadgeCelebration.test.tsx` (render-hook based with vi.useFakeTimers/MockedProvider).
+  - Adds ~210 new assertions across file-size/date/initial formatting, hex→RGB(A) conversions, Pydantic output-type parsing, per-annotation runtime guards, runtime env coercion, extract status, viewport clamping, session-storage-backed reactive vars, debug logger toggling, navigation circuit breaker tripping/reset/window pruning, performance monitor metric lifecycle, Apollo cache field-level mutation dispatch for job notifications, and v1↔v2 compact annotation JSON round-tripping.
+  - Verification: full unit suite passes (1118/1118) and `tsc --noEmit` is clean.
+
 - **Frontend E2E integration tests with coverage**: Added a Playwright integration spec (`frontend/tests/e2e/login-and-navigation.spec.ts`) that exercises the full Vite + Django + Postgres stack. The spec logs in via the password form against a real backend and walks every routed view in `src/views/` (Discovery, Corpuses, Documents, LabelSets, Annotations, Extracts, GlobalDiscussions, ThreadSearchRoute, PrivacyPolicy, TermsOfService, UserProfile, Login). New supporting files:
   - `frontend/tests/e2e/fixtures.ts` — Playwright fixture that dumps `window.__coverage__` to `frontend/coverage/e2e/.nyc_output/` after every test (mirrors the CT pattern in `tests/utils/coverage.ts`).
   - `frontend/tests/e2e/helpers.ts` — `VIEWS` catalog, `loginViaUI`, `spaNavigate`, and `expectViewVisible` helpers. Uses `history.pushState` + `popstate` dispatch for SPA navigation so the in-memory `authToken` reactive var survives between routes.
