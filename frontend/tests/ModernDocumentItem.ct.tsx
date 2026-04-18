@@ -1,7 +1,4 @@
-// Component tests for ModernDocumentItem — complements
-// document-failure-overlay.ct.tsx with coverage for the happy-path rendering,
-// permission-gated actions, context menu, version history, and the
-// relationship badge/popup system. See issue #1280.
+// Component tests for ModernDocumentItem — see issue #1280.
 
 import React from "react";
 import { test, expect } from "./utils/coverage";
@@ -14,11 +11,8 @@ import {
   DocumentProcessingStatus,
   DocumentRelationshipType,
 } from "../src/types/graphql-api";
-import {
-  editingDocument,
-  viewingDocument,
-  openedCorpus,
-} from "../src/graphql/cache";
+import { openedCorpus } from "../src/graphql/cache";
+import { ReactiveVarObserver } from "./utils/ReactiveVarObserver";
 
 /** Minimal document fixture with overridable fields. */
 function makeDocument(overrides: Partial<DocumentType> = {}): DocumentType {
@@ -59,6 +53,10 @@ function mount(
  * DndContext's useDraggable listeners intercept pointer events on the
  * container, preventing React's synthetic click events from reaching children.
  * Invoke the React onClick handler directly via the __reactProps$ fiber.
+ *
+ * Tested against React 18.x. The `__reactProps$` key is a React internal with
+ * no semver guarantee — if this breaks after a React upgrade, check whether
+ * DndContext now forwards pointer events to children and remove this shim.
  */
 async function clickViaReact(
   page: import("@playwright/test").Page,
@@ -67,9 +65,7 @@ async function clickViaReact(
   await page.evaluate((sel) => {
     const el = document.querySelector(sel);
     if (!el) throw new Error(`Element not found: ${sel}`);
-    const propsKey = Object.keys(el).find((k) =>
-      k.startsWith("__reactProps$")
-    );
+    const propsKey = Object.keys(el).find((k) => k.startsWith("__reactProps$"));
     if (!propsKey) throw new Error("React props not found on element");
     const props = (el as any)[propsKey];
     if (typeof props?.onClick !== "function")
@@ -102,7 +98,10 @@ test.describe("ModernDocumentItem — card view rendering", () => {
     await expect(page.locator("img.fallback-icon")).toHaveCount(1);
   });
 
-  test("renders custom icon when provided", async ({ mount: mountFn, page }) => {
+  test("renders custom icon when provided", async ({
+    mount: mountFn,
+    page,
+  }) => {
     const doc = makeDocument({ icon: "https://example.com/icon.png" });
 
     await mount(<ModernDocumentItem item={doc} viewMode="card" />, mountFn);
@@ -146,9 +145,15 @@ test.describe("ModernDocumentItem — card view rendering", () => {
 
     await mount(<ModernDocumentItem item={doc} viewMode="card" />, mountFn);
 
-    // VersionBadge renders a role="button" when hasHistory is true
+    // VersionBadge renders a role="button" with this exact aria-label when
+    // hasHistory is true. The surrounding draggable wrapper also has
+    // role="button", so match the badge's label exactly to avoid a strict
+    // mode violation.
     await expect(
-      page.getByRole("button", { name: /Version 3/ })
+      page.getByRole("button", {
+        name: "Version 3, click to view history",
+        exact: true,
+      })
     ).toBeVisible();
   });
 
@@ -422,19 +427,25 @@ test.describe("ModernDocumentItem — action buttons", () => {
     page,
   }) => {
     const doc = makeDocument();
-    // Reset reactive var before the assertion
-    viewingDocument(null);
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await mountFn(
+      <MockedProvider mocks={[]} addTypename={false}>
+        <MemoryRouter>
+          <DndContext>
+            <ModernDocumentItem item={doc} viewMode="list" />
+            <ReactiveVarObserver />
+          </DndContext>
+        </MemoryRouter>
+      </MockedProvider>
+    );
 
     await clickViaReact(page, 'button[title="View"]');
 
-    await expect
-      .poll(() => viewingDocument()?.id, { timeout: 2000 })
-      .toBe(doc.id);
-
-    // Cleanup
-    viewingDocument(null);
+    await expect(page.getByTestId("rv-observer")).toHaveAttribute(
+      "data-viewing-id",
+      doc.id,
+      { timeout: 2000 }
+    );
   });
 
   test("click on Edit button triggers editingDocument reactive var", async ({
@@ -442,17 +453,25 @@ test.describe("ModernDocumentItem — action buttons", () => {
     page,
   }) => {
     const doc = makeDocument({ myPermissions: ["update_document"] });
-    editingDocument(null);
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await mountFn(
+      <MockedProvider mocks={[]} addTypename={false}>
+        <MemoryRouter>
+          <DndContext>
+            <ModernDocumentItem item={doc} viewMode="list" />
+            <ReactiveVarObserver />
+          </DndContext>
+        </MemoryRouter>
+      </MockedProvider>
+    );
 
     await clickViaReact(page, 'button[title="Edit"]');
 
-    await expect
-      .poll(() => editingDocument()?.id, { timeout: 2000 })
-      .toBe(doc.id);
-
-    editingDocument(null);
+    await expect(page.getByTestId("rv-observer")).toHaveAttribute(
+      "data-editing-id",
+      doc.id,
+      { timeout: 2000 }
+    );
   });
 
   test("click on Remove button invokes removeFromCorpus with document id", async ({
@@ -475,9 +494,7 @@ test.describe("ModernDocumentItem — action buttons", () => {
 
     await clickViaReact(page, 'button[title="Remove"]');
 
-    await expect
-      .poll(() => removedIds.length, { timeout: 2000 })
-      .toBe(1);
+    await expect.poll(() => removedIds.length, { timeout: 2000 }).toBe(1);
     expect(removedIds[0]).toBe(doc.id);
   });
 
@@ -502,9 +519,7 @@ test.describe("ModernDocumentItem — action buttons", () => {
 
     await clickViaReact(page, 'button[title="Open"]');
 
-    await expect
-      .poll(() => clicked, { timeout: 2000 })
-      .toBe(doc.id);
+    await expect.poll(() => clicked, { timeout: 2000 }).toBe(doc.id);
   });
 
   test("hides download button when pdfFile is missing", async ({
@@ -572,7 +587,7 @@ test.describe("ModernDocumentItem — processing state", () => {
     ).toBeVisible();
   });
 
-  test("backend lock disables action buttons' disabled state", async ({
+  test("disables action buttons when backendLock is true", async ({
     mount: mountFn,
     page,
   }) => {
@@ -594,7 +609,8 @@ test.describe("ModernDocumentItem — processing state", () => {
 //
 // DndContext pointer listeners don't intercept contextmenu, but to avoid
 // relying on coordinate-based click targeting we walk up the DOM from a known
-// element and invoke the React onContextMenu prop directly.
+// element and invoke the React onContextMenu prop directly. Same React 18.x
+// `__reactProps$` caveat as clickViaReact applies.
 // ---------------------------------------------------------------------------
 
 async function openContextMenu(page: import("@playwright/test").Page) {

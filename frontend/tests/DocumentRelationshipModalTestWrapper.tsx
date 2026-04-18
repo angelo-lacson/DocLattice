@@ -8,13 +8,14 @@ import { GET_DOCUMENTS } from "../src/graphql/queries";
 import { openedCorpus } from "../src/graphql/cache";
 import { corpusStateAtom } from "../src/components/annotator/context/CorpusAtom";
 import { DOCUMENT_PICKER_SEARCH_LIMIT } from "../src/assets/configurations/constants";
-import {
-  AnnotationLabelType,
-  LabelType,
-} from "../src/types/graphql-api";
+import { AnnotationLabelType, LabelType } from "../src/types/graphql-api";
 
 // Test corpus ID
-const TEST_CORPUS_ID = "corpus-1";
+export const TEST_CORPUS_ID = "corpus-1";
+
+/** Resolve the effective corpus id for mocks and the component prop. */
+const resolveCorpusId = (override: string | null | undefined) =>
+  override === undefined ? TEST_CORPUS_ID : override ?? "";
 
 // Mock corpus for corpus state
 const mockCorpusWithLabelset = {
@@ -170,11 +171,7 @@ const ModalWithState: React.FC<Props> = ({
     <DocumentRelationshipModal
       open={open}
       onClose={onClose}
-      corpusId={
-        corpusIdOverride === undefined
-          ? TEST_CORPUS_ID
-          : (corpusIdOverride ?? "")
-      }
+      corpusId={resolveCorpusId(corpusIdOverride)}
       initialSourceIds={initialSourceIds}
       initialTargetIds={initialTargetIds}
       onSuccess={onSuccess}
@@ -187,18 +184,16 @@ export const DocumentRelationshipModalTestWrapper: React.FC<Props> = (
 ) => {
   const { extraMocks = [] } = props;
 
-  // Build mocks
+  // Build mocks. MockedProvider consumes each mock once, so the initial query
+  // plus any refetch both need their own entry. Use structuredClone to make
+  // the independence explicit and prevent cross-entry reference sharing if
+  // setup code ever mutates the mock data.
   const getMocks = (): MockedResponse[] => {
-    const corpusIdForMock =
-      props.corpusIdOverride === undefined
-        ? TEST_CORPUS_ID
-        : (props.corpusIdOverride ?? "");
-
-    const documentsMock = {
+    const buildDocumentsMock = (): MockedResponse => ({
       request: {
         query: GET_DOCUMENTS,
         variables: {
-          inCorpusWithId: corpusIdForMock,
+          inCorpusWithId: resolveCorpusId(props.corpusIdOverride),
           textSearch: undefined,
           limit: DOCUMENT_PICKER_SEARCH_LIMIT,
           annotateDocLabels: false,
@@ -220,9 +215,9 @@ export const DocumentRelationshipModalTestWrapper: React.FC<Props> = (
           },
         },
       },
-    } as MockedResponse;
+    });
 
-    return [documentsMock, { ...documentsMock }, ...extraMocks];
+    return [buildDocumentsMock(), buildDocumentsMock(), ...extraMocks];
   };
 
   return (
