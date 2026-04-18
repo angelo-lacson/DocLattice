@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Frontend error-path test coverage** (Issue #1270): Added targeted unit tests covering error boundaries, the Apollo error link, and `catch` blocks in utility modules. Previously these branches were effectively untested, leaving regressions in auth error handling, file download failures, and error boundary fallback UI undetectable in CI.
+  - `frontend/src/components/widgets/__tests__/ErrorBoundary.test.tsx` — 7 new tests for `ErrorBoundary.tsx`: default fallback UI on child-thrown errors, `onError` callback invocation, console logging in `componentDidCatch`, custom `fallback` render prop, recovery via the reset button, and persistent error state when the child keeps throwing.
+  - `frontend/src/graphql/errorLink.test.ts` — Rewrote the existing smoke test (which only toggled reactive vars) into a full suite that executes the real `errorLink` through an `ApolloLink.from([errorLink, terminating])` chain. Now asserts all auth-error branches (401/403/`UNAUTHENTICATED`, message-based detection, JWT-expired reload via `setTimeout` + `window.location.reload`), the non-auth logging fall-through, and both network-error branches (401/403 vs generic).
+  - `frontend/src/utils/__tests__/files.test.ts` — Added tests for `downloadFile` success path (axios → Blob → anchor click) and its `catch (e)` branch (rejects with the original error and logs before re-throwing), plus `toBase64` success and `FileReader.onerror` rejection path.
+  - `frontend/src/utils/graphqlGuards.test.ts` — Added explicit coverage for `createSafeQueryExecutor`'s `catch (error)` branch (line 129, logs via `console.error` and surfaces the error) and the validation-blocked `console.warn` branch.
+  - Verification: 49/49 new + updated tests pass via `yarn vitest run` on all four files; `tsc --noEmit` and `prettier --check` both clean.
+
 ### Removed
 
 - **Frontend dead Jotai atoms and Apollo reactive vars** (Issue #1243): Removed unused state management exports after triple-verifying each against both `frontend/src/` and `frontend/tests/` — atoms consumed only by test wrappers (e.g. `hideLabelsAtom`, `rawPermissionsAtom`, the deprecated `showAnnotation*Atom` set) were left in place per the issue's scope-correction note.
@@ -42,6 +51,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Hooks**: `useAuthReady.test.tsx`, `useFeatureAvailability.test.ts`, `useMessageBadges.test.tsx`, `useBadgeCelebration.test.tsx` (render-hook based with vi.useFakeTimers/MockedProvider).
   - Adds ~210 new assertions across file-size/date/initial formatting, hex→RGB(A) conversions, Pydantic output-type parsing, per-annotation runtime guards, runtime env coercion, extract status, viewport clamping, session-storage-backed reactive vars, debug logger toggling, navigation circuit breaker tripping/reset/window pruning, performance monitor metric lifecycle, Apollo cache field-level mutation dispatch for job notifications, and v1↔v2 compact annotation JSON round-tripping.
   - Verification: full unit suite passes (1118/1118) and `tsc --noEmit` is clean.
+
+- **Unit tests for Jotai atoms and Apollo reactive vars** (Issue #1268): Added vitest coverage for the global state layer per the ROI audit in PR #1266.
+  - **`frontend/src/atoms/__tests__/folderAtoms.test.ts`**: 46 tests covering every primitive atom (initial value + write), every derived atom (`folderTreeAtom`, `folderBreadcrumbAtom`, `folderMapAtom`, `canCreateFoldersAtom`) across multiple dependency states, every write-only action atom (toggle/expand/open/close helpers), and `atomWithStorage` persistence paths (Set ↔ JSON round-trip, malformed-JSON fallback, SSR-safe `sidebarCollapsedAtom` default for mobile vs desktop viewports).
+  - **`frontend/src/atoms/__tests__/threadAtoms.test.ts`**: 9 tests covering all five atoms plus a localStorage round-trip and re-hydration path for `threadContextSidebarExpandedAtom`.
+  - **`frontend/src/graphql/__tests__/cache.test.ts`**: 24 tests covering initial values of every reactive var exported from `cache.ts` (routing, modals, entity refs, search terms, collections), round-trip writes for representative vars, `mergeArrayByIdFieldPolicy` id-based merge + default-empty branches, `InMemoryCache` presence, and `showKnowledgeBaseModal` (`persistentVar`) first-write persistence, re-hydration from sessionStorage, and malformed-JSON fallback.
+  - Coverage (v8 provider): `src/atoms` → 99.23% statements / 93.54% branches; `frontend/src/graphql/cache.ts` → 95.6% statements / 100% branches. Well above the 80% target in the issue.
+  - Verification: all 79 new tests green; full unit suite (1014/1014) still passes; `tsc --noEmit` clean.
+
+- **Frontend permission-gating tests** (Issue #1269): Added branch-exhaustive coverage for the permission predicates that gate annotation write UI.
+  - New utility `frontend/src/utils/annotationPermissions.ts` centralizes three pure predicates (`canEditAnnotationsInCorpus`, `canDeleteAnnotation`, `canUpdateAnnotation`) that were previously inlined in `DocumentKnowledgeBase.tsx:471` and `HighlightItem.tsx:242`. Both consumers now delegate to the helper, eliminating duplicated logic.
+  - New unit tests `frontend/src/utils/__tests__/annotationPermissions.test.ts` cover every branch of the predicates, including the full 2×2 truth table for the corpus/document effective-edit check and the full 2³ truth table for the structural × read-only × `CAN_REMOVE` delete gate (30 assertions).
+  - New Playwright CT tests `frontend/tests/HighlightItemPermissions.ct.tsx` (+ harness `HighlightItemPermissionsTestWrapper.tsx`) verify that the sidebar delete affordance renders only on the intersection of the required conditions, and that structural annotations are delete-locked even with `CAN_REMOVE` (6 scenarios).
+  - Production behavior is unchanged — the helper is a faithful extraction of the existing inline logic.
 
 - **Frontend E2E integration tests with coverage**: Added a Playwright integration spec (`frontend/tests/e2e/login-and-navigation.spec.ts`) that exercises the full Vite + Django + Postgres stack. The spec logs in via the password form against a real backend and walks every routed view in `src/views/` (Discovery, Corpuses, Documents, LabelSets, Annotations, Extracts, GlobalDiscussions, ThreadSearchRoute, PrivacyPolicy, TermsOfService, UserProfile, Login). New supporting files:
   - `frontend/tests/e2e/fixtures.ts` — Playwright fixture that dumps `window.__coverage__` to `frontend/coverage/e2e/.nyc_output/` after every test (mirrors the CT pattern in `tests/utils/coverage.ts`).
