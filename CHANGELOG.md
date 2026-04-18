@@ -44,6 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Coverage (v8 provider): `src/atoms` → 99.23% statements / 93.54% branches; `frontend/src/graphql/cache.ts` → 95.6% statements / 100% branches. Well above the 80% target in the issue.
   - Verification: all 79 new tests green; full unit suite (1014/1014) still passes; `tsc --noEmit` clean.
 
+- **Frontend permission-gating tests** (Issue #1269): Added branch-exhaustive coverage for the permission predicates that gate annotation write UI.
+  - New utility `frontend/src/utils/annotationPermissions.ts` centralizes three pure predicates (`canEditAnnotationsInCorpus`, `canDeleteAnnotation`, `canUpdateAnnotation`) that were previously inlined in `DocumentKnowledgeBase.tsx:471` and `HighlightItem.tsx:242`. Both consumers now delegate to the helper, eliminating duplicated logic.
+  - New unit tests `frontend/src/utils/__tests__/annotationPermissions.test.ts` cover every branch of the predicates, including the full 2×2 truth table for the corpus/document effective-edit check and the full 2³ truth table for the structural × read-only × `CAN_REMOVE` delete gate (30 assertions).
+  - New Playwright CT tests `frontend/tests/HighlightItemPermissions.ct.tsx` (+ harness `HighlightItemPermissionsTestWrapper.tsx`) verify that the sidebar delete affordance renders only on the intersection of the required conditions, and that structural annotations are delete-locked even with `CAN_REMOVE` (6 scenarios).
+  - Production behavior is unchanged — the helper is a faithful extraction of the existing inline logic.
+
 - **Frontend E2E integration tests with coverage**: Added a Playwright integration spec (`frontend/tests/e2e/login-and-navigation.spec.ts`) that exercises the full Vite + Django + Postgres stack. The spec logs in via the password form against a real backend and walks every routed view in `src/views/` (Discovery, Corpuses, Documents, LabelSets, Annotations, Extracts, GlobalDiscussions, ThreadSearchRoute, PrivacyPolicy, TermsOfService, UserProfile, Login). New supporting files:
   - `frontend/tests/e2e/fixtures.ts` — Playwright fixture that dumps `window.__coverage__` to `frontend/coverage/e2e/.nyc_output/` after every test (mirrors the CT pattern in `tests/utils/coverage.ts`).
   - `frontend/tests/e2e/helpers.ts` — `VIEWS` catalog, `loginViaUI`, `spaNavigate`, and `expectViewVisible` helpers. Uses `history.pushState` + `popstate` dispatch for SPA navigation so the in-memory `authToken` reactive var survives between routes.
