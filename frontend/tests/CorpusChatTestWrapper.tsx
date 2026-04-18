@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { InMemoryCache } from "@apollo/client";
 import { Provider as JotaiProvider } from "jotai";
@@ -29,21 +29,28 @@ interface Props {
   corpusId: string;
   /** Set to true to start in the new-chat view rather than the conversation list */
   forceNewChat?: boolean;
+  initialQuery?: string;
+  onNavigateHome?: () => void;
+  onMessageSelect?: (id: string) => void;
 }
 
 export const CorpusChatTestWrapper: React.FC<Props> = ({
   mocks,
   corpusId,
   forceNewChat = false,
+  initialQuery,
+  onNavigateHome,
+  onMessageSelect = () => {},
 }) => {
-  useEffect(() => {
-    authToken("test-auth-token");
-    userObj({
-      id: "test-user",
-      email: "test@example.com",
-      username: "testuser",
-    });
-  }, []);
+  // Set auth synchronously so the WebSocket effect sees the token on the
+  // very first render — this avoids a re-mount race that closes/reopens the
+  // socket and can drop early test messages.
+  authToken("test-auth-token");
+  userObj({
+    id: "test-user",
+    email: "test@example.com",
+    username: "testuser",
+  });
 
   return (
     <MemoryRouter initialEntries={["/"]}>
@@ -54,8 +61,10 @@ export const CorpusChatTestWrapper: React.FC<Props> = ({
               corpusId={corpusId}
               showLoad={false}
               setShowLoad={() => {}}
-              onMessageSelect={() => {}}
+              onMessageSelect={onMessageSelect}
               forceNewChat={forceNewChat}
+              initialQuery={initialQuery}
+              onNavigateHome={onNavigateHome}
             />
           </div>
         </MockedProvider>
