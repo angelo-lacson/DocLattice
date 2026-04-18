@@ -10,6 +10,10 @@ coverage:
     project:
       default:
         target: auto
+        # informational: true forces the status to always post, even
+        # without a baseline on main. Once a baseline is established,
+        # this can be removed and the status will start gating PRs.
+        informational: true
     patch:
       default:
         target: auto
