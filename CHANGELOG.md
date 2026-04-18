@@ -37,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Unit tests for Jotai atoms and Apollo reactive vars** (Issue #1268): Added vitest coverage for the global state layer per the ROI audit in PR #1266.
+  - **`frontend/src/atoms/__tests__/folderAtoms.test.ts`**: 46 tests covering every primitive atom (initial value + write), every derived atom (`folderTreeAtom`, `folderBreadcrumbAtom`, `folderMapAtom`, `canCreateFoldersAtom`) across multiple dependency states, every write-only action atom (toggle/expand/open/close helpers), and `atomWithStorage` persistence paths (Set ↔ JSON round-trip, malformed-JSON fallback, SSR-safe `sidebarCollapsedAtom` default for mobile vs desktop viewports).
+  - **`frontend/src/atoms/__tests__/threadAtoms.test.ts`**: 9 tests covering all five atoms plus a localStorage round-trip and re-hydration path for `threadContextSidebarExpandedAtom`.
+  - **`frontend/src/graphql/__tests__/cache.test.ts`**: 24 tests covering initial values of every reactive var exported from `cache.ts` (routing, modals, entity refs, search terms, collections), round-trip writes for representative vars, `mergeArrayByIdFieldPolicy` id-based merge + default-empty branches, `InMemoryCache` presence, and `showKnowledgeBaseModal` (`persistentVar`) first-write persistence, re-hydration from sessionStorage, and malformed-JSON fallback.
+  - Coverage (v8 provider): `src/atoms` → 99.23% statements / 93.54% branches; `frontend/src/graphql/cache.ts` → 95.6% statements / 100% branches. Well above the 80% target in the issue.
+  - Verification: all 79 new tests green; full unit suite (1014/1014) still passes; `tsc --noEmit` clean.
+
 - **Frontend E2E integration tests with coverage**: Added a Playwright integration spec (`frontend/tests/e2e/login-and-navigation.spec.ts`) that exercises the full Vite + Django + Postgres stack. The spec logs in via the password form against a real backend and walks every routed view in `src/views/` (Discovery, Corpuses, Documents, LabelSets, Annotations, Extracts, GlobalDiscussions, ThreadSearchRoute, PrivacyPolicy, TermsOfService, UserProfile, Login). New supporting files:
   - `frontend/tests/e2e/fixtures.ts` — Playwright fixture that dumps `window.__coverage__` to `frontend/coverage/e2e/.nyc_output/` after every test (mirrors the CT pattern in `tests/utils/coverage.ts`).
   - `frontend/tests/e2e/helpers.ts` — `VIEWS` catalog, `loginViaUI`, `spaNavigate`, and `expectViewVisible` helpers. Uses `history.pushState` + `popstate` dispatch for SPA navigation so the in-memory `authToken` reactive var survives between routes.
