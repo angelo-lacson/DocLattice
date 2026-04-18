@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Route component and ExtractDetail view test coverage** (Issue #1285): Closed coverage gaps for zero-coverage route wrappers and the 7%-covered `ExtractDetail.tsx` orchestrator.
+  - `frontend/src/components/routes/__tests__/ExtractDetailRoute.test.tsx` — 6 vitest specs covering missing-ID, reactive-var reuse, loading, error, not-found, and success paths for the slug-resolving extract route.
+  - `frontend/src/components/routes/__tests__/ExtractLandingRoute.test.tsx` — 4 specs for the legacy `/e/:user/:extract` route, including the redirect to `/extracts/:id` when the reactive var is populated.
+  - `frontend/src/components/routes/__tests__/LabelSetLandingRoute.test.tsx` — 5 specs for loading/error/success state and `onClose` cleanup.
+  - `frontend/src/components/routes/__tests__/GlobalDiscussionsRoute.test.tsx` — smoke test for the thin route wrapper.
+  - `frontend/src/components/routes/__tests__/NotFound.test.tsx` — renders 404 UI and verifies the "Go to Corpuses" button navigates back.
+  - `frontend/src/components/routes/__tests__/UserProfileRoute.test.tsx` — 7 specs covering `/profile` redirects (anonymous → `/login`, logged-in → `/users/<slug>`), loading, error, not-found, and own-vs-other profile flags.
+  - `frontend/tests/ExtractDetail.ct.tsx` + `ExtractDetailTestWrapper.tsx` + `ExtractDetailFixtures.ts` — 17 Playwright CT specs exercising the extract-detail view's header, status chips, StatBlocks, running/failed/completed state swaps, Data/Documents/Schema tabs, CreateColumnModal/ConfirmModal integration, and the Export-CSV enable/disable gating.
+  - `frontend/tests/e2e/routing-round-trip.spec.ts` — Playwright E2E spec covering the URL → entity → back round-trip for corpuses, documents, deep-link replay, and the unknown-route `NotFound` fallback. Runs after the corpus-workflow spec so the necessary seed data exists.
+  - Verification: 36 route vitest specs pass (`yarn test:unit --run src/components/routes/__tests__/`), 17 ExtractDetail CT specs pass (`yarn test:ct --reporter=list ExtractDetail.ct.tsx`), `tsc --noEmit` clean.
+  - Surfaced Issue #1295 (UserProfileRoute Rules-of-Hooks violation) as a follow-up.
+
 - **Codecov components for backend and frontend** (`.codecov.yml`): Added `component_management` with two components — Backend (`opencontractserver/**`, `config/**`) and Frontend (`frontend/src/**`) — grouping all five flags so PR comments and the Codecov UI show a single frontend number (union of unit + component + e2e) instead of five overlapping flag numbers. Component-level patch/project statuses now gate PRs per-area.
 - **Frontend coverage ROI audit** (`docs/coverage/frontend-roi-ranking.md`): Ranked every frontend source file by uncovered line count against the Codecov project-level (flag-union) report. Top 50 files, files at 0% coverage with >=100 lines, and per-area totals. Source for prioritizing targeted coverage work.
 - **Frontend error-path test coverage** (Issue #1270): Added targeted unit tests covering error boundaries, the Apollo error link, and `catch` blocks in utility modules. Previously these branches were effectively untested, leaving regressions in auth error handling, file download failures, and error boundary fallback UI undetectable in CI.
