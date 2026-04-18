@@ -1,7 +1,4 @@
-// Component tests for ModernDocumentItem — complements
-// document-failure-overlay.ct.tsx with coverage for the happy-path rendering,
-// permission-gated actions, context menu, version history, and the
-// relationship badge/popup system. See issue #1280.
+// Component tests for ModernDocumentItem — see issue #1280.
 
 import React from "react";
 import { test, expect } from "./utils/coverage";
@@ -59,6 +56,10 @@ function mount(
  * DndContext's useDraggable listeners intercept pointer events on the
  * container, preventing React's synthetic click events from reaching children.
  * Invoke the React onClick handler directly via the __reactProps$ fiber.
+ *
+ * Tested against React 18.x. The `__reactProps$` key is a React internal with
+ * no semver guarantee — if this breaks after a React upgrade, check whether
+ * DndContext now forwards pointer events to children and remove this shim.
  */
 async function clickViaReact(
   page: import("@playwright/test").Page,
@@ -67,9 +68,7 @@ async function clickViaReact(
   await page.evaluate((sel) => {
     const el = document.querySelector(sel);
     if (!el) throw new Error(`Element not found: ${sel}`);
-    const propsKey = Object.keys(el).find((k) =>
-      k.startsWith("__reactProps$")
-    );
+    const propsKey = Object.keys(el).find((k) => k.startsWith("__reactProps$"));
     if (!propsKey) throw new Error("React props not found on element");
     const props = (el as any)[propsKey];
     if (typeof props?.onClick !== "function")
@@ -102,7 +101,10 @@ test.describe("ModernDocumentItem — card view rendering", () => {
     await expect(page.locator("img.fallback-icon")).toHaveCount(1);
   });
 
-  test("renders custom icon when provided", async ({ mount: mountFn, page }) => {
+  test("renders custom icon when provided", async ({
+    mount: mountFn,
+    page,
+  }) => {
     const doc = makeDocument({ icon: "https://example.com/icon.png" });
 
     await mount(<ModernDocumentItem item={doc} viewMode="card" />, mountFn);
@@ -147,9 +149,7 @@ test.describe("ModernDocumentItem — card view rendering", () => {
     await mount(<ModernDocumentItem item={doc} viewMode="card" />, mountFn);
 
     // VersionBadge renders a role="button" when hasHistory is true
-    await expect(
-      page.getByRole("button", { name: /Version 3/ })
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /Version 3/ })).toBeVisible();
   });
 
   test("shows relationship badge with count when relationships exist", async ({
@@ -475,9 +475,7 @@ test.describe("ModernDocumentItem — action buttons", () => {
 
     await clickViaReact(page, 'button[title="Remove"]');
 
-    await expect
-      .poll(() => removedIds.length, { timeout: 2000 })
-      .toBe(1);
+    await expect.poll(() => removedIds.length, { timeout: 2000 }).toBe(1);
     expect(removedIds[0]).toBe(doc.id);
   });
 
@@ -502,9 +500,7 @@ test.describe("ModernDocumentItem — action buttons", () => {
 
     await clickViaReact(page, 'button[title="Open"]');
 
-    await expect
-      .poll(() => clicked, { timeout: 2000 })
-      .toBe(doc.id);
+    await expect.poll(() => clicked, { timeout: 2000 }).toBe(doc.id);
   });
 
   test("hides download button when pdfFile is missing", async ({
@@ -572,7 +568,7 @@ test.describe("ModernDocumentItem — processing state", () => {
     ).toBeVisible();
   });
 
-  test("backend lock disables action buttons' disabled state", async ({
+  test("disables action buttons when backendLock is true", async ({
     mount: mountFn,
     page,
   }) => {
@@ -594,7 +590,8 @@ test.describe("ModernDocumentItem — processing state", () => {
 //
 // DndContext pointer listeners don't intercept contextmenu, but to avoid
 // relying on coordinate-based click targeting we walk up the DOM from a known
-// element and invoke the React onContextMenu prop directly.
+// element and invoke the React onContextMenu prop directly. Same React 18.x
+// `__reactProps$` caveat as clickViaReact applies.
 // ---------------------------------------------------------------------------
 
 async function openContextMenu(page: import("@playwright/test").Page) {

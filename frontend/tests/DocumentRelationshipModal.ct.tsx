@@ -1,17 +1,22 @@
 import { test, expect } from "./utils/coverage";
 import { MockedResponse } from "@apollo/client/testing";
+// Keep the wrapper component import in its own statement: Playwright CT's
+// babel transform only rewrites JSX-component imports into importRefs when
+// every specifier in the source `import { ... }` is a JSX component; mixing
+// component exports with helper/constant exports in the same import leaves
+// the component unrewritten and mounting then throws.
+import { DocumentRelationshipModalTestWrapper } from "./DocumentRelationshipModalTestWrapper";
 import {
-  DocumentRelationshipModalTestWrapper,
   makeMockRelationLabel,
+  TEST_CORPUS_ID,
 } from "./DocumentRelationshipModalTestWrapper";
 import {
   CREATE_DOCUMENT_RELATIONSHIP,
   SMART_LABEL_SEARCH_OR_CREATE,
 } from "../src/graphql/mutations";
 import { LabelType } from "../src/types/graphql-api";
+import { OS_LEGAL_COLORS } from "../src/assets/configurations/osLegalStyles";
 import { docScreenshot } from "./utils/docScreenshot";
-
-const TEST_CORPUS_ID = "corpus-1";
 
 test.describe("DocumentRelationshipModal", () => {
   test("renders modal header", async ({ mount, page }) => {
@@ -309,11 +314,7 @@ test.describe("DocumentRelationshipModal — state transitions", () => {
 
     // Click the first Cancel button in the document (the in-section toggle
     // renders before the footer Cancel in DOM order) to close the search
-    await page
-      .locator("button")
-      .filter({ hasText: "Cancel" })
-      .first()
-      .click();
+    await page.locator("button").filter({ hasText: "Cancel" }).first().click();
 
     await expect(
       page.getByPlaceholder("Search documents in corpus...")
@@ -413,9 +414,7 @@ test.describe("DocumentRelationshipModal — state transitions", () => {
     mount,
     page,
   }) => {
-    await mount(
-      <DocumentRelationshipModalTestWrapper initialSourceIds={[]} />
-    );
+    await mount(<DocumentRelationshipModalTestWrapper initialSourceIds={[]} />);
 
     await page.waitForSelector('text="Link Documents"', { timeout: 10000 });
 
@@ -580,9 +579,7 @@ test.describe("DocumentRelationshipModal — submit", () => {
     await page.getByRole("button", { name: /Create Relationship/ }).click();
 
     // The onSuccess callback should fire once the mutation resolves
-    await expect
-      .poll(() => onSuccessCalled, { timeout: 5000 })
-      .toBe(true);
+    await expect.poll(() => onSuccessCalled, { timeout: 5000 }).toBe(true);
   });
 
   test("submits NOTES mutation with optional content", async ({
@@ -668,9 +665,7 @@ test.describe("DocumentRelationshipModal — submit", () => {
     await expect(submitBtn).toBeEnabled();
     await submitBtn.click();
 
-    await expect
-      .poll(() => onSuccessCalled, { timeout: 5000 })
-      .toBe(true);
+    await expect.poll(() => onSuccessCalled, { timeout: 5000 }).toBe(true);
   });
 
   test("reports mutation failure via toast without onSuccess", async ({
@@ -723,13 +718,15 @@ test.describe("DocumentRelationshipModal — submit", () => {
     const submitBtn = page.getByRole("button", { name: /Create Relationship/ });
     await submitBtn.click();
 
-    // Give the mutation time to resolve
-    await page.waitForTimeout(2000);
+    // Modal should still be open after the failed mutation (the failure path
+    // does not close the modal). Use a visibility assertion instead of a fixed
+    // sleep so we only wait as long as needed for the mutation to settle.
+    await expect(page.getByText("Link Documents")).toBeVisible({
+      timeout: 5000,
+    });
 
-    // onSuccess should NOT be invoked when all mutations fail
-    expect(onSuccessCalled).toBe(false);
-    // Modal should still be open (submit path does not close on full failure)
-    await expect(page.getByText("Link Documents")).toBeVisible();
+    // onSuccess should NOT be invoked when all mutations fail.
+    await expect.poll(() => onSuccessCalled, { timeout: 3000 }).toBe(false);
   });
 });
 
@@ -760,11 +757,7 @@ test.describe("DocumentRelationshipModal — create-label flow", () => {
 
     // Cancel the form — the first "Cancel" button in DOM order is the
     // in-form one; the footer's Cancel comes last.
-    await page
-      .locator("button")
-      .filter({ hasText: "Cancel" })
-      .first()
-      .click();
+    await page.locator("button").filter({ hasText: "Cancel" }).first().click();
 
     // The dropdown returns
     await expect(page.getByText("Search or type to create...")).toBeVisible();
@@ -781,8 +774,7 @@ test.describe("DocumentRelationshipModal — create-label flow", () => {
           corpusId: TEST_CORPUS_ID,
           searchTerm: "supersedes",
           labelType: LabelType.RelationshipLabel,
-          // Default color in the component is OS_LEGAL_COLORS.greenMedium
-          color: "#10b981",
+          color: OS_LEGAL_COLORS.greenMedium,
           description: "",
           createIfNotFound: true,
         },
