@@ -201,10 +201,37 @@ test.describe("ChatMessage — selection", () => {
       </ChatMessageTestWrapper>
     );
 
-    // Source indicator exposed by data-testid
+    // Source indicator exposed by data-testid. Singular "source" label exercises
+    // the `sources.length === 1` branch of the new pluralisation ternary.
     const indicator = page.locator('[data-testid="source-indicator"]');
     await expect(indicator).toBeVisible({ timeout: 5000 });
     await expect(indicator).toContainText("1 source");
+    await expect(indicator).not.toContainText("sources");
+  });
+
+  test("source indicator falls back to 'View sources' when hasSources but sources is empty", async ({
+    mount,
+    page,
+  }) => {
+    // Explicit `hasSources` forces the indicator to render even though the
+    // sources array is empty — this exercises the else branch of the new
+    // pluralisation ternary (`"View sources"`).
+    await mount(
+      <ChatMessageTestWrapper>
+        <ChatMessage
+          {...ASSISTANT_BASE}
+          content="Awaiting source hydration."
+          isComplete={true}
+          timeline={[]}
+          sources={[]}
+          hasSources={true}
+        />
+      </ChatMessageTestWrapper>
+    );
+
+    const indicator = page.locator('[data-testid="source-indicator"]');
+    await expect(indicator).toBeVisible({ timeout: 5000 });
+    await expect(indicator).toContainText("View sources");
   });
 });
 
