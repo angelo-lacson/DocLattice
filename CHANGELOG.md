@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Harden backend CI path-filter job** (Issue #1290, `.github/workflows/backend.yml`): Tightened the `changes` path-filter job so transient `dorny/paths-filter` failures no longer silently skip `linter` / `pytest`.
+  - Dropped the redundant `actions/checkout` step in the `changes` job — `dorny/paths-filter@v3` fetches diffs via the GitHub API and does not need a local clone.
+  - Added `Dockerfile*` to the backend path filter so root-level Dockerfile changes (which directly affect the backend build environment) correctly trigger backend CI.
+  - Marked the `changes` job `continue-on-error: true` so a transient GitHub API failure does not fail the workflow.
+  - Changed the downstream gate from `needs.changes.outputs.backend == 'true'` to `needs.changes.outputs.backend != 'false'` on both `linter` and `pytest`. With `continue-on-error: true`, a failed `changes` job produces an empty-string output; the old `== 'true'` gate evaluated to `false` for PR events and silently skipped downstream jobs — the exact failure mode the "fail open" comment claimed to prevent. The new `!= 'false'` gate runs downstream jobs for both the happy path (`'true'`) and the transient-failure path (`''`), only skipping when the filter explicitly reports no backend changes (`'false'`).
+  - Reworded the linter path-filter comment to clarify that gating only affects PRs with no backend changes; push events to protected branches still run unconditionally.
+
 ### Fixed
 
 - **`useAgentChat` WebSocket reconnects on every approval-gate transition** (Issue #1296): `frontend/src/hooks/useAgentChat.ts` had `pendingApproval` in the main WebSocket `useEffect` dependency array, so every `ASYNC_APPROVAL_NEEDED` / `ASYNC_APPROVAL_RESULT` / `ASYNC_CONTENT` / `ASYNC_FINISH` message that set or cleared approval state tore the socket down and recreated it mid-conversation. Impacts: approval decisions could race the reconnect and silently fail (`isConnected` flipped to `false` before the fresh socket opened), in-flight streaming tokens were dropped whenever an approval gate opened/closed, and the server saw a brand-new consumer attaching mid-run. Fix: mirror `pendingApproval` in a `pendingApprovalRef` updated by a separate effect (`useAgentChat.ts:291-299`), read `pendingApprovalRef.current` from the `ASYNC_CONTENT` / `ASYNC_APPROVAL_RESULT` / `ASYNC_FINISH` branches of `onmessage` (`useAgentChat.ts:651-752`), and drop `pendingApproval` from the socket effect's dependency array (`useAgentChat.ts:802-818`). Tests in `frontend/src/hooks/__tests__/useAgentChat.test.tsx`: removed the previous `_open()` workarounds around approval events, replaced the old "reconnects on approval state change" regression test with a new `does not reconnect the socket when approval state changes (issue #1296)` guard that asserts `wsInstances.length` is unchanged, `originalSocket.close` was not called, and the approval decision is dispatched through the original socket. All 23 tests still pass.
