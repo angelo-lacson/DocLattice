@@ -329,7 +329,12 @@ test.beforeEach(async ({ page }) => {
               },
             });
           }
-        } catch {}
+        } catch (e) {
+          // Surface malformed payloads in the Playwright console so a
+          // timeout here doesn't look like a silent hang.
+          // eslint-disable-next-line no-console
+          console.warn("[StubSocket] send() parse error", e);
+        }
       }
 
       close() {

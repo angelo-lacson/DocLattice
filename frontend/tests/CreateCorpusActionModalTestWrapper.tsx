@@ -1,5 +1,6 @@
 import React from "react";
 import { MockedProvider, MockedResponse } from "@apollo/client/testing";
+import { InMemoryCache } from "@apollo/client";
 import { Provider as JotaiProvider } from "jotai";
 import { ToastContainer } from "react-toastify";
 import {
@@ -31,9 +32,12 @@ export const CreateCorpusActionModalTestWrapper: React.FC<Props> = ({
   onSuccess = () => {},
   actionToEdit = null,
 }) => {
+  // Per CLAUDE.md pitfall #8, keep cache inside the wrapper so Playwright's
+  // per-test serialization never crosses an Apollo cache instance.
+  const cache = new InMemoryCache({ addTypename: false });
   return (
     <JotaiProvider>
-      <MockedProvider mocks={mocks} addTypename={false}>
+      <MockedProvider mocks={mocks} addTypename={false} cache={cache}>
         <div style={{ width: "100vw", height: "100vh" }}>
           <CreateCorpusActionModal
             corpusId={corpusId}
