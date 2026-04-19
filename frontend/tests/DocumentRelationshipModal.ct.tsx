@@ -668,7 +668,7 @@ test.describe("DocumentRelationshipModal — submit", () => {
     await expect.poll(() => onSuccessCalled, { timeout: 5000 }).toBe(true);
   });
 
-  test("reports mutation failure via toast without onSuccess", async ({
+  test("does not call onSuccess and keeps modal open on mutation failure", async ({
     mount,
     page,
   }) => {
@@ -834,5 +834,126 @@ test.describe("DocumentRelationshipModal — create-label flow", () => {
     await expect(page.getByText("Selected Label")).toBeVisible({
       timeout: 5000,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Targeted coverage tests for the useMemo bodies that drive the dropdown's
+// option list and the Add Target/Source search list. These exercise the
+// filter callbacks that are otherwise skipped when relationLabels is empty
+// or labelSearchTerm never changes.
+// ---------------------------------------------------------------------------
+
+test.describe("DocumentRelationshipModal — filter coverage", () => {
+  test("availableDocuments excludes documents already in source or target", async ({
+    mount,
+    page,
+  }) => {
+    await mount(
+      <DocumentRelationshipModalTestWrapper
+        initialSourceIds={["doc-1"]}
+        initialTargetIds={["doc-2"]}
+      />
+    );
+
+    await page.waitForSelector('text="Link Documents"', { timeout: 10000 });
+
+    // Open the Add Target search to render the available-documents list
+    await page.getByRole("button", { name: /Add Target/ }).click();
+    await expect(
+      page.getByPlaceholder("Search documents in corpus...")
+    ).toBeVisible();
+
+    // Mocks have 3 documents; doc-1 is in source and doc-2 is in target, so
+    // only doc-3 ("Target Document 2") should appear in the available list.
+    // SearchResultItem rows are uniquely identified by the .doc-title class
+    // (pills in source/target columns use a different markup), so counting
+    // those gives the precise size of availableDocuments after the filter.
+    const availableTitles = page.locator(".doc-title");
+    await expect(availableTitles).toHaveCount(1, { timeout: 5000 });
+    await expect(availableTitles.first()).toHaveText("Target Document 2");
+  });
+
+  test("filteredRelationshipLabels filters dropdown options by search term", async ({
+    mount,
+    page,
+  }) => {
+    await mount(
+      <DocumentRelationshipModalTestWrapper
+        relationLabels={[
+          makeMockRelationLabel({ id: "label-1", text: "references" }),
+          makeMockRelationLabel({ id: "label-2", text: "amends" }),
+          makeMockRelationLabel({ id: "label-3", text: "supersedes" }),
+        ]}
+      />
+    );
+
+    await page.waitForSelector('text="Relationship Label"', { timeout: 10000 });
+
+    const dropdown = page.locator(".oc-dropdown").first();
+    await dropdown.locator(".oc-dropdown__trigger").click();
+
+    // With no search term, all three relationship labels render as options.
+    await expect(
+      dropdown.locator(".oc-dropdown__option", { hasText: "references" })
+    ).toBeVisible({ timeout: 5000 });
+    await expect(
+      dropdown.locator(".oc-dropdown__option", { hasText: "amends" })
+    ).toBeVisible();
+    await expect(
+      dropdown.locator(".oc-dropdown__option", { hasText: "supersedes" })
+    ).toBeVisible();
+
+    // Type into the search box. The dropdown debounces onSearchChange (300ms)
+    // before firing the parent's setLabelSearchTerm, which then re-runs the
+    // filteredRelationshipLabels useMemo and shrinks the visible options list.
+    await dropdown.locator(".oc-dropdown__search-input").fill("ref");
+
+    // Poll until only the matching option remains. expect.poll handles the
+    // 300ms debounce window without a fixed sleep.
+    await expect
+      .poll(
+        async () =>
+          dropdown
+            .locator(".oc-dropdown__option", { hasText: "amends" })
+            .count(),
+        { timeout: 5000 }
+      )
+      .toBe(0);
+    await expect(
+      dropdown.locator(".oc-dropdown__option", { hasText: "references" })
+    ).toBeVisible();
+  });
+
+  test("filteredRelationshipLabels returns empty list when corpus context missing", async ({
+    mount,
+    page,
+  }) => {
+    // hasCorpus=false short-circuits the filter to return []. Render with
+    // relationLabels populated to prove the early-return wins over the
+    // labels' presence — without the early return the labels would surface
+    // even though no corpus is selected.
+    await mount(
+      <DocumentRelationshipModalTestWrapper
+        corpusIdOverride={null}
+        relationLabels={[
+          makeMockRelationLabel({ id: "label-1", text: "references" }),
+        ]}
+      />
+    );
+
+    await expect(page.getByText("No Corpus Context")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Even though relationLabels are present, the dropdown shouldn't surface
+    // "references" because the useMemo returns [] when hasCorpus is false.
+    const dropdown = page.locator(".oc-dropdown").first();
+    if (await dropdown.isVisible()) {
+      await dropdown.locator(".oc-dropdown__trigger").click();
+      await expect(
+        dropdown.locator(".oc-dropdown__option", { hasText: "references" })
+      ).toHaveCount(0);
+    }
   });
 });

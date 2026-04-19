@@ -13,7 +13,13 @@ import { AnnotationLabelType, LabelType } from "../src/types/graphql-api";
 // Test corpus ID
 export const TEST_CORPUS_ID = "corpus-1";
 
-/** Resolve the effective corpus id for mocks and the component prop. */
+/**
+ * Resolve the effective corpus id for both the GET_DOCUMENTS mock and the
+ * component prop. Behavior:
+ *   undefined → use TEST_CORPUS_ID (default test path)
+ *   null      → "" (intentionally triggers the "No Corpus Context" error UI)
+ *   string    → use as-is
+ */
 const resolveCorpusId = (override: string | null | undefined) =>
   override === undefined ? TEST_CORPUS_ID : override ?? "";
 
@@ -238,7 +244,8 @@ export function makeMockRelationLabel(
     text: "references",
     description: "Document references another",
     color: "#14b8a6",
-    icon: null as any,
+    // `icon` is `?: string` on AnnotationLabelType (no `null` in the type),
+    // so leave it undefined for fixtures that don't need an icon.
     labelType: LabelType.RelationshipLabel,
     myPermissions: [],
     isPublic: false,
