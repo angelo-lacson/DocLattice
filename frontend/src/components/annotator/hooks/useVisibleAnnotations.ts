@@ -53,8 +53,7 @@ export function useVisibleAnnotations(): (
 
     const forcedIds = new Set(forcedBySelection);
 
-    /* selecting a relation is an explicit user gesture — its member
-       annotations must be visible regardless of the structural toggle */
+    // Explicit relation selection always wins — not gated on showStructural (unlike forcedByRelationships).
     forcedBySelectedRelationIds.forEach((id) => forcedIds.add(id));
 
     if (showStructural) {
