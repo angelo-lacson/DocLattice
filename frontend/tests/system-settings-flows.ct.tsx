@@ -3,6 +3,7 @@
 // default-embedder modal, non-secret config save, mobile tab keyboard
 // navigation, and mutation error paths.
 import React from "react";
+import type { Page } from "@playwright/test";
 import { test, expect } from "./utils/coverage";
 import { SystemSettingsWrapper } from "./AdminComponentsTestWrapper";
 import {
@@ -140,7 +141,7 @@ const mimeTypesMock = {
   result: { data: { supportedMimeTypes: mockMimeTypes } },
 };
 
-const waitForLoad = async (page: any) => {
+const waitForLoad = async (page: Page) => {
   await expect(
     page.locator("h1:has-text('Pipeline Configuration')")
   ).toBeVisible({ timeout: 5000 });

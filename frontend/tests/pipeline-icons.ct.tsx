@@ -7,18 +7,7 @@ import {
   PipelineIconDispatcherWrapper,
   PipelineDisplayNameWrapper,
 } from "./PipelineIconsTestWrapper";
-
-const PIPELINE_ICON_NAMES = [
-  "DoclingIcon",
-  "LlamaParseIcon",
-  "TextParserIcon",
-  "PdfThumbnailIcon",
-  "TextThumbnailIcon",
-  "ModernBertIcon",
-  "SentenceTransformerIcon",
-  "MultimodalIcon",
-  "GenericComponentIcon",
-];
+import { PIPELINE_ICON_NAMES } from "./pipeline-icons.ct-constants";
 
 test.describe("PipelineIcons — full catalog rendering", () => {
   test("mounts every exported icon component at default size", async ({
