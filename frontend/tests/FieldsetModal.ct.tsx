@@ -16,7 +16,10 @@
 import React from "react";
 import { test, expect } from "./utils/coverage";
 import { FieldsetModalTestWrapper } from "./FieldsetModalTestWrapper";
-import { buildGetFieldsetMock } from "./FieldsetModalMocks";
+import {
+  buildGetFieldsetMock,
+  DEFAULT_EXTRACT_TASK_NAME,
+} from "./FieldsetModalMocks";
 import { FieldsetType, ColumnType } from "../src/types/graphql-api";
 
 // ---------------------------------------------------------------------------
@@ -34,8 +37,7 @@ const existingColumn: ColumnType = {
   limitToLabel: "",
   instructions: "Look for dates near the header",
   extractIsList: false,
-  taskName:
-    "opencontractserver.tasks.data_extract_tasks.doc_extract_query_task",
+  taskName: DEFAULT_EXTRACT_TASK_NAME,
 };
 
 const existingFieldset = {

@@ -11,6 +11,11 @@ import type {
   FieldsetType,
 } from "../src/types/graphql-api";
 
+// Note: `FieldsetType` is imported only for the `buildFieldsetsMock`
+// parameter typing — a `makeFieldset` fixture factory was removed after the
+// fieldset tab tests switched to explicit inline fixtures (no consumers
+// remaining). Re-add if future tests need a minimal factory.
+
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
@@ -31,22 +36,6 @@ export const makeAnalyzer = (
     ...overrides,
   } as AnalyzerType);
 
-/** Build a minimal FieldsetType fixture. */
-export const makeFieldset = (
-  overrides: Partial<FieldsetType> & Pick<FieldsetType, "id" | "name">
-): FieldsetType =>
-  ({
-    __typename: "FieldsetType",
-    description: "",
-    inUse: false,
-    creator: { __typename: "UserType", id: "u1", username: "alice" },
-    columns: {
-      __typename: "ColumnTypeEdge",
-      edges: [],
-    },
-    ...overrides,
-  } as FieldsetType);
-
 export const SAMPLE_CORPUS: CorpusType = {
   __typename: "CorpusType",
   id: "corpus-1",
@@ -63,7 +52,11 @@ export const SAMPLE_CORPUS: CorpusType = {
 export const buildAnalyzersMock = (
   analyzers: AnalyzerType[]
 ): MockedResponse => ({
-  request: { query: GET_ANALYZERS, variables: {} },
+  // The component calls `useQuery(GET_ANALYZERS, { skip, fetchPolicy })`
+  // without explicit `variables`, so Apollo passes `undefined`. We omit the
+  // `variables` key here so MockedProvider's deep-equal matcher does not
+  // compare `{}` against `undefined` (which would silently miss).
+  request: { query: GET_ANALYZERS },
   result: {
     data: {
       analyzers: {

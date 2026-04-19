@@ -5,13 +5,14 @@ import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { FieldsetModal } from "../src/components/widgets/modals/FieldsetModal";
 import { GET_REGISTERED_EXTRACT_TASKS } from "../src/graphql/queries";
 import { FieldsetType } from "../src/types/graphql-api";
+import { DEFAULT_EXTRACT_TASK_NAME } from "./FieldsetModalMocks";
 
 const extractTasksMock: MockedResponse = {
   request: { query: GET_REGISTERED_EXTRACT_TASKS },
   result: {
     data: {
       registeredExtractTasks: {
-        "opencontractserver.tasks.data_extract_tasks.doc_extract_query_task":
+        [DEFAULT_EXTRACT_TASK_NAME]:
           "Extract structured data using LLM queries",
       },
     },
