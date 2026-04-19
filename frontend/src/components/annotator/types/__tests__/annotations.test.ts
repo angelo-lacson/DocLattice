@@ -252,9 +252,17 @@ describe("PdfAnnotations", () => {
       const undone = pdf.undoAnnotation();
       expect(undone).not.toBe(pdf);
       expect(undone.unsavedChanges).toBe(true);
-      // The pop on .annotations affects the original array, which is a known
-      // wrinkle we pin here. undone.annotations should contain only "a".
       expect(undone.annotations.map((x) => x.id)).toEqual(["a"]);
+    });
+
+    it("does not mutate the original instance's annotations array", () => {
+      const a = makeToken("a");
+      const b = makeToken("b");
+      const originalInput = [a, b];
+      const pdf = new PdfAnnotations(originalInput, [], []);
+      pdf.undoAnnotation();
+      expect(pdf.annotations).toBe(originalInput);
+      expect(pdf.annotations.map((x) => x.id)).toEqual(["a", "b"]);
     });
 
     it("prunes any relations that referenced only the popped annotation", () => {
