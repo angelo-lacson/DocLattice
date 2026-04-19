@@ -15,6 +15,7 @@
  */
 import React from "react";
 import { test, expect } from "./utils/coverage";
+import { docScreenshot } from "./utils/docScreenshot";
 import { FieldsetModalTestWrapper } from "./FieldsetModalTestWrapper";
 import {
   buildGetFieldsetMock,
@@ -96,6 +97,8 @@ test.describe("FieldsetModal — create mode rendering", () => {
     await expect(
       page.getByRole("button", { name: "Create Fieldset" })
     ).toBeVisible();
+
+    await docScreenshot(page, "widgets--fieldset-modal--create-empty");
   });
 
   test("disables Create Fieldset while the form is incomplete", async ({
@@ -303,6 +306,8 @@ test.describe("FieldsetModal — edit mode", () => {
     await expect(
       page.locator("text=Editing existing fieldset definition")
     ).toBeVisible();
+
+    await docScreenshot(page, "widgets--fieldset-modal--edit-populated");
   });
 
   test("shows 'Update Fieldset' as enabled when prefilled data is valid", async ({
