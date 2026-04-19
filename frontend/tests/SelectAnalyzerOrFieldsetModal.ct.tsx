@@ -493,13 +493,15 @@ test.describe("SelectAnalyzerOrFieldsetModal — close behavior", () => {
     // the overlay non-interactive; wait for it to settle.
     await page.waitForTimeout(500);
 
-    // The overlay is a portaled motion.div with its own onClick={onClose}.
-    // Dispatching the event directly on the tagged element avoids pixel-
-    // click races with framer-motion's entrance animation.
-    await page
+    // Target the portaled motion.div overlay and click in its top-left
+    // corner — the ModalContainer sits in the centre with its own
+    // `stopPropagation` click handler, so clicking the overlay edge
+    // reliably propagates to `onClick={onClose}`.
+    const overlay = page
       .locator('[data-testid="select-analyzer-or-fieldset-overlay"]')
-      .first()
-      .dispatchEvent("click");
+      .first();
+    await expect(overlay).toBeVisible();
+    await overlay.click({ position: { x: 5, y: 5 }, force: true });
 
     await expect(page.locator("text=Start Analysis")).toBeHidden({
       timeout: 3000,
