@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`RelationGroup.updateForAnnotationDeletion` pre-filter length check** (Issue #1288): `frontend/src/components/annotator/types/annotations.ts:49-50` computed `nowSourceEmpty` / `nowTargetEmpty` from the pre-filter `this.sourceIds` / `this.targetIds`, so the "now empty" conditions were identical to the "before" conditions and the pruning branches that return `undefined` were dead code. Deleting the sole source or sole target of a relation left the relation orphaned, pointing at a deleted annotation id. Fixed by reading from the post-filter `newSourceIds` / `newTargetIds`. Called from `PdfAnnotations.undoAnnotation()`, so undo now properly drops any relation whose last source or target was the popped annotation. New regression tests under `RelationGroup > .updateForAnnotationDeletion()` cover all four pruning branches plus the survive-with-updated-ids and unchanged cases, and the existing `undoAnnotation` test that pinned the wrong behaviour was corrected.
+
 ### Added
 
 - **Extracts DataGrid & Detail component test coverage** (Issue #1282): Expanded Playwright component tests for the two biggest uncovered files in `frontend/src/components/extracts/`. Previously at 32.5% and 23.0% line coverage respectively (~990 uncovered lines combined); the new tests exercise the high-signal branches listed in the issue.
