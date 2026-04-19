@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Annotator hook / renderer / label-selector coverage** (Issue #1284): Added vitest coverage for the annotator hook layer plus Playwright CT coverage for the text and docx renderers and the enhanced label selector.
+  - `frontend/src/components/annotator/hooks/__tests__/AnnotationHooks.test.tsx` — 25 tests covering state-wrapper helpers, guard clauses, success paths, and relation side effects. Includes a regression that keeps a sibling annotation in state across a `useUpdateAnnotation` call.
+  - `frontend/tests/TxtAnnotator.ct.tsx`, `frontend/tests/DocxAnnotator.ct.tsx`, and `frontend/tests/EnhancedLabelSelector.ct.tsx` — CT suites driving prop-driven scenarios (visibility filtering, search highlights, chat sources, structural filtering, read-only mode).
+
+### Fixed
+
+- **`useUpdateAnnotation` lost sibling annotations on update** (`frontend/src/components/annotator/hooks/AnnotationHooks.tsx:386`): The hook called `replaceAnnotations([updatedAnnotation])`, which collapses the whole `annotations` array down to the single passed-in element. On any document with more than one annotation, updating one annotation silently dropped the others. Fixed by using `setPdfAnnotations` with a `.map` that swaps only the matching id; regression test added in `AnnotationHooks.test.tsx` (see `useUpdateAnnotation > updates one annotation in place without dropping siblings`).
+
 - **Extracts DataGrid & Detail component test coverage** (Issue #1282): Expanded Playwright component tests for the two biggest uncovered files in `frontend/src/components/extracts/`. Previously at 32.5% and 23.0% line coverage respectively (~990 uncovered lines combined); the new tests exercise the high-signal branches listed in the issue.
   - `frontend/tests/DataGrid.ct.tsx`: grew from 4 to 19 tests. New coverage: loading overlay (idle vs running copy), Document/column sort toggles, row-selection bulk-delete bar + callback, add-column modal, per-column edit modal, per-column delete confirmation (including the `fieldset.inUse` warning copy), add-documents FAB, a 4-type cell-rendering matrix (text/number/boolean/JSON object), corrected-data precedence, and `exportToCsv` via the imperative handle.
   - `frontend/tests/ExtractDetailContent.ct.tsx` + `frontend/tests/ExtractDetailContentTestWrapper.tsx` (both new): 16 tests covering the loading overlay, not-found state, stats panel, Data/Documents/Schema tabs, running-state spinner, failed-state Retry button + `startExtract` mutation, schema tab empty-vs-populated + Add Column + Delete Column confirmation, Documents tab empty state, and both imperative-handle methods (`exportToCsv`, `startExtract`) plus the `onExtractLoaded` callback.
