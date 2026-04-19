@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`useAgentChat` WebSocket reconnects on every approval-gate transition** (Issue #1296): `frontend/src/hooks/useAgentChat.ts` had `pendingApproval` in the main WebSocket `useEffect` dependency array, so every `ASYNC_APPROVAL_NEEDED` / `ASYNC_APPROVAL_RESULT` / `ASYNC_CONTENT` / `ASYNC_FINISH` message that set or cleared approval state tore the socket down and recreated it mid-conversation. Impacts: approval decisions could race the reconnect and silently fail (`isConnected` flipped to `false` before the fresh socket opened), in-flight streaming tokens were dropped whenever an approval gate opened/closed, and the server saw a brand-new consumer attaching mid-run. Fix: mirror `pendingApproval` in a `pendingApprovalRef` updated by a separate effect (`useAgentChat.ts:291-299`), read `pendingApprovalRef.current` from the `ASYNC_CONTENT` / `ASYNC_APPROVAL_RESULT` / `ASYNC_FINISH` branches of `onmessage` (`useAgentChat.ts:651-752`), and drop `pendingApproval` from the socket effect's dependency array (`useAgentChat.ts:802-818`). Tests in `frontend/src/hooks/__tests__/useAgentChat.test.tsx`: removed the previous `_open()` workarounds around approval events, replaced the old "reconnects on approval state change" regression test with a new `does not reconnect the socket when approval state changes (issue #1296)` guard that asserts `wsInstances.length` is unchanged, `originalSocket.close` was not called, and the approval decision is dispatched through the original socket. All 23 tests still pass.
+
 ### Added
 
 - **Extracts DataGrid & Detail component test coverage** (Issue #1282): Expanded Playwright component tests for the two biggest uncovered files in `frontend/src/components/extracts/`. Previously at 32.5% and 23.0% line coverage respectively (~990 uncovered lines combined); the new tests exercise the high-signal branches listed in the issue.
