@@ -392,11 +392,6 @@ describe("useAgentChat", () => {
   });
 
   describe("approval flow", () => {
-    // NOTE: `pendingApproval` is currently in the main useEffect's dep array
-    // (issue #1296), which forces a socket reconnect whenever approval state
-    // changes. The tests below re-open the freshly-created socket after any
-    // approval state transition so the next assertion runs against a live
-    // connection. Once #1296 is fixed, the extra `_open()` calls can be removed.
     it("opens approval modal on ASYNC_APPROVAL_NEEDED and clears on ASYNC_APPROVAL_RESULT", () => {
       const { result } = renderHook(
         () => useAgentChat({ context: { corpusId: "c-1" } }),
@@ -436,8 +431,6 @@ describe("useAgentChat", () => {
       );
       expect(waiting?.approvalStatus).toBe("awaiting");
 
-      // Approval state change reconnected the socket; reopen for next delivery.
-      act(() => latestSocket()._open());
       act(() =>
         latestSocket()._deliver({
           type: "ASYNC_APPROVAL_RESULT",
@@ -493,12 +486,7 @@ describe("useAgentChat", () => {
           },
         })
       );
-      // Approval-needed reconnected the socket; bring it back online before
-      // dispatching the decision so isConnected is true. See issue #1296.
-      act(() => latestSocket()._open());
-      // Capture the socket that will receive the decision — the next state
-      // change (pendingApproval → null inside sendApprovalDecision) will
-      // trigger yet another reconnect, moving `latestSocket()` past it.
+
       const decisionSocket = latestSocket();
 
       act(() => result.current.sendApprovalDecision(true));
@@ -514,14 +502,18 @@ describe("useAgentChat", () => {
       expect(msg?.approvalStatus).toBe("approved");
     });
 
-    it("reconnects the socket when approval state changes (regression, issue #1296)", () => {
-      // Documents existing behaviour: pendingApproval is in the main effect's
-      // dep array, so any transition into/out of an approval gate tears down
-      // the socket and creates a new one. Remove this test once #1296 is fixed.
-      renderHook(() => useAgentChat({ context: { corpusId: "c-1" } }), {
-        wrapper: createWrapper(),
-      });
+    it("does not reconnect the socket when approval state changes (issue #1296)", () => {
+      // Regression guard for issue #1296: prior to the fix, `pendingApproval`
+      // was in the main effect's dependency array, so entering/exiting an
+      // approval gate tore down the socket and created a new one mid-stream.
+      // The handlers now read `pendingApproval` via a ref, so the socket must
+      // stay open across approval-state transitions.
+      const { result } = renderHook(
+        () => useAgentChat({ context: { corpusId: "c-1" } }),
+        { wrapper: createWrapper() }
+      );
       act(() => latestSocket()._open());
+      const originalSocket = latestSocket();
       const socketsBefore = wsInstances.length;
 
       act(() =>
@@ -535,7 +527,19 @@ describe("useAgentChat", () => {
         })
       );
 
-      expect(wsInstances.length).toBeGreaterThan(socketsBefore);
+      // No new socket was created and the original one was not closed.
+      expect(wsInstances.length).toBe(socketsBefore);
+      expect(originalSocket.close).not.toHaveBeenCalled();
+      expect(result.current.isConnected).toBe(true);
+
+      // Sending the approval decision dispatches through the same socket.
+      act(() => result.current.sendApprovalDecision(true));
+      expect(originalSocket.send).toHaveBeenCalledTimes(1);
+
+      // Clearing the approval state (inside sendApprovalDecision) also must
+      // not trigger a reconnect.
+      expect(wsInstances.length).toBe(socketsBefore);
+      expect(originalSocket.close).not.toHaveBeenCalled();
     });
 
     it("sendApprovalDecision no-ops without pending approval", () => {
