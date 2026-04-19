@@ -46,8 +46,8 @@ export class RelationGroup {
     const newSourceIds = this.sourceIds.filter((id) => id !== a.id);
     const newTargetIds = this.targetIds.filter((id) => id !== a.id);
 
-    const nowSourceEmpty = this.sourceIds.length === 0;
-    const nowTargetEmpty = this.targetIds.length === 0;
+    const nowSourceEmpty = newSourceIds.length === 0;
+    const nowTargetEmpty = newTargetIds.length === 0;
 
     // Only target had any annotations, now it has none,
     // so delete.
