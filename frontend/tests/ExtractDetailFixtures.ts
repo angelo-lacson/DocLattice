@@ -157,7 +157,7 @@ export const buildExtractDetailMocks = ({
   const passthroughMutation = (query: any): MockedResponse => ({
     request: { query },
     variableMatcher: () => true,
-    result: { data: {} },
+    result: { data: null },
   });
 
   return [
