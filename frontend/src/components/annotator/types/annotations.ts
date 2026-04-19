@@ -68,10 +68,7 @@ export class RelationGroup {
       return undefined;
     }
 
-    // Preserve the original id and structural flag so the surviving relation
-    // is treated as the same entity by downstream persistence/diff logic.
-    // Without this, an undo that merely trimmed a member would create a
-    // ghost relation (new uuid) and silently drop the structural flag.
+    // Preserve id/structural so surviving relation stays the same entity.
     return new RelationGroup(
       newSourceIds,
       newTargetIds,
