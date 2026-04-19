@@ -68,7 +68,14 @@ export class RelationGroup {
       return undefined;
     }
 
-    return new RelationGroup(newSourceIds, newTargetIds, this.label);
+    // Preserve id/structural so surviving relation stays the same entity.
+    return new RelationGroup(
+      newSourceIds,
+      newTargetIds,
+      this.label,
+      this.id,
+      this.structural
+    );
   }
 
   static fromObject(obj: RelationGroup) {
