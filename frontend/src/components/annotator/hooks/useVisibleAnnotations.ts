@@ -53,10 +53,7 @@ export function useVisibleAnnotations(): (
 
     const forcedIds = new Set(forcedBySelection);
 
-    /* Explicit relation selection is a user-initiated signal — always force
-       its members visible, just like forcedBySelection. Unlike the
-       "show all structural relationships" toggle, this is a narrow,
-       user-driven request and shouldn't be gated on showStructural.       */
+    // Explicit relation selection always wins — not gated on showStructural (unlike forcedByRelationships).
     forcedBySelectedRelationIds.forEach((id) => forcedIds.add(id));
 
     if (showStructural) {
