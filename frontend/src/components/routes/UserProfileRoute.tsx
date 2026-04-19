@@ -21,15 +21,13 @@ export const UserProfileRoute: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const currentUser = useReactiveVar(backendUserObj);
 
-  // Always call hooks unconditionally — `skip: !slug` gates the network call.
-  // Reordering (early return before useQuery) violates the Rules of Hooks when
-  // the same fiber is reused across a redirect from /profile → /users/:slug.
+  // Must be unconditional — skip: !slug gates the network call; see #1295.
   const { data, loading, error } = useQuery<GetUserOutput, GetUserInput>(
     GET_USER,
     {
       variables: { slug: slug ?? "" },
       skip: !slug,
-    },
+    }
   );
 
   // If no slug provided, redirect to current user's profile
