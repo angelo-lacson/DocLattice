@@ -12,28 +12,35 @@ import {
   getComponentIcon,
   getComponentDisplayName,
 } from "../src/components/admin/PipelineIcons";
+import { PIPELINE_ICON_NAMES } from "./pipeline-icons.ct-constants";
 
 // ---------------------------------------------------------------------------
-// Shared catalog of pipeline icons. Mounted by the catalog wrapper so that a
-// single CT run exercises every exported component (React function + render
-// branches that depend on default props).
+// Catalog of pipeline icons, paired to the name list in pipeline-icons.ct-
+// constants.ts so the wrapper and the test file can't silently drift when a
+// new icon is added. Adding an icon component here without extending
+// PIPELINE_ICON_NAMES (or vice versa) will fail the compile-time check below.
+// Non-component exports live in the sibling constants module because
+// Playwright CT's babel plugin treats *TestWrapper.tsx as a component file.
 // ---------------------------------------------------------------------------
-const ALL_ICON_COMPONENTS = [
-  { name: "DoclingIcon", Component: DoclingIcon },
-  { name: "LlamaParseIcon", Component: LlamaParseIcon },
-  { name: "TextParserIcon", Component: TextParserIcon },
-  { name: "PdfThumbnailIcon", Component: PdfThumbnailIcon },
-  { name: "TextThumbnailIcon", Component: TextThumbnailIcon },
-  { name: "ModernBertIcon", Component: ModernBertIcon },
-  { name: "SentenceTransformerIcon", Component: SentenceTransformerIcon },
-  { name: "MultimodalIcon", Component: MultimodalIcon },
-  { name: "GenericComponentIcon", Component: GenericComponentIcon },
-];
+const ICON_COMPONENTS_BY_NAME: Record<
+  (typeof PIPELINE_ICON_NAMES)[number],
+  React.FC<any>
+> = {
+  DoclingIcon,
+  LlamaParseIcon,
+  TextParserIcon,
+  PdfThumbnailIcon,
+  TextThumbnailIcon,
+  ModernBertIcon,
+  SentenceTransformerIcon,
+  MultimodalIcon,
+  GenericComponentIcon,
+};
 
-/** Names used by the test file to drive per-icon assertions. */
-export const PIPELINE_ICON_NAMES: string[] = ALL_ICON_COMPONENTS.map(
-  (entry) => entry.name
-);
+const ALL_ICON_COMPONENTS = PIPELINE_ICON_NAMES.map((name) => ({
+  name,
+  Component: ICON_COMPONENTS_BY_NAME[name],
+}));
 
 /**
  * Mounts the full catalog of pipeline icons at default size. The data-testid

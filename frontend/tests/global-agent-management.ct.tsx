@@ -3,124 +3,19 @@
 // update, and delete code paths plus form validation + error branches.
 import React from "react";
 import { test, expect } from "./utils/coverage";
-import { gql } from "@apollo/client";
 import {
   GlobalAgentManagementWrapper,
   GlobalAgentManagementWithToastsWrapper,
 } from "./AdminComponentsTestWrapper";
-
-// GraphQL operation documents mirrored from GlobalAgentManagement.tsx. The
-// @apollo/client MockedProvider matches by query document identity, so the
-// strings must be kept in sync with the component.
-const GET_GLOBAL_AGENTS = gql`
-  query GetGlobalAgents {
-    agentConfigurations(scope: "GLOBAL") {
-      edges {
-        node {
-          id
-          name
-          slug
-          description
-          systemInstructions
-          availableTools
-          permissionRequiredTools
-          badgeConfig
-          avatarUrl
-          scope
-          isActive
-          isPublic
-          creator {
-            id
-            username
-          }
-          created
-          modified
-        }
-      }
-    }
-  }
-`;
-
-const CREATE_AGENT_CONFIGURATION = gql`
-  mutation CreateAgentConfiguration(
-    $name: String!
-    $description: String!
-    $systemInstructions: String!
-    $availableTools: [String]
-    $permissionRequiredTools: [String]
-    $badgeConfig: JSONString
-    $avatarUrl: String
-    $scope: String!
-    $isPublic: Boolean
-  ) {
-    createAgentConfiguration(
-      name: $name
-      description: $description
-      systemInstructions: $systemInstructions
-      availableTools: $availableTools
-      permissionRequiredTools: $permissionRequiredTools
-      badgeConfig: $badgeConfig
-      avatarUrl: $avatarUrl
-      scope: $scope
-      isPublic: $isPublic
-    ) {
-      ok
-      message
-      agent {
-        id
-        name
-        slug
-        description
-      }
-    }
-  }
-`;
-
-const UPDATE_AGENT_CONFIGURATION = gql`
-  mutation UpdateAgentConfiguration(
-    $agentId: ID!
-    $name: String
-    $description: String
-    $systemInstructions: String
-    $availableTools: [String]
-    $permissionRequiredTools: [String]
-    $badgeConfig: JSONString
-    $avatarUrl: String
-    $isActive: Boolean
-    $isPublic: Boolean
-  ) {
-    updateAgentConfiguration(
-      agentId: $agentId
-      name: $name
-      description: $description
-      systemInstructions: $systemInstructions
-      availableTools: $availableTools
-      permissionRequiredTools: $permissionRequiredTools
-      badgeConfig: $badgeConfig
-      avatarUrl: $avatarUrl
-      isActive: $isActive
-      isPublic: $isPublic
-    ) {
-      ok
-      message
-      agent {
-        id
-        name
-        slug
-        description
-      }
-    }
-  }
-`;
-
-const DELETE_AGENT_CONFIGURATION = gql`
-  mutation DeleteAgentConfiguration($agentId: ID!) {
-    deleteAgentConfiguration(agentId: $agentId) {
-      ok
-      message
-    }
-  }
-`;
+// Import the same GraphQL documents the production component uses so a
+// field/variable change on one side is caught by tsc or a mock miss,
+// rather than silently desyncing the test copy.
+import {
+  GET_GLOBAL_AGENTS,
+  CREATE_GLOBAL_AGENT_CONFIGURATION,
+  UPDATE_GLOBAL_AGENT_CONFIGURATION,
+  DELETE_GLOBAL_AGENT_CONFIGURATION,
+} from "../src/components/admin/global_agent_management.graphql";
 
 const baseAgent = {
   id: "QWdlbnRDb25maWd1cmF0aW9uVHlwZTox",
@@ -393,7 +288,7 @@ test.describe("GlobalAgentManagement — create flow", () => {
   }) => {
     const createMock = {
       request: {
-        query: CREATE_AGENT_CONFIGURATION,
+        query: CREATE_GLOBAL_AGENT_CONFIGURATION,
         variables: {
           name: "New Test Agent",
           description: "New description",
@@ -506,7 +401,7 @@ test.describe("GlobalAgentManagement — create flow", () => {
   }) => {
     const failingCreateMock = {
       request: {
-        query: CREATE_AGENT_CONFIGURATION,
+        query: CREATE_GLOBAL_AGENT_CONFIGURATION,
         variables: {
           name: "Conflict Agent",
           description: "desc",
@@ -621,7 +516,7 @@ test.describe("GlobalAgentManagement — edit flow", () => {
 
     const updateMock = {
       request: {
-        query: UPDATE_AGENT_CONFIGURATION,
+        query: UPDATE_GLOBAL_AGENT_CONFIGURATION,
         variables: {
           agentId: baseAgent.id,
           name: "Research Assistant v2",
@@ -763,7 +658,7 @@ test.describe("GlobalAgentManagement — delete flow", () => {
   }) => {
     const deleteMock = {
       request: {
-        query: DELETE_AGENT_CONFIGURATION,
+        query: DELETE_GLOBAL_AGENT_CONFIGURATION,
         variables: { agentId: baseAgent.id },
       },
       result: {
@@ -818,7 +713,7 @@ test.describe("GlobalAgentManagement — delete flow", () => {
   }) => {
     const failingDeleteMock = {
       request: {
-        query: DELETE_AGENT_CONFIGURATION,
+        query: DELETE_GLOBAL_AGENT_CONFIGURATION,
         variables: { agentId: baseAgent.id },
       },
       result: {

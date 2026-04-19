@@ -30,11 +30,8 @@ export const GlobalAgentManagementWrapper: React.FC<
 // Wrapper variant that also mounts a ToastContainer so tests can assert on
 // react-toastify notifications. Kept separate from GlobalAgentManagementWrapper
 // to avoid changing the behavior of pre-existing tests that don't need toasts.
-interface GlobalAgentManagementWithToastsWrapperProps
-  extends GlobalAgentManagementWrapperProps {}
-
 export const GlobalAgentManagementWithToastsWrapper: React.FC<
-  GlobalAgentManagementWithToastsWrapperProps
+  GlobalAgentManagementWrapperProps
 > = ({ mocks = [] }) => (
   <MockedProvider mocks={mocks} addTypename={false}>
     <MemoryRouter>
