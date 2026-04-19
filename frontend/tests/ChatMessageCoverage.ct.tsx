@@ -177,7 +177,6 @@ test.describe("ChatMessage — selection", () => {
 
     const bubble = page.locator('[data-testid="message-content"]');
     await expect(bubble).toBeVisible({ timeout: 5000 });
-    // Click away from the bubble — on the outer container — to trigger onSelect
     await bubble.click();
 
     // Give the handler a tick to fire
@@ -205,7 +204,7 @@ test.describe("ChatMessage — selection", () => {
     // Source indicator exposed by data-testid
     const indicator = page.locator('[data-testid="source-indicator"]');
     await expect(indicator).toBeVisible({ timeout: 5000 });
-    await expect(indicator).toContainText("1 sources");
+    await expect(indicator).toContainText("1 source");
   });
 });
 

@@ -1,11 +1,5 @@
-/**
- * Test wrapper for `FieldsetModal` Playwright CT tests.
- *
- * Playwright CT's babel plugin treats this file as a component module — all
- * exports here must be React components. Mock builders live in a sibling
- * `FieldsetModalMocks.ts` so the plugin still recognizes
- * `FieldsetModalTestWrapper` as a mountable component.
- */
+// Mock builders live in FieldsetModalMocks.ts — Playwright CT's babel
+// plugin only accepts React components as exports from *TestWrapper files.
 import React, { useState } from "react";
 import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { FieldsetModal } from "../src/components/widgets/modals/FieldsetModal";
@@ -44,7 +38,10 @@ export const FieldsetModalTestWrapper: React.FC<WrapperProps> = ({
   const [open, setOpen] = useState(startOpen);
   const [successPayload, setSuccessPayload] = useState<string>("");
 
-  const effectiveMocks = mocks ?? defaultTaskMocks;
+  // Edit-mode callers pass supplemental mocks (e.g. REQUEST_GET_FIELDSET).
+  // Always prepend the default task mocks so FieldsetModal's GET_REGISTERED_
+  // EXTRACT_TASKS query resolves regardless of what the caller passes.
+  const effectiveMocks = [...defaultTaskMocks, ...(mocks ?? [])];
 
   return (
     <MockedProvider mocks={effectiveMocks} addTypename={false}>
