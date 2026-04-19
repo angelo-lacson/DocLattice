@@ -27,13 +27,13 @@ on:
       - v*
   pull_request:
     paths:
-      - 'frontend/**'
-      - '.github/workflows/frontend-e2e.yml'
-      - 'opencontractserver/users/migrations/0003_create_initial_superuser.py'
-      - 'config/settings/**'
-      - 'test.yml'
-      - 'test.e2e-coverage.yml'
-      - 'compose/local/django/**'
+      - "frontend/**"
+      - ".github/workflows/frontend-e2e.yml"
+      - "opencontractserver/users/migrations/0003_create_initial_superuser.py"
+      - "config/settings/**"
+      - "test.yml"
+      - "test.e2e-coverage.yml"
+      - "compose/local/django/**"
 
 concurrency:
   group: frontend-e2e-${{ github.head_ref || github.run_id }}
@@ -54,7 +54,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install Yarn
         run: npm install -g yarn
@@ -161,10 +161,10 @@ jobs:
       - name: Run Playwright integration tests with coverage
         working-directory: ./frontend
         env:
-          CI: 'true'
-          COVERAGE: 'true'
+          CI: "true"
+          COVERAGE: "true"
           E2E_TEST_USERNAME: admin
-          E2E_TEST_PASSWORD: 'Openc0ntracts_def@ult'
+          E2E_TEST_PASSWORD: "Openc0ntracts_def@ult"
         run: yarn run test:e2e:coverage
 
       # ────────────────────────────────────────────────────────────────
@@ -218,6 +218,18 @@ jobs:
           name: frontend-e2e-coverage
           fail_ci_if_error: false
           disable_search: true
+
+      # Publish the raw lcov so the cross-workflow merge job in
+      # `codecov-notify.yml` can pull it via `actions/download-artifact` and
+      # combine it with the unit + component lcovs into a single `frontend` flag.
+      - name: Upload frontend E2E lcov artifact
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-e2e-lcov
+          path: frontend/coverage/e2e/lcov.info
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload backend E2E coverage to Codecov
         if: success() || failure()
