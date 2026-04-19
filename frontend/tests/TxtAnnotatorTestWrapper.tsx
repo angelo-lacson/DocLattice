@@ -77,6 +77,14 @@ interface WrapperProps {
   rejected?: boolean;
   /** Mark the first annotation as structural. */
   structural?: boolean;
+  /**
+   * Pass explicit `showStructuralAnnotations` to the annotator.
+   * Defaults to the `structural` flag so existing callers behave the same;
+   * tests that want to assert the "structural annotation is filtered out
+   * when showStructuralAnnotations=false" branch can override this
+   * independently of the annotation's structural flag.
+   */
+  showStructuralAnnotations?: boolean;
   /** Disable approve/reject callbacks to test the "no feedback actions" path. */
   hideApproveReject?: boolean;
 }
@@ -95,6 +103,7 @@ export const TxtAnnotatorTestWrapper: React.FC<WrapperProps> = ({
   approved = false,
   rejected = false,
   structural = false,
+  showStructuralAnnotations,
   hideApproveReject = false,
 }) => {
   const [selected, setSelected] = useState<string[]>(
@@ -177,7 +186,7 @@ export const TxtAnnotatorTestWrapper: React.FC<WrapperProps> = ({
           deleteAnnotation={() => {}}
           selectedAnnotations={selected}
           setSelectedAnnotations={setSelected}
-          showStructuralAnnotations={structural}
+          showStructuralAnnotations={showStructuralAnnotations ?? structural}
         />
       </div>
     </MemoryRouter>

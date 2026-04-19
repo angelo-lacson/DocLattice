@@ -263,12 +263,12 @@ test.describe("TxtAnnotator", () => {
     await component.unmount();
   });
 
-  test("structural annotation is hidden when showStructuralAnnotations is false", async ({
+  test("structural annotation renders when showStructuralAnnotations is true", async ({
     mount,
     page,
   }) => {
-    // `structural={true}` on the wrapper flips BOTH the annotation's structural flag
-    // AND the showStructuralAnnotations prop to true, so the annotation renders.
+    // structural=true sets both firstAnn.structural and (by default)
+    // showStructuralAnnotations=true, so the annotated span is drawn.
     const component = await mount(
       <TxtAnnotatorTestWrapper
         readOnly={true}
@@ -280,10 +280,32 @@ test.describe("TxtAnnotator", () => {
     const annotator = page.getByTestId("txt-annotator");
     await expect(annotator).toBeVisible({ timeout: 10000 });
 
-    // Structural annotation is visible because showStructuralAnnotations=true
     await expect(page.getByTestId(/^annotated-span-/).first()).toBeVisible({
       timeout: 10000,
     });
+
+    await component.unmount();
+  });
+
+  test("structural annotation is hidden when showStructuralAnnotations is false", async ({
+    mount,
+    page,
+  }) => {
+    // Annotation is structural, but showStructuralAnnotations is explicitly
+    // false — the annotator should filter it out entirely.
+    const component = await mount(
+      <TxtAnnotatorTestWrapper
+        readOnly={true}
+        withAnnotations={true}
+        structural={true}
+        showStructuralAnnotations={false}
+      />
+    );
+
+    const annotator = page.getByTestId("txt-annotator");
+    await expect(annotator).toBeVisible({ timeout: 10000 });
+
+    await expect(page.getByTestId(/^annotated-span-/)).toHaveCount(0);
 
     await component.unmount();
   });
