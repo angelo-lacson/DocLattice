@@ -388,6 +388,34 @@ describe("useVisibleAnnotations", () => {
       const ids = result.current.map((x) => x.id).sort();
       expect(ids).toEqual(["src", "tgt"]); // loose still hidden
     });
+
+    it("stays gated on showStructural: does NOT force-show relation members when showStructural is false and no relation is selected", () => {
+      // Companion to the issue #1289 fix: the *explicit* selected-relation
+      // bypass is un-gated, but the *implicit* showStructuralRelationships
+      // bypass must remain gated on showStructural — otherwise toggling
+      // structural off would have no effect on relation members at all.
+      const src = makeAnnot({ id: "src", structural: true });
+      const tgt = makeAnnot({ id: "tgt", structural: true });
+      const rel = new RelationGroup(["src"], ["tgt"], labelA, "rel-1");
+
+      primeMocks(
+        defaultState({
+          annotations: [src, tgt],
+          relations: [rel],
+          display: {
+            showStructural: false, // structural off
+            showStructuralRelationships: true, // but "show all" is on
+            showSelectedOnly: false,
+          },
+          selection: { selectedAnnotations: [], selectedRelations: [] }, // no explicit selection
+        })
+      );
+
+      const { result } = renderHook(() => useVisibleAnnotations());
+      // Both members are structural and nothing forces them visible, so
+      // the structural filter hides them.
+      expect(result.current.map((x) => x.id)).toEqual([]);
+    });
   });
 
   describe("showSelectedOnly mode", () => {
