@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MockedProvider } from "@apollo/client/testing";
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -103,7 +104,7 @@ describe("LabelSetLandingRoute", () => {
     renderRoute();
 
     const closeBtn = screen.getByRole("button", { name: "close-labelset" });
-    closeBtn.click();
+    await userEvent.click(closeBtn);
 
     expect(openedLabelset()).toBeNull();
   });

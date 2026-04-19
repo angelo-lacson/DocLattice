@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { NotFound } from "../NotFound";
@@ -41,7 +42,7 @@ describe("NotFound", () => {
     renderNotFound();
 
     const btn = screen.getByRole("button", { name: /Go to Corpuses/i });
-    btn.click();
+    await userEvent.click(btn);
 
     const locationNode = await screen.findByTestId("location");
     expect(locationNode.textContent).toBe("/corpuses");
