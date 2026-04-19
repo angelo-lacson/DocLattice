@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`ChatMessage` source indicator no longer renders "1 sources"** (`frontend/src/components/widgets/chat/ChatMessage.tsx:1993`): the source indicator always used the plural noun regardless of count, while every other pluralized label in the component ("1 Source", "1 step", "1 tool") switched correctly. Updated to `"1 source" / "N sources"` to match.
+
 ### Added
 
 - **Frontend coverage for widgets, modals, and icon-picker** (Issue #1279): Added one vitest suite and three Playwright CT suites targeting ~2,150 uncovered lines in `frontend/src/components/widgets/`:
