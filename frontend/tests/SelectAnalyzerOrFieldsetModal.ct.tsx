@@ -493,22 +493,13 @@ test.describe("SelectAnalyzerOrFieldsetModal — close behavior", () => {
     // the overlay non-interactive; wait for it to settle.
     await page.waitForTimeout(500);
 
-    // Fire the close handler directly on the overlay element. The overlay is
-    // the outer motion.div rendered via createPortal to document.body with
-    // position:fixed inset:0. We target it by its z-index style (999999) to
-    // avoid pixel-click races with framer-motion's entrance animation.
-    await page.evaluate(() => {
-      const candidates = Array.from(
-        document.querySelectorAll<HTMLElement>("div")
-      ).filter((el) => {
-        const cs = window.getComputedStyle(el);
-        return cs.position === "fixed" && cs.zIndex === "999999";
-      });
-      // The overlay is the outermost such element; dispatch a click on it.
-      candidates[0]?.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true })
-      );
-    });
+    // The overlay is a portaled motion.div with its own onClick={onClose}.
+    // Dispatching the event directly on the tagged element avoids pixel-
+    // click races with framer-motion's entrance animation.
+    await page
+      .locator('[data-testid="select-analyzer-or-fieldset-overlay"]')
+      .first()
+      .dispatchEvent("click");
 
     await expect(page.locator("text=Start Analysis")).toBeHidden({
       timeout: 3000,

@@ -1130,6 +1130,7 @@ export const SelectAnalyzerOrFieldsetModal: React.FC<
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
       onClick={onClose}
+      data-testid="select-analyzer-or-fieldset-overlay"
     >
       <ModalContainer
         initial={{ opacity: 0 }}
