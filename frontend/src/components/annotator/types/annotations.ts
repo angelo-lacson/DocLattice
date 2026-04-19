@@ -28,7 +28,7 @@ export class RelationGroup {
     public sourceIds: string[],
     public targetIds: string[],
     public label: AnnotationLabelType,
-    public id: string | string = uuidv4(),
+    public id: string = uuidv4(),
     public structural: boolean = false
   ) {
     this.id = id;
