@@ -71,6 +71,9 @@ async function clickViaReact(
     if (typeof props?.onClick !== "function")
       throw new Error("onClick handler missing");
     props.onClick({
+      type: "click",
+      bubbles: true,
+      cancelable: true,
       stopPropagation: () => {},
       preventDefault: () => {},
       shiftKey: false,

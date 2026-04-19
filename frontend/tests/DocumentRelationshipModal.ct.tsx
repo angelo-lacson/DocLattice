@@ -774,6 +774,9 @@ test.describe("DocumentRelationshipModal — create-label flow", () => {
           corpusId: TEST_CORPUS_ID,
           searchTerm: "supersedes",
           labelType: LabelType.RelationshipLabel,
+          // Must mirror the default color set by the inline create-label form
+          // inside DocumentRelationshipModal. If the form default changes, update
+          // this to match or the mock will silently stop matching.
           color: OS_LEGAL_COLORS.greenMedium,
           description: "",
           createIfNotFound: true,
