@@ -47,6 +47,39 @@ import { ErrorMessage, WarningMessage } from "../widgets/feedback";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
 
 // ============================================================================
+// HELPERS
+// ============================================================================
+
+type LabelLike = {
+  id: string;
+  text?: string | null;
+  labelType?: string | null;
+};
+
+/**
+ * Filter a list of labels down to relationship-typed labels that match
+ * `searchTerm`. When `hasCorpus` is false, returns an empty array (relationship
+ * labels only make sense inside a corpus). An empty `searchTerm` returns all
+ * relationship labels unfiltered. Case-insensitive substring match on `text`.
+ */
+export function filterRelationshipLabels<T extends LabelLike>(
+  labels: T[] | null | undefined,
+  searchTerm: string,
+  hasCorpus: boolean
+): T[] {
+  if (!hasCorpus) return [];
+  const relationshipOnly =
+    labels?.filter(
+      (label) => label.labelType === LabelType.RelationshipLabel
+    ) || [];
+  if (!searchTerm) return relationshipOnly;
+  const needle = searchTerm.toLowerCase();
+  return relationshipOnly.filter((label) =>
+    (label.text ?? "").toLowerCase().includes(needle)
+  );
+}
+
+// ============================================================================
 // TYPES
 // ============================================================================
 
@@ -397,22 +430,10 @@ export const DocumentRelationshipModal: React.FC<
   }, [allDocuments, sourceIds, targetIds]);
 
   // Manual filter keeps `labelSearchTerm` in sync — @os-legal/ui's Dropdown only fires `onSearchChange` in `async` mode.
-  const filteredRelationshipLabels = useMemo(() => {
-    if (!hasCorpus) {
-      return [];
-    }
-
-    const relationshipOnly =
-      relationLabels?.filter(
-        (label) => label.labelType === LabelType.RelationshipLabel
-      ) || [];
-
-    if (!labelSearchTerm) return relationshipOnly;
-    const needle = labelSearchTerm.toLowerCase();
-    return relationshipOnly.filter((label) =>
-      (label.text ?? "").toLowerCase().includes(needle)
-    );
-  }, [relationLabels, hasCorpus, labelSearchTerm]);
+  const filteredRelationshipLabels = useMemo(
+    () => filterRelationshipLabels(relationLabels, labelSearchTerm, hasCorpus),
+    [relationLabels, hasCorpus, labelSearchTerm]
+  );
 
   // Get selected label info
   const selectedLabel = useMemo(() => {
