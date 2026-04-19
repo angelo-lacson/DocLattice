@@ -396,18 +396,26 @@ export const DocumentRelationshipModal: React.FC<
     return allDocuments.filter((doc) => !usedIds.has(doc.id));
   }, [allDocuments, sourceIds, targetIds]);
 
-  // Get all relationship labels (Dropdown's search prop handles filtering)
+  // Relationship labels, filtered by the search term. Filtering happens here
+  // (not inside the Dropdown via `searchable="local"`) so `labelSearchTerm`
+  // stays in sync and drives the "Create label:" empty-state button —
+  // @os-legal/ui's Dropdown only fires `onSearchChange` in `async` mode.
   const filteredRelationshipLabels = useMemo(() => {
     if (!hasCorpus) {
       return [];
     }
 
-    return (
+    const relationshipOnly =
       relationLabels?.filter(
         (label) => label.labelType === LabelType.RelationshipLabel
-      ) || []
+      ) || [];
+
+    if (!labelSearchTerm) return relationshipOnly;
+    const needle = labelSearchTerm.toLowerCase();
+    return relationshipOnly.filter((label) =>
+      (label.text ?? "").toLowerCase().includes(needle)
     );
-  }, [relationLabels, hasCorpus]);
+  }, [relationLabels, hasCorpus, labelSearchTerm]);
 
   // Get selected label info
   const selectedLabel = useMemo(() => {
@@ -986,7 +994,7 @@ export const DocumentRelationshipModal: React.FC<
                           mode="select"
                           placeholder="Search or type to create..."
                           fluid
-                          searchable="local"
+                          searchable="async"
                           options={filteredRelationshipLabels.map((label) => ({
                             value: label.id,
                             label: label.text || "",

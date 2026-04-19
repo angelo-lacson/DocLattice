@@ -11,11 +11,8 @@ import {
   DocumentProcessingStatus,
   DocumentRelationshipType,
 } from "../src/types/graphql-api";
-import {
-  editingDocument,
-  viewingDocument,
-  openedCorpus,
-} from "../src/graphql/cache";
+import { openedCorpus } from "../src/graphql/cache";
+import { ReactiveVarObserver } from "./utils/ReactiveVarObserver";
 
 /** Minimal document fixture with overridable fields. */
 function makeDocument(overrides: Partial<DocumentType> = {}): DocumentType {
@@ -148,8 +145,16 @@ test.describe("ModernDocumentItem — card view rendering", () => {
 
     await mount(<ModernDocumentItem item={doc} viewMode="card" />, mountFn);
 
-    // VersionBadge renders a role="button" when hasHistory is true
-    await expect(page.getByRole("button", { name: /Version 3/ })).toBeVisible();
+    // VersionBadge renders a role="button" with this exact aria-label when
+    // hasHistory is true. The surrounding draggable wrapper also has
+    // role="button", so match the badge's label exactly to avoid a strict
+    // mode violation.
+    await expect(
+      page.getByRole("button", {
+        name: "Version 3, click to view history",
+        exact: true,
+      })
+    ).toBeVisible();
   });
 
   test("shows relationship badge with count when relationships exist", async ({
@@ -422,19 +427,25 @@ test.describe("ModernDocumentItem — action buttons", () => {
     page,
   }) => {
     const doc = makeDocument();
-    // Reset reactive var before the assertion
-    viewingDocument(null);
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await mountFn(
+      <MockedProvider mocks={[]} addTypename={false}>
+        <MemoryRouter>
+          <DndContext>
+            <ModernDocumentItem item={doc} viewMode="list" />
+            <ReactiveVarObserver />
+          </DndContext>
+        </MemoryRouter>
+      </MockedProvider>
+    );
 
     await clickViaReact(page, 'button[title="View"]');
 
-    await expect
-      .poll(() => viewingDocument()?.id, { timeout: 2000 })
-      .toBe(doc.id);
-
-    // Cleanup
-    viewingDocument(null);
+    await expect(page.getByTestId("rv-observer")).toHaveAttribute(
+      "data-viewing-id",
+      doc.id,
+      { timeout: 2000 }
+    );
   });
 
   test("click on Edit button triggers editingDocument reactive var", async ({
@@ -442,17 +453,25 @@ test.describe("ModernDocumentItem — action buttons", () => {
     page,
   }) => {
     const doc = makeDocument({ myPermissions: ["update_document"] });
-    editingDocument(null);
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await mountFn(
+      <MockedProvider mocks={[]} addTypename={false}>
+        <MemoryRouter>
+          <DndContext>
+            <ModernDocumentItem item={doc} viewMode="list" />
+            <ReactiveVarObserver />
+          </DndContext>
+        </MemoryRouter>
+      </MockedProvider>
+    );
 
     await clickViaReact(page, 'button[title="Edit"]');
 
-    await expect
-      .poll(() => editingDocument()?.id, { timeout: 2000 })
-      .toBe(doc.id);
-
-    editingDocument(null);
+    await expect(page.getByTestId("rv-observer")).toHaveAttribute(
+      "data-editing-id",
+      doc.id,
+      { timeout: 2000 }
+    );
   });
 
   test("click on Remove button invokes removeFromCorpus with document id", async ({
