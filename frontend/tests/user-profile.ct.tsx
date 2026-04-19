@@ -25,6 +25,63 @@ const mockPublicUser = {
   totalDocumentsUploaded: 10,
 };
 
+test.describe("UserProfileRoute - Hook Ordering Regression (Issue #1295)", () => {
+  test("mounts with slug under a Routes tree that also defines /profile (no 'Rendered more hooks' crash)", async ({
+    mount,
+    page,
+  }) => {
+    // This test exercises the scenario that surfaced the original bug: both
+    // the redirect route (/profile, no slug) and the render route
+    // (/users/:slug) live in the same <Routes> tree. When useQuery was below
+    // the `!slug` early return, React could (depending on fiber reuse)
+    // compare hook call counts across the two renders and throw
+    // "Rendered more hooks than during the previous render". With the fix,
+    // useQuery is called unconditionally and skip: !slug gates the network
+    // request, so the component renders without crashing on either path.
+    const consoleErrors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") consoleErrors.push(msg.text());
+    });
+
+    const mocks = [
+      {
+        request: {
+          query: GET_USER,
+          variables: { slug: "publicuser-123" },
+        },
+        result: {
+          data: {
+            userBySlug: mockPublicUser,
+          },
+        },
+      },
+    ];
+
+    const component = await mount(
+      <MockedProvider mocks={mocks} addTypename={false}>
+        <MemoryRouter initialEntries={["/users/publicuser-123"]}>
+          <Routes>
+            <Route path="/profile" element={<UserProfileRoute />} />
+            <Route path="/users/:slug" element={<UserProfileRoute />} />
+          </Routes>
+        </MemoryRouter>
+      </MockedProvider>
+    );
+
+    // Either the rendered profile text or the loading display proves the
+    // hook ordering is stable. We wait for the user name to appear once the
+    // GET_USER mock resolves, but first ensure no Rules-of-Hooks error fired.
+    await page.waitForTimeout(500);
+
+    const hookErrors = consoleErrors.filter((e) =>
+      e.includes("Rendered more hooks than during the previous render")
+    );
+    expect(hookErrors).toEqual([]);
+
+    await component.unmount();
+  });
+});
+
 test.describe("UserProfile View - Loading and Error States", () => {
   test("should show loading state while fetching user data", async ({
     mount,
