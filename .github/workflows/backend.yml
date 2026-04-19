@@ -26,13 +26,16 @@ concurrency:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    # Fail open: if this job errors (e.g., transient GitHub API failure),
+    # downstream jobs should still run rather than being silently skipped.
+    continue-on-error: true
     permissions:
       contents: read
       pull-requests: read
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
     steps:
-      - uses: actions/checkout@v6
+      # No checkout needed: dorny/paths-filter@v3 fetches diffs via the GitHub API.
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -44,6 +47,7 @@ jobs:
               - 'requirements/**'
               - 'test.yml'
               - 'compose/**'
+              - 'Dockerfile*'
               - '.pre-commit-config.yaml'
               - 'setup.cfg'
               - 'pyproject.toml'
@@ -51,9 +55,12 @@ jobs:
 
   linter:
     needs: changes
-    # Always run on push to protected branches so the post-merge "ground truth"
-    # run is never gated by path filter; path gating only applies to PRs.
-    if: needs.changes.outputs.backend == 'true' || github.event_name == 'push'
+    # Skipping via path filter only applies to PRs with no backend changes.
+    # Push events to protected branches always run unconditionally.
+    # Using `!= 'false'` rather than `== 'true'` so a transient `changes` failure
+    # (outputs.backend is '' when the job errors under continue-on-error) still
+    # runs downstream jobs — the actual "fail open" behavior.
+    if: needs.changes.outputs.backend != 'false' || github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -78,7 +85,8 @@ jobs:
 
   pytest:
     needs: [changes, linter]
-    if: needs.changes.outputs.backend == 'true' || github.event_name == 'push'
+    # Same fail-open semantics as the linter gate above.
+    if: needs.changes.outputs.backend != 'false' || github.event_name == 'push'
     runs-on: yuge
     timeout-minutes: 180
     permissions:
