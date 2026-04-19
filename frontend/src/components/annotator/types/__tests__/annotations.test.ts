@@ -3,18 +3,13 @@
  *   - ServerTokenAnnotation (.update, immutability, ID preservation)
  *   - ServerSpanAnnotation  (.update, immutability, ID preservation)
  *   - PdfAnnotations        (.saved, .undoAnnotation — reducer-style returns)
- *   - RelationGroup.fromObject and ServerTokenAnnotation.fromObject
+ *   - RelationGroup         (.fromObject, .updateForAnnotationDeletion)
+ *   - ServerTokenAnnotation.fromObject
  *
  * The PdfAnnotator package will ship these classes as its public type
  * surface. Any silent change to .update() semantics, the readonly fields,
  * or the reducer-style return of PdfAnnotations would break downstream
  * consumers, so they are pinned here.
- *
- * Note: RelationGroup.updateForAnnotationDeletion is intentionally NOT
- * pinned by this file — its current implementation has a pre-existing
- * logic bug (nowSourceEmpty / nowTargetEmpty compare the pre-filter
- * arrays instead of the post-filter arrays). Tests here avoid locking
- * that in so the bug can be fixed independently of the extraction.
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -213,6 +208,47 @@ describe("RelationGroup", () => {
     expect(reconstructed.id).toBe("rel-1");
     expect(reconstructed.structural).toBe(true);
   });
+
+  describe(".updateForAnnotationDeletion()", () => {
+    it("returns undefined when the sole source is deleted", () => {
+      const rel = new RelationGroup(["a"], ["b"], labelA, "rel-1");
+      expect(rel.updateForAnnotationDeletion(makeToken("a"))).toBeUndefined();
+    });
+
+    it("returns undefined when the sole target is deleted", () => {
+      const rel = new RelationGroup(["a"], ["b"], labelA, "rel-1");
+      expect(rel.updateForAnnotationDeletion(makeToken("b"))).toBeUndefined();
+    });
+
+    it("returns undefined when the deleted annotation is sole member of both sides", () => {
+      const rel = new RelationGroup(["a"], ["a"], labelA, "rel-1");
+      expect(rel.updateForAnnotationDeletion(makeToken("a"))).toBeUndefined();
+    });
+
+    it("survives with updated sourceIds when one of many sources is deleted", () => {
+      const rel = new RelationGroup(["a", "b"], ["c"], labelA, "rel-1");
+      const updated = rel.updateForAnnotationDeletion(makeToken("a"));
+      expect(updated).toBeInstanceOf(RelationGroup);
+      expect(updated!.sourceIds).toEqual(["b"]);
+      expect(updated!.targetIds).toEqual(["c"]);
+    });
+
+    it("survives with updated targetIds when one of many targets is deleted", () => {
+      const rel = new RelationGroup(["a"], ["b", "c"], labelA, "rel-1");
+      const updated = rel.updateForAnnotationDeletion(makeToken("b"));
+      expect(updated).toBeInstanceOf(RelationGroup);
+      expect(updated!.sourceIds).toEqual(["a"]);
+      expect(updated!.targetIds).toEqual(["c"]);
+    });
+
+    it("survives unchanged when the deleted annotation is not in the relation", () => {
+      const rel = new RelationGroup(["a"], ["b"], labelA, "rel-1");
+      const updated = rel.updateForAnnotationDeletion(makeToken("z"));
+      expect(updated).toBeInstanceOf(RelationGroup);
+      expect(updated!.sourceIds).toEqual(["a"]);
+      expect(updated!.targetIds).toEqual(["b"]);
+    });
+  });
 });
 
 describe("PdfAnnotations", () => {
@@ -260,15 +296,16 @@ describe("PdfAnnotations", () => {
     it("prunes any relations that referenced only the popped annotation", () => {
       const a = makeToken("a");
       const b = makeToken("b");
+      // orphanRel has "b" as its sole source; popping "b" empties sourceIds
+      // and must drop the whole relation.
       const orphanRel = new RelationGroup(["b"], ["a"], labelA, "rel-1");
+      // survivorRel does not reference "b"; it should remain.
       const survivorRel = new RelationGroup(["a"], ["a"], labelA, "rel-2");
       const pdf = new PdfAnnotations([a, b], [orphanRel, survivorRel], []);
-      // Popping "b" removes it from orphanRel.sourceIds, leaving it with ["a"]
-      // on source side and ["a"] on target side, so the survivor remains.
-      // orphanRel should survive with ["a"] source and ["a"] target.
       const undone = pdf.undoAnnotation();
-      // Both relations retain at least one member after filtering "b".
-      expect(undone.relations.length).toBeGreaterThanOrEqual(1);
+      expect(undone.relations).toHaveLength(1);
+      expect(undone.relations[0].sourceIds).toEqual(["a"]);
+      expect(undone.relations[0].targetIds).toEqual(["a"]);
     });
   });
 });
