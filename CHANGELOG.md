@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Annotator hook / renderer / label-selector coverage** (Issue #1284): Added vitest coverage for the annotator hook layer plus Playwright CT coverage for the text and docx renderers and the enhanced label selector.
+  - `frontend/src/components/annotator/hooks/__tests__/AnnotationHooks.test.tsx` — 25 tests covering state-wrapper helpers, guard clauses, success paths, and relation side effects. Includes a regression that keeps a sibling annotation in state across a `useUpdateAnnotation` call.
+  - `frontend/tests/TxtAnnotator.ct.tsx`, `frontend/tests/DocxAnnotator.ct.tsx`, and `frontend/tests/EnhancedLabelSelector.ct.tsx` — CT suites driving prop-driven scenarios (visibility filtering, search highlights, chat sources, structural filtering, read-only mode).
+
+### Fixed
+
+- **`useUpdateAnnotation` lost sibling annotations on update** (`frontend/src/components/annotator/hooks/AnnotationHooks.tsx:386`): The hook called `replaceAnnotations([updatedAnnotation])`, which collapses the whole `annotations` array down to the single passed-in element. On any document with more than one annotation, updating one annotation silently dropped the others. Fixed by using `setPdfAnnotations` with a `.map` that swaps only the matching id; regression test added in `AnnotationHooks.test.tsx` (see `useUpdateAnnotation > updates one annotation in place without dropping siblings`).
+
 - **Frontend component-test coverage for Corpus Chat & Agent Management** (Issue #1276): Added Playwright CT coverage for the four corpus components called out as the highest-uncovered surface area in `docs/coverage/frontend-roi-ranking.md` (CorpusChat, CreateCorpusActionModal, CorpusAgentManagement, CorpusDescriptionEditor — combined ~3,300 lines, ~2,800 previously uncovered).
   - `frontend/tests/CorpusChat.ct.tsx`: extended from 3 to 13 tests. Adds a Playwright `WebSocket` stub (mirroring the `ChatTray.ct.tsx` pattern) so we can drive ASYNC_START/CONTENT/FINISH, ASYNC_THOUGHT (with compaction notice), ASYNC_APPROVAL_NEEDED, ASYNC_APPROVAL_RESULT, ASYNC_ERROR (deferred via `setTimeout` to avoid being clobbered by the synchronous `setWsError(null)` after `socket.send`), and CONTEXT_EXHAUSTED. Covers approve/reject flows, context-meter rendering, send-button gating, conversation loading, navigation callbacks, and GraphQL error surface.
   - `frontend/tests/CorpusChatTestWrapper.tsx`: now sets `authToken`/`userObj` synchronously (matches `ChatTrayTestWrapper`) to avoid a re-mount race that closes the stub socket between renders. Forwards `initialQuery`, `onNavigateHome`, and `onMessageSelect` to the component.
