@@ -203,6 +203,12 @@ test.describe("ChatMessage — selection", () => {
 
     // Source indicator exposed by data-testid. Singular "source" label exercises
     // the `sources.length === 1` branch of the new pluralisation ternary.
+    //
+    // NOTE: lowercase "source" here is intentional — the `SourceIndicator`
+    // button renders "{N} source" / "{N} sources". This is NOT the same as the
+    // collapsible section header elsewhere in the file which reads "{N} Source"
+    // / "{N} Sources" (capital S). Both strings are checked in this suite so
+    // the case differences are load-bearing.
     const indicator = page.locator('[data-testid="source-indicator"]');
     await expect(indicator).toBeVisible({ timeout: 5000 });
     await expect(indicator).toContainText("1 source");
@@ -245,6 +251,10 @@ test.describe("ChatMessage — approval status pill", () => {
     { status: "awaiting", label: "Awaiting Approval" },
   ];
 
+  // Playwright has no native `test.each`. The `for...of` loop below registers
+  // one independent `test()` per case (each with a unique title via template
+  // interpolation), which Playwright treats as fully independent tests — so
+  // ordering/isolation matches what a hypothetical `test.each` would provide.
   for (const { status, label } of APPROVAL_CASES) {
     test(`renders ${status} approval with label "${label}"`, async ({
       mount,
