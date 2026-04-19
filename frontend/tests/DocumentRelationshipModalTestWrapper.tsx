@@ -13,13 +13,7 @@ import { AnnotationLabelType, LabelType } from "../src/types/graphql-api";
 // Test corpus ID
 export const TEST_CORPUS_ID = "corpus-1";
 
-/**
- * Resolve the effective corpus id for both the GET_DOCUMENTS mock and the
- * component prop. Behavior:
- *   undefined → use TEST_CORPUS_ID (default test path)
- *   null      → "" (intentionally triggers the "No Corpus Context" error UI)
- *   string    → use as-is
- */
+// Resolve corpus id for mock + prop: undefined → TEST_CORPUS_ID, null → "" (triggers No-Corpus error), string → as-is.
 const resolveCorpusId = (override: string | null | undefined) =>
   override === undefined ? TEST_CORPUS_ID : override ?? "";
 
@@ -191,9 +185,8 @@ export const DocumentRelationshipModalTestWrapper: React.FC<Props> = (
   const { extraMocks = [] } = props;
 
   // Build mocks. MockedProvider consumes each mock once, so the initial query
-  // plus any refetch both need their own entry. Use structuredClone to make
-  // the independence explicit and prevent cross-entry reference sharing if
-  // setup code ever mutates the mock data.
+  // plus any refetch both need their own entry. Invoke the factory twice to
+  // ensure each entry is an independent object literal (no shared references).
   const getMocks = (): MockedResponse[] => {
     const buildDocumentsMock = (): MockedResponse => ({
       request: {

@@ -1,10 +1,10 @@
 import { test, expect } from "./utils/coverage";
 import { MockedResponse } from "@apollo/client/testing";
-// Keep the wrapper component import in its own statement: Playwright CT's
-// babel transform only rewrites JSX-component imports into importRefs when
-// every specifier in the source `import { ... }` is a JSX component; mixing
-// component exports with helper/constant exports in the same import leaves
-// the component unrewritten and mounting then throws.
+// NOTE: Do NOT merge the two DocumentRelationshipModalTestWrapper imports
+// below into one statement. Playwright CT's babel transform only rewrites
+// JSX-component imports into `importRefs` when every specifier in the
+// statement is a JSX component; mixing a component export with helper /
+// constant exports leaves the component unrewritten and `mount()` throws.
 import { DocumentRelationshipModalTestWrapper } from "./DocumentRelationshipModalTestWrapper";
 import {
   makeMockRelationLabel,

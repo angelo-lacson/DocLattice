@@ -36,11 +36,13 @@ function makeDocument(overrides: Partial<DocumentType> = {}): DocumentType {
   } as DocumentType;
 }
 
-function mount(
+// Named `renderWithProviders` (not `mount`) to avoid shadowing Playwright CT's
+// `mount` fixture destructured from each test's context.
+function renderWithProviders(
   ui: React.ReactElement,
-  mountFn: (el: React.ReactElement) => Promise<unknown>
+  mount: (el: React.ReactElement) => Promise<unknown>
 ) {
-  return mountFn(
+  return mount(
     <MockedProvider mocks={[]} addTypename={false}>
       <MemoryRouter>
         <DndContext>{ui}</DndContext>
@@ -86,25 +88,28 @@ async function clickViaReact(
 // ---------------------------------------------------------------------------
 test.describe("ModernDocumentItem — card view rendering", () => {
   test("renders fallback thumbnail when icon is not provided", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({ icon: null });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="card" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="card" />,
+      mount
+    );
 
     await expect(page.getByText("Test Document.pdf")).toBeVisible();
     // Fallback icon class is applied when icon is absent
     await expect(page.locator("img.fallback-icon")).toHaveCount(1);
   });
 
-  test("renders custom icon when provided", async ({
-    mount: mountFn,
-    page,
-  }) => {
+  test("renders custom icon when provided", async ({ mount, page }) => {
     const doc = makeDocument({ icon: "https://example.com/icon.png" });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="card" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="card" />,
+      mount
+    );
 
     // When icon is set, fallback is NOT rendered, real img is
     await expect(page.locator("img.fallback-icon")).toHaveCount(0);
@@ -114,7 +119,7 @@ test.describe("ModernDocumentItem — card view rendering", () => {
   });
 
   test("shows page count, public badge, and file type", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({
@@ -123,7 +128,10 @@ test.describe("ModernDocumentItem — card view rendering", () => {
       fileType: "pdf",
     });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="card" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="card" />,
+      mount
+    );
 
     await expect(page.getByText("42p")).toBeVisible();
     await expect(page.getByText("Public")).toBeVisible();
@@ -133,7 +141,7 @@ test.describe("ModernDocumentItem — card view rendering", () => {
   });
 
   test("shows version badge when document has history", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({
@@ -143,7 +151,10 @@ test.describe("ModernDocumentItem — card view rendering", () => {
       canViewHistory: true,
     });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="card" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="card" />,
+      mount
+    );
 
     // VersionBadge renders a role="button" with this exact aria-label when
     // hasHistory is true. The surrounding draggable wrapper also has
@@ -158,7 +169,7 @@ test.describe("ModernDocumentItem — card view rendering", () => {
   });
 
   test("shows relationship badge with count when relationships exist", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const rels: DocumentRelationshipType[] = [
@@ -199,7 +210,10 @@ test.describe("ModernDocumentItem — card view rendering", () => {
       allDocRelationships: rels,
     });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="card" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="card" />,
+      mount
+    );
 
     // Number is rendered in the badge
     await expect(page.getByText("2").first()).toBeVisible();
@@ -211,13 +225,13 @@ test.describe("ModernDocumentItem — card view rendering", () => {
     await expect(page.getByText("Inbound Linker").first()).toBeAttached();
   });
 
-  test("renders title fallback when title missing", async ({
-    mount: mountFn,
-    page,
-  }) => {
+  test("renders title fallback when title missing", async ({ mount, page }) => {
     const doc = makeDocument({ title: undefined });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="card" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="card" />,
+      mount
+    );
 
     await expect(page.getByText("Untitled Document").first()).toBeVisible();
   });
@@ -228,7 +242,7 @@ test.describe("ModernDocumentItem — card view rendering", () => {
 // ---------------------------------------------------------------------------
 test.describe("ModernDocumentItem — list view rendering", () => {
   test("renders description, file type, and page count", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({
@@ -237,7 +251,10 @@ test.describe("ModernDocumentItem — list view rendering", () => {
       pageCount: 12,
     });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
 
     await expect(page.getByText("Test Document.pdf")).toBeVisible();
     await expect(page.getByText("A quarterly contract revision")).toBeVisible();
@@ -246,14 +263,17 @@ test.describe("ModernDocumentItem — list view rendering", () => {
     await expect(page.getByText("12 pages")).toBeVisible();
   });
 
-  test("shows public badge in list meta", async ({ mount: mountFn, page }) => {
+  test("shows public badge in list meta", async ({ mount, page }) => {
     const doc = makeDocument({ isPublic: true });
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
     await expect(page.getByText("Public")).toBeVisible();
   });
 
   test("shows version info in list meta and marks outdated versions", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({
@@ -262,7 +282,10 @@ test.describe("ModernDocumentItem — list view rendering", () => {
       isLatestVersion: false,
     });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
 
     // v4 (4 versions) should appear in list meta
     await expect(page.getByText(/v4/).first()).toBeVisible();
@@ -270,7 +293,7 @@ test.describe("ModernDocumentItem — list view rendering", () => {
   });
 
   test("shows relationship count badge in list meta", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const rels: DocumentRelationshipType[] = [
@@ -297,7 +320,10 @@ test.describe("ModernDocumentItem — list view rendering", () => {
       allDocRelationships: rels,
     });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
 
     // "1 Linked Document" (singular) should be in the popup DOM
     await expect(
@@ -312,12 +338,15 @@ test.describe("ModernDocumentItem — list view rendering", () => {
 // ---------------------------------------------------------------------------
 test.describe("ModernDocumentItem — selection", () => {
   test("applies is-selected class when is_selected is true (card view)", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({ is_selected: true });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="card" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="card" />,
+      mount
+    );
 
     await expect(page.locator(".is-selected")).toBeVisible();
     // Check mark icon is rendered inside the checkbox
@@ -325,22 +354,25 @@ test.describe("ModernDocumentItem — selection", () => {
   });
 
   test("applies is-selected class when is_selected is true (list view)", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({ is_selected: true });
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
     await expect(page.locator(".is-selected")).toBeVisible();
   });
 
   test("checkbox click invokes onShiftClick callback (card view)", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument();
     let shiftClicked: string | null = null;
 
-    await mount(
+    await renderWithProviders(
       <ModernDocumentItem
         item={doc}
         viewMode="card"
@@ -348,7 +380,7 @@ test.describe("ModernDocumentItem — selection", () => {
           shiftClicked = d.id;
         }}
       />,
-      mountFn
+      mount
     );
 
     await clickViaReact(page, ".checkbox");
@@ -364,12 +396,15 @@ test.describe("ModernDocumentItem — selection", () => {
 // ---------------------------------------------------------------------------
 test.describe("ModernDocumentItem — permissions", () => {
   test("hides edit button for read-only users (list view)", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({ myPermissions: ["read_document"] });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
 
     // Without CAN_UPDATE, the edit button is not rendered
     await expect(page.locator('button[title="Edit"]')).toHaveCount(0);
@@ -378,40 +413,46 @@ test.describe("ModernDocumentItem — permissions", () => {
   });
 
   test("shows edit button for users with CAN_UPDATE (list view)", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({ myPermissions: ["update_document"] });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
 
     await expect(page.locator('button[title="Edit"]')).toBeVisible();
   });
 
   test("hides remove button when removeFromCorpus is absent", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument();
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
 
     await expect(page.locator('button[title="Remove"]')).toHaveCount(0);
   });
 
   test("shows remove button when removeFromCorpus is provided", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument();
 
-    await mount(
+    await renderWithProviders(
       <ModernDocumentItem
         item={doc}
         viewMode="list"
         removeFromCorpus={() => {}}
       />,
-      mountFn
+      mount
     );
 
     await expect(page.locator('button[title="Remove"]')).toBeVisible();
@@ -423,12 +464,12 @@ test.describe("ModernDocumentItem — permissions", () => {
 // ---------------------------------------------------------------------------
 test.describe("ModernDocumentItem — action buttons", () => {
   test("click on View button triggers viewingDocument reactive var", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument();
 
-    await mountFn(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <MemoryRouter>
           <DndContext>
@@ -449,12 +490,12 @@ test.describe("ModernDocumentItem — action buttons", () => {
   });
 
   test("click on Edit button triggers editingDocument reactive var", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({ myPermissions: ["update_document"] });
 
-    await mountFn(
+    await mount(
       <MockedProvider mocks={[]} addTypename={false}>
         <MemoryRouter>
           <DndContext>
@@ -475,13 +516,13 @@ test.describe("ModernDocumentItem — action buttons", () => {
   });
 
   test("click on Remove button invokes removeFromCorpus with document id", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument();
     let removedIds: string[] = [];
 
-    await mount(
+    await renderWithProviders(
       <ModernDocumentItem
         item={doc}
         viewMode="list"
@@ -489,7 +530,7 @@ test.describe("ModernDocumentItem — action buttons", () => {
           removedIds = ids;
         }}
       />,
-      mountFn
+      mount
     );
 
     await clickViaReact(page, 'button[title="Remove"]');
@@ -499,14 +540,14 @@ test.describe("ModernDocumentItem — action buttons", () => {
   });
 
   test("click on Open button calls onClick callback", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument();
     let clicked: string | null = null;
     openedCorpus(null);
 
-    await mount(
+    await renderWithProviders(
       <ModernDocumentItem
         item={doc}
         viewMode="list"
@@ -514,7 +555,7 @@ test.describe("ModernDocumentItem — action buttons", () => {
           clicked = d.id;
         }}
       />,
-      mountFn
+      mount
     );
 
     await clickViaReact(page, 'button[title="Open"]');
@@ -523,23 +564,29 @@ test.describe("ModernDocumentItem — action buttons", () => {
   });
 
   test("hides download button when pdfFile is missing", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({ pdfFile: undefined });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
 
     await expect(page.locator('button[title="Download"]')).toHaveCount(0);
   });
 
   test("shows download button when pdfFile is present", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({ pdfFile: "https://example.com/doc.pdf" });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
 
     await expect(page.locator('button[title="Download"]')).toBeVisible();
   });
@@ -550,7 +597,7 @@ test.describe("ModernDocumentItem — action buttons", () => {
 // ---------------------------------------------------------------------------
 test.describe("ModernDocumentItem — processing state", () => {
   test("shows backend-locked styling and Processing overlay (card)", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({
@@ -558,14 +605,17 @@ test.describe("ModernDocumentItem — processing state", () => {
       backendLock: true,
     });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="card" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="card" />,
+      mount
+    );
 
     await expect(page.locator(".backend-locked")).toBeVisible();
     await expect(page.getByText("Processing...")).toBeVisible();
   });
 
   test("shows floating delete button while processing when removeFromCorpus provided", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({
@@ -573,13 +623,13 @@ test.describe("ModernDocumentItem — processing state", () => {
       backendLock: true,
     });
 
-    await mount(
+    await renderWithProviders(
       <ModernDocumentItem
         item={doc}
         viewMode="card"
         removeFromCorpus={() => {}}
       />,
-      mountFn
+      mount
     );
 
     await expect(
@@ -588,7 +638,7 @@ test.describe("ModernDocumentItem — processing state", () => {
   });
 
   test("disables action buttons when backendLock is true", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({
@@ -596,7 +646,10 @@ test.describe("ModernDocumentItem — processing state", () => {
       backendLock: true,
     });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
 
     // Open button should exist but be disabled due to backendLock
     await expect(page.locator('button[title="Open"]')).toBeDisabled();
@@ -643,12 +696,15 @@ async function openContextMenu(page: import("@playwright/test").Page) {
 
 test.describe("ModernDocumentItem — context menu", () => {
   test("right-click opens context menu with document actions", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({ pdfFile: "https://example.com/doc.pdf" });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
 
     await openContextMenu(page);
 
@@ -660,18 +716,18 @@ test.describe("ModernDocumentItem — context menu", () => {
   });
 
   test("context menu shows 'Link to Document' when handler provided", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument();
 
-    await mount(
+    await renderWithProviders(
       <ModernDocumentItem
         item={doc}
         viewMode="list"
         onLinkToDocument={() => {}}
       />,
-      mountFn
+      mount
     );
 
     await openContextMenu(page);
@@ -682,18 +738,18 @@ test.describe("ModernDocumentItem — context menu", () => {
   });
 
   test("context menu shows 'Remove from Corpus' when removeFromCorpus provided", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument();
 
-    await mount(
+    await renderWithProviders(
       <ModernDocumentItem
         item={doc}
         viewMode="list"
         removeFromCorpus={() => {}}
       />,
-      mountFn
+      mount
     );
 
     await openContextMenu(page);
@@ -704,12 +760,15 @@ test.describe("ModernDocumentItem — context menu", () => {
   });
 
   test("context menu shows 'Select' vs 'Deselect' based on is_selected", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({ is_selected: true });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
 
     await openContextMenu(page);
 
@@ -717,7 +776,7 @@ test.describe("ModernDocumentItem — context menu", () => {
   });
 
   test("context menu shows 'View Version History' for docs with history", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({
@@ -726,7 +785,10 @@ test.describe("ModernDocumentItem — context menu", () => {
       versionCount: 2,
     });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
 
     await openContextMenu(page);
 
@@ -736,12 +798,15 @@ test.describe("ModernDocumentItem — context menu", () => {
   });
 
   test("context menu shows Edit Document when user has CAN_UPDATE", async ({
-    mount: mountFn,
+    mount,
     page,
   }) => {
     const doc = makeDocument({ myPermissions: ["update_document"] });
 
-    await mount(<ModernDocumentItem item={doc} viewMode="list" />, mountFn);
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="list" />,
+      mount
+    );
 
     await openContextMenu(page);
 
