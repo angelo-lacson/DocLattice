@@ -10,11 +10,6 @@
  * or the reducer-style return of PdfAnnotations would break downstream
  * consumers, so they are pinned here.
  *
- * Note: RelationGroup.updateForAnnotationDeletion is intentionally NOT
- * pinned by this file — its current implementation has a pre-existing
- * logic bug (nowSourceEmpty / nowTargetEmpty compare the pre-filter
- * arrays instead of the post-filter arrays). Tests here avoid locking
- * that in so the bug can be fixed independently of the extraction.
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -258,25 +253,37 @@ describe("PdfAnnotations", () => {
     it("does not mutate the original instance's annotations array", () => {
       const a = makeToken("a");
       const b = makeToken("b");
-      const originalInput = [a, b];
-      const pdf = new PdfAnnotations(originalInput, [], []);
+      const originalArray = [a, b];
+      const pdf = new PdfAnnotations(originalArray, [], []);
       pdf.undoAnnotation();
-      expect(pdf.annotations).toBe(originalInput);
+      expect(pdf.annotations).toBe(originalArray);
       expect(pdf.annotations.map((x) => x.id)).toEqual(["a", "b"]);
+      expect(originalArray.map((x) => x.id)).toEqual(["a", "b"]);
     });
 
     it("prunes any relations that referenced only the popped annotation", () => {
       const a = makeToken("a");
       const b = makeToken("b");
+      // orphanRel's source is only ["b"]; popping "b" empties the source
+      // side and the relation should be removed.
       const orphanRel = new RelationGroup(["b"], ["a"], labelA, "rel-1");
+      // survivorRel does not reference "b" at all; it should remain.
       const survivorRel = new RelationGroup(["a"], ["a"], labelA, "rel-2");
       const pdf = new PdfAnnotations([a, b], [orphanRel, survivorRel], []);
-      // Popping "b" removes it from orphanRel.sourceIds, leaving it with ["a"]
-      // on source side and ["a"] on target side, so the survivor remains.
-      // orphanRel should survive with ["a"] source and ["a"] target.
       const undone = pdf.undoAnnotation();
-      // Both relations retain at least one member after filtering "b".
-      expect(undone.relations.length).toBeGreaterThanOrEqual(1);
+      expect(undone.relations).toHaveLength(1);
+      expect(undone.relations[0].sourceIds).toEqual(["a"]);
+      expect(undone.relations[0].targetIds).toEqual(["a"]);
+    });
+
+    it("prunes relations left with no targets after deletion", () => {
+      const a = makeToken("a");
+      const b = makeToken("b");
+      // Target side references only "b"; popping "b" empties the target.
+      const orphanRel = new RelationGroup(["a"], ["b"], labelA, "rel-1");
+      const pdf = new PdfAnnotations([a, b], [orphanRel], []);
+      const undone = pdf.undoAnnotation();
+      expect(undone.relations).toHaveLength(0);
     });
   });
 });
