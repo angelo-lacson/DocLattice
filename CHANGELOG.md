@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Forced-by-selected-relation visibility now respects explicit user selection regardless of `showStructural`** (Issue #1294): In `frontend/src/components/annotator/hooks/useVisibleAnnotations.ts:54-62`, the IDs forced visible by a selected relation were previously only merged into `forcedIds` inside the `if (showStructural)` branch. With structural annotations toggled off, clicking a relation in the sidebar failed to highlight its member annotations — making the relation sidebar effectively unusable in that mode. Moved the `forcedBySelectedRelationIds` merge outside the structural branch so explicit user selection always wins (consistent with the existing `forcedBySelection` treatment). Structural-relationships auto-forcing (`showStructuralRelationships`) remains gated on `showStructural`, since that path is implicit rather than user-initiated.
+  - Updated `frontend/src/components/annotator/hooks/__tests__/useVisibleAnnotations.test.tsx`: replaced the pinning test that documented the bug ("does NOT apply forced-by-selected-relation when showStructural is false") with two assertions verifying the corrected behavior — forced-by-selected-relation now applies to both non-structural annotations (overriding a label filter) and structural annotations when `showStructural` is false. All 16 tests in the file pass; `tsc --noEmit` clean.
+
 ### Added
 
 - **Extracts DataGrid & Detail component test coverage** (Issue #1282): Expanded Playwright component tests for the two biggest uncovered files in `frontend/src/components/extracts/`. Previously at 32.5% and 23.0% line coverage respectively (~990 uncovered lines combined); the new tests exercise the high-signal branches listed in the issue.
