@@ -34,6 +34,10 @@ import {
 const CORPUS_TITLE = "E2E Test Corpus";
 const DOC_TITLE = "E2E Test Document";
 
+/** Escape every RegExp metacharacter in a literal string. */
+const escapeRegExp = (s: string): string =>
+  s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
 test.describe("Routing round-trip", () => {
   test("deep-links a corpus, navigates back, then deep-links a document", async ({
     page,
@@ -92,12 +96,11 @@ test.describe("Routing round-trip", () => {
       if (!corpusHref) throw new Error("expected corpusHref to be captured");
       const slugPath = new URL(corpusHref).pathname;
       await spaNavigate(page, slugPath);
-      await expect(page).toHaveURL(
-        new RegExp(slugPath.replace(/[/]/g, "\\/")),
-        {
-          timeout: 15_000,
-        }
-      );
+      // Fully escape every regex metacharacter in the path, not just `/` —
+      // CodeQL flagged the old partial escape as js/incomplete-sanitization.
+      await expect(page).toHaveURL(new RegExp(escapeRegExp(slugPath)), {
+        timeout: 15_000,
+      });
       await expect(page.getByText(CORPUS_TITLE).first()).toBeVisible({
         timeout: 20_000,
       });

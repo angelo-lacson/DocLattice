@@ -45,8 +45,10 @@ export const ExtractDetailTestWrapper: React.FC<WrapperProps> = ({
   mocks = [],
   authenticated = true,
 }) => {
-  const initialized = React.useRef(false);
-  if (!initialized.current) {
+  // useMemo with an empty dep array seeds the reactive vars exactly once
+  // before the first commit, without producing a side-effect on every
+  // render (StrictMode-safe). useEffect cleans up on unmount.
+  React.useMemo(() => {
     if (authenticated) {
       authToken("test-auth-token");
       userObj({
@@ -67,8 +69,12 @@ export const ExtractDetailTestWrapper: React.FC<WrapperProps> = ({
       backendUserObj(null);
     }
     openedExtract(extract);
-    initialized.current = true;
-  }
+    // Intentionally scoped to mount — test wrappers mount once per test and
+    // unmount via the returned cleanup, so the reactive-var changes
+    // shouldn't re-fire when `extract` identity shifts during a single
+    // mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   React.useEffect(() => {
     return () => {
