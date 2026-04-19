@@ -45,12 +45,7 @@ import {
   RelationGroup,
   DocTypeAnnotation,
 } from "../../types/annotations";
-import {
-  pdfAnnotationsAtom,
-  structuralAnnotationsAtom,
-  initialAnnotationsAtom,
-  initialRelationsAtom,
-} from "../../context/AnnotationAtoms";
+import { pdfAnnotationsAtom } from "../../context/AnnotationAtoms";
 import { selectedDocumentAtom } from "../../context/DocumentAtom";
 import { corpusStateAtom } from "../../context/CorpusAtom";
 import {
@@ -331,20 +326,83 @@ describe("AnnotationHooks", () => {
 
   describe("useCreateAnnotation", () => {
     it("short-circuits (no state change, no mutation) without a corpus", async () => {
-      const { result } = renderHook(() => useCreateAnnotation(), {
-        wrapper: buildWrapper({ withCorpus: false }),
-      });
+      // MockedProvider has NO mocks — if the hook fires the mutation
+      // anyway, Apollo throws "No more mocked responses" which surfaces
+      // through the rendered hook. The real assertion is that state and
+      // the mutation side both stay empty.
+      const { result } = renderHook(
+        () => ({
+          create: useCreateAnnotation(),
+          state: usePdfAnnotations(),
+        }),
+        { wrapper: buildWrapper({ withCorpus: false }) }
+      );
 
       const ann = makeSpan("new");
       await act(async () => {
-        await result.current(ann);
+        await result.current.create(ann);
       });
 
-      // No state write happened for the new annotation
-      const { result: stateResult } = renderHook(() => usePdfAnnotations(), {
-        wrapper: buildWrapper({ withCorpus: false }),
+      expect(result.current.state.pdfAnnotations.annotations).toHaveLength(0);
+    });
+
+    it("adds the server-returned annotation (with server-assigned id) on a successful mutation", async () => {
+      const localAnn = makeSpan("local-tmp-id", 0, 5, "hello");
+      const serverAssignedId = "server-generated-id-123";
+
+      const mocks: MockedResponse[] = [
+        {
+          request: {
+            query: REQUEST_ADD_ANNOTATION,
+            variables: {
+              json: localAnn.json,
+              documentId: mockDocument.id,
+              corpusId: mockCorpus.id,
+              annotationLabelId: mockLabel.id,
+              rawText: localAnn.rawText,
+              page: localAnn.page,
+              annotationType: LabelType.SpanLabel,
+            },
+          },
+          result: {
+            data: {
+              addAnnotation: {
+                ok: true,
+                annotation: {
+                  id: serverAssignedId,
+                  page: 0,
+                  rawText: "hello",
+                  json: { start: 0, end: 5 },
+                  annotationType: LabelType.SpanLabel,
+                  annotationLabel: mockLabel,
+                  myPermissions: ["CAN_READ", "CAN_UPDATE", "CAN_REMOVE"],
+                  isPublic: false,
+                  sourceNodeInRelationships: { edges: [] },
+                },
+              },
+            },
+          },
+        },
+      ];
+
+      const { result } = renderHook(
+        () => ({
+          create: useCreateAnnotation(),
+          state: usePdfAnnotations(),
+        }),
+        { wrapper: buildWrapper({ mocks }) }
+      );
+
+      await act(async () => {
+        await result.current.create(localAnn);
       });
-      expect(stateResult.current.pdfAnnotations.annotations).toHaveLength(0);
+
+      expect(result.current.state.pdfAnnotations.annotations).toHaveLength(1);
+      // The key contract: the id in state comes from the server response,
+      // not the local temporary id that was passed in.
+      expect(result.current.state.pdfAnnotations.annotations[0].id).toBe(
+        serverAssignedId
+      );
     });
 
     it("drops annotations with neither text nor tokens", async () => {
@@ -458,6 +516,54 @@ describe("AnnotationHooks", () => {
         "ann-1"
       );
       expect(result.current.state.pdfAnnotations.unsavedChanges).toBe(true);
+    });
+
+    it("updates one annotation in place without dropping siblings", async () => {
+      // Regression: earlier versions called replaceAnnotations([updated])
+      // which collapsed the full list to the one updated annotation.
+      // The updated hook must preserve siblings and swap only the match.
+      const sibling = makeSpan("ann-sibling", 100, 105, "world");
+      const target = makeSpan("ann-target", 0, 5, "hello");
+
+      const mocks: MockedResponse[] = [
+        {
+          request: {
+            query: REQUEST_UPDATE_ANNOTATION,
+            variables: {
+              id: target.id,
+              json: target.json,
+              rawText: target.rawText,
+              page: target.page,
+              annotationLabel: mockLabel.id,
+            },
+          },
+          result: {
+            data: { updateAnnotation: { ok: true, message: "ok" } },
+          },
+        },
+      ];
+
+      const { result } = renderHook(
+        () => ({
+          update: useUpdateAnnotation(),
+          state: usePdfAnnotations(),
+        }),
+        {
+          wrapper: buildWrapper({
+            mocks,
+            initialAnnotations: [sibling, target],
+          }),
+        }
+      );
+
+      await act(async () => {
+        await result.current.update(target);
+      });
+
+      const ids = result.current.state.pdfAnnotations.annotations.map(
+        (a) => a.id
+      );
+      expect(ids).toEqual(["ann-sibling", "ann-target"]);
     });
   });
 
