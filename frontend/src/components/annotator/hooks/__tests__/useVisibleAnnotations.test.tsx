@@ -305,9 +305,10 @@ describe("useVisibleAnnotations", () => {
       expect(ids).toEqual(["src", "tgt"]); // "other" still filtered out
     });
 
-    it("does NOT apply forced-by-selected-relation when showStructural is false", () => {
-      // Per implementation: selected-relation IDs are added to forcedIds only
-      // inside the `if (showStructural)` block.
+    it("applies forced-by-selected-relation even when showStructural is false (issue #1289)", () => {
+      // Explicit relation selection is a user-initiated signal and should
+      // force its members visible regardless of the showStructural toggle,
+      // mirroring the behavior of forcedBySelection for individual annotations.
       const src = makeAnnot({ id: "src" });
       const tgt = makeAnnot({ id: "tgt" });
       const rel = new RelationGroup(["src"], ["tgt"], labelA, "rel-1");
@@ -321,7 +322,7 @@ describe("useVisibleAnnotations", () => {
             showStructuralRelationships: false,
             showSelectedOnly: false,
           },
-          controls: { spanLabelsToView: [labelB] }, // excludes both
+          controls: { spanLabelsToView: [labelB] }, // would otherwise exclude both
           selection: {
             selectedAnnotations: [],
             selectedRelations: [rel],
@@ -330,7 +331,35 @@ describe("useVisibleAnnotations", () => {
       );
 
       const { result } = renderHook(() => useVisibleAnnotations());
-      expect(result.current).toHaveLength(0);
+      expect(result.current.map((x) => x.id).sort()).toEqual(["src", "tgt"]);
+    });
+
+    it("keeps structural relation members visible when showStructural is false but the relation is selected", () => {
+      // Relation members that happen to be structural should still be forced
+      // visible when the user has explicitly selected the relation, even with
+      // the structural toggle off.
+      const src = makeAnnot({ id: "src", structural: true });
+      const tgt = makeAnnot({ id: "tgt", structural: true });
+      const rel = new RelationGroup(["src"], ["tgt"], labelA, "rel-1");
+
+      primeMocks(
+        defaultState({
+          annotations: [src, tgt],
+          relations: [rel],
+          display: {
+            showStructural: false,
+            showStructuralRelationships: false,
+            showSelectedOnly: false,
+          },
+          selection: {
+            selectedAnnotations: [],
+            selectedRelations: [rel],
+          },
+        })
+      );
+
+      const { result } = renderHook(() => useVisibleAnnotations());
+      expect(result.current.map((x) => x.id).sort()).toEqual(["src", "tgt"]);
     });
   });
 
