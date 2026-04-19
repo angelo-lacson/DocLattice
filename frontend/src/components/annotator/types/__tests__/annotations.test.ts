@@ -227,19 +227,25 @@ describe("RelationGroup", () => {
     });
 
     it("survives with updated sourceIds when one of many sources is deleted", () => {
-      const rel = new RelationGroup(["a", "b"], ["c"], labelA, "rel-1");
+      const rel = new RelationGroup(["a", "b"], ["c"], labelA, "rel-1", true);
       const updated = rel.updateForAnnotationDeletion(makeToken("a"));
       expect(updated).toBeInstanceOf(RelationGroup);
       expect(updated!.sourceIds).toEqual(["b"]);
       expect(updated!.targetIds).toEqual(["c"]);
+      // The surviving relation must preserve its identity and structural flag
+      // so downstream persistence/diff logic treats it as the same entity.
+      expect(updated!.id).toBe("rel-1");
+      expect(updated!.structural).toBe(true);
     });
 
     it("survives with updated targetIds when one of many targets is deleted", () => {
-      const rel = new RelationGroup(["a"], ["b", "c"], labelA, "rel-1");
+      const rel = new RelationGroup(["a"], ["b", "c"], labelA, "rel-1", true);
       const updated = rel.updateForAnnotationDeletion(makeToken("b"));
       expect(updated).toBeInstanceOf(RelationGroup);
       expect(updated!.sourceIds).toEqual(["a"]);
       expect(updated!.targetIds).toEqual(["c"]);
+      expect(updated!.id).toBe("rel-1");
+      expect(updated!.structural).toBe(true);
     });
 
     it("survives unchanged when the deleted annotation is not in the relation", () => {
@@ -248,6 +254,7 @@ describe("RelationGroup", () => {
       expect(updated).toBeInstanceOf(RelationGroup);
       expect(updated!.sourceIds).toEqual(["a"]);
       expect(updated!.targetIds).toEqual(["b"]);
+      expect(updated!.id).toBe("rel-1");
     });
   });
 });
