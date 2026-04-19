@@ -232,8 +232,7 @@ describe("RelationGroup", () => {
       expect(updated).toBeInstanceOf(RelationGroup);
       expect(updated!.sourceIds).toEqual(["b"]);
       expect(updated!.targetIds).toEqual(["c"]);
-      // The surviving relation must preserve its identity and structural flag
-      // so downstream persistence/diff logic treats it as the same entity.
+      // Preserve identity/structural so persistence treats it as same entity.
       expect(updated!.id).toBe("rel-1");
       expect(updated!.structural).toBe(true);
     });
@@ -255,6 +254,7 @@ describe("RelationGroup", () => {
       expect(updated!.sourceIds).toEqual(["a"]);
       expect(updated!.targetIds).toEqual(["b"]);
       expect(updated!.id).toBe("rel-1");
+      expect(updated!.structural).toBe(false);
     });
   });
 });
