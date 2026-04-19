@@ -228,7 +228,6 @@ export const DocumentRelationshipModalTestWrapper: React.FC<Props> = (
   );
 };
 
-/** Helper for tests: build a mock relationship label. */
 export function makeMockRelationLabel(
   overrides: Partial<AnnotationLabelType> = {}
 ): AnnotationLabelType {

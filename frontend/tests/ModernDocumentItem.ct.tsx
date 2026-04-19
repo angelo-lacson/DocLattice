@@ -1,5 +1,3 @@
-// Component tests for ModernDocumentItem — see issue #1280.
-
 import React from "react";
 import { test, expect } from "./utils/coverage";
 import { MockedProvider } from "@apollo/client/testing";
@@ -690,7 +688,10 @@ async function openContextMenu(page: import("@playwright/test").Page) {
       }
       el = el.parentElement;
     }
-    throw new Error("No onContextMenu handler found in ancestry");
+    throw new Error(
+      "openContextMenu: no onContextMenu handler found walking up from .checkbox — " +
+        "is the component rendered with the checkbox present?"
+    );
   });
 }
 
