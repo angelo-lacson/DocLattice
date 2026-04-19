@@ -1,110 +1,14 @@
 import React from "react";
-import { gql } from "@apollo/client";
 import { test, expect } from "./utils/coverage";
 import { MockedResponse } from "@apollo/client/testing";
 import { CorpusAgentManagementTestWrapper } from "./CorpusAgentManagementTestWrapper";
+import { GET_CORPUS_AGENTS, GET_AVAILABLE_TOOLS } from "../src/graphql/queries";
+import {
+  CREATE_AGENT_CONFIGURATION,
+  DELETE_AGENT_CONFIGURATION,
+} from "../src/graphql/mutations";
 
 const TEST_CORPUS_ID = "corpus-aam-1";
-
-/* -------------------------------------------------------------------------- */
-/* Inline gql duplicated from CorpusAgentManagement.tsx                        */
-/* MockedProvider matches by document so the strings must be identical.        */
-/* -------------------------------------------------------------------------- */
-
-const GET_CORPUS_AGENTS = gql`
-  query GetCorpusAgents($corpusId: String!) {
-    agentConfigurations(corpusId: $corpusId) {
-      edges {
-        node {
-          id
-          name
-          slug
-          description
-          systemInstructions
-          availableTools
-          permissionRequiredTools
-          badgeConfig
-          avatarUrl
-          scope
-          isActive
-          isPublic
-          creator {
-            id
-            username
-          }
-          created
-          modified
-        }
-      }
-    }
-  }
-`;
-
-const GET_AVAILABLE_TOOLS = gql`
-  query GetAvailableTools {
-    availableTools {
-      name
-      description
-      category
-      requiresCorpus
-      requiresApproval
-    }
-    availableToolCategories
-  }
-`;
-
-const CREATE_AGENT_CONFIGURATION = gql`
-  mutation CreateAgentConfiguration(
-    $name: String!
-    $slug: String
-    $description: String!
-    $systemInstructions: String!
-    $availableTools: [String]
-    $permissionRequiredTools: [String]
-    $badgeConfig: GenericScalar
-    $avatarUrl: String
-    $scope: String!
-    $corpusId: ID
-    $isPublic: Boolean
-  ) {
-    createAgentConfiguration(
-      name: $name
-      slug: $slug
-      description: $description
-      systemInstructions: $systemInstructions
-      availableTools: $availableTools
-      permissionRequiredTools: $permissionRequiredTools
-      badgeConfig: $badgeConfig
-      avatarUrl: $avatarUrl
-      scope: $scope
-      corpusId: $corpusId
-      isPublic: $isPublic
-    ) {
-      ok
-      message
-      agent {
-        id
-        name
-        slug
-        description
-        badgeConfig
-        availableTools
-        permissionRequiredTools
-        isActive
-        isPublic
-      }
-    }
-  }
-`;
-
-const DELETE_AGENT_CONFIGURATION = gql`
-  mutation DeleteAgentConfiguration($agentId: ID!) {
-    deleteAgentConfiguration(agentId: $agentId) {
-      ok
-      message
-    }
-  }
-`;
 
 /* -------------------------------------------------------------------------- */
 /* Mock builders                                                              */

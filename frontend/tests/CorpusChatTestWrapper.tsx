@@ -7,6 +7,18 @@ import { CorpusChat } from "../src/components/corpuses/CorpusChat";
 import { authToken, userObj } from "../src/graphql/cache";
 import { relayStylePagination } from "@apollo/client/utilities";
 
+// Module-level init: the WebSocket effect in CorpusChat needs authToken/userObj
+// populated *before* the first render. Calling these in the component body is a
+// side-effect-in-render that fires on every re-render (and in StrictMode, twice
+// on mount). Priming them once at module load is equivalent, safer, and fires
+// exactly before the first render of any test using this wrapper.
+authToken("test-auth-token");
+userObj({
+  id: "test-user",
+  email: "test@example.com",
+  username: "testuser",
+});
+
 const createTestCache = () =>
   new InMemoryCache({
     typePolicies: {
@@ -42,16 +54,6 @@ export const CorpusChatTestWrapper: React.FC<Props> = ({
   onNavigateHome,
   onMessageSelect = () => {},
 }) => {
-  // Set auth synchronously so the WebSocket effect sees the token on the
-  // very first render — this avoids a re-mount race that closes/reopens the
-  // socket and can drop early test messages.
-  authToken("test-auth-token");
-  userObj({
-    id: "test-user",
-    email: "test@example.com",
-    username: "testuser",
-  });
-
   return (
     <MemoryRouter initialEntries={["/"]}>
       <JotaiProvider>
