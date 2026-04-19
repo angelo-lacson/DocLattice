@@ -38,17 +38,29 @@ test.describe("UserProfileRoute - Hook Ordering Regression (Issue #1295)", () =>
     // "Rendered more hooks than during the previous render". With the fix,
     // useQuery is called unconditionally and skip: !slug gates the network
     // request, so the component renders without crashing on either path.
+    //
+    // NOTE: This is a narrow regression guard rather than a full reproduction
+    // of the original crash. Reproducing the exact crash in-process requires
+    // keeping the same fiber across /profile -> /users/:slug, which React
+    // Router <Routes> doesn't do (it unmounts the old element when the
+    // matched path changes). The positive assertions below (loading display
+    // for the slug path, absence of hook-count errors) prove the hook
+    // ordering is stable — exactly what the fix guarantees statically.
     const consoleErrors: string[] = [];
     page.on("console", (msg) => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
 
+    // Delay the mock so the render parks on the loading state, giving us
+    // positive visible evidence (not just the absence of a crash) that
+    // useQuery ran under skip:false on the slug path.
     const mocks = [
       {
         request: {
           query: GET_USER,
           variables: { slug: "publicuser-123" },
         },
+        delay: 5000,
         result: {
           data: {
             userBySlug: mockPublicUser,
@@ -68,10 +80,11 @@ test.describe("UserProfileRoute - Hook Ordering Regression (Issue #1295)", () =>
       </MockedProvider>
     );
 
-    // Either the rendered profile text or the loading display proves the
-    // hook ordering is stable. We wait for the user name to appear once the
-    // GET_USER mock resolves, but first ensure no Rules-of-Hooks error fired.
-    await page.waitForTimeout(500);
+    // Wait for positive DOM evidence that the slug render reached the
+    // useQuery call (skip:false branch) instead of a silent bailout.
+    await expect(page.locator("text=Loading profile...")).toBeVisible({
+      timeout: 10000,
+    });
 
     const hookErrors = consoleErrors.filter((e) =>
       e.includes("Rendered more hooks than during the previous render")
