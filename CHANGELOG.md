@@ -51,6 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `frontend/src/utils/graphqlGuards.test.ts` — Added explicit coverage for `createSafeQueryExecutor`'s `catch (error)` branch (line 129, logs via `console.error` and surfaces the error) and the validation-blocked `console.warn` branch.
   - Verification: 49/49 new + updated tests pass via `yarn vitest run` on all four files; `tsc --noEmit` and `prettier --check` both clean.
 
+### Fixed
+
+- **`PdfAnnotations.undoAnnotation()` mutated the caller's annotations array** (Issue #1291): `frontend/src/components/annotator/types/annotations.ts:311` called `this.annotations.pop()` before constructing the new `PdfAnnotations`, silently shortening the original instance's `annotations` array even though the field is declared `readonly`. This violated the immutability contract the other methods (`saved()`, `update()`, `fromObject()`) uphold and is a footgun for the upcoming PdfAnnotator package extraction (#1283) — any consumer holding a reference to the pre-undo instance would see a stale length without a state change. The method now derives `popped` via index access and `remaining` via `slice(0, -1)`, so the caller's array is untouched. The pinning test in `frontend/src/components/annotator/types/__tests__/annotations.test.ts` was updated to assert non-mutation (`pdf.annotations` stays `[a, b]` after `pdf.undoAnnotation()`), and the "known wrinkle" comment was removed.
+
 ### Removed
 
 - **Frontend dead Jotai atoms and Apollo reactive vars** (Issue #1243): Removed unused state management exports after triple-verifying each against both `frontend/src/` and `frontend/tests/` — atoms consumed only by test wrappers (e.g. `hideLabelsAtom`, `rawPermissionsAtom`, the deprecated `showAnnotation*Atom` set) were left in place per the issue's scope-correction note.
