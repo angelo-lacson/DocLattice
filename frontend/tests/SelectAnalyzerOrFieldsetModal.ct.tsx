@@ -17,6 +17,7 @@
  */
 import React from "react";
 import { test, expect } from "./utils/coverage";
+import { docScreenshot } from "./utils/docScreenshot";
 import { SelectAnalyzerOrFieldsetModalTestWrapper } from "./SelectAnalyzerOrFieldsetModalTestWrapper";
 import {
   SAMPLE_CORPUS,
@@ -111,6 +112,8 @@ test.describe("SelectAnalyzerOrFieldsetModal — analyzer tab", () => {
     });
     await expect(runBtn).toBeVisible();
     await expect(runBtn).toBeDisabled();
+
+    await docScreenshot(page, "widgets--select-analyzer-modal--analyzer-grid");
   });
 
   test("shows document-specific subtitle when a document is provided", async ({
