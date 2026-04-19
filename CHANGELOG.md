@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Harden backend CI path-filter job** (Issue #1290, `.github/workflows/backend.yml`): Tightened the `changes` path-filter job so transient `dorny/paths-filter` failures no longer silently skip `linter` / `pytest`.
+  - Dropped the redundant `actions/checkout` step in the `changes` job — `dorny/paths-filter@v3` fetches diffs via the GitHub API and does not need a local clone.
+  - Added `Dockerfile*` to the backend path filter so root-level Dockerfile changes (which directly affect the backend build environment) correctly trigger backend CI.
+  - Marked the `changes` job `continue-on-error: true` so a transient GitHub API failure does not fail the workflow.
+  - Changed the downstream gate from `needs.changes.outputs.backend == 'true'` to `needs.changes.outputs.backend != 'false'` on both `linter` and `pytest`. With `continue-on-error: true`, a failed `changes` job produces an empty-string output; the old `== 'true'` gate evaluated to `false` for PR events and silently skipped downstream jobs — the exact failure mode the "fail open" comment claimed to prevent. The new `!= 'false'` gate runs downstream jobs for both the happy path (`'true'`) and the transient-failure path (`''`), only skipping when the filter explicitly reports no backend changes (`'false'`).
+  - Reworded the linter path-filter comment to clarify that gating only affects PRs with no backend changes; push events to protected branches still run unconditionally.
+
 ### Fixed
 
 - **Forced-by-selected-relation visibility now respects explicit user selection regardless of `showStructural`** (Issue #1294): In `frontend/src/components/annotator/hooks/useVisibleAnnotations.ts:54-62`, the IDs forced visible by a selected relation were previously only merged into `forcedIds` inside the `if (showStructural)` branch. With structural annotations toggled off, clicking a relation in the sidebar failed to highlight its member annotations — making the relation sidebar effectively unusable in that mode. Moved the `forcedBySelectedRelationIds` merge outside the structural branch so explicit user selection always wins (consistent with the existing `forcedBySelection` treatment). Structural-relationships auto-forcing (`showStructuralRelationships`) remains gated on `showStructural`, since that path is implicit rather than user-initiated.

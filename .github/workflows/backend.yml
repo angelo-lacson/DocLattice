@@ -57,7 +57,10 @@ jobs:
     needs: changes
     # Skipping via path filter only applies to PRs with no backend changes.
     # Push events to protected branches always run unconditionally.
-    if: needs.changes.outputs.backend == 'true' || github.event_name == 'push'
+    # Using `!= 'false'` rather than `== 'true'` so a transient `changes` failure
+    # (outputs.backend is '' when the job errors under continue-on-error) still
+    # runs downstream jobs — the actual "fail open" behavior.
+    if: needs.changes.outputs.backend != 'false' || github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -82,7 +85,8 @@ jobs:
 
   pytest:
     needs: [changes, linter]
-    if: needs.changes.outputs.backend == 'true' || github.event_name == 'push'
+    # Same fail-open semantics as the linter gate above.
+    if: needs.changes.outputs.backend != 'false' || github.event_name == 'push'
     runs-on: yuge
     timeout-minutes: 180
     permissions:
