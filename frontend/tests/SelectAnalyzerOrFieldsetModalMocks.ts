@@ -11,11 +11,6 @@ import type {
   FieldsetType,
 } from "../src/types/graphql-api";
 
-// Note: `FieldsetType` is imported only for the `buildFieldsetsMock`
-// parameter typing — a `makeFieldset` fixture factory was removed after the
-// fieldset tab tests switched to explicit inline fixtures (no consumers
-// remaining). Re-add if future tests need a minimal factory.
-
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
@@ -108,7 +103,9 @@ export const buildFieldsetsMock = (
 
 /**
  * Build the standard mock set for tests. GraphQL queries may refetch
- * (cache-and-network), so we provide duplicates.
+ * (cache-and-network), so we provide three duplicates per query — one for
+ * the initial mount, one for the cache-and-network refetch, and one for
+ * strict-mode/tab-switch re-renders.
  */
 export const buildMockSet = (
   analyzers: AnalyzerType[],

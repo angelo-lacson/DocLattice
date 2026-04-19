@@ -19,6 +19,9 @@ const extractTasksMock: MockedResponse = {
   },
 };
 
+// One per test that opens CreateColumnModal (which refetches this query);
+// MockedProvider consumes entries sequentially, so we duplicate rather than
+// reuse. Extra entries cover strict-mode/double-mount re-renders.
 const defaultTaskMocks: MockedResponse[] = Array.from({ length: 6 }, () => ({
   ...extractTasksMock,
 }));
