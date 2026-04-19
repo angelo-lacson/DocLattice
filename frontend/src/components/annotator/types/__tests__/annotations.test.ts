@@ -10,6 +10,7 @@
  * surface. Any silent change to .update() semantics, the readonly fields,
  * or the reducer-style return of PdfAnnotations would break downstream
  * consumers, so they are pinned here.
+ *
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -288,9 +289,18 @@ describe("PdfAnnotations", () => {
       const undone = pdf.undoAnnotation();
       expect(undone).not.toBe(pdf);
       expect(undone.unsavedChanges).toBe(true);
-      // The pop on .annotations affects the original array, which is a known
-      // wrinkle we pin here. undone.annotations should contain only "a".
       expect(undone.annotations.map((x) => x.id)).toEqual(["a"]);
+    });
+
+    it("does not mutate the original instance's annotations array", () => {
+      const a = makeToken("a");
+      const b = makeToken("b");
+      const originalArray = [a, b];
+      const pdf = new PdfAnnotations(originalArray, [], []);
+      pdf.undoAnnotation();
+      expect(pdf.annotations).toBe(originalArray);
+      expect(pdf.annotations.map((x) => x.id)).toEqual(["a", "b"]);
+      expect(originalArray.map((x) => x.id)).toEqual(["a", "b"]);
     });
 
     it("prunes any relations that referenced only the popped annotation", () => {
@@ -306,6 +316,16 @@ describe("PdfAnnotations", () => {
       expect(undone.relations).toHaveLength(1);
       expect(undone.relations[0].sourceIds).toEqual(["a"]);
       expect(undone.relations[0].targetIds).toEqual(["a"]);
+    });
+
+    it("prunes relations left with no targets after deletion", () => {
+      const a = makeToken("a");
+      const b = makeToken("b");
+      // Target side references only "b"; popping "b" empties the target.
+      const orphanRel = new RelationGroup(["a"], ["b"], labelA, "rel-1");
+      const pdf = new PdfAnnotations([a, b], [orphanRel], []);
+      const undone = pdf.undoAnnotation();
+      expect(undone.relations).toHaveLength(0);
     });
   });
 });

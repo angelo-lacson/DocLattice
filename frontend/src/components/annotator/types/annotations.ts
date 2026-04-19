@@ -28,7 +28,7 @@ export class RelationGroup {
     public sourceIds: string[],
     public targetIds: string[],
     public label: AnnotationLabelType,
-    public id: string | string = uuidv4(),
+    public id: string = uuidv4(),
     public structural: boolean = false
   ) {
     this.id = id;
@@ -309,17 +309,18 @@ export class PdfAnnotations {
 
   /** Remove the most recently added annotation and clean up any relations referencing it. */
   undoAnnotation(): PdfAnnotations {
-    const popped = this.annotations.pop();
-    if (!popped) {
+    if (this.annotations.length === 0) {
       // No annotations, nothing to update
       return this;
     }
+    const popped = this.annotations[this.annotations.length - 1];
+    const remaining = this.annotations.slice(0, -1);
     const newRelations = this.relations
       .map((r) => r.updateForAnnotationDeletion(popped))
       .filter((r) => r !== undefined);
 
     return new PdfAnnotations(
-      this.annotations,
+      remaining,
       newRelations as RelationGroup[],
       this.docTypes,
       true
