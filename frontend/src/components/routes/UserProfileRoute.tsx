@@ -29,7 +29,7 @@ export const UserProfileRoute: React.FC = () => {
     {
       variables: { slug: slug ?? "" },
       skip: !slug,
-    },
+    }
   );
 
   // If no slug provided, redirect to current user's profile
