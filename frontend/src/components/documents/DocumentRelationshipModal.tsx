@@ -396,10 +396,7 @@ export const DocumentRelationshipModal: React.FC<
     return allDocuments.filter((doc) => !usedIds.has(doc.id));
   }, [allDocuments, sourceIds, targetIds]);
 
-  // Relationship labels, filtered by the search term. Filtering happens here
-  // (not inside the Dropdown via `searchable="local"`) so `labelSearchTerm`
-  // stays in sync and drives the "Create label:" empty-state button —
-  // @os-legal/ui's Dropdown only fires `onSearchChange` in `async` mode.
+  // Manual filter keeps `labelSearchTerm` in sync — @os-legal/ui's Dropdown only fires `onSearchChange` in `async` mode.
   const filteredRelationshipLabels = useMemo(() => {
     if (!hasCorpus) {
       return [];
