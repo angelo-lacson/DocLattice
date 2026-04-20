@@ -466,6 +466,20 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
             setIsProcessing(false);
             break;
           case "SYNC_CONTENT": {
+            // SYNC_CONTENT is a standalone, non-streaming assistant message.
+            // Append it to chat so it renders, then persist sources/timeline.
+            setChat((prev) => [
+              ...prev,
+              {
+                messageId: data?.message_id || `asst_${Date.now()}`,
+                user: "Assistant",
+                content,
+                timestamp: new Date().toLocaleString(),
+                isAssistant: true,
+                isComplete: true,
+              },
+            ]);
+
             const sourcesToPass =
               data?.sources && Array.isArray(data.sources)
                 ? data.sources
