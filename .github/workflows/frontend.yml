@@ -94,6 +94,7 @@ jobs:
           flags: frontend-component,frontend
           name: frontend-ct-coverage
           fail_ci_if_error: false
+          disable_search: true
 
   build:
     name: Build
@@ -148,6 +149,7 @@ jobs:
           flags: frontend-unit,frontend
           name: frontend-unit-coverage
           fail_ci_if_error: false
+          disable_search: true
 
   docker-build:
     name: Build Docker Image
