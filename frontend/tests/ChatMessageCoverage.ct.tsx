@@ -24,6 +24,7 @@ import {
   TimelineEntry,
 } from "../src/components/widgets/chat/ChatMessage";
 import { ChatMessageTestWrapper } from "./ChatMessageTestWrapper";
+import { docScreenshot } from "./utils/docScreenshot";
 
 const ASSISTANT_BASE = {
   user: "Assistant",
@@ -122,6 +123,8 @@ test.describe("ChatMessage — markdown rendering", () => {
     await expect(
       bubble.locator("li", { hasText: "second item" })
     ).toBeVisible();
+
+    await docScreenshot(page, "widgets--chat-message--markdown");
   });
 
   test("renders GitHub-flavored markdown tables", async ({ mount, page }) => {
@@ -179,9 +182,9 @@ test.describe("ChatMessage — selection", () => {
     await expect(bubble).toBeVisible({ timeout: 5000 });
     await bubble.click();
 
-    // Give the handler a tick to fire
-    await page.waitForTimeout(100);
-    expect(clicks).toBeGreaterThanOrEqual(1);
+    await expect
+      .poll(() => clicks, { timeout: 2000 })
+      .toBeGreaterThanOrEqual(1);
   });
 
   test("renders the source indicator when sources are present", async ({
@@ -378,8 +381,9 @@ test.describe("ChatMessage — sources preview", () => {
     // Click directly on the chip (not the Annotate / Expand controls)
     await chip.click({ position: { x: 5, y: 5 } });
 
-    await page.waitForTimeout(100);
-    expect(clicks).toBeGreaterThanOrEqual(1);
+    await expect
+      .poll(() => clicks, { timeout: 2000 })
+      .toBeGreaterThanOrEqual(1);
   });
 
   test("expands and collapses an individual source", async ({

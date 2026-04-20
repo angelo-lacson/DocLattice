@@ -76,7 +76,14 @@ export const buildFieldsetsMock = (
   fieldsets: FieldsetType[],
   searchText = ""
 ): MockedResponse => ({
-  request: { query: GET_FIELDSETS, variables: { searchText } },
+  // UnifiedFieldsetSelector passes `searchQuery ? { searchText } : {}`, so the
+  // initial mount fires GET_FIELDSETS with `variables: {}`. Match that exactly
+  // — MockedProvider does a deep-equal on variables and `{ searchText: "" }`
+  // would silently miss the initial query and leave the fieldset tab empty.
+  request: {
+    query: GET_FIELDSETS,
+    variables: searchText ? { searchText } : {},
+  },
   result: {
     data: {
       fieldsets: {
