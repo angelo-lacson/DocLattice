@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **PR #1297 follow-up — tighten component tests and unit-test coverage** (Issue #1321):
+  - `frontend/src/components/documents/__tests__/DocumentRelationshipModal.test.ts`: added a test that pins the `labelType: undefined` edge case for `filterRelationshipLabels` (previously only `null` non-relationship labels were covered), so the strict-equality guard against non-`RelationshipLabel` types is explicit.
+  - `frontend/tests/ModernDocumentItem.ct.tsx`:
+    - Extended the `__reactProps$` upgrade-risk comments on `clickViaReact` / `openContextMenu` to call out the build-hash suffix explicitly — the suffix rotates on every React build, so `Object.keys(el).find(k => k.startsWith("__reactProps$"))` is the only correct lookup pattern.
+    - `openContextMenu` now falls back to a full-document scan for an element with a React `onContextMenu` prop when the `.checkbox` anchor is absent (e.g. future conditional rendering of read-only items). The primary checkbox path is unchanged.
+    - Added `NOTE` comments on the relationship-popup `toBeAttached()` assertions explaining that they only verify DOM presence (the popup uses `visibility: hidden` + hover reveal) and when to switch to `toBeVisible()` instead.
+  - `frontend/tests/DocumentRelationshipModal.ct.tsx`:
+    - Replaced the DOM-order `removeButtons.nth(1)` assertion in the "removes document from target column" test with an XPath-based walk from the pill's visible title, so re-ordering the source/target layout can no longer silently test the wrong button.
+    - Strengthened the mutation-failure negative assertion: after submitting a failing mutation, wait for the submit button to re-enable (a positive signal that the `isSubmitting` finally-block has executed) before polling `onSuccessCalled === false`. Prevents the poll from passing immediately on the initial `false` value.
+  - `frontend/tests/utils/ReactiveVarObserver.tsx`: expanded the doc comment with a three-step recipe for extending the observer to additional reactive vars, matching the existing `viewingDocument` / `editingDocument` convention.
+
 ### Fixed
 
 - **`fullDatacellList` no-args path was unbounded** (Issue #1256, follow-up to PR #1235, `config/graphql/extract_types.py:131-148`): `ExtractType.resolve_full_datacell_list` capped the `limit` and `offset-only` branches at `MAX_FULL_DATACELL_LIST_LIMIT` but returned the entire queryset when called with no arguments. Authenticated callers hitting `fullDatacellList` directly (no `limit`, no `offset`) could bypass the payload bound. Collapsed all three code paths so every call — no-args, offset-only, or `limit`+`offset` — returns `qs[start : start + min(limit_or_max, MAX_FULL_DATACELL_LIST_LIMIT)]`. The embed UI is unaffected (it already passes `limit: 500`); direct API callers now receive at most 500 cells and must paginate via `offset` to walk the rest. Added regression test `test_full_datacell_list_no_args_capped_at_server_max` in `opencontractserver/tests/test_extract_queries.py` which creates 501 cells and asserts the no-args response returns exactly `MAX_FULL_DATACELL_LIST_LIMIT` while `datacellCount` reports the true total.
