@@ -215,6 +215,33 @@ test.describe("ChatMessage — selection", () => {
     await expect(indicator).not.toContainText("sources");
   });
 
+  test("source indicator renders plural 'sources' for multi-source count", async ({
+    mount,
+    page,
+  }) => {
+    // Exercises the `sources.length > 1` branch of the pluralisation ternary.
+    await mount(
+      <ChatMessageTestWrapper>
+        <ChatMessage
+          {...ASSISTANT_BASE}
+          content="Three citations."
+          isComplete={true}
+          timeline={[]}
+          sources={[
+            { text: "First snippet." },
+            { text: "Second snippet." },
+            { text: "Third snippet." },
+          ]}
+          isSelected={true}
+        />
+      </ChatMessageTestWrapper>
+    );
+
+    const indicator = page.locator('[data-testid="source-indicator"]');
+    await expect(indicator).toBeVisible({ timeout: 5000 });
+    await expect(indicator).toContainText("3 sources");
+  });
+
   test("source indicator falls back to 'View sources' when hasSources but sources is empty", async ({
     mount,
     page,
