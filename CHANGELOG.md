@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Simplified `RelationGroup.updateForAnnotationDeletion` pruning logic** (Issue #1317, follow-up to #1314, `frontend/src/components/annotator/types/annotations.ts:40-60`): The method previously branched on four near-duplicate conditions (`sourceEmpty && nowTargetEmpty`, `targetEmpty && nowSourceEmpty`, `!sourceEmpty && nowSourceEmpty`, `!targetEmpty && nowTargetEmpty`) each returning `undefined`. All four are equivalent to a single `nowSourceEmpty || nowTargetEmpty` check (`filter` is monotonic, so an originally-empty side stays empty after filtering). Collapsed the branches and removed the now-unused `sourceEmpty` / `targetEmpty` locals per the project's DRY guideline. Behavior is unchanged; existing regression tests in `frontend/src/components/annotator/types/__tests__/annotations.test.ts` still pass unmodified, confirming the simplification is semantics-preserving.
+
 ### Fixed
 
 - **Frontend coverage badge reported ~31% despite months of added tests** (`README.md:12`, `.github/workflows/codecov-notify.yml`, `.codecov.yml`, `frontend/vite.config.ts:210-223`): The README's "Frontend coverage" badge was pointing at `flag=frontend-unit` — the Vitest slice only. The three frontend suites (Vitest unit, Playwright component via `vite-plugin-istanbul`, Playwright E2E via `vite-plugin-istanbul`) upload to separate Codecov flags (`frontend-unit`, `frontend-component`, `frontend-e2e`) and were never merged into a single lcov. Recent PRs almost exclusively added Playwright component and E2E tests, so their coverage landed in `frontend-component`/`frontend-e2e` while the badge stayed stuck reading the Vitest slice.
