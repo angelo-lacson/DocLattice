@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **PR #1297 follow-up — tighten component tests and unit-test coverage** (Issue #1321):
+  - `frontend/src/components/documents/__tests__/DocumentRelationshipModal.test.ts`: added a test that pins the `labelType: undefined` edge case for `filterRelationshipLabels` (previously only `null` non-relationship labels were covered), so the strict-equality guard against non-`RelationshipLabel` types is explicit.
+  - `frontend/tests/ModernDocumentItem.ct.tsx`:
+    - Extended the `__reactProps$` upgrade-risk comments on `clickViaReact` / `openContextMenu` to call out the build-hash suffix explicitly — the suffix rotates on every React build, so `Object.keys(el).find(k => k.startsWith("__reactProps$"))` is the only correct lookup pattern.
+    - `openContextMenu` now falls back to a full-document scan for an element with a React `onContextMenu` prop when the `.checkbox` anchor is absent (e.g. future conditional rendering of read-only items). The primary checkbox path is unchanged.
+    - Added `NOTE` comments on the relationship-popup `toBeAttached()` assertions explaining that they only verify DOM presence (the popup uses `visibility: hidden` + hover reveal) and when to switch to `toBeVisible()` instead.
+  - `frontend/tests/DocumentRelationshipModal.ct.tsx`:
+    - Replaced the DOM-order `removeButtons.nth(1)` assertion in the "removes document from target column" test with an XPath-based walk from the pill's visible title, so re-ordering the source/target layout can no longer silently test the wrong button.
+    - Strengthened the mutation-failure negative assertion: after submitting a failing mutation, wait for the submit button to re-enable (a positive signal that the `isSubmitting` finally-block has executed) before polling `onSuccessCalled === false`. Prevents the poll from passing immediately on the initial `false` value.
+  - `frontend/tests/utils/ReactiveVarObserver.tsx`: expanded the doc comment with a three-step recipe for extending the observer to additional reactive vars, matching the existing `viewingDocument` / `editingDocument` convention.
+
 ### Fixed
 
 - **Frontend coverage badge reported ~31% despite months of added tests** (`README.md:12`, `.github/workflows/codecov-notify.yml`, `.codecov.yml`, `frontend/vite.config.ts:210-223`): The README's "Frontend coverage" badge was pointing at `flag=frontend-unit` — the Vitest slice only. The three frontend suites (Vitest unit, Playwright component via `vite-plugin-istanbul`, Playwright E2E via `vite-plugin-istanbul`) upload to separate Codecov flags (`frontend-unit`, `frontend-component`, `frontend-e2e`) and were never merged into a single lcov. Recent PRs almost exclusively added Playwright component and E2E tests, so their coverage landed in `frontend-component`/`frontend-e2e` while the badge stayed stuck reading the Vitest slice.
