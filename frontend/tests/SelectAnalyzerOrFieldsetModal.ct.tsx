@@ -492,10 +492,6 @@ test.describe("SelectAnalyzerOrFieldsetModal — close behavior", () => {
       timeout: 5000,
     });
 
-    // Framer-motion's initial opacity animation (150ms) can briefly leave
-    // the overlay non-interactive; wait for it to settle.
-    await page.waitForTimeout(500);
-
     // Target the portaled motion.div overlay and click in its top-left
     // corner — the ModalContainer sits in the centre with its own
     // `stopPropagation` click handler, so clicking the overlay edge
@@ -503,7 +499,12 @@ test.describe("SelectAnalyzerOrFieldsetModal — close behavior", () => {
     const overlay = page
       .locator('[data-testid="select-analyzer-or-fieldset-overlay"]')
       .first();
-    await expect(overlay).toBeVisible();
+    // Wait until framer-motion's fade-in animation settles before clicking,
+    // rather than using a fixed sleep.
+    await expect(overlay).toHaveCSS("opacity", "1", { timeout: 2000 });
+    // `force: true` bypasses pointer-actionability checks — required because
+    // the overlay is a portaled full-viewport div and Playwright treats the
+    // ModalContainer (its child) as intercepting pointer events at the centre.
     await overlay.click({ position: { x: 5, y: 5 }, force: true });
 
     await expect(page.locator("text=Start Analysis")).toBeHidden({
