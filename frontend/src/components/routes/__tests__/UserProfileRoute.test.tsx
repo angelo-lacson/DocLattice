@@ -88,11 +88,6 @@ describe("UserProfileRoute", () => {
   });
 
   it("redirects /profile to /users/<slug> when a user is logged in", async () => {
-    // NOTE: we don't mount the /users/:slug route here because
-    // UserProfileRoute has a latent Rules-of-Hooks issue when it's reused
-    // across a <Navigate> — the early-return path skips useQuery(), then
-    // once the URL changes React tries to add the hook to the same fiber.
-    // Tracked separately; the redirect itself still works in practice.
     backendUserObj({ id: "u-1", slug: "alice" } as any);
 
     render(
@@ -108,6 +103,38 @@ describe("UserProfileRoute", () => {
 
     const loc = await screen.findByTestId("location");
     expect(loc.textContent).toBe("/users/alice");
+  });
+
+  it("redirects /profile and then renders /users/:slug without a Rules-of-Hooks crash (issue #1295)", async () => {
+    // Regression guard: the pre-fix code called useQuery *after* the
+    // early-return for the no-slug case, so when /profile redirected to
+    // /users/:slug the same UserProfileRoute fiber transitioned from 0 to 1
+    // hook and React threw. With useQuery hoisted unconditionally, the two
+    // renders share the same hook ordering and the redirect survives.
+    backendUserObj({ id: "u-1", slug: "alice" } as any);
+
+    render(
+      <MockedProvider
+        mocks={[
+          {
+            request: { query: GET_USER, variables: { slug: "alice" } },
+            result: { data: { userBySlug: user } },
+          },
+        ]}
+        addTypename={false}
+      >
+        <MemoryRouter initialEntries={["/profile"]}>
+          <Routes>
+            <Route path="/profile" element={<UserProfileRoute />} />
+            <Route path="/users/:slug" element={<UserProfileRoute />} />
+          </Routes>
+        </MemoryRouter>
+      </MockedProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("UserProfile:alice")).toBeInTheDocument();
+    });
   });
 
   it("renders UserProfile with isOwnProfile=true when viewer is the profile owner", async () => {
