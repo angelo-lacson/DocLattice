@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Frontend coverage badge reported ~31% despite months of added tests** (`README.md:12`, `.github/workflows/codecov-notify.yml`, `.codecov.yml`, `frontend/vite.config.ts:210-223`): The README's "Frontend coverage" badge was pointing at `flag=frontend-unit` — the Vitest slice only. The three frontend suites (Vitest unit, Playwright component via `vite-plugin-istanbul`, Playwright E2E via `vite-plugin-istanbul`) upload to separate Codecov flags (`frontend-unit`, `frontend-component`, `frontend-e2e`) and were never merged into a single lcov. Recent PRs almost exclusively added Playwright component and E2E tests, so their coverage landed in `frontend-component`/`frontend-e2e` while the badge stayed stuck reading the Vitest slice.
+  - Added an `Upload {unit,CT,E2E} lcov artifact` step (using `actions/upload-artifact@v7`) to each producing job in `.github/workflows/frontend.yml` (`component-test` and `unit-test`) and `.github/workflows/frontend-e2e.yml` (`e2e`). The existing per-flag Codecov uploads are untouched, so per-suite drill-in still works.
+  - Extended the existing cross-workflow coordinator at `.github/workflows/codecov-notify.yml` to download the three artifacts by run id (via `actions/download-artifact@v7` with `continue-on-error: true` to tolerate path-filtered skips and upload failures), merge them with `npx lcov-result-merger@5`, and upload the combined lcov to Codecov under a new `frontend` flag before calling `send-notifications`. The existing `listWorkflowRunsForRepo` check already discovers the producing runs by SHA — it now also emits `frontend_ci_run_id` and `frontend_e2e_run_id` outputs for the downloads to consume.
+  - Added the `frontend` flag to `.codecov.yml` (paths: `frontend/src/`, `carryforward: true`). Intentionally does not match the `frontend-.*` regex used by the `frontend` component's `flag_regexes`, so the component keeps aggregating only the three per-suite flags and does not double-count the merged upload.
+  - Pointed the README badge at `flag=frontend` so the displayed number reflects the union of all three suites.
+  - Fixed a secondary v8 issue at `frontend/vite.config.ts:210-223`: added `all: true` to the Vitest coverage block. Without it, v8 silently drops files not imported by any unit test, inflating the `frontend-unit` ratio and misaligning the v8 lcov's file universe with the Istanbul-based component/E2E lcovs (which do enumerate all source files). Aligning the two is required for the merged `frontend` lcov to be meaningful.
+  - Added `lcov-result-merger@^5.0.1` as a `frontend/package.json` devDependency with a local `coverage:merge` script so the merge can be reproduced locally (`yarn test:coverage:unit && yarn test:coverage:ct && yarn test:e2e:coverage && yarn coverage:merge`).
+
 ### Changed
 
 - **Harden backend CI path-filter job** (Issue #1290, `.github/workflows/backend.yml`): Tightened the `changes` path-filter job so transient `dorny/paths-filter` failures no longer silently skip `linter` / `pytest`.
