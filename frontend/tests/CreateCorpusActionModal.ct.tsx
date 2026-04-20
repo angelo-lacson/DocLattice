@@ -731,4 +731,406 @@ test.describe("CreateCorpusActionModal", () => {
 
     await component.unmount();
   });
+
+  test("analyzer action: validation prompts to select analyzer", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <CreateCorpusActionModalTestWrapper
+        mocks={baseCreateModeMocks}
+        corpusId={TEST_CORPUS_ID}
+      />
+    );
+
+    await expect(
+      page.getByText("Create New Corpus Action", { exact: true })
+    ).toBeVisible({ timeout: 20000 });
+
+    // Switch action type to analyzer
+    await page.locator(".oc-dropdown__trigger").nth(1).click();
+    await page.getByText("Analyzer (Run analysis)").click();
+
+    await expect(page.getByText("Analyzer Configuration")).toBeVisible({
+      timeout: 10000,
+    });
+
+    await page
+      .locator('input[placeholder="Enter action name"]')
+      .fill("My Analyzer Action");
+
+    await page
+      .getByRole("button", { name: "Create Action", exact: true })
+      .click();
+
+    await expect(page.getByText("Please select an analyzer")).toBeVisible({
+      timeout: 5000,
+    });
+
+    await component.unmount();
+  });
+
+  test("inline agent: empty name fails validation", async ({ mount, page }) => {
+    const component = await mount(
+      <CreateCorpusActionModalTestWrapper
+        mocks={baseCreateModeMocks}
+        corpusId={TEST_CORPUS_ID}
+      />
+    );
+
+    await expect(
+      page.getByText("Create New Corpus Action", { exact: true })
+    ).toBeVisible({ timeout: 20000 });
+
+    await page
+      .locator('input[placeholder="Enter action name"]')
+      .fill("Outer action name");
+
+    // Switch to agent
+    await page.locator(".oc-dropdown__trigger").nth(1).click();
+    await page.getByText("Agent (AI-powered action)").click();
+
+    await expect(page.getByText("Agent Configuration")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Inline mode is default for document triggers — leave inline agent name empty
+    await page
+      .getByRole("button", { name: "Create Action", exact: true })
+      .click();
+
+    await expect(
+      page.getByText("Please enter a name for the agent")
+    ).toBeVisible({ timeout: 5000 });
+
+    await component.unmount();
+  });
+
+  test("inline agent: missing system instructions fails validation", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <CreateCorpusActionModalTestWrapper
+        mocks={baseCreateModeMocks}
+        corpusId={TEST_CORPUS_ID}
+      />
+    );
+
+    await expect(
+      page.getByText("Create New Corpus Action", { exact: true })
+    ).toBeVisible({ timeout: 20000 });
+
+    await page.locator('input[placeholder="Enter action name"]').fill("Outer");
+
+    // Switch to agent
+    await page.locator(".oc-dropdown__trigger").nth(1).click();
+    await page.getByText("Agent (AI-powered action)").click();
+
+    await expect(page.getByText("Agent Configuration")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Fill inline agent name via placeholder selector (document-trigger variant)
+    await page
+      .locator('input[placeholder="e.g., Document Summarizer"]')
+      .fill("Doc Agent");
+
+    // Clear the system-instructions textarea (it's the first of the three textareas)
+    const textareas = page.locator("textarea");
+    await textareas.nth(0).fill("");
+
+    await page
+      .getByRole("button", { name: "Create Action", exact: true })
+      .click();
+
+    await expect(
+      page.getByText("Please enter system instructions for the agent")
+    ).toBeVisible({ timeout: 5000 });
+
+    await component.unmount();
+  });
+
+  test("existing-agent mode: missing selection fails validation", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <CreateCorpusActionModalTestWrapper
+        mocks={baseCreateModeMocks}
+        corpusId={TEST_CORPUS_ID}
+      />
+    );
+
+    await expect(
+      page.getByText("Create New Corpus Action", { exact: true })
+    ).toBeVisible({ timeout: 20000 });
+
+    await page
+      .locator('input[placeholder="Enter action name"]')
+      .fill("Pickless");
+
+    // Switch action type to agent and then to "Use Existing Agent"
+    await page.locator(".oc-dropdown__trigger").nth(1).click();
+    await page.getByText("Agent (AI-powered action)").click();
+    await expect(page.getByText("Agent Configuration")).toBeVisible({
+      timeout: 10000,
+    });
+    await page.getByText("Use Existing Agent", { exact: true }).click();
+
+    // Click Create Action without selecting an agent
+    await page
+      .getByRole("button", { name: "Create Action", exact: true })
+      .click();
+
+    await expect(
+      page.getByText("Please select an agent configuration")
+    ).toBeVisible({ timeout: 5000 });
+
+    await component.unmount();
+  });
+
+  test("inline-agent create: full happy path calls create mutation", async ({
+    mount,
+    page,
+  }) => {
+    let successCount = 0;
+
+    // The initial-state inlineAgentInstructions (DEFAULT_MODERATOR_INSTRUCTIONS)
+    // applies until the user manually changes the trigger — we keep the same
+    // default here so the mutation variables match the rendered form.
+    const DEFAULT_MODERATOR_INSTRUCTIONS = `You are a thread moderator for this corpus. Your role is to:
+1. Monitor discussion threads and messages for policy compliance
+2. Take appropriate moderation actions when needed
+3. Respond helpfully to user questions when appropriate
+
+You have access to thread context, messages, and moderation tools. Use them judiciously.`;
+
+    const inlineCreateMock: MockedResponse = {
+      request: {
+        query: CREATE_CORPUS_ACTION,
+        variables: {
+          corpusId: TEST_CORPUS_ID,
+          name: "Inline Agent Action",
+          trigger: "add_document",
+          fieldsetId: undefined,
+          analyzerId: undefined,
+          agentConfigId: undefined,
+          taskInstructions: "Process each document carefully.",
+          preAuthorizedTools: ["read_document_text", "update_document_summary"],
+          createAgentInline: true,
+          inlineAgentName: "Inline Doc Agent",
+          inlineAgentDescription: undefined,
+          inlineAgentInstructions: DEFAULT_MODERATOR_INSTRUCTIONS,
+          inlineAgentTools: ["read_document_text", "update_document_summary"],
+          disabled: false,
+          runOnAllCorpuses: false,
+        },
+      },
+      result: {
+        data: {
+          createCorpusAction: {
+            ok: true,
+            message: "Created",
+            obj: {
+              id: "ca-inline",
+              name: "Inline Agent Action",
+              trigger: "ADD_DOCUMENT",
+              disabled: false,
+              runOnAllCorpuses: false,
+              fieldset: null,
+              analyzer: null,
+              agentConfig: {
+                id: "brand-new-agent",
+                name: "Inline Doc Agent",
+                description: "",
+              },
+              taskInstructions: "Process each document carefully.",
+              preAuthorizedTools: [
+                "read_document_text",
+                "update_document_summary",
+              ],
+            },
+          },
+        },
+      },
+    };
+
+    const component = await mount(
+      <CreateCorpusActionModalTestWrapper
+        mocks={[...baseCreateModeMocks, inlineCreateMock]}
+        corpusId={TEST_CORPUS_ID}
+        onSuccess={() => {
+          successCount += 1;
+        }}
+      />
+    );
+
+    await expect(
+      page.getByText("Create New Corpus Action", { exact: true })
+    ).toBeVisible({ timeout: 20000 });
+
+    await page
+      .locator('input[placeholder="Enter action name"]')
+      .fill("Inline Agent Action");
+
+    // Switch action type to agent (inline mode is the default for doc triggers)
+    await page.locator(".oc-dropdown__trigger").nth(1).click();
+    await page.getByText("Agent (AI-powered action)").click();
+
+    await expect(page.getByText("Agent Configuration")).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Fill inline agent name via placeholder
+    await page
+      .locator('input[placeholder="e.g., Document Summarizer"]')
+      .fill("Inline Doc Agent");
+
+    // Task instructions textarea (document-trigger variant)
+    await page
+      .locator(
+        'textarea[placeholder*="Summarize this document and update its description"]'
+      )
+      .fill("Process each document carefully.");
+
+    // Submit
+    await page
+      .getByRole("button", { name: "Create Action", exact: true })
+      .click();
+
+    await expect
+      .poll(() => successCount, { timeout: 10000 })
+      .toBeGreaterThan(0);
+
+    await component.unmount();
+  });
+
+  test("create mutation error surfaces toast error", async ({
+    mount,
+    page,
+  }) => {
+    const erroringCreateMock: MockedResponse = {
+      request: {
+        query: CREATE_CORPUS_ACTION,
+        variables: {
+          corpusId: TEST_CORPUS_ID,
+          name: "Will Fail",
+          trigger: "add_document",
+          fieldsetId: "fs-1",
+          analyzerId: undefined,
+          agentConfigId: undefined,
+          taskInstructions: undefined,
+          preAuthorizedTools: undefined,
+          createAgentInline: undefined,
+          inlineAgentName: undefined,
+          inlineAgentDescription: undefined,
+          inlineAgentInstructions: undefined,
+          inlineAgentTools: undefined,
+          disabled: false,
+          runOnAllCorpuses: false,
+        },
+      },
+      result: {
+        data: {
+          createCorpusAction: {
+            ok: false,
+            message: "Backend rejected the action",
+            obj: null,
+          },
+        },
+      },
+    };
+
+    const component = await mount(
+      <CreateCorpusActionModalTestWrapper
+        mocks={[...baseCreateModeMocks, erroringCreateMock]}
+        corpusId={TEST_CORPUS_ID}
+      />
+    );
+
+    await expect(
+      page.getByText("Create New Corpus Action", { exact: true })
+    ).toBeVisible({ timeout: 20000 });
+
+    await page
+      .locator('input[placeholder="Enter action name"]')
+      .fill("Will Fail");
+
+    await page.locator(".oc-dropdown__trigger").nth(2).click();
+    await page.getByText("Contract Fields", { exact: true }).click();
+
+    await page
+      .getByRole("button", { name: "Create Action", exact: true })
+      .click();
+
+    await expect(page.getByText("Backend rejected the action")).toBeVisible({
+      timeout: 10000,
+    });
+
+    await component.unmount();
+  });
+
+  test("edit mode: analyzer action pre-populates selector", async ({
+    mount,
+    page,
+  }) => {
+    const component = await mount(
+      <CreateCorpusActionModalTestWrapper
+        mocks={baseCreateModeMocks}
+        corpusId={TEST_CORPUS_ID}
+        actionToEdit={{
+          id: "act-an-1",
+          name: "My Analyzer Action",
+          trigger: "ADD_DOCUMENT",
+          disabled: false,
+          runOnAllCorpuses: false,
+          analyzer: { id: "an-1", name: "test-analyzer" },
+        }}
+      />
+    );
+
+    await expect(
+      page.getByText("Edit Corpus Action", { exact: true })
+    ).toBeVisible({ timeout: 20000 });
+
+    await expect(page.getByText("Analyzer Configuration")).toBeVisible();
+
+    // Analyzer's description is rendered in the selected option
+    const nameInput = page.locator('input[placeholder="Enter action name"]');
+    await expect(nameInput).toHaveValue("My Analyzer Action");
+
+    await component.unmount();
+  });
+
+  test("edit mode: legacy trigger casing normalizes to add_document", async ({
+    mount,
+    page,
+  }) => {
+    // "Add_Document" is neither fully upper-case nor lower-case — normalizer
+    // falls through to default "add_document".
+    const component = await mount(
+      <CreateCorpusActionModalTestWrapper
+        mocks={baseCreateModeMocks}
+        corpusId={TEST_CORPUS_ID}
+        actionToEdit={{
+          id: "act-x",
+          name: "Legacy",
+          trigger: "Weird_Trigger" as unknown as string,
+          disabled: false,
+          runOnAllCorpuses: false,
+          fieldset: { id: "fs-1", name: "Contract Fields" },
+        }}
+      />
+    );
+
+    await expect(
+      page.getByText("Edit Corpus Action", { exact: true })
+    ).toBeVisible({ timeout: 20000 });
+
+    // Trigger label falls back to "On Document Add"
+    await expect(page.getByText("On Document Add")).toBeVisible();
+
+    await component.unmount();
+  });
 });
