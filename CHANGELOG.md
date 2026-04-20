@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Simplify `RelationGroup.updateForAnnotationDeletion` pruning branches** (Issue #1316, `frontend/src/components/annotator/types/annotations.ts:40-59`): The four conditional branches that each returned `undefined` collectively covered exactly `newSourceIds.length === 0 || newTargetIds.length === 0`, and the `sourceEmpty` / `targetEmpty` pre-filter variables were only referenced inside those branches. Collapsed the four conditions into a single `if` and removed the now-unused pre-filter variables. No behavior change — existing `RelationGroup > .updateForAnnotationDeletion()` regression tests still pass unchanged (all 28 tests in `annotations.test.ts` pass; `tsc --noEmit` clean).
+
 - **Harden backend CI path-filter job** (Issue #1290, `.github/workflows/backend.yml`): Tightened the `changes` path-filter job so transient `dorny/paths-filter` failures no longer silently skip `linter` / `pytest`.
   - Dropped the redundant `actions/checkout` step in the `changes` job — `dorny/paths-filter@v3` fetches diffs via the GitHub API and does not need a local clone.
   - Added `Dockerfile*` to the backend path filter so root-level Dockerfile changes (which directly affect the backend build environment) correctly trigger backend CI.
