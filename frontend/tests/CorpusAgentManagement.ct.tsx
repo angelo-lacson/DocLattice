@@ -744,7 +744,7 @@ test.describe("CorpusAgentManagement", () => {
     ).toBeVisible({ timeout: 5000 });
 
     // Click Cancel in the modal footer
-    await page.locator(".oc-modal button:has-text('Cancel')").last().click();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
     await expect(
       page.getByText(`Edit Agent Configuration: ${sampleAgent.name}`, {
