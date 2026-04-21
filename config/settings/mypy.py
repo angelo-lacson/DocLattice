@@ -12,10 +12,17 @@ to run mypy locally or via pre-commit.
 
 import os
 
-# `env.db(...)` in `config.settings.base` will raise unless DATABASE_URL is
-# set. Provide a harmless default before the base import runs.
-os.environ.setdefault(
-    "DATABASE_URL", "postgres://mypy:mypy@localhost:5432/mypy_dummy_db"
-)
+# `env.db(...)` in `config.settings.base` raises unless DATABASE_URL is set.
+# Set it *and* keep a local copy so we can reassert it after the test
+# import below, in case `config.settings.test` (or any of its transitive
+# imports) ever grows a DATABASE_URL override that runs before we re-read
+# the env.
+_MYPY_DUMMY_DATABASE_URL = "postgres://mypy:mypy@localhost:5432/mypy_dummy_db"
+os.environ.setdefault("DATABASE_URL", _MYPY_DUMMY_DATABASE_URL)
 
 from .test import *  # noqa: E402, F401, F403
+
+# Defensive: if the test-settings import chain ever pops DATABASE_URL from
+# the environment (unlikely but cheap to guard), put it back so the rest of
+# the plugin start-up doesn't explode on a later env.db() call.
+os.environ.setdefault("DATABASE_URL", _MYPY_DUMMY_DATABASE_URL)

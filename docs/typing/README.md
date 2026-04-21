@@ -5,7 +5,8 @@ wired up and how to graduate modules out of the initial baseline.
 
 ## How it is wired
 
-- **Configuration**: `setup.cfg` `[mypy]` section.
+- **Configuration**: `mypy.ini` at the repo root. (Pulled out of `setup.cfg`
+  because the per-module baseline list below is large.)
   - `python_version = 3.11` (matches `requirements/base.txt` runtime).
   - `plugins = mypy_django_plugin.main, mypy_drf_plugin.main` — Django- and
     DRF-aware type inference (models, querysets, serializers, etc.).
@@ -20,12 +21,15 @@ wired up and how to graduate modules out of the initial baseline.
 - **Pre-commit hook**: `.pre-commit-config.yaml` runs
   `pre-commit/mirrors-mypy` with stubs + the minimum Django runtime pinned in
   `additional_dependencies` so contributors don't need the full dev env
-  installed locally.
+  installed locally. All deps are version-pinned — pre-commit autoupdate
+  only bumps `rev`, so leaving stubs unpinned would let them drift
+  independently on every weekly refresh.
 - **CI**: `.github/workflows/backend.yml` runs
-  `python -m mypy --config-file setup.cfg opencontractserver config` as part
-  of the `linter` job, on the same pinned Python 3.12 runner as the rest of
-  the lint pipeline (the plugin reads `python_version` from `setup.cfg`, so
-  the runner Python and the checked-code Python can differ).
+  `python -m mypy --config-file mypy.ini opencontractserver config` as part
+  of the `linter` job. The preceding `Install dependencies` step pip-installs
+  `requirements/local.txt`, which pins `mypy`, `django-stubs`, and
+  `djangorestframework-stubs` alongside the Django runtime — so the plugin
+  has everything it needs in the runner env.
 
 ## How to run mypy locally
 
@@ -36,7 +40,7 @@ Django plugin happy.
 
 ```bash
 docker compose -f test.yml run --rm django \
-  python -m mypy --config-file setup.cfg opencontractserver config
+  python -m mypy --config-file mypy.ini opencontractserver config
 ```
 
 ### Via pre-commit (isolated env)
@@ -52,7 +56,7 @@ on first run (a few minutes) and caches it afterwards.
 
 ```bash
 pip install -r requirements/local.txt
-python -m mypy --config-file setup.cfg opencontractserver config
+python -m mypy --config-file mypy.ini opencontractserver config
 ```
 
 No `DATABASE_URL` env var is required — `config.settings.mypy` bakes in a
@@ -62,16 +66,27 @@ dummy one for type-checking only.
 
 As of issue #1331 the codebase has ~7.2k pre-existing mypy errors across 357
 files (see `mypy_baseline.txt`). Forcing all of those to be fixed in one go
-would block the rest of the remediation work, so instead we turned on mypy
-with `ignore_errors = True` for every `opencontractserver.*` and `config.*`
-module. That keeps the pipeline green today **and** lets CI start gating
-against *new* regressions (e.g. a brand-new file with type errors, or a file
-added to an already-graduated package, still fails the hook).
+would block the rest of the remediation work.
 
-The full list of errors at the time of the initial wire-up is frozen in
-`mypy_baseline.txt` so follow-up issues can measure progress and reviewers
-can see what a given file currently has wrong without re-running mypy
-without the baseline.
+### What the baseline does (and does not) gate
+
+`mypy.ini` lists **every file** that had an error at the time of the initial
+wire-up under its own `[mypy-<module.path>]` section with
+`ignore_errors = True`. There is **no wildcard pattern** covering
+`opencontractserver.*` or `config.*`.
+
+That matters because:
+
+- **New files ARE type-checked.** A brand-new module at
+  `opencontractserver/new_feature/views.py` is not in the baseline, so mypy
+  will check it and the hook / CI will fail on any errors.
+- **Refactoring an existing baselined file does not silently re-silence
+  it.** If a module is renamed or moved, its old `[mypy-…]` section
+  becomes dead (`warn_unused_configs` flags this) and the new path is
+  checked from scratch.
+- **Existing baselined files are silenced.** Any error inside
+  `opencontractserver/utils/storages.py` (for example) is suppressed until
+  that module is graduated.
 
 ### Baseline shape (issue #1331)
 
@@ -88,40 +103,35 @@ stable diffs).
 
 ## How to graduate a module out of the baseline
 
-The baseline is a per-module `ignore_errors = True` override in `setup.cfg`:
-
-```ini
-[mypy-opencontractserver.*]
-ignore_errors = True
-
-[mypy-config.*]
-ignore_errors = True
-```
-
-Graduate by **narrowing** the pattern so the module you want to type-check
-falls outside the baseline.
-
-### Example: graduating `opencontractserver.constants`
-
-1. Add an override that re-enables checking for just that subtree:
+1. **Delete the module's section** in `mypy.ini`. Example — to graduate
+   `opencontractserver/constants/annotations.py`:
 
     ```ini
-    [mypy-opencontractserver.constants.*]
-    ignore_errors = False
+    # Before
+    [mypy-opencontractserver.constants.annotations]
+    ignore_errors = True
+
+    # After
+    (section removed)
     ```
 
 2. Run mypy and fix what surfaces:
 
     ```bash
-    python -m mypy --config-file setup.cfg opencontractserver config
+    python -m mypy --config-file mypy.ini opencontractserver config
     ```
 
-3. Update `mypy_baseline.txt` — remove the now-fixed entries so future diffs
-   stay honest. (`docs/typing/mypy_baseline.txt` is an advisory reference; it
-   is not consumed by mypy itself, so it needs manual pruning.)
+3. **Prune the corresponding lines** from `docs/typing/mypy_baseline.txt`.
+   This file is an advisory reference — it is not consumed by mypy itself,
+   so it must be pruned manually. **Reviewers**: before approving a
+   graduation PR, verify that:
+   - Every pruned entry references the module being graduated (no
+     unrelated drive-by deletions).
+   - Every entry for the graduated module has been pruned (no leftover
+     lines that would silently rot in the reference file).
 
 4. Commit with a message referencing the tracker issue, e.g.
-   `typing: graduate opencontractserver.constants (refs #1331)`.
+   `typing: graduate opencontractserver.constants.annotations (refs #1331)`.
 
 ### Order we'd suggest graduating in
 
@@ -158,13 +168,13 @@ ignore_errors = True
 ## Troubleshooting
 
 - **`Error constructing plugin instance of NewSemanalDjangoPlugin`** — the
-  Django plugin imports `config.settings.test`, which transitively imports
+  Django plugin imports `config.settings.mypy`, which transitively imports
   most of `INSTALLED_APPS`. Missing one of those apps (e.g. `celery`,
   `channels`, `django-storages`) is almost always the cause. Install the
   missing dep or run mypy from inside the test container.
 - **`Set the DATABASE_URL environment variable`** — you're pointing mypy at
   `config.settings.test` or `.base` instead of `config.settings.mypy`.
-  Double-check `django_settings_module` in `setup.cfg`.
+  Double-check `django_settings_module` in `mypy.ini`.
 - **`Library stubs not installed for "requests"`** — add `types-requests`
   to the hook's `additional_dependencies` (and to the dev env if you want
   the error to go away locally outside pre-commit).

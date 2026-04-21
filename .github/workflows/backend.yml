@@ -58,6 +58,7 @@ jobs:
               - 'Dockerfile*'
               - '.pre-commit-config.yaml'
               - 'setup.cfg'
+              - 'mypy.ini'
               - 'pyproject.toml'
               - '.github/workflows/backend.yml'
 
@@ -93,12 +94,15 @@ jobs:
         run: pre-commit run --all-files
 
       - name: Run mypy
-        # mypy reads python_version from setup.cfg, so the runner Python
-        # (3.12) and the type-checked Python (3.11) can differ.
-        # pre-commit already runs mypy too; re-running here keeps CI
-        # authoritative even when contributors skip the hook locally.
-        # See docs/typing/README.md for the baseline / graduation model.
-        run: python -m mypy --config-file setup.cfg opencontractserver config
+        # mypy reads python_version from mypy.ini, so the runner Python
+        # (3.12) and the type-checked Python (3.11) can differ. The
+        # `Install dependencies` step above already pip-installs
+        # requirements/local.txt (which pins mypy + django-stubs +
+        # djangorestframework-stubs), so the django-stubs plugin has
+        # everything it needs. Running mypy directly here (not via
+        # pre-commit) keeps CI authoritative even when contributors skip
+        # the hook locally. See docs/typing/README.md.
+        run: python -m mypy --config-file mypy.ini opencontractserver config
 
   pytest:
     needs: [changes, linter]
