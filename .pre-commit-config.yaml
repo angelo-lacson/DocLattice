@@ -46,12 +46,19 @@ repos:
         # pulls in most of INSTALLED_APPS. Pinning the Django + stub runtime
         # here keeps the hook self-contained (contributors don't need the
         # full dev env installed locally).
-        # Every dep is pinned — pre-commit autoupdate only bumps `rev`, so
-        # unpinned stubs could drift independently and silently introduce
-        # errors on hook refresh. Runtime pins MUST match
-        # requirements/base.txt + requirements/local.txt; the admin
-        # autodiscover that django-stubs triggers transitively imports
-        # most of the project, so nearly the full runtime is needed.
+        # pre-commit autoupdate only bumps `rev`; additional_dependencies
+        # are resolved fresh every time the hook env is (re)built, so
+        # anything less than `==` can drift. Direct dependencies whose
+        # API surface mypy actually checks against are `==`-pinned and
+        # MUST match requirements/base.txt + requirements/local.txt. The
+        # admin autodiscover that django-stubs triggers transitively
+        # imports most of the project, which is why the list is long.
+        # A handful of transitive deps (pandas, python-docx, openpyxl,
+        # python-pptx, spacy) are left unpinned or range-pinned — they
+        # are import-only (mypy never follows into their types with
+        # ignore_missing_imports=True), so a compatible bump cannot
+        # introduce new type errors. Range pins upper-bound known
+        # major breakages (e.g. pypdf 7, openai 3) for the same reason.
         additional_dependencies:
           # --- Type stubs -----------------------------------------------
           - django-stubs==6.0.2

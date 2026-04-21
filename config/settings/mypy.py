@@ -20,6 +20,9 @@ import os
 _MYPY_DUMMY_DATABASE_URL = "postgres://mypy:mypy@localhost:5432/mypy_dummy_db"
 os.environ.setdefault("DATABASE_URL", _MYPY_DUMMY_DATABASE_URL)
 
+# As of 2026-04, `config.settings.test` only requires DATABASE_URL from
+# the environment. If a future change adds another required env var to
+# the test chain, add a matching os.environ.setdefault() above.
 from .test import *  # noqa: E402, F401, F403
 
 # Defensive: if the test-settings import chain ever pops DATABASE_URL from
