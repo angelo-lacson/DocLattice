@@ -33,6 +33,51 @@ repos:
         args: ["--config=setup.cfg"]
         additional_dependencies: [flake8-isort]
 
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.20.1
+    hooks:
+      - id: mypy
+        # Always check the full project surface, not just staged files —
+        # the Django plugin is a per-project load so partial runs miss
+        # cross-module errors. See docs/typing/README.md.
+        pass_filenames: false
+        args: ["--config-file=setup.cfg", "opencontractserver", "config"]
+        # mypy-django-plugin imports config.settings.mypy at startup, which
+        # pulls in most of INSTALLED_APPS. Pinning the Django + stub runtime
+        # here keeps the hook self-contained (contributors don't need the
+        # full dev env installed locally).
+        additional_dependencies:
+          # --- Type stubs -----------------------------------------------
+          - django-stubs==6.0.2
+          - djangorestframework-stubs==3.16.9
+          - types-requests
+          - types-PyYAML
+          # --- Django runtime (must match requirements/base.txt) --------
+          - django==5.2.13
+          - django-environ==0.13.0
+          - django-model-utils==5.0.0
+          - django-redis==6.0.0
+          - django-filter==25.1
+          - django-storages[boto3,google]==1.14.6
+          - django-tree-queries[admin]==0.24.0
+          - django-cte==3.0.0
+          - django-guardian
+          - django-celery-beat==2.9.0
+          - django-cors-headers==4.9.0
+          - djangorestframework==3.17.1
+          - drf-extra-fields==3.7.0
+          - whitenoise==6.12.0
+          - channels==4.3.2
+          - channels-redis==4.3.0
+          - daphne==4.2.1
+          - celery==5.6.3
+          - pgvector>=0.4.0
+          - graphene-django==3.2.3
+          - django-graphql-jwt==0.4.0
+          - pydantic>=2,<3
+          - psycopg2-binary
+          - plasmapdf==0.1.3
+
 # sets up .pre-commit-ci.yaml to ensure pre-commit dependencies stay up to date
 ci:
   autoupdate_schedule: weekly
