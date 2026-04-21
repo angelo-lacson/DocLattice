@@ -1115,12 +1115,8 @@ test.describe("CorpusChat", () => {
 
     // Back button in the navigation header (sits outside the scrollable
     // conversation-view div) returns to the list.
-    const homeBtn = page.locator('[title="Return to Dashboard"]');
-    await expect(homeBtn).toBeVisible();
-    // The BackButton is the only other button in #conversation-indicator's
-    // ChatNavigationHeader; it sits immediately before the Home icon.
-    const backBtn = homeBtn.locator("xpath=preceding::button[1]");
-    await backBtn.click();
+    await expect(page.locator('[title="Return to Dashboard"]')).toBeVisible();
+    await page.getByLabel("Back to conversation list").click();
 
     // Conversation list is visible again
     await expect(page.getByText("Second Conversation")).toBeVisible({
@@ -1253,6 +1249,12 @@ test.describe("CorpusChat", () => {
     // The conversation list has a title filter input. Any input that accepts
     // text can drive the title debounce state — we just need to cover the
     // debounce timer useEffect.
+    //
+    // NOTE: this is coverage-only; it does NOT assert filter semantics.
+    // If the debounce timer is broken (e.g. the effect no longer fires),
+    // this test will still pass — it exists to exercise the code path,
+    // not to pin filter behaviour. Any behavioural regression should be
+    // caught by a dedicated filter test added alongside that feature.
     const filterInputs = page.locator('input[type="text"], input:not([type])');
     if ((await filterInputs.count()) > 0) {
       const first = filterInputs.first();

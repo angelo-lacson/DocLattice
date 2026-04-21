@@ -13,6 +13,8 @@ import {
   CREATE_CORPUS_ACTION,
   UPDATE_CORPUS_ACTION,
 } from "../src/graphql/mutations";
+import { DEFAULT_MODERATOR_INSTRUCTIONS } from "../src/components/corpuses/CreateCorpusActionModal";
+import { docScreenshot } from "./utils/docScreenshot";
 
 const TEST_CORPUS_ID = "corpus-123";
 
@@ -219,6 +221,8 @@ test.describe("CreateCorpusActionModal", () => {
 
     // Default action type is fieldset
     await expect(page.getByText("Fieldset Configuration")).toBeVisible();
+
+    await docScreenshot(page, "corpus--create-action-modal--fieldset-default");
 
     await component.unmount();
   });
@@ -896,16 +900,8 @@ test.describe("CreateCorpusActionModal", () => {
   }) => {
     let successCount = 0;
 
-    // The initial-state inlineAgentInstructions (DEFAULT_MODERATOR_INSTRUCTIONS)
-    // applies until the user manually changes the trigger — we keep the same
-    // default here so the mutation variables match the rendered form.
-    const DEFAULT_MODERATOR_INSTRUCTIONS = `You are a thread moderator for this corpus. Your role is to:
-1. Monitor discussion threads and messages for policy compliance
-2. Take appropriate moderation actions when needed
-3. Respond helpfully to user questions when appropriate
-
-You have access to thread context, messages, and moderation tools. Use them judiciously.`;
-
+    // DEFAULT_MODERATOR_INSTRUCTIONS is imported from the source module so the
+    // mutation variables stay in sync if the default ever changes.
     const inlineCreateMock: MockedResponse = {
       request: {
         query: CREATE_CORPUS_ACTION,
@@ -1116,6 +1112,9 @@ You have access to thread context, messages, and moderation tools. Use them judi
         actionToEdit={{
           id: "act-x",
           name: "Legacy",
+          // Intentionally invalid trigger string — the double cast bypasses the
+          // tight CorpusActionTrigger union type to exercise the normalizer's
+          // default fallback branch.
           trigger: "Weird_Trigger" as unknown as string,
           disabled: false,
           runOnAllCorpuses: false,
