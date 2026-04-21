@@ -984,6 +984,7 @@ const SourceItem: React.FC<SourceItemProps> = ({
       $isSelected={isSelected}
       onClick={onClick}
       className="source-chip"
+      data-testid="source-chip"
     >
       <SourceHeader>
         <SourceTitle $isSelected={isSelected}>

@@ -241,11 +241,8 @@ test.describe("FieldsetModal — column management", () => {
       timeout: 5000,
     });
 
-    // Each column card has two icon buttons: pencil-edit and trash-delete.
-    // lucide-react's `toKebabCase` produces "trash2" (no dash before the
-    // trailing digit), so the class is `lucide-trash2`.
     const deleteBtn = page
-      .locator("button", { has: page.locator("svg.lucide-trash2") })
+      .getByRole("button", { name: "Delete column" })
       .first();
     await deleteBtn.click();
 
@@ -357,11 +354,7 @@ test.describe("FieldsetModal — close behavior", () => {
     await expect(page.locator("text=Create New Fieldset")).toBeVisible({
       timeout: 5000,
     });
-    // The close button is the motion.button containing the X lucide icon.
-    const closeBtn = page
-      .locator("button")
-      .filter({ has: page.locator("svg.lucide-x") })
-      .first();
+    const closeBtn = page.getByRole("button", { name: "Close" });
     await closeBtn.click();
     await expect(page.locator("text=Create New Fieldset")).toBeHidden({
       timeout: 3000,

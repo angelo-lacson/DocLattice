@@ -376,7 +376,7 @@ test.describe("ChatMessage — sources preview", () => {
 
     // Expand the sources
     await bubble.locator("text=1 Source").click();
-    const chip = bubble.locator(".source-chip").first();
+    const chip = bubble.locator('[data-testid="source-chip"]').first();
     await expect(chip).toBeVisible({ timeout: 3000 });
     // Click directly on the chip (not the Annotate / Expand controls)
     await chip.click({ position: { x: 5, y: 5 } });
