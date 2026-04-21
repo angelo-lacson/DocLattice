@@ -4,6 +4,7 @@ import { MockedResponse } from "@apollo/client/testing";
 import { CorpusDescriptionEditorTestWrapper } from "./CorpusDescriptionEditorTestWrapper";
 import { GET_CORPUS_WITH_HISTORY } from "../src/graphql/queries";
 import { UPDATE_CORPUS_DESCRIPTION } from "../src/graphql/mutations";
+import { docScreenshot } from "./utils/docScreenshot";
 
 const TEST_CORPUS_ID = "corpus-cde-1";
 const MD_URL = "http://localhost/test-md/initial.md";
@@ -142,6 +143,8 @@ test.describe("CorpusDescriptionEditor", () => {
       'textarea[placeholder="Write your corpus description in Markdown..."]'
     );
     await expect(textarea).toHaveValue(INITIAL_MD, { timeout: 10000 });
+
+    await docScreenshot(page, "corpus--description-editor--loaded");
 
     await component.unmount();
   });

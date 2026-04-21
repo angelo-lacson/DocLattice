@@ -466,12 +466,12 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
             setIsProcessing(false);
             break;
           case "SYNC_CONTENT": {
-            // SYNC_CONTENT is a standalone, non-streaming assistant message.
-            // Append it to chat so it renders, then persist sources/timeline.
+            // SYNC_CONTENT is a standalone (non-streaming) assistant reply — unlike the
+            // ASYNC path, it must be appended to `chat` directly or it will never render.
             setChat((prev) => [
               ...prev,
               {
-                messageId: data?.message_id || `asst_${Date.now()}`,
+                messageId: data?.message_id || crypto.randomUUID(),
                 user: "Assistant",
                 content,
                 timestamp: new Date().toLocaleString(),
@@ -1007,6 +1007,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
         {isConversation && (
           <ChatNavigationHeader>
             <BackButton
+              aria-label="Back to conversation list"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();

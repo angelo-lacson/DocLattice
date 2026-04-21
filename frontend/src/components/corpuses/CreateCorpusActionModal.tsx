@@ -71,7 +71,7 @@ const DEFAULT_MODERATION_TOOLS = [
   { name: "unpin_thread", description: "Unpin a pinned thread" },
 ] as const;
 
-const DEFAULT_MODERATOR_INSTRUCTIONS = `You are a thread moderator for this corpus. Your role is to:
+export const DEFAULT_MODERATOR_INSTRUCTIONS = `You are a thread moderator for this corpus. Your role is to:
 1. Monitor discussion threads and messages for policy compliance
 2. Take appropriate moderation actions when needed
 3. Respond helpfully to user questions when appropriate

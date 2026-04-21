@@ -8,6 +8,7 @@ import {
   DELETE_AGENT_CONFIGURATION,
   UPDATE_AGENT_CONFIGURATION,
 } from "../src/graphql/mutations";
+import { docScreenshot } from "./utils/docScreenshot";
 
 const TEST_CORPUS_ID = "corpus-aam-1";
 
@@ -151,6 +152,8 @@ test.describe("CorpusAgentManagement", () => {
     await expect(page.getByText("Active")).toBeVisible();
     await expect(page.getByLabel("Edit agent")).toBeVisible();
     await expect(page.getByLabel("Delete agent")).toBeVisible();
+
+    await docScreenshot(page, "corpus--agent-management--agent-row");
 
     await component.unmount();
   });
@@ -604,8 +607,7 @@ test.describe("CorpusAgentManagement", () => {
 
     // Click Save Changes (modal footer button)
     await page
-      .locator(".oc-modal button:has-text('Save Changes')")
-      .last()
+      .getByRole("button", { name: "Save Changes", exact: true })
       .click();
 
     await expect(page.getByText("Agent updated successfully")).toBeVisible({
