@@ -1153,6 +1153,7 @@ export const SelectAnalyzerOrFieldsetModal: React.FC<
             onClick={onClose}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
+            aria-label="Close"
           >
             <X />
           </CloseButton>

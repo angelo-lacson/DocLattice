@@ -470,10 +470,7 @@ test.describe("SelectAnalyzerOrFieldsetModal — close behavior", () => {
     await expect(page.locator("text=Start Analysis")).toBeVisible({
       timeout: 5000,
     });
-    const closeBtn = page
-      .locator("button")
-      .filter({ has: page.locator("svg.lucide-x") })
-      .first();
+    const closeBtn = page.getByRole("button", { name: "Close" });
     await closeBtn.click();
     await expect(page.locator("text=Start Analysis")).toBeHidden({
       timeout: 3000,
@@ -492,20 +489,16 @@ test.describe("SelectAnalyzerOrFieldsetModal — close behavior", () => {
       timeout: 5000,
     });
 
-    // Target the portaled motion.div overlay and click in its top-left
-    // corner — the ModalContainer sits in the centre with its own
-    // `stopPropagation` click handler, so clicking the overlay edge
-    // reliably propagates to `onClick={onClose}`.
+    // Wait until framer-motion's fade-in animation settles before clicking,
+    // rather than using a fixed sleep.
     const overlay = page
       .locator('[data-testid="select-analyzer-or-fieldset-overlay"]')
       .first();
-    // Wait until framer-motion's fade-in animation settles before clicking,
-    // rather than using a fixed sleep.
     await expect(overlay).toHaveCSS("opacity", "1", { timeout: 2000 });
-    // `force: true` bypasses pointer-actionability checks — required because
-    // the overlay is a portaled full-viewport div and Playwright treats the
-    // ModalContainer (its child) as intercepting pointer events at the centre.
-    await overlay.click({ position: { x: 5, y: 5 }, force: true });
+    // Click a viewport corner far from the centered ModalContainer so the
+    // click reaches the overlay's `onClick={onClose}` handler without
+    // bypassing pointer-actionability checks (which `force: true` would do).
+    await page.mouse.click(5, 5);
 
     await expect(page.locator("text=Start Analysis")).toBeHidden({
       timeout: 3000,
