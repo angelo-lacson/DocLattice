@@ -43,7 +43,8 @@ export class RelationGroup {
     const newSourceIds = this.sourceIds.filter((id) => id !== a.id);
     const newTargetIds = this.targetIds.filter((id) => id !== a.id);
 
-    // A relation with no sources or no targets is meaningless — drop it.
+    // A relation requires at least one source and one target; if either side
+    // is empty after pruning, the relation is orphaned and must be dropped.
     if (newSourceIds.length === 0 || newTargetIds.length === 0) {
       return undefined;
     }
