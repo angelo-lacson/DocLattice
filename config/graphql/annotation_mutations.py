@@ -47,7 +47,7 @@ class RemoveAnnotation(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(root, info, annotation_id):
+    def mutate(root, info, annotation_id) -> "RemoveAnnotation":
         try:
             user = info.context.user
             annotation_pk = from_global_id(annotation_id)[1]
@@ -96,7 +96,7 @@ class RejectAnnotation(graphene.Mutation):
 
     @login_required
     @transaction.atomic
-    def mutate(root, info, annotation_id, comment=None):
+    def mutate(root, info, annotation_id, comment=None) -> "RejectAnnotation":
         user = info.context.user
         annotation_pk = from_global_id(annotation_id)[1]
 
@@ -159,7 +159,7 @@ class ApproveAnnotation(graphene.Mutation):
 
     @login_required
     @transaction.atomic
-    def mutate(root, info, annotation_id, comment=None):
+    def mutate(root, info, annotation_id, comment=None) -> "ApproveAnnotation":
         user = info.context.user
         annotation_pk = from_global_id(annotation_id)[1]
 
@@ -254,7 +254,7 @@ class AddAnnotation(graphene.Mutation):
         annotation_label_id,
         annotation_type,
         long_description=None,
-    ):
+    ) -> "AddAnnotation":
         corpus_pk = from_global_id(corpus_id)[1]
         document_pk = from_global_id(document_id)[1]
         label_pk = from_global_id(annotation_label_id)[1]
@@ -296,7 +296,9 @@ class AddDocTypeAnnotation(graphene.Mutation):
     annotation = graphene.Field(AnnotationType)
 
     @login_required
-    def mutate(root, info, corpus_id, document_id, annotation_label_id):
+    def mutate(
+        root, info, corpus_id, document_id, annotation_label_id
+    ) -> "AddDocTypeAnnotation":
         annotation = None
         ok = False
 
@@ -328,7 +330,7 @@ class RemoveRelationship(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(root, info, relationship_id):
+    def mutate(root, info, relationship_id) -> "RemoveRelationship":
         try:
             user = info.context.user
             relationship_pk = from_global_id(relationship_id)[1]
@@ -400,7 +402,7 @@ class AddRelationship(graphene.Mutation):
         relationship_label_id,
         corpus_id,
         document_id,
-    ):
+    ) -> "AddRelationship":
         try:
             source_pks = list(
                 map(lambda graphene_id: from_global_id(graphene_id)[1], source_ids)
@@ -479,7 +481,7 @@ class RemoveRelationships(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(root, info, relationship_ids):
+    def mutate(root, info, relationship_ids) -> "RemoveRelationships":
         user = info.context.user
         for graphene_id in relationship_ids:
             pk = from_global_id(graphene_id)[1]
@@ -542,7 +544,7 @@ class UpdateRelationship(graphene.Mutation):
         add_target_ids=None,
         remove_source_ids=None,
         remove_target_ids=None,
-    ):
+    ) -> "UpdateRelationship":
         try:
             relationship_pk = from_global_id(relationship_id)[1]
             relationship = Relationship.objects.get(pk=relationship_pk)
@@ -662,7 +664,7 @@ class UpdateRelations(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(root, info, relationships):
+    def mutate(root, info, relationships) -> "UpdateRelations":
         user = info.context.user
         for relationship in relationships:
             pk = from_global_id(relationship["id"])[1]
@@ -728,7 +730,7 @@ class UpdateNote(graphene.Mutation):
     version = graphene.Int(description="The new version number after update")
 
     @login_required
-    def mutate(root, info, note_id, new_content, title=None):
+    def mutate(root, info, note_id, new_content, title=None) -> "UpdateNote":
         from opencontractserver.annotations.models import Note
 
         try:
@@ -826,7 +828,9 @@ class CreateNote(graphene.Mutation):
     obj = graphene.Field(NoteType)
 
     @login_required
-    def mutate(root, info, document_id, title, content, corpus_id=None, parent_id=None):
+    def mutate(
+        root, info, document_id, title, content, corpus_id=None, parent_id=None
+    ) -> "CreateNote":
         from opencontractserver.annotations.models import Note
         from opencontractserver.corpuses.models import Corpus
         from opencontractserver.documents.models import Document

@@ -143,7 +143,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             "slug",
             "is_profile_public",  # Issue #611
         ]
-        read_only_fields = []
+        read_only_fields: list[str] = []
 
 
 class ColumnSerializer(serializers.ModelSerializer):

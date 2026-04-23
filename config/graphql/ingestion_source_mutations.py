@@ -75,7 +75,9 @@ class CreateIngestionSourceMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
-    def mutate(_root, info, name, source_type=None, config=None):
+    def mutate(
+        _root, info, name, source_type=None, config=None
+    ) -> "CreateIngestionSourceMutation":
         user = info.context.user
 
         resolved_type = _resolve_source_type(source_type)
@@ -122,14 +124,14 @@ class UpdateIngestionSourceMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
-    def mutate(_root, info, id, **kwargs):
+    def mutate(_root, info, id, **kwargs) -> "UpdateIngestionSourceMutation":
         user = info.context.user
 
         pk, error = _parse_ingestion_source_global_id(id)
-        if error:
+        if pk is None:
             return UpdateIngestionSourceMutation(
                 ok=False,
-                message=error,
+                message=error or _NOT_FOUND_MSG,
                 ingestion_source=None,
             )
 
@@ -190,14 +192,14 @@ class DeleteIngestionSourceMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
-    def mutate(_root, info, id):
+    def mutate(_root, info, id) -> "DeleteIngestionSourceMutation":
         user = info.context.user
 
         pk, error = _parse_ingestion_source_global_id(id)
-        if error:
+        if pk is None:
             return DeleteIngestionSourceMutation(
                 ok=False,
-                message=error,
+                message=error or _NOT_FOUND_MSG,
             )
 
         # Intentionally scoped to creator even for superusers — see

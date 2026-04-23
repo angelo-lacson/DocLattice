@@ -48,7 +48,7 @@ class ApproveDatacell(graphene.Mutation):
     obj = graphene.Field(DatacellType)
 
     @login_required
-    def mutate(root, info, datacell_id):
+    def mutate(root, info, datacell_id) -> "ApproveDatacell":
 
         ok = True
         obj = None
@@ -80,7 +80,7 @@ class RejectDatacell(graphene.Mutation):
     obj = graphene.Field(DatacellType)
 
     @login_required
-    def mutate(root, info, datacell_id):
+    def mutate(root, info, datacell_id) -> "RejectDatacell":
 
         ok = True
         obj = None
@@ -113,7 +113,7 @@ class EditDatacell(graphene.Mutation):
     obj = graphene.Field(DatacellType)
 
     @login_required
-    def mutate(root, info, datacell_id, edited_data):
+    def mutate(root, info, datacell_id, edited_data) -> "EditDatacell":
 
         ok = True
         obj = None
@@ -163,7 +163,7 @@ class CreateMetadataColumn(graphene.Mutation):
         default_value=None,
         help_text=None,
         display_order=0,
-    ):
+    ) -> "CreateMetadataColumn":
         from opencontractserver.corpuses.models import Corpus
         from opencontractserver.types.enums import PermissionTypes
         from opencontractserver.utils.permissioning import (
@@ -267,7 +267,7 @@ class UpdateMetadataColumn(graphene.Mutation):
     obj = graphene.Field(ColumnType)
 
     @login_required
-    def mutate(root, info, column_id, **kwargs):
+    def mutate(root, info, column_id, **kwargs) -> "UpdateMetadataColumn":
         from opencontractserver.types.enums import PermissionTypes
 
         try:
@@ -341,7 +341,9 @@ class SetMetadataValue(graphene.Mutation):
     obj = graphene.Field(DatacellType)
 
     @login_required
-    def mutate(root, info, document_id, corpus_id, column_id, value):
+    def mutate(
+        root, info, document_id, corpus_id, column_id, value
+    ) -> "SetMetadataValue":
         from django.utils import timezone
 
         from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
@@ -422,7 +424,7 @@ class DeleteMetadataValue(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(root, info, document_id, corpus_id, column_id):
+    def mutate(root, info, document_id, corpus_id, column_id) -> "DeleteMetadataValue":
         from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
         try:
@@ -481,7 +483,7 @@ class CreateFieldset(graphene.Mutation):
 
     @staticmethod
     @login_required
-    def mutate(root, info, name, description):
+    def mutate(root, info, name, description) -> "CreateFieldset":
         fieldset = Fieldset(
             name=name,
             description=description,
@@ -537,7 +539,7 @@ class UpdateColumnMutation(DRFMutation):
         extract_is_list=None,
         language_model_id=None,
         must_contain_text=None,
-    ):
+    ) -> "UpdateColumnMutation":
 
         ok = False
         message = ""
@@ -619,7 +621,7 @@ class CreateColumn(graphene.Mutation):
         match_text=None,
         limit_to_label=None,
         instructions=None,
-    ):
+    ) -> "CreateColumn":
         if {query, match_text} == {None}:
             raise ValueError("One of `query` or `match_text` must be provided.")
 
@@ -656,7 +658,7 @@ class DeleteColumn(graphene.Mutation):
 
     @staticmethod
     @login_required
-    def mutate(root, info, id):
+    def mutate(root, info, id) -> "DeleteColumn":
         Column.objects.get(pk=from_global_id(id)[1], creator=info.context.user).delete()
         return DeleteColumn(ok=True, message="STARTED!", deleted_id=id)
 
@@ -671,7 +673,7 @@ class StartExtract(graphene.Mutation):
 
     @staticmethod
     @login_required
-    def mutate(root, info, extract_id):
+    def mutate(root, info, extract_id) -> "StartExtract":
         # Start celery task to process extract
         pk = from_global_id(extract_id)[1]
         extract = Extract.objects.get(pk=pk, creator=info.context.user)
@@ -720,7 +722,7 @@ class CreateExtract(graphene.Mutation):
         fieldset_id=None,
         fieldset_name=None,
         fieldset_description=None,
-    ):
+    ) -> "CreateExtract":
 
         corpus = None
         if corpus_id is not None:
@@ -813,7 +815,7 @@ class UpdateExtractMutation(graphene.Mutation):
     @login_required
     def mutate(
         root, info, id, title=None, corpus_id=None, fieldset_id=None, error=None
-    ):
+    ) -> "UpdateExtractMutation":
         user = info.context.user
 
         try:
@@ -921,7 +923,7 @@ class AddDocumentsToExtract(DRFMutation):
     objs = graphene.List(DocumentType)
 
     @login_required
-    def mutate(root, info, extract_id, document_ids):
+    def mutate(root, info, extract_id, document_ids) -> "AddDocumentsToExtract":
 
         ok = False
         doc_objs = []
@@ -973,7 +975,9 @@ class RemoveDocumentsFromExtract(graphene.Mutation):
     ids_removed = graphene.List(graphene.String)
 
     @login_required
-    def mutate(root, info, extract_id, document_ids_to_remove):
+    def mutate(
+        root, info, extract_id, document_ids_to_remove
+    ) -> "RemoveDocumentsFromExtract":
 
         ok = False
 
@@ -1030,7 +1034,9 @@ class StartDocumentExtract(graphene.Mutation):
 
     @staticmethod
     @login_required
-    def mutate(root, info, document_id, fieldset_id, corpus_id=None):
+    def mutate(
+        root, info, document_id, fieldset_id, corpus_id=None
+    ) -> "StartDocumentExtract":
         from opencontractserver.corpuses.models import Corpus
 
         doc_pk = from_global_id(document_id)[1]

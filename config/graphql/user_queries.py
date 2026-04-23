@@ -2,10 +2,13 @@
 GraphQL query mixin for user, assignment, import, and export queries.
 """
 
+from __future__ import annotations
+
 import warnings
+from typing import TYPE_CHECKING, Any, Optional
 
 import graphene
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from graphene import relay
 from graphene_django.fields import DjangoConnectionField
 from graphene_django.filter import DjangoFilterConnectionField
@@ -22,6 +25,9 @@ from config.graphql.graphene_types import (
 )
 from opencontractserver.users.models import Assignment, UserExport, UserImport
 
+if TYPE_CHECKING:
+    from opencontractserver.users.models import User
+
 
 class UserQueryMixin:
     """Query fields and resolvers for user, assignment, import, and export queries."""
@@ -30,10 +36,12 @@ class UserQueryMixin:
     me = graphene.Field(UserType)
     user_by_slug = graphene.Field(UserType, slug=graphene.String(required=True))
 
-    def resolve_me(self, info):
+    def resolve_me(self, info: graphene.ResolveInfo) -> "User":
         return info.context.user
 
-    def resolve_user_by_slug(self, info, slug):
+    def resolve_user_by_slug(
+        self, info: graphene.ResolveInfo, slug: str
+    ) -> Optional["User"]:
         """
         Resolve a user by their slug with profile privacy filtering.
 
@@ -60,14 +68,21 @@ class UserQueryMixin:
     userimports = DjangoConnectionField(UserImportType)
 
     @login_required
-    def resolve_userimports(self, info, **kwargs):
+    def resolve_userimports(
+        self, info: graphene.ResolveInfo, **kwargs: Any
+    ) -> QuerySet[UserImport]:
         return UserImport.objects.visible_to_user(info.context.user)
 
     userimport = relay.Node.Field(UserImportType)
 
     @login_required
-    def resolve_userimport(self, info, **kwargs):
-        django_pk = from_global_id(kwargs.get("id", None))[1]
+    def resolve_userimport(
+        self, info: graphene.ResolveInfo, **kwargs: Any
+    ) -> UserImport:
+        relay_id = kwargs.get("id")
+        if relay_id is None:
+            raise UserImport.DoesNotExist()
+        django_pk = from_global_id(relay_id)[1]
         return UserImport.objects.visible_to_user(info.context.user).get(id=django_pk)
 
     # EXPORT RESOLVERS #####################################
@@ -76,14 +91,21 @@ class UserQueryMixin:
     )
 
     @login_required
-    def resolve_userexports(self, info, **kwargs):
+    def resolve_userexports(
+        self, info: graphene.ResolveInfo, **kwargs: Any
+    ) -> QuerySet[UserExport]:
         return UserExport.objects.visible_to_user(info.context.user)
 
     userexport = relay.Node.Field(UserExportType)
 
     @login_required
-    def resolve_userexport(self, info, **kwargs):
-        django_pk = from_global_id(kwargs.get("id", None))[1]
+    def resolve_userexport(
+        self, info: graphene.ResolveInfo, **kwargs: Any
+    ) -> UserExport:
+        relay_id = kwargs.get("id")
+        if relay_id is None:
+            raise UserExport.DoesNotExist()
+        django_pk = from_global_id(relay_id)[1]
         return UserExport.objects.visible_to_user(info.context.user).get(id=django_pk)
 
     # ASSIGNMENT RESOLVERS #####################################
@@ -92,7 +114,9 @@ class UserQueryMixin:
     )
 
     @login_required
-    def resolve_assignments(self, info, **kwargs):
+    def resolve_assignments(
+        self, info: graphene.ResolveInfo, **kwargs: Any
+    ) -> QuerySet[Assignment]:
         """
         Resolve assignments.
 
@@ -116,7 +140,9 @@ class UserQueryMixin:
     assignment = relay.Node.Field(AssignmentType)
 
     @login_required
-    def resolve_assignment(self, info, **kwargs):
+    def resolve_assignment(
+        self, info: graphene.ResolveInfo, **kwargs: Any
+    ) -> Assignment:
         """
         Resolve a single assignment by ID.
 
@@ -131,7 +157,10 @@ class UserQueryMixin:
         )
 
         user = info.context.user
-        django_pk = from_global_id(kwargs.get("id", None))[1]
+        relay_id = kwargs.get("id")
+        if relay_id is None:
+            raise GraphQLError("Assignment not found")
+        django_pk = from_global_id(relay_id)[1]
 
         # Use direct query - Assignment model doesn't have visible_to_user manager
         if user.is_superuser:

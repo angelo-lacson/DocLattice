@@ -7,6 +7,7 @@ which are used by extract/metadata queries.
 
 import inspect
 import logging
+from typing import Any
 
 import graphene
 from django.conf import settings
@@ -65,7 +66,7 @@ class ExtractQueryMixin:
 
     fieldset = relay.Node.Field(FieldsetType)
 
-    def resolve_fieldset(self, info, **kwargs):
+    def resolve_fieldset(self, info, **kwargs) -> Any:
         django_pk = from_global_id(kwargs.get("id", None))[1]
         return Fieldset.objects.visible_to_user(info.context.user).get(id=django_pk)
 
@@ -73,23 +74,23 @@ class ExtractQueryMixin:
         FieldsetType, filterset_class=FieldsetFilter
     )
 
-    def resolve_fieldsets(self, info, **kwargs):
+    def resolve_fieldsets(self, info, **kwargs) -> Any:
         return Fieldset.objects.visible_to_user(info.context.user)
 
     column = relay.Node.Field(ColumnType)
 
-    def resolve_column(self, info, **kwargs):
+    def resolve_column(self, info, **kwargs) -> Any:
         django_pk = from_global_id(kwargs.get("id", None))[1]
         return Column.objects.visible_to_user(info.context.user).get(id=django_pk)
 
     columns = DjangoFilterConnectionField(ColumnType, filterset_class=ColumnFilter)
 
-    def resolve_columns(self, info, **kwargs):
+    def resolve_columns(self, info, **kwargs) -> Any:
         return Column.objects.visible_to_user(info.context.user)
 
     extract = relay.Node.Field(ExtractType)
 
-    def resolve_extract(self, info, **kwargs):
+    def resolve_extract(self, info, **kwargs) -> Any:
         from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
 
         django_pk = from_global_id(kwargs.get("id", None))[1]
@@ -102,7 +103,7 @@ class ExtractQueryMixin:
         ExtractType, filterset_class=ExtractFilter, max_limit=15
     )
 
-    def resolve_extracts(self, info, **kwargs):
+    def resolve_extracts(self, info, **kwargs) -> Any:
         from opencontractserver.annotations.query_optimizer import ExtractQueryOptimizer
 
         corpus_id = kwargs.get("corpus_id")
@@ -117,7 +118,7 @@ class ExtractQueryMixin:
 
     datacell = relay.Node.Field(DatacellType)
 
-    def resolve_datacell(self, info, **kwargs):
+    def resolve_datacell(self, info, **kwargs) -> Any:
         django_pk = from_global_id(kwargs.get("id", None))[1]
         return Datacell.objects.visible_to_user(info.context.user).get(id=django_pk)
 
@@ -125,13 +126,13 @@ class ExtractQueryMixin:
         DatacellType, filterset_class=DatacellFilter
     )
 
-    def resolve_datacells(self, info, **kwargs):
+    def resolve_datacells(self, info, **kwargs) -> Any:
         return Datacell.objects.visible_to_user(info.context.user)
 
     registered_extract_tasks = graphene.Field(GenericScalar)
 
     @login_required
-    def resolve_registered_extract_tasks(self, info, **kwargs):
+    def resolve_registered_extract_tasks(self, info, **kwargs) -> Any:
         from config import celery_app
 
         tasks = {}
@@ -176,7 +177,7 @@ class ExtractQueryMixin:
         description="Get metadata datacells for multiple documents in a single query (batch)",
     )
 
-    def resolve_document_metadata_datacells(self, info, document_id, corpus_id):
+    def resolve_document_metadata_datacells(self, info, document_id, corpus_id) -> Any:
         """Get metadata datacells for a document using MetadataQueryOptimizer."""
         from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
@@ -188,7 +189,9 @@ class ExtractQueryMixin:
             user, local_doc_id, local_corpus_id, manual_only=True
         )
 
-    def resolve_metadata_completion_status_v2(self, info, document_id, corpus_id):
+    def resolve_metadata_completion_status_v2(
+        self, info, document_id, corpus_id
+    ) -> Any:
         """Get metadata completion status using MetadataQueryOptimizer."""
         from opencontractserver.extracts.query_optimizer import MetadataQueryOptimizer
 
@@ -200,7 +203,9 @@ class ExtractQueryMixin:
             user, local_doc_id, local_corpus_id
         )
 
-    def resolve_documents_metadata_datacells_batch(self, info, document_ids, corpus_id):
+    def resolve_documents_metadata_datacells_batch(
+        self, info, document_ids, corpus_id
+    ) -> Any:
         """
         Get metadata datacells for multiple documents using MetadataQueryOptimizer.
 
@@ -256,7 +261,7 @@ class ExtractQueryMixin:
         # GREMLIN ENGINE RESOLVERS #####################################
         gremlin_engine = relay.Node.Field(GremlinEngineType_READ)
 
-        def resolve_gremlin_engine(self, info, **kwargs):
+        def resolve_gremlin_engine(self, info, **kwargs) -> Any:
             django_pk = from_global_id(kwargs.get("id", None))[1]
             return GremlinEngine.objects.visible_to_user(info.context.user).get(
                 id=django_pk
@@ -266,13 +271,13 @@ class ExtractQueryMixin:
             GremlinEngineType_READ, filterset_class=GremlinEngineFilter
         )
 
-        def resolve_gremlin_engines(self, info, **kwargs):
+        def resolve_gremlin_engines(self, info, **kwargs) -> Any:
             return GremlinEngine.objects.visible_to_user(info.context.user)
 
         # ANALYZER RESOLVERS #####################################
         analyzer = relay.Node.Field(AnalyzerType)
 
-        def resolve_analyzer(self, info, **kwargs):
+        def resolve_analyzer(self, info, **kwargs) -> Any:
 
             if kwargs.get("id", None) is not None:
                 django_pk = from_global_id(kwargs.get("id", None))[1]
@@ -287,13 +292,13 @@ class ExtractQueryMixin:
             AnalyzerType, filterset_class=AnalyzerFilter
         )
 
-        def resolve_analyzers(self, info, **kwargs):
+        def resolve_analyzers(self, info, **kwargs) -> Any:
             return Analyzer.objects.visible_to_user(info.context.user)
 
         # ANALYSIS RESOLVERS #####################################
         analysis = relay.Node.Field(AnalysisType)
 
-        def resolve_analysis(self, info, **kwargs):
+        def resolve_analysis(self, info, **kwargs) -> Any:
             from opencontractserver.annotations.query_optimizer import (
                 AnalysisQueryOptimizer,
             )
@@ -309,7 +314,7 @@ class ExtractQueryMixin:
         )
 
         @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_MEDIUM"))
-        def resolve_analyses(self, info, **kwargs):
+        def resolve_analyses(self, info, **kwargs) -> Any:
             from opencontractserver.annotations.query_optimizer import (
                 AnalysisQueryOptimizer,
             )
