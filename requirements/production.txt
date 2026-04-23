@@ -8,7 +8,7 @@ collectfasta==3.3.3  # https://github.com/jasongi/collectfasta (maintained fork 
 
 # Django
 # ------------------------------------------------------------------------------
-django-anymail[mailgun]==14.0  # https://github.com/anymail/django-anymail
+django-anymail[mailgun]==15.0  # https://github.com/anymail/django-anymail
 
 # GCP Stuff
 # ------------------------------------------------------------------------------
