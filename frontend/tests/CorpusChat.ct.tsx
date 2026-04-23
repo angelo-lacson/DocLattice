@@ -1032,7 +1032,7 @@ test.describe("CorpusChat", () => {
     await component.unmount();
   });
 
-  test("ASYNC_RESUME keeps the processing indicator visible", async ({
+  test("ASYNC_RESUME sequence completes with final message", async ({
     mount,
     page,
   }) => {
@@ -1235,9 +1235,60 @@ test.describe("CorpusChat", () => {
     mount,
     page,
   }) => {
+    // Mock for the debounced refetch with `title_Contains: "First"`. Returns
+    // only the "First Conversation" edge so we can positively assert that the
+    // debounced value flowed into the Apollo variables and produced a
+    // filter-aware result.
+    const filteredConversationsMock: MockedResponse = {
+      request: {
+        query: GET_CORPUS_CONVERSATIONS,
+        variables: {
+          corpusId: TEST_CORPUS_ID,
+          conversationType: "CHAT",
+          title_Contains: "First",
+        },
+      },
+      result: {
+        data: {
+          conversations: {
+            __typename: "ConversationTypeConnection",
+            pageInfo: {
+              __typename: "PageInfo",
+              hasNextPage: false,
+              endCursor: null,
+            },
+            edges: [
+              {
+                __typename: "ConversationTypeEdge",
+                node: {
+                  __typename: "ConversationType",
+                  id: TEST_CONVERSATION_ID,
+                  title: "First Conversation",
+                  createdAt: new Date(Date.now() - 86400000).toISOString(),
+                  updatedAt: new Date(Date.now() - 86400000).toISOString(),
+                  chatMessages: {
+                    __typename: "ChatMessageTypeConnection",
+                    totalCount: 5,
+                  },
+                  creator: {
+                    __typename: "UserType",
+                    email: "user@example.com",
+                  },
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+
     const component = await mount(
       <CorpusChatTestWrapper
-        mocks={[conversationsWithDataMock, conversationsWithDataMock]}
+        mocks={[
+          conversationsWithDataMock,
+          conversationsWithDataMock,
+          filteredConversationsMock,
+        ]}
         corpusId={TEST_CORPUS_ID}
       />
     );
@@ -1245,24 +1296,28 @@ test.describe("CorpusChat", () => {
     await expect(page.getByText("First Conversation")).toBeVisible({
       timeout: 20000,
     });
+    // "Second Conversation" is present in the unfiltered mock — we will later
+    // assert it disappears after the debounce fires with the filter.
+    await expect(page.getByText("Second Conversation")).toBeVisible();
 
-    // The conversation list has a title filter input. Any input that accepts
-    // text can drive the title debounce state — we just need to cover the
-    // debounce timer useEffect.
-    //
-    // NOTE: this is coverage-only; it does NOT assert filter semantics.
-    // If the debounce timer is broken (e.g. the effect no longer fires),
-    // this test will still pass — it exists to exercise the code path,
-    // not to pin filter behaviour. Any behavioural regression should be
-    // caught by a dedicated filter test added alongside that feature.
-    const filterInputs = page.locator('input[type="text"], input:not([type])');
-    if ((await filterInputs.count()) > 0) {
-      const first = filterInputs.first();
-      await first.fill("First");
-      // Wait long enough for the 500ms debounce to elapse
-      await page.waitForTimeout(700);
-    }
+    // The conversation list has a collapsed search icon that expands to a
+    // text input. Click it to reveal the title filter input, then type to
+    // drive the 500ms debounce timer useEffect and refetch.
+    const searchButton = page.locator('button[title="Search"]');
+    await expect(searchButton).toBeVisible({ timeout: 5000 });
+    await searchButton.click();
 
+    const filterInput = page.locator('input[placeholder="Search chats..."]');
+    await expect(filterInput).toBeVisible({ timeout: 5000 });
+    await filterInput.fill("First");
+
+    // After the 500ms debounce fires, the filtered mock takes effect: "Second
+    // Conversation" is dropped from the result. Asserting its disappearance
+    // proves the debounced value reached Apollo's variables — previously the
+    // test silently skipped entirely when the filter input was absent.
+    await expect(page.getByText("Second Conversation")).not.toBeVisible({
+      timeout: 5000,
+    });
     await expect(page.getByText("First Conversation")).toBeVisible();
     await component.unmount();
   });
