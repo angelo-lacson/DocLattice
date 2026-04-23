@@ -58,6 +58,7 @@ jobs:
               - 'Dockerfile*'
               - '.pre-commit-config.yaml'
               - 'setup.cfg'
+              - 'mypy.ini'
               - 'pyproject.toml'
               - '.github/workflows/backend.yml'
 
@@ -91,6 +92,15 @@ jobs:
 
       - name: Run pre-commit
         run: pre-commit run --all-files
+
+      - name: Run mypy
+        # Runs from requirements/local.txt (not via pre-commit) so CI is
+        # authoritative even when contributors skip the hook. Keep the
+        # mypy pin in requirements/local.txt in sync with the `rev:` of
+        # the mirrors-mypy hook in .pre-commit-config.yaml — a drift
+        # means the hook and CI can disagree silently. See
+        # docs/typing/README.md.
+        run: python -m mypy --config-file mypy.ini opencontractserver config
 
   pytest:
     needs: [changes, linter]

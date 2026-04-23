@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Mypy type-checking wired into pre-commit and CI** (Issue #1331): The existing `[mypy]` block in `setup.cfg` and the `mypy==1.20.1` / `django-stubs==6.0.2` / `djangorestframework-stubs==3.16.9` pins in `requirements/local.txt` were never actually enforced, so the investment was drifting (48 pre-existing `# type: ignore` markers, many modules at 0% annotation coverage). This PR turns on the gate without requiring the 7208 existing errors across 357 files to be fixed first — `mypy.ini` lists each of those files under its own `[mypy-<module>] ignore_errors = True` section, so new modules added outside the baseline **are** type-checked and CI / the hook fails on their errors.
+  - `mypy.ini` (split out of `setup.cfg` because the per-module baseline is ~1000 lines): `python_version` bumped `3.9` → `3.11` to match the runtime, plugins kept, `django_settings_module` pointed at the new `config/settings/mypy.py` (dummy `DATABASE_URL` default so contributors don't need env vars).
+  - `.pre-commit-config.yaml`: new `mirrors-mypy@v1.20.1` hook with `pass_filenames: false` and fully pinned stubs + Django runtime in `additional_dependencies` (pre-commit autoupdate only bumps `rev`, so unpinned stubs would drift).
+  - `.github/workflows/backend.yml`: `Run mypy` step added to the `linter` job; the preceding `pip install -r requirements/local.txt` step satisfies the django-stubs plugin.
+  - `docs/typing/README.md`: how to run locally / via pre-commit / in the test container, plus the per-file graduation workflow.
+  - `docs/typing/mypy_baseline.txt`: frozen error list (sorted for stable diffs) so follow-up issues can measure progress.
+
 ### Changed
 
 - **Simplified `RelationGroup.updateForAnnotationDeletion` pruning logic** (Issue #1317, follow-up to #1314, `frontend/src/components/annotator/types/annotations.ts:40-60`): The method previously branched on four near-duplicate conditions (`sourceEmpty && nowTargetEmpty`, `targetEmpty && nowSourceEmpty`, `!sourceEmpty && nowSourceEmpty`, `!targetEmpty && nowTargetEmpty`) each returning `undefined`. All four are equivalent to a single `nowSourceEmpty || nowTargetEmpty` check (`filter` is monotonic, so an originally-empty side stays empty after filtering). Collapsed the branches and removed the now-unused `sourceEmpty` / `targetEmpty` locals per the project's DRY guideline. Behavior is unchanged; existing regression tests in `frontend/src/components/annotator/types/__tests__/annotations.test.ts` still pass unmodified, confirming the simplification is semantics-preserving.
