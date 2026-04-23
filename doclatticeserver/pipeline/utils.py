@@ -2,12 +2,13 @@ import importlib
 import inspect
 import logging
 import pkgutil
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 from doclatticeserver.pipeline.base.embedder import BaseEmbedder
 from doclatticeserver.pipeline.base.file_types import FILE_TYPE_TO_MIME, FileTypeEnum
 from doclatticeserver.pipeline.base.parser import BaseParser
 from doclatticeserver.pipeline.base.post_processor import BasePostProcessor
+from doclatticeserver.pipeline.base.reranker import BaseReranker
 from doclatticeserver.pipeline.base.thumbnailer import BaseThumbnailGenerator
 from doclatticeserver.types.dicts import DocLatticeExportDataJsonPythonType
 
@@ -80,6 +81,16 @@ def get_all_post_processors() -> list[type[BasePostProcessor]]:
     return get_all_subclasses(
         "doclatticeserver.pipeline.post_processors", BasePostProcessor
     )
+
+
+def get_all_rerankers() -> list[type[BaseReranker]]:
+    """
+    Get all reranker classes.
+
+    Returns:
+        List[Type[BaseReranker]]: List of reranker classes.
+    """
+    return get_all_subclasses("doclatticeserver.pipeline.rerankers", BaseReranker)
 
 
 def get_components_by_mimetype(
@@ -265,6 +276,7 @@ def get_component_by_name(component_name: str) -> type:
                     or issubclass(obj, BaseEmbedder)
                     or issubclass(obj, BaseThumbnailGenerator)
                     or issubclass(obj, BasePostProcessor)
+                    or issubclass(obj, BaseReranker)
                 ):
                     return obj
         except (ModuleNotFoundError, AttributeError):
@@ -276,6 +288,7 @@ def get_component_by_name(component_name: str) -> type:
         "doclatticeserver.pipeline.embedders",
         "doclatticeserver.pipeline.thumbnailers",
         "doclatticeserver.pipeline.post_processors",
+        "doclatticeserver.pipeline.rerankers",
     ]
 
     for base_path in base_paths:
@@ -290,6 +303,7 @@ def get_component_by_name(component_name: str) -> type:
                         and obj != BaseThumbnailGenerator
                     )
                     or (issubclass(obj, BasePostProcessor) and obj != BasePostProcessor)
+                    or (issubclass(obj, BaseReranker) and obj != BaseReranker)
                 ):
                     return obj
         except ModuleNotFoundError:
@@ -488,3 +502,107 @@ def run_post_processors(
             raise
 
     return current_zip_bytes, current_export_data
+
+
+# --------------------------------------------------------------------------- #
+# Reranker helpers
+# --------------------------------------------------------------------------- #
+# Process-local cache of reranker *instances* keyed by class path. Rerankers
+# (especially cross-encoder backends) can be expensive to instantiate because
+# ``__init__`` loads component settings from the database; we also don't want
+# cross-encoder model weights reloading every call. Callers that need a fresh
+# instance (e.g. after a settings change) should call ``invalidate_reranker_cache``.
+#
+# NOTE: This cache is process-local. Multi-worker deployments (gunicorn,
+# Celery) will continue serving the old instance in already-warm workers
+# after a PipelineSettings change until each worker recycles or explicitly
+# calls invalidate_reranker_cache(). Operators changing the reranker in
+# production should plan for a rolling restart.
+
+# Sentinel value stored for configurations that failed to load so we don't
+# re-hit the database / re-import on every call.
+_RERANKER_LOAD_FAILED: object = object()
+_RERANKER_INSTANCE_CACHE: dict[str, object] = {}
+
+
+def get_default_reranker_path() -> str:
+    """
+    Get the default reranker class path from the database PipelineSettings
+    singleton. Returns empty string when no reranker is configured.
+    """
+    from doclatticeserver.documents.models import PipelineSettings
+
+    return PipelineSettings.get_instance().get_default_reranker()
+
+
+def get_default_reranker_class() -> Optional[type[BaseReranker]]:
+    """
+    Resolve the configured default reranker class path to an actual class.
+
+    Returns ``None`` when no reranker is configured, or when the configured
+    class path cannot be imported (missing optional dependency, typo, etc.).
+    The caller is responsible for treating ``None`` as "reranking disabled".
+    """
+    class_path = get_default_reranker_path()
+    if not class_path:
+        return None
+    try:
+        module_path, class_name = class_path.rsplit(".", 1)
+        module = importlib.import_module(module_path)
+        reranker_class = getattr(module, class_name)
+    except (ModuleNotFoundError, AttributeError, ValueError) as e:
+        logger.error(f"Error loading reranker '{class_path}': {e}")
+        return None
+
+    if not isinstance(reranker_class, type) or not issubclass(
+        reranker_class, BaseReranker
+    ):
+        logger.error(
+            f"Configured default reranker '{class_path}' is not a BaseReranker subclass"
+        )
+        return None
+    return reranker_class
+
+
+def get_default_reranker_instance() -> Optional[BaseReranker]:
+    """
+    Return a process-cached instance of the configured default reranker.
+
+    Returns ``None`` when no reranker is configured or instantiation fails.
+    Instantiation failures are logged but never propagated — the caller
+    should gracefully fall back to first-stage retrieval order. Failed
+    loads are cached as well so a misconfiguration doesn't re-query the
+    DB and re-attempt the import on every retrieval call.
+    """
+    class_path = get_default_reranker_path()
+    if not class_path:
+        return None
+
+    cached = _RERANKER_INSTANCE_CACHE.get(class_path)
+    if cached is _RERANKER_LOAD_FAILED:
+        return None
+    if cached is not None:
+        return cast(BaseReranker, cached)
+
+    reranker_class = get_default_reranker_class()
+    if reranker_class is None:
+        _RERANKER_INSTANCE_CACHE[class_path] = _RERANKER_LOAD_FAILED
+        return None
+
+    try:
+        instance = reranker_class()
+    except Exception as e:  # pragma: no cover - defensive
+        logger.error(
+            f"Failed to instantiate reranker '{class_path}': {e}. "
+            "Reranking will be skipped for this process."
+        )
+        _RERANKER_INSTANCE_CACHE[class_path] = _RERANKER_LOAD_FAILED
+        return None
+
+    _RERANKER_INSTANCE_CACHE[class_path] = instance
+    return instance
+
+
+def invalidate_reranker_cache() -> None:
+    """Drop cached reranker instances (use after changing PipelineSettings)."""
+    _RERANKER_INSTANCE_CACHE.clear()
