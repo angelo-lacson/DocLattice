@@ -471,7 +471,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
             setChat((prev) => [
               ...prev,
               {
-                messageId: data?.message_id || crypto.randomUUID(),
+                messageId: data?.message_id ?? crypto.randomUUID(),
                 user: "Assistant",
                 content,
                 timestamp: new Date().toLocaleString(),
