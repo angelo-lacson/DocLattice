@@ -181,7 +181,7 @@ async def doc_extract_query_task(
         """
         from doclatticeserver.annotations.models import Annotation
 
-        valid_ids = [int(a) for a in annotation_ids if isinstance(a, int) and a > 0]
+        valid_ids = [a for a in annotation_ids if isinstance(a, int) and a > 0]
         if not valid_ids:
             return
         # Guard against IDs that don't exist (e.g. race with deletion).
@@ -367,9 +367,7 @@ async def doc_extract_query_task(
             # that weren't part of a retrieved annotation.
             if retrieved_annotation_ids:
                 try:
-                    await _link_retrieval_citations(
-                        datacell, retrieved_annotation_ids
-                    )
+                    await _link_retrieval_citations(datacell, retrieved_annotation_ids)
                     logger.info(
                         "Linked %d retrieval citations to datacell %s",
                         len(retrieved_annotation_ids),
