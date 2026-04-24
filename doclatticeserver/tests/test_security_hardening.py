@@ -1205,3 +1205,63 @@ class TestDRFMutationValidationError(TestCase):
         message = DRFMutation.format_validation_error(exc)
         self.assertIn("Error one.", message)
         self.assertIn("Error two.", message)
+
+
+# ---------------------------------------------------------------------------
+# DRFMutation / DRFDeletion IOSettings misconfiguration guard (issue #1360)
+# ---------------------------------------------------------------------------
+
+
+class TestIOSettingsRequiredFieldsGuard(TestCase):
+    """Subclasses that forget to configure IOSettings should fail with a
+    clear ``NotImplementedError`` rather than a late ``AttributeError`` /
+    ``TypeError`` that pretends to be a generic "internal error"."""
+
+    def test_require_io_setting_raises_when_io_settings_missing(self):
+        from config.graphql.base import _require_io_setting
+
+        class MisconfiguredMutation:
+            pass
+
+        with self.assertRaises(NotImplementedError) as ctx:
+            _require_io_setting(MisconfiguredMutation, "model")
+        self.assertIn("MisconfiguredMutation", str(ctx.exception))
+        self.assertIn("model", str(ctx.exception))
+
+    def test_require_io_setting_raises_when_attribute_none(self):
+        """Mirrors the inherited ``IOSettings`` on ``DRFMutation`` where
+        ``model``/``serializer``/``graphene_model`` default to ``None``."""
+        from config.graphql.base import _require_io_setting
+
+        class MisconfiguredMutation:
+            class IOSettings:
+                model = None
+                serializer = None
+                graphene_model = None
+
+        for field in ("model", "serializer", "graphene_model"):
+            with self.assertRaises(NotImplementedError) as ctx:
+                _require_io_setting(MisconfiguredMutation, field)
+            self.assertIn("MisconfiguredMutation", str(ctx.exception))
+            self.assertIn(field, str(ctx.exception))
+
+    def test_require_io_setting_returns_configured_value(self):
+        from config.graphql.base import _require_io_setting
+
+        class ConfiguredMutation:
+            class IOSettings:
+                model = Corpus
+
+        self.assertIs(_require_io_setting(ConfiguredMutation, "model"), Corpus)
+
+    def test_base_iosettings_defaults_are_none_on_mutation(self):
+        """Regression guard: the base ``DRFMutation.IOSettings`` exposes
+        ``model`` / ``graphene_model`` / ``serializer`` as ``None`` so the
+        runtime guard can detect a missing override. ``DRFDeletion`` now
+        declares ``model`` the same way (previously not declared at all)."""
+        from config.graphql.base import DRFDeletion, DRFMutation
+
+        self.assertIsNone(DRFMutation.IOSettings.model)
+        self.assertIsNone(DRFMutation.IOSettings.serializer)
+        self.assertIsNone(DRFMutation.IOSettings.graphene_model)
+        self.assertIsNone(DRFDeletion.IOSettings.model)
