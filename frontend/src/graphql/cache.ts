@@ -23,6 +23,7 @@ import {
 } from "../types/graphql-api";
 import { ViewState } from "../components/types";
 import { FileUploadPackageProps } from "../components/widgets/modals/DocumentUploadModal";
+import type { GetUserOutput } from "./queries";
 
 export const mergeArrayByIdFieldPolicy: FieldPolicy<Reference[]> = {
   // eslint-disable-next-line @typescript-eslint/default-param-last
@@ -463,24 +464,11 @@ export const extractSearchTerm = makeVar<string>("");
  *   openedUser - Profile snapshot resolved by CentralRouteManager Phase 1.
  *   Set by: CentralRouteManager only.
  *
- * The shape mirrors the GET_USER GraphQL response. Components reading this
- * should treat null as "no user resolved yet" (loading or missing).
+ * Derived from the GET_USER query output so the shape automatically tracks
+ * any schema changes — adding a manual interface here would silently drift
+ * the moment a new field appears on UserType.
  */
-export interface OpenedUserProfile {
-  id: string;
-  username: string;
-  slug: string;
-  name: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  isProfilePublic: boolean;
-  reputationGlobal: number;
-  totalMessages: number;
-  totalThreadsCreated: number;
-  totalAnnotationsCreated: number;
-  totalDocumentsUploaded: number;
-}
+export type OpenedUserProfile = NonNullable<GetUserOutput["userBySlug"]>;
 export const openedUser = makeVar<OpenedUserProfile | null>(null);
 
 /**
