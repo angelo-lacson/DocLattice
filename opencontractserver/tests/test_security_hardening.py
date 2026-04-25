@@ -1208,14 +1208,12 @@ class TestDRFMutationValidationError(TestCase):
 
 
 # ---------------------------------------------------------------------------
-# DRFMutation / DRFDeletion IOSettings misconfiguration guard (issue #1360)
+# DRFMutation / DRFDeletion IOSettings misconfiguration guard
 # ---------------------------------------------------------------------------
 
 
 class TestIOSettingsRequiredFieldsGuard(TestCase):
-    """Subclasses that forget to configure IOSettings should fail with a
-    clear ``NotImplementedError`` rather than a late ``AttributeError`` /
-    ``TypeError`` that pretends to be a generic "internal error"."""
+    """Misconfigured IOSettings must raise ``NotImplementedError`` at mutation time."""
 
     def test_require_io_setting_raises_when_io_settings_missing(self):
         from config.graphql.base import _require_io_setting
@@ -1229,8 +1227,7 @@ class TestIOSettingsRequiredFieldsGuard(TestCase):
         self.assertIn("model", str(ctx.exception))
 
     def test_require_io_setting_raises_when_attribute_none(self):
-        """Mirrors the inherited ``IOSettings`` on ``DRFMutation`` where
-        ``model``/``serializer``/``graphene_model`` default to ``None``."""
+        """Each of model/serializer/graphene_model must independently fail when ``None``."""
         from config.graphql.base import _require_io_setting
 
         class MisconfiguredMutation:
@@ -1255,13 +1252,28 @@ class TestIOSettingsRequiredFieldsGuard(TestCase):
         self.assertIs(_require_io_setting(ConfiguredMutation, "model"), Corpus)
 
     def test_base_iosettings_defaults_are_none_on_mutation(self):
-        """Regression guard: the base ``DRFMutation.IOSettings`` exposes
-        ``model`` / ``graphene_model`` / ``serializer`` as ``None`` so the
-        runtime guard can detect a missing override. ``DRFDeletion`` now
-        declares ``model`` the same way (previously not declared at all)."""
+        """Base ``IOSettings`` must default to ``None`` so the runtime guard can fire."""
         from config.graphql.base import DRFDeletion, DRFMutation
 
         self.assertIsNone(DRFMutation.IOSettings.model)
         self.assertIsNone(DRFMutation.IOSettings.serializer)
         self.assertIsNone(DRFMutation.IOSettings.graphene_model)
         self.assertIsNone(DRFDeletion.IOSettings.model)
+
+    def test_drf_deletion_mutate_raises_when_lookup_value_missing(self):
+        """``DRFDeletion.mutate`` must raise ``ValueError`` when the lookup arg is omitted."""
+        from unittest.mock import MagicMock
+
+        from config.graphql.base import DRFDeletion
+
+        class _DeleteCorpus(DRFDeletion):
+            class IOSettings(DRFDeletion.IOSettings):
+                model = Corpus
+                lookup_field = "id"
+
+        info = MagicMock()
+        info.context.user = MagicMock(is_authenticated=True)
+
+        with self.assertRaises(ValueError) as ctx:
+            _DeleteCorpus.mutate(None, info)
+        self.assertIn("id", str(ctx.exception))
