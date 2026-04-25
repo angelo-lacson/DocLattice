@@ -78,9 +78,7 @@ class RemoveLabelsFromLabelsetMutationTestCase(TestCase):
             color="#0000FF",
             creator=self.user,
         )
-        self.labelset.annotation_labels.add(
-            self.label_a, self.label_b, self.label_c
-        )
+        self.labelset.annotation_labels.add(self.label_a, self.label_b, self.label_c)
 
     def test_remove_labels_from_labelset_actually_removes_them(self) -> None:
         """Mutation should remove the specified labels from the labelset M2M."""
@@ -106,7 +104,7 @@ class RemoveLabelsFromLabelsetMutationTestCase(TestCase):
         remaining = set(self.labelset.annotation_labels.values_list("pk", flat=True))
         self.assertEqual(remaining, {self.label_c.pk})
 
-        # The labels themselves should still exist – only the M2M is broken
+        # Only the M2M link is removed — the labels themselves are not deleted
         self.assertTrue(AnnotationLabel.objects.filter(pk=self.label_a.pk).exists())
         self.assertTrue(AnnotationLabel.objects.filter(pk=self.label_b.pk).exists())
 
@@ -146,9 +144,7 @@ class RemoveLabelsFromLabelsetMutationTestCase(TestCase):
             "labelsetId": to_global_id("LabelSetType", self.labelset.id),
         }
 
-        result = self.other_client.execute(
-            REMOVE_LABELS_MUTATION, variables=variables
-        )
+        result = self.other_client.execute(REMOVE_LABELS_MUTATION, variables=variables)
 
         self.assertIsNone(result.get("errors"))
         data = result["data"]["removeAnnotationLabelsFromLabelset"]
@@ -157,9 +153,23 @@ class RemoveLabelsFromLabelsetMutationTestCase(TestCase):
 
         # Nothing should have changed
         remaining = set(self.labelset.annotation_labels.values_list("pk", flat=True))
-        self.assertEqual(
-            remaining, {self.label_a.pk, self.label_b.pk, self.label_c.pk}
-        )
+        self.assertEqual(remaining, {self.label_a.pk, self.label_b.pk, self.label_c.pk})
+
+    def test_remove_labels_empty_list_is_noop(self) -> None:
+        """Empty ``labelIds`` should succeed without changing the labelset."""
+
+        variables = {
+            "labelIds": [],
+            "labelsetId": to_global_id("LabelSetType", self.labelset.id),
+        }
+
+        result = self.client.execute(REMOVE_LABELS_MUTATION, variables=variables)
+
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["removeAnnotationLabelsFromLabelset"]
+        self.assertTrue(data["ok"])
+        remaining = set(self.labelset.annotation_labels.values_list("pk", flat=True))
+        self.assertEqual(remaining, {self.label_a.pk, self.label_b.pk, self.label_c.pk})
 
     def test_remove_labels_allows_public_labelset(self) -> None:
         """A public labelset is editable via this mutation by any authed user.
@@ -177,9 +187,7 @@ class RemoveLabelsFromLabelsetMutationTestCase(TestCase):
             "labelsetId": to_global_id("LabelSetType", self.labelset.id),
         }
 
-        result = self.other_client.execute(
-            REMOVE_LABELS_MUTATION, variables=variables
-        )
+        result = self.other_client.execute(REMOVE_LABELS_MUTATION, variables=variables)
 
         self.assertIsNone(result.get("errors"))
         data = result["data"]["removeAnnotationLabelsFromLabelset"]
