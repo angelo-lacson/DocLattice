@@ -21,6 +21,7 @@ interface ParsedRoute {
     | "extract"
     | "thread"
     | "labelset"
+    | "user"
     | "browse"
     | "unknown";
   userIdent?: string;
@@ -29,6 +30,8 @@ interface ParsedRoute {
   extractIdent?: string;
   threadIdent?: string;
   labelsetIdent?: string;
+  /** Slug for the /users/:slug profile route. */
+  userSlug?: string;
   browsePath?: string;
 }
 
@@ -78,6 +81,7 @@ type NavigateFn = (
  * - /d/:userIdent/:docIdent
  * - /d/:userIdent/:corpusIdent/:docIdent
  * - /e/:userIdent/:extractIdent
+ * - /users/:slug
  * - /annotations, /extracts, /corpuses, /documents, etc.
  *
  * @param pathname - URL pathname to parse
@@ -139,11 +143,27 @@ export function parseRoute(pathname: string): ParsedRoute {
     };
   }
 
+  // Extract detail by id: /extracts/:extractId
+  if (segments[0] === "extracts" && segments.length === 2) {
+    return {
+      type: "extract",
+      extractIdent: segments[1],
+    };
+  }
+
   // LabelSet route: /label_sets/:id (ID-based, labelsets don't have slugs)
   if (segments[0] === "label_sets" && segments.length === 2) {
     return {
       type: "labelset",
       labelsetIdent: segments[1],
+    };
+  }
+
+  // User profile route: /users/:slug
+  if (segments[0] === "users" && segments.length === 2) {
+    return {
+      type: "user",
+      userSlug: segments[1],
     };
   }
 
