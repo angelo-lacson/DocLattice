@@ -23,7 +23,6 @@ import {
   openedThread,
   openedLabelset,
   openedUser,
-  OpenedUserProfile,
   selectedAnnotationIds,
   selectedAnalysesIds,
   selectedExtractIds,
@@ -324,16 +323,26 @@ export function CentralRouteManager() {
       }
       routeError(null);
 
-      // Type assertion: route.type is guaranteed to be "document" | "corpus" | "extract" | "thread" | "labelset" here
-      // because "browse" and "unknown" are handled by early return above
+      // route.type is guaranteed to be a resolvable entity here ("browse" and
+      // "unknown" returned above). userSlug must be passed explicitly so
+      // /users/:slug routes get a per-slug key — without it, every user
+      // resolution would dedupe to the same key and rapid profile switches
+      // would silently drop all but the first request.
       const requestKey = buildRequestKey(
-        route.type as "document" | "corpus" | "extract" | "thread" | "labelset",
+        route.type as
+          | "document"
+          | "corpus"
+          | "extract"
+          | "thread"
+          | "labelset"
+          | "user",
         route.userIdent,
         route.corpusIdent,
         route.documentIdent,
         route.extractIdent,
         route.threadIdent,
-        route.labelsetIdent
+        route.labelsetIdent,
+        route.userSlug
       );
 
       // Prevent duplicate simultaneous requests
@@ -815,7 +824,7 @@ export function CentralRouteManager() {
             }
 
             if (!error && data?.userBySlug) {
-              const user = data.userBySlug as OpenedUserProfile;
+              const user = data.userBySlug;
 
               routingLogger.debug(
                 "[RouteManager] ✅ Resolved user via slug:",
@@ -833,6 +842,18 @@ export function CentralRouteManager() {
             }
 
             console.warn("[RouteManager] User not found");
+            // Unlike the corpus/document/extract not-found paths (which
+            // redirect to /404 and clear via the browse-route handler), the
+            // user error path stays on the URL so the visitor can fix the
+            // slug. That makes clearing residual entity state our
+            // responsibility — otherwise consumers of openedCorpus etc.
+            // could render stale entity UI alongside the error display.
+            openedUser(null);
+            openedCorpus(null);
+            openedDocument(null);
+            openedExtract(null);
+            openedThread(null);
+            openedLabelset(null);
             routeError(new Error(`User "${route.userSlug}" not found`));
             routeLoading(false);
             return;

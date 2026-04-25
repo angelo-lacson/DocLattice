@@ -535,13 +535,14 @@ export const requestTracker = new RequestTracker();
  * Build a unique key for request deduplication
  */
 export function buildRequestKey(
-  type: "corpus" | "document" | "extract" | "thread" | "labelset",
+  type: "corpus" | "document" | "extract" | "thread" | "labelset" | "user",
   userIdent?: string,
   corpusIdent?: string,
   documentIdent?: string,
   extractIdent?: string,
   threadIdent?: string,
-  labelsetIdent?: string
+  labelsetIdent?: string,
+  userSlug?: string
 ): string {
   const parts = [
     type,
@@ -551,6 +552,7 @@ export function buildRequestKey(
     extractIdent,
     threadIdent,
     labelsetIdent,
+    userSlug,
   ].filter(Boolean);
   return parts.join("-");
 }

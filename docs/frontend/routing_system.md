@@ -57,13 +57,7 @@ The OpenContracts routing system follows a **centralized architecture** where **
 **The Correct Pattern:**
 Components wanting to change URL-driven state must use utility functions that update the URL. CentralRouteManager Phase 2 will detect the URL change and set the reactive var. This maintains unidirectional data flow: Component → URL → CentralRouteManager → Reactive Var → Component.
 
-This is non-negotiable. Violations cause infinite loops, route jittering, competing state updates, and unpredictable behavior. During development, we systematically removed all violations from:
-- `CorpusDocumentCards.tsx` (caused infinite loop bug)
-- `DocumentKnowledgeBase.tsx` (4 violations)
-- `FloatingDocumentControls.tsx` (1 violation)
-- `NavMenu.tsx` / `MobileNavMenu.tsx` (clearing on menu clicks)
-- `CorpusBreadcrumbs.tsx` (manual clearing)
-- `Corpuses.tsx` (3 violations)
+This is non-negotiable. Violations cause infinite loops, route jittering, competing state updates, and unpredictable behavior. The static `centralRouteDiscipline.test.ts` regression guard enforces this rule today, and the historical violations it was built to prevent (URL bypasses in `CorpusDocumentCards.tsx`, `DocumentKnowledgeBase.tsx`, `FloatingDocumentControls.tsx`, `NavMenu.tsx`/`MobileNavMenu.tsx`, `CorpusBreadcrumbs.tsx`, and `Corpuses.tsx`) have all been removed.
 
 **If you find yourself writing `openedCorpus(someValue)`, `openedDocument(someValue)`, `openedExtract(someValue)`, `openedThread(someValue)`, `openedLabelset(someValue)`, or `openedUser(someValue)` anywhere except `CentralRouteManager.tsx`, STOP. You are introducing a bug.**
 
