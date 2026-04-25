@@ -260,6 +260,40 @@ class CrossCorpusStructuralLeakTests(TestCase):
     # Document-scoped retrieval — must continue to work post-fix
     # ------------------------------------------------------------------ #
 
+    def test_deletion_aware_path_excludes_deleted_document_structural(self) -> None:
+        """Structural rows whose only ``DocumentPath`` is deleted are dropped.
+
+        Covers the deletion side of ``check_corpus_deletion=True``: the
+        ``DocumentPath`` row for ``doc_a`` is flipped to ``is_deleted=True``,
+        so ``active_doc_ids`` in
+        ``CoreAnnotationVectorStore._build_base_queryset`` becomes empty and
+        the corpus-only branch must short-circuit to no results — the
+        document's structural annotation must NOT come back, even though the
+        annotation row itself is otherwise unchanged.
+        """
+        DocumentPath.objects.filter(document=self.doc_a, corpus=self.corpus_a).update(
+            is_deleted=True
+        )
+
+        store = CoreAnnotationVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus_a.id,
+            document_id=None,
+            check_corpus_deletion=True,
+        )
+        query = VectorSearchQuery(
+            query_embedding=_constant_vector(384, 0.5), similarity_top_k=10
+        )
+        results = store.search(query)
+        returned_ids = {r.annotation.id for r in results}
+
+        self.assertNotIn(
+            self.struct_a.id,
+            returned_ids,
+            "Structural annotation whose only DocumentPath is deleted "
+            "leaked through the deletion-aware corpus-only path",
+        )
+
     def test_document_scoped_search_still_returns_structural(self) -> None:
         """Document-scoped retrieval is the existing well-tested path.
 
