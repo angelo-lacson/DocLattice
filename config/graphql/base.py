@@ -23,21 +23,9 @@ logger = logging.getLogger(__name__)
 
 
 def _require_io_setting(mutation_cls: type, name: str) -> Any:
-    """Return ``cls.IOSettings.<name>``; raise if it is missing or ``None``.
-
-    ``IOSettings`` is config-by-subclassing — concrete ``DRFMutation`` /
-    ``DRFDeletion`` subclasses are expected to override ``model``,
-    ``serializer`` and ``graphene_model``. Without this guard, a subclass
-    that forgets one of those surfaces as a late ``AttributeError`` /
-    ``TypeError`` inside ``mutate()``, which gets swallowed by the broad
-    ``except Exception`` and reported to the user as a generic
-    "internal error". Failing fast with a clear message here makes the
-    misconfiguration obvious at mutation-invocation time.
-    """
+    """Raise ``NotImplementedError`` if ``cls.IOSettings.<name>`` is missing or ``None``."""
     io_settings = getattr(mutation_cls, "IOSettings", None)
-    value = (
-        getattr(io_settings, name, None) if io_settings is not None else None
-    )
+    value = getattr(io_settings, name, None) if io_settings is not None else None
     if value is None:
         raise NotImplementedError(
             f"{mutation_cls.__name__}.IOSettings.{name} must be set by the "
@@ -222,8 +210,7 @@ class DRFMutation(graphene.Mutation):
                         raw_value = kwargs[pk_field]
                         if isinstance(raw_value, list):
                             kwargs[pk_field] = [
-                                from_global_id(global_id)[1]
-                                for global_id in raw_value
+                                from_global_id(global_id)[1] for global_id in raw_value
                             ]
                         else:
                             logger.info(f"pk field is: {raw_value}")
