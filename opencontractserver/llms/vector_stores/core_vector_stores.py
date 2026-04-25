@@ -305,6 +305,7 @@ class CoreAnnotationVectorStore:
         # Check for deleted documents in corpus
         if self.check_corpus_deletion and self.corpus_id and not self.document_id:
             # Note: sync_to_async already imported at module level
+            from opencontractserver.annotations.models import StructuralAnnotationSet
             from opencontractserver.documents.models import DocumentPath
 
             # Get documents with active (non-deleted) paths in corpus
@@ -317,8 +318,20 @@ class CoreAnnotationVectorStore:
             )()
 
             if active_doc_ids:
-                # Ensure we only search documents with active paths
-                active_filters &= Q(document_id__in=active_doc_ids)
+                # Two annotation shapes pass this filter:
+                #   1. Direct: Annotation.document_id is in the active set.
+                #   2. Structural: Annotation.document_id is NULL but the
+                #      structural_set links to one of those active documents.
+                #      ``document_id__in`` cannot match NULL on its own, so
+                #      structural annotations need an explicit OR clause —
+                #      otherwise every parser-produced structural row is
+                #      silently dropped on this corpus-wide path.
+                active_struct_set_ids = StructuralAnnotationSet.objects.filter(
+                    documents__in=active_doc_ids
+                ).values("id")
+                active_filters &= Q(document_id__in=active_doc_ids) | Q(
+                    structural=True, structural_set_id__in=active_struct_set_ids
+                )
                 _logger.debug(f"Found {len(active_doc_ids)} active documents in corpus")
             else:
                 _logger.warning(f"No active documents found in corpus {self.corpus_id}")
@@ -376,11 +389,46 @@ class CoreAnnotationVectorStore:
             # --- Corpus-only context (no document_id specified) ---
             _logger.debug(f"Corpus-only context: corpus_id={self.corpus_id}")
             # Annotations must be either:
-            # a) Structural (their Annotation.corpus_id might be null, included by nature)
-            # b) Non-structural AND directly linked to this corpus via Annotation.corpus_id.
-            active_filters &= Q(structural=True) | Q(
-                structural=False, corpus_id=self.corpus_id
-            )
+            # a) Structural — restricted to ``structural_set``s reachable from
+            #    a document in this corpus that is *visible to the requesting
+            #    user*. This collapses two checks into one filter:
+            #
+            #      • Corpus boundary (was missing): a parser-produced
+            #        structural annotation has ``document_id = corpus_id =
+            #        NULL``; its corpus membership is only knowable via
+            #        ``structural_set → Document.structural_annotation_set
+            #        (reverse FK) → DocumentPath.corpus_id``.
+            #      • Per-document permission (was bypassed): structural rows
+            #        previously matched ``Q(structural=True)`` unconditionally,
+            #        so a user with permission on the *corpus* could be served
+            #        rows whose underlying documents they have no permission
+            #        on.
+            #
+            #    Without this, the corpus-wide path leaked structural rows from
+            #    every other corpus in the database (and from inaccessible
+            #    documents within the same corpus).
+            # b) Non-structural — directly linked to this corpus via
+            #    ``Annotation.corpus_id``. Per-document visibility for these
+            #    rows is enforced by the visibility filter further below
+            #    plus the upfront IDOR check on ``corpus_id``.
+            # Document is imported earlier in this method (line 211); reusing
+            # the local binding avoids an F811 redefinition warning.
+            from opencontractserver.annotations.models import StructuralAnnotationSet
+
+            visible_corpus_doc_ids = await sync_to_async(
+                lambda: list(
+                    Document.objects.visible_to_user(user)
+                    .filter(path_records__corpus_id=self.corpus_id)
+                    .values_list("id", flat=True)
+                    .distinct()
+                )
+            )()
+            visible_corpus_set_ids = StructuralAnnotationSet.objects.filter(
+                documents__in=visible_corpus_doc_ids
+            ).values("id")
+            active_filters &= Q(
+                structural=True, structural_set_id__in=visible_corpus_set_ids
+            ) | Q(structural=False, corpus_id=self.corpus_id)
 
         # ------------------------------------------------------------------ #
         # Apply accumulated document/corpus scope filters if any were added
