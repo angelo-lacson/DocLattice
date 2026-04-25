@@ -20,6 +20,7 @@ import { StyledTextArea } from "../widgets/modals/styled";
 import { toast } from "react-toastify";
 import _ from "lodash";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import { DEFAULT_MODERATOR_INSTRUCTIONS } from "../../assets/configurations/constants";
 import { InlineBadge } from "../agents/AgentBadges";
 import { FormField } from "../widgets/form/FormField";
 
@@ -70,13 +71,6 @@ const DEFAULT_MODERATION_TOOLS = [
   { name: "pin_thread", description: "Pin thread to top of list" },
   { name: "unpin_thread", description: "Unpin a pinned thread" },
 ] as const;
-
-export const DEFAULT_MODERATOR_INSTRUCTIONS = `You are a thread moderator for this corpus. Your role is to:
-1. Monitor discussion threads and messages for policy compliance
-2. Take appropriate moderation actions when needed
-3. Respond helpfully to user questions when appropriate
-
-You have access to thread context, messages, and moderation tools. Use them judiciously.`;
 
 const DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS =
   "You are a document processing agent for this corpus.";

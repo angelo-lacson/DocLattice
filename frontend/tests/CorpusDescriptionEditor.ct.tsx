@@ -743,12 +743,10 @@ test.describe("CorpusDescriptionEditor", () => {
     mount,
     page,
   }) => {
-    // Intercept the markdown URL with a 500 error so the fetch().then() throws
+    // Abort the network request so the fetch promise rejects and the
+    // component's .catch() branch (setCurrentContent("")) runs.
     await page.route("**/test-md/**", async (route: any) => {
-      await route.fulfill({
-        status: 500,
-        body: "boom",
-      });
+      await route.abort("failed");
     });
 
     const component = await mount(
@@ -762,12 +760,12 @@ test.describe("CorpusDescriptionEditor", () => {
       timeout: 20000,
     });
 
-    // Editor remains mounted but body may contain text (the fetch itself
-    // succeeds — 500 body). The important thing is the component didn't crash.
     const textarea = page.locator(
       'textarea[placeholder="Write your corpus description in Markdown..."]'
     );
     await expect(textarea).toBeVisible({ timeout: 5000 });
+    // The catch branch resets content to empty string; pin that contract.
+    await expect(textarea).toHaveValue("", { timeout: 5000 });
 
     await component.unmount();
   });
