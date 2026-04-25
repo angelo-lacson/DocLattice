@@ -321,6 +321,57 @@ reliably issues tool calls + planning text but fails to commit to the final
 structured output that pydantic-ai expects. Tracked in [issue #1381]; the
 data point is unusable until that integration is fixed.
 
+### Prompt-induced failure mode + fix (cross-subset)
+
+The "extraction returned None" outcome on the agent path turned out to be three
+distinct failure modes lumped under one error message:
+
+1. **`agent_committed_none`** — agent searched, decided answer is genuinely
+   absent, returned None. Legitimate.
+2. **`no_final_response`** — agent issued a tool call, the message log ends
+   there with no tool-return / no synthesis. The pydantic-ai loop exited
+   without producing a structured answer. **Pipeline bug**, not a data
+   signal.
+3. **`tool_loop_no_output`** — agent stuck issuing the same tool call
+   repeatedly without ever synthesising an answer.
+
+The system prompt at `pydantic_ai_agents.py:_build_structured_system_prompt`
+included "If the information cannot be found using the tools, return
+null/None." Combined with `output_type=str` and gpt-4o-mini's tendency to
+satisfy structured output schemas eagerly, this gave the agent a license to
+bail after a single search. Tighter prompt ("you MUST issue at least 2-3
+distinct search queries before concluding absence") on three subsets:
+
+| Metric | privacy_qa Δ | contractnli Δ | cuad Δ |
+|---|---:|---:|---:|
+| extraction_success_rate | −5.7 pts | **+21.1 pts** | **+26.3 pts** |
+| citation_char_recall | **+0.247** | **+0.211** | **+0.248** |
+| answer_token_f1 | +0.100 | **+0.188** | +0.101 |
+| answer_contains_verbatim_span | +0.142 | **+0.323** | +0.116 |
+| input_tokens / task | +60% | +160% | +7% |
+| llm_calls / task | −0.64 | −0.12 | −1.0 |
+
+Quality up on every subset on every quality axis. Failure rate down on
+contractnli (0.77 → 0.99) and cuad (0.73 → 1.00). The privacy_qa "−5.7 pts
+on success rate" is misleading: 11 new failures on tasks where the prior
+prompt would silently return None on the same uncertainty — but the
+*successful* tasks improved enough that citation_char_recall **rose +24.7
+pts** in aggregate. Net win.
+
+Token cost rises mostly because the agent is keeping more tool-return
+context across iterations. LLM call counts actually go *down* because the
+agent now commits to an answer once it has the data, rather than looping
+on near-duplicate queries. Worth the spend for legal extraction where false
+negatives are far more costly than a few extra tokens.
+
+Failure-mode classifier in `data_extract_tasks._classify_none_result` now
+distinguishes the three modes and records the diagnostic in the
+datacell's stacktrace, so operators can grep for `failure_mode=` to
+separate signal (legitimate null) from noise (pipeline bug). Auto-grounding
+hardening (per-query timeout + n-gram anchor pre-filter, see
+`text_alignment.py`) was a prerequisite — the previous fuzzy matcher hung
+indefinitely on gpt-4o's longer responses, masking this analysis.
+
 ### Probe vs agent — measuring different things
 
 The probe's `char_recall = 0.784` and the agent's `citation_char_recall =

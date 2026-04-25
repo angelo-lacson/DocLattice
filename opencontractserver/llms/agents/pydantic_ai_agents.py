@@ -502,8 +502,17 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             "You are in data extraction mode.\n"
             "Use available tools to locate the requested information.\n"
             "Return ONLY the raw value matching the target type. "
-            "No explanations, no citations, no extra words.\n"
-            "If the information cannot be found using the tools, return null/None."
+            "No explanations, no citations, no extra words.\n\n"
+            "SEARCH PROTOCOL:\n"
+            "Before concluding the requested information is absent, you MUST "
+            "issue at least 2-3 distinct search queries that approach the "
+            "question from different angles (e.g. paraphrase the question, "
+            "search for key terms, search for likely answer phrasings). A "
+            "single failed search is NOT sufficient evidence that the "
+            "information is missing — most documents need multiple targeted "
+            "queries to surface a relevant span.\n\n"
+            "Only return null/None after multiple search attempts have all "
+            "failed to find relevant content."
         )
 
     async def _chat_raw(
@@ -1963,9 +1972,16 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             "EXTRACTION PROTOCOL:\n"
             "1. You have access to tools to analyze this document. Use them to find the requested information.\n"
             "2. Use vector search, summary loaders, and note access as needed to locate data.\n"
-            "3. Return ONLY the raw extracted value matching the target type.\n"
-            "4. No explanations, no citations, no commentary – just the data.\n\n"
-            "If the information cannot be found using the tools, return null/None."
+            "3. Before concluding that information is absent, you MUST issue at "
+            "least 2-3 distinct search queries that approach the question from "
+            "different angles (paraphrase the question, search for key terms, "
+            "search for likely answer phrasings). A single failed search is NOT "
+            "sufficient evidence that the information is missing — most legal "
+            "documents need multiple targeted queries to surface a relevant span.\n"
+            "4. Return ONLY the raw extracted value matching the target type.\n"
+            "5. No explanations, no citations, no commentary – just the data.\n\n"
+            "Only return null/None after multiple search attempts have all "
+            "failed to find relevant content."
         )
 
     @classmethod
@@ -2500,9 +2516,16 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             "EXTRACTION PROTOCOL:\n"
             "1. You have access to tools to analyze this corpus. Use them to find the requested information.\n"
             "2. Leverage vector search and document coordination tools as needed.\n"
-            "3. Return ONLY the raw extracted value matching the target type.\n"
-            "4. No explanations, no citations, no commentary – just the data.\n\n"
-            "If the information cannot be found using the tools, return null/None."
+            "3. Before concluding that information is absent, you MUST issue at "
+            "least 2-3 distinct search queries that approach the question from "
+            "different angles (paraphrase the question, search for key terms, "
+            "search for likely answer phrasings). A single failed search is NOT "
+            "sufficient evidence that the information is missing — most legal "
+            "documents need multiple targeted queries to surface a relevant span.\n"
+            "4. Return ONLY the raw extracted value matching the target type.\n"
+            "5. No explanations, no citations, no commentary – just the data.\n\n"
+            "Only return null/None after multiple search attempts have all "
+            "failed to find relevant content."
         )
 
     @classmethod
