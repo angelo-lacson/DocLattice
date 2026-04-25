@@ -392,7 +392,12 @@ def _evaluate(
                 input_tokens=usage["input_tokens"],
                 output_tokens=usage["output_tokens"],
                 total_tokens=usage["total_tokens"],
-                llm_requests=usage["llm_requests"],
+                # ``extract_usage_from_llm_log`` always populates this with
+                # an int (count of response messages), but the parser's
+                # return-type widens to ``int | None`` for the token-count
+                # entries; cast the request count back to int explicitly so
+                # mypy doesn't inherit the wider union.
+                llm_requests=usage["llm_requests"] or 0,
                 extraction_ok=extraction_ok,
                 error=error,
                 tags=tags,

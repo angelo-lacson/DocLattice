@@ -287,7 +287,9 @@ def char_precision_cross_doc(
     if total_retrieved_len == 0:
         return 0.0
     same_doc_spans = [
-        sp for sp, did in zip(predicted_spans, predicted_doc_ids) if did == target_doc_id
+        sp
+        for sp, did in zip(predicted_spans, predicted_doc_ids)
+        if did == target_doc_id
     ]
     gold_merged = _merge_spans(gold)
     pred_merged = _merge_spans(same_doc_spans)
@@ -312,7 +314,9 @@ def char_recall_cross_doc(
     if len(predicted_spans) != len(predicted_doc_ids):
         raise ValueError("predicted_spans and predicted_doc_ids must be parallel")
     same_doc_spans = [
-        sp for sp, did in zip(predicted_spans, predicted_doc_ids) if did == target_doc_id
+        sp
+        for sp, did in zip(predicted_spans, predicted_doc_ids)
+        if did == target_doc_id
     ]
     return char_recall(same_doc_spans, gold)
 

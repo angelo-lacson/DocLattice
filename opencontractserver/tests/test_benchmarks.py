@@ -186,9 +186,7 @@ class CrossDocCharMetricsTestCase(PyUnitTestCase):
         docs = [7, 99]  # target=7, 99 is wrong doc
         gold = [(50, 250)]
         self.assertAlmostEqual(char_recall_cross_doc(spans, docs, 7, gold), 0.25)
-        self.assertAlmostEqual(
-            char_precision_cross_doc(spans, docs, 7, gold), 50 / 200
-        )
+        self.assertAlmostEqual(char_precision_cross_doc(spans, docs, 7, gold), 50 / 200)
 
     def test_all_wrong_doc_yields_zero_on_both(self):
         spans = [(0, 100)]

@@ -110,7 +110,11 @@ class BenchmarkReport:
     corpus_id: int
     extract_id: int
     task_results: list[TaskResult]
-    aggregates: dict[str, int | float] = field(default_factory=dict)
+    # ``aggregates`` is heterogeneous: most keys are scalar (int/float),
+    # but ``per_subset`` is a nested dict of per-subset metric dicts.
+    # Widening the value type to ``Any`` keeps the schema honest without
+    # forcing every consumer through a runtime type-narrow.
+    aggregates: dict[str, Any] = field(default_factory=dict)
     # Populated by :meth:`write` so callers (e.g. the management command)
     # can surface the path where ``report.json`` / ``report.csv`` landed
     # without re-deriving it.
@@ -490,7 +494,5 @@ def _usage_aggregates(results: list[TaskResult]) -> dict[str, int | float]:
         "input_tokens_mean": (total_in / n_in) if n_in else 0.0,
         "output_tokens_mean": (total_out / n_out) if n_out else 0.0,
         "total_tokens_mean": (total_total / n_total) if n_total else 0.0,
-        "llm_requests_mean": (
-            (total_requests / task_count) if task_count else 0.0
-        ),
+        "llm_requests_mean": ((total_requests / task_count) if task_count else 0.0),
     }
