@@ -93,6 +93,7 @@ services:
       PORT: 8000
       TRANSFORMERS_OFFLINE: 1
       HF_DATASETS_OFFLINE: 1
+      API_KEY: abc123
 
   multimodal-embedder:
     image: ghcr.io/jsv4/vectorembeddermicroservice-multimodal:latest

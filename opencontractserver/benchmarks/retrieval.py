@@ -9,6 +9,7 @@ lets each dimension fail independently.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -42,6 +43,13 @@ class RetrievalResult:
     annotation_ids: list[int]
     spans: list[Span]
     similarity_scores: list[float]
+    # Parallel list of document IDs — needed when ``corpus_wide=True`` so
+    # the metric layer can filter intersection to the target document
+    # (matching LegalBench-RAG's ``snippet.file_path == gt_snippet.file_path``
+    # check in ``run_benchmark.py:29``).  In per-document mode every entry
+    # equals the queried document_id, and scoring collapses to the
+    # single-doc formulas unchanged.
+    document_ids: list[int | None] = dataclasses.field(default_factory=list)
 
 
 def probe_retrieval(
@@ -51,29 +59,48 @@ def probe_retrieval(
     query_text: str,
     top_k: int,
     user_id: int | None = None,
+    corpus_wide: bool = False,
 ) -> RetrievalResult:
     """Retrieve the top-k annotations for ``query_text`` via the core vector store.
 
-    Only annotations belonging to ``document_id`` inside ``corpus_id`` are
-    considered.  The filter is intentionally narrow so benchmark retrieval
-    numbers are per-document, matching LegalBench-RAG's convention of
-    scoring each query against a specific corpus file.
+    By default, only annotations belonging to ``document_id`` inside
+    ``corpus_id`` are considered — this matches OpenContracts' production
+    extraction protocol (one agent run per target document).
+
+    With ``corpus_wide=True`` the document filter is dropped and the probe
+    searches the entire ``corpus_id``.  This matches LegalBench-RAG's
+    baseline, which has no document filter and forces the retriever to
+    find the right file plus the right span in a single shot.  Use this
+    mode when you want numbers directly comparable to the paper.
 
     Args:
         corpus_id: The corpus the benchmark loader created.
-        document_id: The document to search within.
+        document_id: The document to search within (ignored when
+            ``corpus_wide=True``; kept on the signature so callers don't
+            need to branch on mode).
         query_text: The benchmark query.
         top_k: Number of top annotations to return.
         user_id: Optional user id to thread through for ACL filtering.
             When omitted, only public/structural annotations are visible.
+        corpus_wide: If ``True``, do not filter by ``document_id``.
 
     Returns:
         A :class:`RetrievalResult` ready for the metrics module.
     """
+    # ``check_corpus_deletion=False`` works around a bug in
+    # ``CoreAnnotationVectorStore``: when ``document_id`` is None (the
+    # corpus-wide case), the deletion-aware path adds a
+    # ``document_id__in=<active_doc_ids>`` filter that silently drops every
+    # structural annotation (paragraph chunks, sentence chunks, …) because
+    # their ``document_id`` FK is NULL — they're attached via
+    # ``StructuralAnnotationSet.structural_set_id`` instead. Bypass that
+    # filter for the benchmark; the corpus is freshly created for each
+    # run, so there are no stale-deleted documents to defend against.
     store = CoreAnnotationVectorStore(
         corpus_id=corpus_id,
-        document_id=document_id,
+        document_id=None if corpus_wide else document_id,
         user_id=user_id,
+        check_corpus_deletion=not corpus_wide,
     )
     query = VectorSearchQuery(query_text=query_text, similarity_top_k=top_k)
     results: list[VectorSearchResult] = store.search(query)
@@ -81,6 +108,42 @@ def probe_retrieval(
     annotation_ids: list[int] = []
     spans: list[Span] = []
     scores: list[float] = []
+    doc_ids: list[int | None] = []
+    # Structural annotations have ``document_id=NULL`` because they hang
+    # off ``StructuralAnnotationSet`` (shared across documents with the
+    # same content hash). To produce a per-result document_id we resolve
+    # ``structural_set_id`` → ``Document.id`` via the reverse FK on
+    # Document. Cache lookups per-call so a top-k of 64 doesn't trigger
+    # 64 queries when many hits share the same set.
+    from opencontractserver.documents.models import Document
+
+    struct_set_to_doc: dict[int, int | None] = {}
+
+    def _resolve_doc_id(annotation: Annotation) -> int | None:
+        if annotation.document_id is not None:
+            return annotation.document_id
+        struct_set_id = annotation.structural_set_id
+        if struct_set_id is None:
+            return None
+        if struct_set_id not in struct_set_to_doc:
+            # Resolve to the Document in the *target corpus* — across
+            # benchmark runs the same content_hash can reappear, and
+            # ``CoreAnnotationVectorStore``'s structural-annotation
+            # filter doesn't restrict to corpus, so a naive
+            # ``filter(structural_annotation_set_id=…).first()`` can
+            # land on a Document from a previous run's corpus, making
+            # doc_ids mismatch the gold's target_doc_id and zeroing
+            # out char_recall_cross_doc. Constrain via DocumentPath.
+            doc = (
+                Document.objects.filter(
+                    structural_annotation_set_id=struct_set_id,
+                    path_records__corpus_id=corpus_id,
+                )
+                .distinct()
+                .first()
+            )
+            struct_set_to_doc[struct_set_id] = doc.id if doc else None
+        return struct_set_to_doc[struct_set_id]
 
     for hit in results:
         annotation: Annotation = hit.annotation
@@ -94,11 +157,13 @@ def probe_retrieval(
         annotation_ids.append(annotation.id)
         spans.append(span)
         scores.append(float(hit.similarity_score))
+        doc_ids.append(_resolve_doc_id(annotation))
 
     return RetrievalResult(
         annotation_ids=annotation_ids,
         spans=spans,
         similarity_scores=scores,
+        document_ids=doc_ids,
     )
 
 

@@ -22,6 +22,10 @@ from opencontractserver.benchmarks.loader import (
 )
 from opencontractserver.benchmarks.metrics import (
     char_iou,
+    char_precision,
+    char_precision_cross_doc,
+    char_recall,
+    char_recall_cross_doc,
     contains_verbatim_span,
     exact_match,
     overlaps_any,
@@ -30,7 +34,11 @@ from opencontractserver.benchmarks.metrics import (
     token_f1,
     token_recall,
 )
-from opencontractserver.benchmarks.report import BenchmarkReport, TaskResult
+from opencontractserver.benchmarks.report import (
+    BenchmarkReport,
+    TaskResult,
+    extract_usage_from_llm_log,
+)
 from opencontractserver.benchmarks.retrieval import (
     RetrievalResult,
     probe_retrieval,
@@ -57,6 +65,8 @@ def run_benchmark(
     use_eager_ingestion: bool = True,
     write_report: bool = True,
     extraction_concurrency: int = 1,
+    retrieval_only: bool = False,
+    corpus_wide: bool = False,
 ) -> BenchmarkReport:
     """Materialize, execute, evaluate, and (optionally) persist a benchmark run.
 
@@ -136,16 +146,25 @@ def run_benchmark(
             embedder_path,
         )
 
-    _run_extraction(
-        loaded=loaded,
-        model=model,
-        concurrency=extraction_concurrency,
-    )
+    if not retrieval_only:
+        _run_extraction(
+            loaded=loaded,
+            model=model,
+            concurrency=extraction_concurrency,
+        )
+    else:
+        logger.info(
+            "retrieval_only=True: skipping agent extraction; only the "
+            "single-shot top-k probe will be scored (LegalBench-RAG parity)."
+        )
+    config["retrieval_only"] = retrieval_only
 
+    config["corpus_wide"] = corpus_wide
     task_results = _evaluate(
         loaded=loaded,
         top_k=top_k,
         user_id=user.id,
+        corpus_wide=corpus_wide,
     )
 
     report = BenchmarkReport(
@@ -178,13 +197,19 @@ def run_benchmark(
 
     logger.info(
         "Benchmark run finished: tasks=%d success_rate=%.3f f1=%.3f "
-        "citation_span_overlaps_gold=%.3f probe_recall@%d=%.3f",
+        "citation_span_overlaps_gold=%.3f probe_recall@%d=%.3f "
+        "total_tokens=%d (in=%d out=%d, mean=%.0f/task, requests=%d)",
         int(report.aggregates["task_count"]),
         report.aggregates["extraction_success_rate"],
         report.aggregates["answer_token_f1"],
         report.aggregates["citation_span_overlaps_gold"],
         top_k,
         report.aggregates["probe_recall_at_k"],
+        int(report.aggregates["total_tokens_sum"]),
+        int(report.aggregates["input_tokens_sum"]),
+        int(report.aggregates["output_tokens_sum"]),
+        report.aggregates["total_tokens_mean"],
+        int(report.aggregates["llm_requests_sum"]),
     )
     return report
 
@@ -245,6 +270,7 @@ def _evaluate(
     loaded: LoadedBenchmark,
     top_k: int,
     user_id: int,
+    corpus_wide: bool = False,
 ) -> list[TaskResult]:
     """Compute answer, retrieval, and citation metrics for every datacell."""
     task_results: list[TaskResult] = []
@@ -282,12 +308,15 @@ def _evaluate(
         # the synthetic top-k probe run by :func:`_probe_retrieval_safely`.
         cited_spans, cited_text = _extract_cited_spans_and_text(cell)
 
+        usage = extract_usage_from_llm_log(cell.llm_call_log)
+
         retrieval = _probe_retrieval_safely(
             corpus_id=loaded.corpus.id,
             document_id=cell.document_id,
             query_text=query,
             top_k=top_k,
             user_id=user_id,
+            corpus_wide=corpus_wide,
         )
 
         # Use the shared overlap helper from ``metrics`` so the citation-hit
@@ -318,8 +347,36 @@ def _evaluate(
                 probe_recall_at_k=recall_at_k(retrieval.spans, gold_spans, top_k),
                 probe_precision_at_k=precision_at_k(retrieval.spans, gold_spans, top_k),
                 probe_char_iou=char_iou(retrieval.spans, gold_spans),
+                # When the probe is corpus-wide, retrieved spans may come
+                # from non-target documents.  Use the cross-doc-aware
+                # variants so intersection is filtered to the target doc
+                # (LB-RAG's ``file_path`` equality check) while the
+                # precision denominator still reflects the full retrieval
+                # volume — a wrong-doc hit is a precision cost but not a
+                # recall contribution.  In per-document mode every
+                # retrieved annotation belongs to the target doc, so the
+                # cross-doc variants return identical numbers to the
+                # single-doc ones — safe to use unconditionally.
+                probe_char_recall=char_recall_cross_doc(
+                    retrieval.spans,
+                    retrieval.document_ids,
+                    cell.document_id,
+                    gold_spans,
+                ),
+                probe_char_precision=char_precision_cross_doc(
+                    retrieval.spans,
+                    retrieval.document_ids,
+                    cell.document_id,
+                    gold_spans,
+                ),
+                citation_char_recall=char_recall(cited_spans, gold_spans),
+                citation_char_precision=char_precision(cited_spans, gold_spans),
                 citation_span_overlaps_gold=citation_span_hit,
                 citation_text_contains_gold_span=citation_verbatim_hit,
+                input_tokens=usage["input_tokens"],
+                output_tokens=usage["output_tokens"],
+                total_tokens=usage["total_tokens"],
+                llm_requests=usage["llm_requests"],
                 extraction_ok=extraction_ok,
                 error=error,
                 tags=tags,
@@ -358,6 +415,7 @@ def _probe_retrieval_safely(
     query_text: str,
     top_k: int,
     user_id: int,
+    corpus_wide: bool = False,
 ) -> RetrievalResult:
     """Swallow retrieval errors so a broken probe can't tank the whole run."""
     try:
@@ -367,6 +425,7 @@ def _probe_retrieval_safely(
             query_text=query_text,
             top_k=top_k,
             user_id=user_id,
+            corpus_wide=corpus_wide,
         )
     except Exception as exc:
         # Broad catch is intentional — the probe runs once per datacell and
@@ -380,7 +439,9 @@ def _probe_retrieval_safely(
             exc,
             exc_info=True,
         )
-        return RetrievalResult(annotation_ids=[], spans=[], similarity_scores=[])
+        return RetrievalResult(
+            annotation_ids=[], spans=[], similarity_scores=[], document_ids=[]
+        )
 
 
 def _extract_prediction_string(cell: Datacell) -> str:

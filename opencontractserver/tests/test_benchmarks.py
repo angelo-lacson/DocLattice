@@ -26,12 +26,22 @@ from opencontractserver.benchmarks.adapters.legalbench_rag import (
 )
 from opencontractserver.benchmarks.loader import load_benchmark_into_corpus
 from opencontractserver.benchmarks.metrics import (
+    char_f1,
     char_iou,
+    char_precision,
+    char_precision_cross_doc,
+    char_recall,
+    char_recall_cross_doc,
     exact_match,
     normalize_answer,
     precision_at_k,
     recall_at_k,
     token_f1,
+)
+from opencontractserver.benchmarks.report import (
+    BenchmarkReport,
+    TaskResult,
+    extract_usage_from_llm_log,
 )
 from opencontractserver.benchmarks.runner import run_benchmark
 from opencontractserver.documents.models import Document
@@ -95,6 +105,306 @@ class MetricsTestCase(PyUnitTestCase):
         # |intersection| / |union| = 5 / 15
         self.assertAlmostEqual(char_iou([(0, 10)], [(5, 15)]), 5 / 15, places=4)
         self.assertEqual(char_iou([], []), 0.0)
+
+
+# --------------------------------------------------------------------------- #
+# LegalBench-RAG char-level metrics
+# --------------------------------------------------------------------------- #
+
+
+class LegalBenchCharMetricsTestCase(PyUnitTestCase):
+    """Verify ``char_recall`` / ``char_precision`` match LB-RAG's formulas.
+
+    Reference: ``legalbenchrag/run_benchmark.py`` lines 20-54 — precision is
+    ``chars(retrieved ∩ gold) / chars(retrieved)`` and recall is
+    ``chars(retrieved ∩ gold) / chars(gold)``.  These tests lock in that
+    behaviour so a refactor can't silently drift.
+    """
+
+    def test_perfect_match_is_one_on_both(self):
+        self.assertEqual(char_recall([(0, 100)], [(0, 100)]), 1.0)
+        self.assertEqual(char_precision([(0, 100)], [(0, 100)]), 1.0)
+        self.assertEqual(char_f1([(0, 100)], [(0, 100)]), 1.0)
+
+    def test_no_overlap_is_zero(self):
+        self.assertEqual(char_recall([(0, 50)], [(100, 200)]), 0.0)
+        self.assertEqual(char_precision([(0, 50)], [(100, 200)]), 0.0)
+        self.assertEqual(char_f1([(0, 50)], [(100, 200)]), 0.0)
+
+    def test_partial_overlap_recall_uses_gold_denominator(self):
+        # retrieved 100 chars, gold 200 chars, overlap 50 chars
+        # recall = 50 / 200 = 0.25, precision = 50 / 100 = 0.5
+        self.assertAlmostEqual(char_recall([(0, 100)], [(50, 250)]), 0.25)
+        self.assertAlmostEqual(char_precision([(0, 100)], [(50, 250)]), 0.5)
+
+    def test_overlapping_predictions_are_merged(self):
+        # Two overlapping retrieved spans must not double-count intersection
+        preds = [(0, 100), (50, 150)]  # merged → (0, 150), 150 chars
+        gold = [(0, 200)]  # 200 chars, intersection with merged = 150
+        self.assertAlmostEqual(char_recall(preds, gold), 150 / 200)
+        self.assertAlmostEqual(char_precision(preds, gold), 150 / 150)
+
+    def test_empty_gold_returns_zero_recall(self):
+        # LB-RAG returns 0 when there is no gold — see line 54 of their code.
+        self.assertEqual(char_recall([(0, 100)], []), 0.0)
+
+    def test_empty_prediction_returns_zero_precision(self):
+        # Mirrors LB-RAG line 35-36: precision of an empty retrieval is 0.
+        self.assertEqual(char_precision([], [(0, 100)]), 0.0)
+
+    def test_iou_is_not_same_as_recall_precision(self):
+        # Sanity: IoU is symmetric, but recall/precision are not.
+        preds = [(0, 100)]
+        gold = [(50, 250)]  # overlap 50
+        self.assertAlmostEqual(char_iou(preds, gold), 50 / 250)  # 200 + 100 - 50
+        self.assertAlmostEqual(char_recall(preds, gold), 50 / 200)
+        self.assertAlmostEqual(char_precision(preds, gold), 50 / 100)
+
+
+class CrossDocCharMetricsTestCase(PyUnitTestCase):
+    """``char_*_cross_doc`` honors LB-RAG's ``file_path`` equality rule."""
+
+    def test_same_doc_collapses_to_single_doc_formulas(self):
+        spans = [(0, 100), (200, 300)]
+        docs = [7, 7]
+        gold = [(50, 150)]
+        self.assertEqual(
+            char_recall_cross_doc(spans, docs, 7, gold),
+            char_recall(spans, gold),
+        )
+        self.assertEqual(
+            char_precision_cross_doc(spans, docs, 7, gold),
+            char_precision(spans, gold),
+        )
+
+    def test_wrong_doc_contributes_to_precision_denom_only(self):
+        # 100 chars from target doc (overlap 50 with gold)
+        # + 100 chars from wrong doc (no contribution to intersection)
+        # recall = 50/200 = 0.25 (unchanged — wrong-doc spans ignored)
+        # precision = 50 / (100 + 100) = 0.25 (wrong-doc counted in denom)
+        spans = [(0, 100), (500, 600)]
+        docs = [7, 99]  # target=7, 99 is wrong doc
+        gold = [(50, 250)]
+        self.assertAlmostEqual(char_recall_cross_doc(spans, docs, 7, gold), 0.25)
+        self.assertAlmostEqual(
+            char_precision_cross_doc(spans, docs, 7, gold), 50 / 200
+        )
+
+    def test_all_wrong_doc_yields_zero_on_both(self):
+        spans = [(0, 100)]
+        docs = [99]
+        gold = [(0, 100)]
+        self.assertEqual(char_recall_cross_doc(spans, docs, 7, gold), 0.0)
+        self.assertEqual(char_precision_cross_doc(spans, docs, 7, gold), 0.0)
+
+    def test_parallel_list_mismatch_raises(self):
+        with self.assertRaises(ValueError):
+            char_recall_cross_doc([(0, 10)], [], 7, [(0, 10)])
+
+
+class PerSubsetAggregateTestCase(PyUnitTestCase):
+    """``BenchmarkReport.aggregates['per_subset']`` mirrors LB-RAG weighting."""
+
+    def _make(self, subset: str, pr: float, pp: float) -> TaskResult:
+        return TaskResult(
+            datacell_id=0,
+            task_id="t",
+            document_key="doc",
+            query="q",
+            prediction="",
+            gold_answer="",
+            retrieved_spans=[],
+            retrieved_annotation_ids=[],
+            gold_spans=[],
+            probe_char_recall=pr,
+            probe_char_precision=pp,
+            tags=[subset],
+            extraction_ok=True,
+        )
+
+    def test_macro_avg_equal_weights_even_when_subset_counts_differ(self):
+        # Two subsets, one with 3 tasks, one with 1 task — subset-level
+        # means should still be weighted equally in the macro avg.
+        from opencontractserver.benchmarks.report import BenchmarkReport
+
+        results = [
+            self._make("cuad", 0.9, 0.8),
+            self._make("cuad", 0.9, 0.8),
+            self._make("cuad", 0.9, 0.8),
+            self._make("privacy_qa", 0.3, 0.1),
+        ]
+        report = BenchmarkReport(
+            adapter={}, config={}, corpus_id=0, extract_id=0, task_results=results
+        )
+        per_subset = report.aggregates["per_subset"]
+        self.assertAlmostEqual(per_subset["cuad"]["probe_char_recall"], 0.9)
+        self.assertAlmostEqual(per_subset["privacy_qa"]["probe_char_recall"], 0.3)
+        # Macro avg: (0.9 + 0.3) / 2 = 0.6 — NOT weighted by task count.
+        self.assertAlmostEqual(per_subset["_macro_avg"]["probe_char_recall"], 0.6)
+        self.assertEqual(per_subset["_macro_avg"]["subset_count"], 2)
+
+    def test_macro_avg_omitted_when_all_untagged(self):
+        from opencontractserver.benchmarks.report import BenchmarkReport
+
+        r = TaskResult(
+            datacell_id=0,
+            task_id="t",
+            document_key="d",
+            query="q",
+            prediction="",
+            gold_answer="",
+            retrieved_spans=[],
+            retrieved_annotation_ids=[],
+            gold_spans=[],
+            tags=[],
+        )
+        report = BenchmarkReport(
+            adapter={}, config={}, corpus_id=0, extract_id=0, task_results=[r]
+        )
+        per_subset = report.aggregates["per_subset"]
+        self.assertIn("_untagged", per_subset)
+        self.assertNotIn("_macro_avg", per_subset)
+
+
+# --------------------------------------------------------------------------- #
+# LLM usage extraction (parser for ``Datacell.llm_call_log``)
+# --------------------------------------------------------------------------- #
+
+
+class LLMUsageExtractionTestCase(PyUnitTestCase):
+    """Verify token totals are summed correctly across pydantic-ai messages."""
+
+    def test_returns_empty_on_none_or_blank(self):
+        for value in (None, "", "   "):
+            usage = extract_usage_from_llm_log(value)
+            self.assertEqual(
+                usage,
+                {
+                    "input_tokens": None,
+                    "output_tokens": None,
+                    "total_tokens": None,
+                    "llm_requests": 0,
+                },
+            )
+
+    def test_returns_empty_on_malformed_json(self):
+        usage = extract_usage_from_llm_log("{not json")
+        self.assertEqual(usage["llm_requests"], 0)
+        self.assertIsNone(usage["total_tokens"])
+
+    def test_sums_across_multiple_responses(self):
+        log = json.dumps(
+            [
+                {"kind": "request", "parts": []},
+                {
+                    "kind": "response",
+                    "usage": {
+                        "input_tokens": 100,
+                        "output_tokens": 20,
+                        "total_tokens": 120,
+                    },
+                },
+                {"kind": "request", "parts": []},
+                {
+                    "kind": "response",
+                    "usage": {
+                        "input_tokens": 50,
+                        "output_tokens": 10,
+                        "total_tokens": 60,
+                    },
+                },
+            ]
+        )
+        usage = extract_usage_from_llm_log(log)
+        self.assertEqual(usage["input_tokens"], 150)
+        self.assertEqual(usage["output_tokens"], 30)
+        self.assertEqual(usage["total_tokens"], 180)
+        self.assertEqual(usage["llm_requests"], 2)
+
+    def test_accepts_legacy_field_names(self):
+        # Older pydantic-ai releases spell the fields ``request_tokens`` /
+        # ``response_tokens``; the parser must accept both to keep working
+        # across version pins.
+        log = json.dumps(
+            [
+                {
+                    "kind": "response",
+                    "usage": {"request_tokens": 40, "response_tokens": 5},
+                }
+            ]
+        )
+        usage = extract_usage_from_llm_log(log)
+        self.assertEqual(usage["input_tokens"], 40)
+        self.assertEqual(usage["output_tokens"], 5)
+        # total_tokens derived from in+out when provider omits it.
+        self.assertEqual(usage["total_tokens"], 45)
+        self.assertEqual(usage["llm_requests"], 1)
+
+    def test_response_without_usage_still_counts_as_request(self):
+        log = json.dumps([{"kind": "response"}])
+        usage = extract_usage_from_llm_log(log)
+        self.assertEqual(usage["llm_requests"], 1)
+        self.assertIsNone(usage["input_tokens"])
+
+
+class BenchmarkReportUsageAggregateTestCase(PyUnitTestCase):
+    """``BenchmarkReport.compute_aggregates`` surfaces usage totals."""
+
+    def _make_task(
+        self,
+        datacell_id: int,
+        tokens_in: int | None,
+        tokens_out: int | None,
+        tokens_total: int | None,
+        requests: int,
+        extraction_ok: bool = True,
+    ) -> TaskResult:
+        return TaskResult(
+            datacell_id=datacell_id,
+            task_id=f"t{datacell_id}",
+            document_key="doc",
+            query="q",
+            prediction="p",
+            gold_answer="g",
+            retrieved_spans=[],
+            retrieved_annotation_ids=[],
+            gold_spans=[],
+            input_tokens=tokens_in,
+            output_tokens=tokens_out,
+            total_tokens=tokens_total,
+            llm_requests=requests,
+            extraction_ok=extraction_ok,
+        )
+
+    def test_sums_and_means_computed_only_over_reported(self):
+        report = BenchmarkReport(
+            adapter={},
+            config={},
+            corpus_id=0,
+            extract_id=0,
+            task_results=[
+                self._make_task(1, 100, 20, 120, requests=2),
+                self._make_task(2, None, None, None, requests=0),
+                self._make_task(3, 50, 10, 60, requests=1),
+            ],
+        )
+        agg = report.aggregates
+        self.assertEqual(agg["input_tokens_sum"], 150)
+        self.assertEqual(agg["output_tokens_sum"], 30)
+        self.assertEqual(agg["total_tokens_sum"], 180)
+        self.assertEqual(agg["llm_requests_sum"], 3)
+        # Mean excludes the None-report task (so 150/2, not 150/3).
+        self.assertEqual(agg["input_tokens_mean"], 75.0)
+        self.assertEqual(agg["total_tokens_mean"], 90.0)
+        # Request mean counts every task (including the zero-request one).
+        self.assertEqual(agg["llm_requests_mean"], 1.0)
+
+    def test_empty_results_yields_zero_usage(self):
+        report = BenchmarkReport(
+            adapter={}, config={}, corpus_id=0, extract_id=0, task_results=[]
+        )
+        self.assertEqual(report.aggregates["total_tokens_sum"], 0)
+        self.assertEqual(report.aggregates["total_tokens_mean"], 0.0)
 
 
 # --------------------------------------------------------------------------- #

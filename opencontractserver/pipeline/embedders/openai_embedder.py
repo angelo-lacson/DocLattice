@@ -149,6 +149,24 @@ class OpenAIEmbedder(BaseEmbedder):
                 )
             )
 
+            # OpenAI embeddings API caps input at 8192 tokens; a 400 "maximum
+            # context length" is fatal to ingestion pipelines that produce
+            # long chunks (e.g. whole-document summaries, un-capped paragraph
+            # chunks of legalese). Local embedders like
+            # ``sentence-transformers`` silently truncate via the tokenizer,
+            # so users expect the same robustness here. Truncate on the char
+            # side at ~4x the token budget (English averages ~4 chars/token)
+            # to stay well under 8192 tokens for any realistic input.
+            max_chars = 30000
+            if len(text) > max_chars:
+                logger.warning(
+                    "OpenAIEmbedder truncating input from %d to %d chars to fit "
+                    "the 8192-token context window",
+                    len(text),
+                    max_chars,
+                )
+                text = text[:max_chars]
+
             client = self._build_client(**all_kwargs)
 
             # text-embedding-ada-002 does not support the dimensions parameter
