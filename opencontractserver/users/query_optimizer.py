@@ -4,7 +4,7 @@ User Query Optimizer for OpenContracts.
 Provides optimized user queries with profile privacy filtering and corpus membership visibility.
 """
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, ClassVar, Optional, Union
 
 from django.contrib.auth.models import AnonymousUser
 from django.db.models import Q, QuerySet
@@ -39,7 +39,7 @@ class UserQueryOptimizer:
     """
 
     # Permission codenames that indicate > READ access
-    WRITE_PERMISSION_CODENAMES: list[str] = [
+    WRITE_PERMISSION_CODENAMES: ClassVar[list[str]] = [
         "create_corpus",
         "update_corpus",
         "remove_corpus",
