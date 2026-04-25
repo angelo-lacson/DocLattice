@@ -74,7 +74,7 @@ def backfill_null_embedder_paths(apps, schema_editor):
             emb.delete()
             deleted += 1
 
-    logger.warning(
+    logger.info(
         "Embedding.embedder_path backfill complete: backfilled=%s, deleted=%s, "
         "total=%s.",
         backfilled,
