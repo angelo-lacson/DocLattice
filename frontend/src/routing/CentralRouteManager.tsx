@@ -22,6 +22,8 @@ import {
   openedExtract,
   openedThread,
   openedLabelset,
+  openedUser,
+  OpenedUserProfile,
   selectedAnnotationIds,
   selectedAnalysesIds,
   selectedExtractIds,
@@ -55,6 +57,7 @@ import {
   GET_DOCUMENT_BY_ID_FOR_REDIRECT,
   GET_THREAD_DETAIL,
   GET_LABELSET_WITH_ALL_LABELS,
+  GET_USER,
   GetCorpusByIdForRedirectInput,
   GetCorpusByIdForRedirectOutput,
   GetDocumentByIdForRedirectInput,
@@ -63,6 +66,8 @@ import {
   ResolveExtractByIdOutput,
   GetThreadDetailInput,
   GetThreadDetailOutput,
+  GetUserInput,
+  GetUserOutput,
 } from "../graphql/queries";
 import {
   CorpusType,
@@ -209,6 +214,12 @@ export function CentralRouteManager() {
     nextFetchPolicy: "cache-and-network",
   });
 
+  // User profile query - slug-based
+  const [resolveUser] = useLazyQuery<GetUserOutput, GetUserInput>(GET_USER, {
+    fetchPolicy: "cache-first",
+    nextFetchPolicy: "cache-and-network",
+  });
+
   // ═══════════════════════════════════════════════════════════════
   // PHASE 1: URL Path → Entity Resolution
   // ═══════════════════════════════════════════════════════════════
@@ -243,6 +254,7 @@ export function CentralRouteManager() {
       openedExtract(null);
       openedThread(null);
       openedLabelset(null);
+      openedUser(null);
       routeLoading(false);
       routeError(null);
       lastProcessedPath.current = pathKey;
@@ -645,6 +657,9 @@ export function CentralRouteManager() {
               openedExtract(extract);
               openedCorpus(null);
               openedDocument(null);
+              openedThread(null);
+              openedLabelset(null);
+              openedUser(null);
               routeLoading(false);
               return;
             }
@@ -715,6 +730,7 @@ export function CentralRouteManager() {
               openedCorpus(corpus);
               openedDocument(null);
               openedExtract(null);
+              openedUser(null);
               routeLoading(false);
               return;
             }
@@ -764,12 +780,61 @@ export function CentralRouteManager() {
               openedDocument(null);
               openedExtract(null);
               openedThread(null);
+              openedUser(null);
               routeLoading(false);
               return;
             }
 
             console.warn("[RouteManager] Labelset not found");
             navigate("/404", { replace: true });
+            return;
+          }
+
+          // ────────────────────────────────────────────────────────
+          // USER PROFILE (/users/:slug)
+          // ────────────────────────────────────────────────────────
+          if (route.type === "user" && route.userSlug) {
+            routingLogger.debug("[RouteManager] Resolving user profile");
+
+            const { data, error } = await resolveUser({
+              variables: { slug: route.userSlug },
+            });
+
+            if (error) {
+              console.error(
+                "[RouteManager] ❌ GraphQL error resolving user:",
+                error
+              );
+              console.error("[RouteManager] Variables:", {
+                slug: route.userSlug,
+              });
+            }
+
+            if (!data?.userBySlug) {
+              console.warn("[RouteManager] ⚠️  user is null");
+            }
+
+            if (!error && data?.userBySlug) {
+              const user = data.userBySlug as OpenedUserProfile;
+
+              routingLogger.debug(
+                "[RouteManager] ✅ Resolved user via slug:",
+                user.id
+              );
+
+              openedUser(user);
+              openedCorpus(null);
+              openedDocument(null);
+              openedExtract(null);
+              openedThread(null);
+              openedLabelset(null);
+              routeLoading(false);
+              return;
+            }
+
+            console.warn("[RouteManager] User not found");
+            routeError(new Error(`User "${route.userSlug}" not found`));
+            routeLoading(false);
             return;
           }
 
