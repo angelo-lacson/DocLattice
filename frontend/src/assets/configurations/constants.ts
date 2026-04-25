@@ -530,3 +530,12 @@ export const TRIGGER_LABELS: Record<string, string> = {
   new_thread: "On Thread",
   new_message: "On Message",
 } as const;
+
+// Default agent task instructions used when creating a thread-moderation
+// CorpusAction (rendered as the placeholder/initial value in the modal).
+export const DEFAULT_MODERATOR_INSTRUCTIONS = `You are a thread moderator for this corpus. Your role is to:
+1. Monitor discussion threads and messages for policy compliance
+2. Take appropriate moderation actions when needed
+3. Respond helpfully to user questions when appropriate
+
+You have access to thread context, messages, and moderation tools. Use them judiciously.`;

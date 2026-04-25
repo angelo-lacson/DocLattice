@@ -13,7 +13,7 @@ import {
   CREATE_CORPUS_ACTION,
   UPDATE_CORPUS_ACTION,
 } from "../src/graphql/mutations";
-import { DEFAULT_MODERATOR_INSTRUCTIONS } from "../src/components/corpuses/CreateCorpusActionModal";
+import { DEFAULT_MODERATOR_INSTRUCTIONS } from "../src/assets/configurations/constants";
 import { docScreenshot } from "./utils/docScreenshot";
 
 const TEST_CORPUS_ID = "corpus-123";
