@@ -87,7 +87,7 @@ class Auth0AdminBackend(ModelBackend):
             logger.warning("Auth0 admin auth failed: user %s not found", auth0_user_id)
             return None
 
-    def get_user(self, user_id: Any) -> Optional["User"]:
+    def get_user(self, user_id: int) -> Optional["User"]:
         """Retrieve user by primary key."""
         try:
             return UserModel.objects.get(pk=user_id)

@@ -18,7 +18,7 @@ def get_authorization_header(request: HttpRequest) -> bytes:
     coerce it to ``bytes`` here so downstream callers can treat the
     header uniformly (``.split()`` on ``bytes`` returns ``list[bytes]``).
     """
-    auth: Any = request.META.get("HTTP_AUTHORIZATION", b"")
+    auth: str | bytes = request.META.get("HTTP_AUTHORIZATION", b"")
     if isinstance(auth, str):
         # Work around django test client oddness
         auth = auth.encode(HTTP_HEADER_ENCODING)
