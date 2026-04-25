@@ -51,7 +51,7 @@ pytesseract
 pydantic-ai>=1.56.0,<2
 spacy
 pdfplumber>=0.10.0  # https://github.com/jsvine/pdfplumber - PDF token extraction
-shapely>=2.0.0  # https://github.com/shapely/shapely - spatial operations for bbox intersection
+shapely>=2.1.2  # https://github.com/shapely/shapely - spatial operations for bbox intersection
 
 # Data Processing Tools
 # -------------------------------------------------------------------------------
