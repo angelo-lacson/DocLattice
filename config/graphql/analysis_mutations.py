@@ -206,3 +206,5 @@ class DeleteAnalysisMutation(graphene.Mutation):
 
         # Kick off an async task to delete the analysis (as it can be very large)
         delete_analysis_and_annotations_task.si(analysis_pk=analysis_pk).apply_async()
+
+        return DeleteAnalysisMutation(ok=True, message="SUCCESS")

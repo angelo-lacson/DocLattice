@@ -30,9 +30,11 @@ logger = logging.getLogger(__name__)
 
 def _csrf_noop_get_response(request: HttpRequest) -> HttpResponse:
     # CsrfViewMiddleware only invokes ``get_response`` when we call
-    # ``__call__``; we only use ``process_view``, so this is never reached.
-    # An empty ``HttpResponse`` keeps the middleware's type contract happy.
-    return HttpResponse()
+    # ``__call__``; we only use ``process_view``, so this is unreachable.
+    raise NotImplementedError(
+        "_csrf_noop_get_response is unreachable: CsrfViewMiddleware.process_view "
+        "does not call get_response."
+    )
 
 
 _csrf_middleware = CsrfViewMiddleware(_csrf_noop_get_response)
