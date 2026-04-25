@@ -127,6 +127,26 @@ class Command(BaseCommand):
                 "well-provisioned keys."
             ),
         )
+        parser.add_argument(
+            "--retrieval-only",
+            action="store_true",
+            help=(
+                "Skip the agent extract pass and score only the single-shot "
+                "top-k retrieval probe. Produces LegalBench-RAG-parity char "
+                "recall / precision numbers with no LLM calls."
+            ),
+        )
+        parser.add_argument(
+            "--corpus-wide",
+            action="store_true",
+            help=(
+                "Widen the probe to the full corpus instead of filtering to "
+                "the task's target document. Required for direct "
+                "apples-to-apples comparison with LegalBench-RAG's paper, "
+                "which has no document filter and forces the retriever to "
+                "find the right file plus the right span in a single shot."
+            ),
+        )
 
     def handle(self, *args, **options) -> None:
         username = options["user"]
@@ -160,6 +180,8 @@ class Command(BaseCommand):
             corpus_title=options.get("corpus_title"),
             run_label=options.get("run_label"),
             extraction_concurrency=options["extraction_concurrency"],
+            retrieval_only=options.get("retrieval_only", False),
+            corpus_wide=options.get("corpus_wide", False),
         )
 
         self.stdout.write(self.style.SUCCESS("Benchmark run complete."))
@@ -172,5 +194,15 @@ class Command(BaseCommand):
         for key, value in sorted(report.aggregates.items()):
             if isinstance(value, float):
                 self.stdout.write(f"  {key:<28} {value:.4f}")
+            elif isinstance(value, dict):
+                # ``per_subset`` is the only dict-valued aggregate today.
+                # Print each subset on its own indented line so multi-subset
+                # runs stay readable without exploding into JSON.
+                for subset_name, subset_block in sorted(value.items()):
+                    metrics_str = " ".join(
+                        f"{k}={v:.4f}" if isinstance(v, float) else f"{k}={v}"
+                        for k, v in sorted(subset_block.items())
+                    )
+                    self.stdout.write(f"  {key}[{subset_name}]: {metrics_str}")
             else:
                 self.stdout.write(f"  {key:<28} {value}")

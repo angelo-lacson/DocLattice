@@ -214,6 +214,126 @@ def precision_at_k(
     return predicted_spans_matching(top_k, gold) / len(top_k)
 
 
+def char_recall(
+    predicted: Sequence[Span],
+    gold: Sequence[Span],
+) -> float:
+    """Fraction of gold **characters** covered by predicted spans.
+
+    Mirrors LegalBench-RAG's per-query recall
+    (``legalbenchrag/run_benchmark.py`` lines 38-54) exactly::
+
+        recall = chars(predicted ∩ gold) / chars(gold)
+
+    Both sides are merged into non-overlapping intervals first so
+    overlapping retrievals aren't double-counted.  Returns 0.0 when
+    ``gold`` is empty — a recall question is undefined without gold,
+    and 0.0 (rather than 1.0) avoids inflating aggregate numbers on
+    adapter bugs that drop gold spans.
+    """
+    gold_merged = _merge_spans(gold)
+    gold_len = _total_span_length(gold_merged)
+    if gold_len == 0:
+        return 0.0
+    pred_merged = _merge_spans(predicted)
+    return _intersection_length(pred_merged, gold_merged) / gold_len
+
+
+def char_precision(
+    predicted: Sequence[Span],
+    gold: Sequence[Span],
+) -> float:
+    """Fraction of predicted **characters** that hit a gold span.
+
+    Mirrors LegalBench-RAG's per-query precision
+    (``legalbenchrag/run_benchmark.py`` lines 20-36)::
+
+        precision = chars(predicted ∩ gold) / chars(predicted)
+
+    Returns 0.0 when nothing was predicted — "precision of nothing"
+    is undefined, and 0.0 keeps the metric honest when a probe silently
+    returns an empty list.
+    """
+    pred_merged = _merge_spans(predicted)
+    pred_len = _total_span_length(pred_merged)
+    if pred_len == 0:
+        return 0.0
+    gold_merged = _merge_spans(gold)
+    return _intersection_length(pred_merged, gold_merged) / pred_len
+
+
+def char_precision_cross_doc(
+    predicted_spans: Sequence[Span],
+    predicted_doc_ids: Sequence[int | None],
+    target_doc_id: int,
+    gold: Sequence[Span],
+) -> float:
+    """LegalBench-RAG precision when retrieval may return spans from
+    multiple documents.
+
+    Mirrors ``legalbenchrag/run_benchmark.py`` lines 20-36 exactly: the
+    precision DENOMINATOR is the total chars across every retrieved span
+    (summed as-is, no merging — matching their loop), and the NUMERATOR
+    counts only the chars that intersect a gold span *in the same
+    document as the gold* (LB-RAG's ``file_path`` equality check).
+
+    Spans from non-target documents contribute to the denominator
+    (they're "retrieved noise") but not the numerator, which is the
+    honest way to report the cost of retrieving the wrong document.
+    """
+    if len(predicted_spans) != len(predicted_doc_ids):
+        raise ValueError("predicted_spans and predicted_doc_ids must be parallel")
+    total_retrieved_len = sum(e - s for s, e in predicted_spans)
+    if total_retrieved_len == 0:
+        return 0.0
+    same_doc_spans = [
+        sp for sp, did in zip(predicted_spans, predicted_doc_ids) if did == target_doc_id
+    ]
+    gold_merged = _merge_spans(gold)
+    pred_merged = _merge_spans(same_doc_spans)
+    intersection = _intersection_length(pred_merged, gold_merged)
+    return intersection / total_retrieved_len
+
+
+def char_recall_cross_doc(
+    predicted_spans: Sequence[Span],
+    predicted_doc_ids: Sequence[int | None],
+    target_doc_id: int,
+    gold: Sequence[Span],
+) -> float:
+    """LegalBench-RAG recall when retrieval may return spans from
+    multiple documents.
+
+    Only retrieved spans from ``target_doc_id`` contribute to the
+    intersection; denominator is total gold chars.  Equivalent to
+    :func:`char_recall` applied to the subset of retrieved spans whose
+    document matches the gold's target document.
+    """
+    if len(predicted_spans) != len(predicted_doc_ids):
+        raise ValueError("predicted_spans and predicted_doc_ids must be parallel")
+    same_doc_spans = [
+        sp for sp, did in zip(predicted_spans, predicted_doc_ids) if did == target_doc_id
+    ]
+    return char_recall(same_doc_spans, gold)
+
+
+def char_f1(
+    predicted: Sequence[Span],
+    gold: Sequence[Span],
+) -> float:
+    """Harmonic mean of :func:`char_recall` and :func:`char_precision`.
+
+    LegalBench-RAG reports recall and precision separately rather than
+    F1; we compute F1 anyway because it's the single-number summary
+    most readers expect.  Returns 0.0 when either side is zero.
+    """
+    r = char_recall(predicted, gold)
+    p = char_precision(predicted, gold)
+    if r + p == 0.0:
+        return 0.0
+    return 2 * r * p / (r + p)
+
+
 def char_iou(
     predicted: Sequence[Span],
     gold: Sequence[Span],

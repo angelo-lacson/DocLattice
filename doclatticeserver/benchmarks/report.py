@@ -67,8 +67,31 @@ class TaskResult:
     probe_recall_at_k: float = 0.0
     probe_precision_at_k: float = 0.0
     probe_char_iou: float = 0.0
+    # LegalBench-RAG-compatible char-level metrics on the probe spans.
+    # These mirror ``legalbenchrag.run_benchmark`` exactly so our headline
+    # numbers can be quoted against their paper without normalization
+    # caveats.  See ``metrics.char_recall`` / ``metrics.char_precision``.
+    probe_char_recall: float = 0.0
+    probe_char_precision: float = 0.0
+    # Same char-level metrics, but applied to the spans the agent
+    # **actually cited** (``Datacell.sources``).  This is the OC-specific
+    # "what the production pipeline delivered" number — not comparable
+    # to LB-RAG, which has no agent loop.
+    citation_char_recall: float = 0.0
+    citation_char_precision: float = 0.0
     citation_span_overlaps_gold: float = 0.0
     citation_text_contains_gold_span: float = 0.0
+    # LLM token usage, summed across every ``ModelResponse`` in the cell's
+    # captured message history (``Datacell.llm_call_log``).  ``None`` means
+    # no usage was reported by the provider (either because extraction
+    # failed before any call, or the model/provider didn't return usage in
+    # the serialised messages).  ``llm_requests`` counts how many model
+    # calls the agent made for this cell — useful for spotting when tool
+    # loops blow up request counts even if per-call tokens stay low.
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    llm_requests: int = 0
     extraction_ok: bool = False
     error: str | None = None
     tags: list[str] = field(default_factory=list)
@@ -153,6 +176,31 @@ class BenchmarkReport:
                 r.probe_precision_at_k for r in self.task_results
             ),
             "probe_char_iou": mean(r.probe_char_iou for r in self.task_results),
+            # LegalBench-RAG-parity char-level numbers (probe + citation).
+            # The probe columns are the apples-to-apples comparison with
+            # their paper; the citation columns measure the full
+            # agent-plus-grounding pipeline.
+            "probe_char_recall": mean(r.probe_char_recall for r in self.task_results),
+            "probe_char_precision": mean(
+                r.probe_char_precision for r in self.task_results
+            ),
+            "citation_char_recall": mean(
+                r.citation_char_recall for r in self.task_results
+            ),
+            "citation_char_precision": mean(
+                r.citation_char_precision for r in self.task_results
+            ),
+            # LLM token usage.  Totals are summed across every task (not just
+            # successful ones) so a run that fails late still shows the cost.
+            # Per-task means are computed over tasks that actually reported
+            # usage, so a zero-usage adapter doesn't drag the mean to 0.
+            **_usage_aggregates(self.task_results),
+            # Per-subset breakdown + equal-weight macro-average.  LegalBench-RAG
+            # reports per-subset recall/precision and a macro avg weighted 0.25
+            # each across the 4 subsets; this gives us direct parity when
+            # multiple subsets are loaded (otherwise the per-subset block just
+            # echoes the overall numbers).
+            "per_subset": _per_subset_aggregates(self.task_results),
         }
 
     # ------------------------------------------------------------------ #
@@ -204,6 +252,14 @@ class BenchmarkReport:
                     "probe_recall_at_k",
                     "probe_precision_at_k",
                     "probe_char_iou",
+                    "probe_char_recall",
+                    "probe_char_precision",
+                    "citation_char_recall",
+                    "citation_char_precision",
+                    "input_tokens",
+                    "output_tokens",
+                    "total_tokens",
+                    "llm_requests",
                     "prediction",
                     "gold_answer",
                     "tags",
@@ -227,6 +283,14 @@ class BenchmarkReport:
                         f"{r.probe_recall_at_k:.4f}",
                         f"{r.probe_precision_at_k:.4f}",
                         f"{r.probe_char_iou:.4f}",
+                        f"{r.probe_char_recall:.4f}",
+                        f"{r.probe_char_precision:.4f}",
+                        f"{r.citation_char_recall:.4f}",
+                        f"{r.citation_char_precision:.4f}",
+                        "" if r.input_tokens is None else r.input_tokens,
+                        "" if r.output_tokens is None else r.output_tokens,
+                        "" if r.total_tokens is None else r.total_tokens,
+                        r.llm_requests,
                         r.prediction,
                         r.gold_answer,
                         ";".join(r.tags),
@@ -243,3 +307,190 @@ def _task_result_to_dict(result: TaskResult) -> dict[str, Any]:
     payload["retrieved_spans"] = [list(s) for s in result.retrieved_spans]
     payload["gold_spans"] = [list(s) for s in result.gold_spans]
     return payload
+
+
+# --------------------------------------------------------------------------- #
+# LLM usage extraction
+# --------------------------------------------------------------------------- #
+
+# pydantic-ai serialises ``Usage`` with a `kind` discriminator and spells
+# the token fields differently depending on version.  Accept every known
+# spelling so the parser works across 0.0.x / 0.2.x / 0.3.x without
+# pinning.  Missing fields stay at ``None`` and simply don't get summed.
+_USAGE_INPUT_KEYS = ("input_tokens", "request_tokens", "prompt_tokens")
+_USAGE_OUTPUT_KEYS = ("output_tokens", "response_tokens", "completion_tokens")
+_USAGE_TOTAL_KEYS = ("total_tokens",)
+
+
+def extract_usage_from_llm_log(llm_log: str | None) -> dict[str, int | None]:
+    """Sum token usage across every ``ModelResponse`` in a captured log.
+
+    ``llm_log`` is the raw JSON string produced by
+    ``ModelMessagesTypeAdapter.dump_json(messages)`` in
+    ``doc_extract_query_task``.  Response messages (``kind == "response"``)
+    carry a ``usage`` sub-object with token counts.  We walk the list and
+    sum ``input_tokens`` / ``output_tokens`` / ``total_tokens``.
+
+    Returns a dict with ``input_tokens`` / ``output_tokens`` / ``total_tokens``
+    (``None`` if no response reported that field) and ``llm_requests`` (the
+    number of response messages).
+    """
+    empty = {
+        "input_tokens": None,
+        "output_tokens": None,
+        "total_tokens": None,
+        "llm_requests": 0,
+    }
+    if not llm_log:
+        return empty
+    try:
+        messages = json.loads(llm_log)
+    except (ValueError, TypeError):
+        return empty
+    if not isinstance(messages, list):
+        return empty
+
+    requests = 0
+    totals: dict[str, int | None] = {
+        "input_tokens": None,
+        "output_tokens": None,
+        "total_tokens": None,
+    }
+
+    def _pick(usage: dict, keys: tuple[str, ...]) -> int | None:
+        for k in keys:
+            v = usage.get(k)
+            if isinstance(v, int):
+                return v
+        return None
+
+    def _accumulate(dest_key: str, value: int | None) -> None:
+        if value is None:
+            return
+        current = totals[dest_key]
+        totals[dest_key] = value if current is None else current + value
+
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        if msg.get("kind") != "response":
+            continue
+        requests += 1
+        usage = msg.get("usage")
+        if not isinstance(usage, dict):
+            continue
+        _accumulate("input_tokens", _pick(usage, _USAGE_INPUT_KEYS))
+        _accumulate("output_tokens", _pick(usage, _USAGE_OUTPUT_KEYS))
+        _accumulate("total_tokens", _pick(usage, _USAGE_TOTAL_KEYS))
+
+    # If provider reported input/output but not total, derive it so the
+    # headline ``total_tokens`` column is never silently missing when the
+    # other two are present.
+    if totals["total_tokens"] is None and (
+        totals["input_tokens"] is not None or totals["output_tokens"] is not None
+    ):
+        totals["total_tokens"] = (totals["input_tokens"] or 0) + (
+            totals["output_tokens"] or 0
+        )
+
+    return {**totals, "llm_requests": requests}
+
+
+def _per_subset_aggregates(
+    results: list[TaskResult],
+) -> dict[str, dict[str, float | int]]:
+    """Break aggregates out by subset tag and emit a LegalBench-RAG-style
+    equal-weight macro average.
+
+    The LegalBench-RAG paper weights each of the four subsets at 0.25
+    regardless of how many tasks each contributes (``benchmark.py`` line
+    13-18).  We mirror that: compute per-subset means for the char-level
+    headline metrics, then average those per-subset means across the
+    subsets actually present in the run.  That keeps our overall number
+    directly comparable to theirs even when we slice or sample.
+
+    The subset name is taken from ``TaskResult.tags[0]`` — our
+    ``LegalBenchRAGAdapter`` stamps the subset there at load time.  Tasks
+    with no tag land in a synthetic ``"_untagged"`` bucket so they still
+    show up, but they're excluded from the macro average to keep it
+    comparable to LB-RAG's by-subset weighting.
+    """
+    by_subset: dict[str, list[TaskResult]] = {}
+    for r in results:
+        subset = r.tags[0] if r.tags else "_untagged"
+        by_subset.setdefault(subset, []).append(r)
+
+    def _subset_block(rs: list[TaskResult]) -> dict[str, float | int]:
+        return {
+            "task_count": len(rs),
+            "extraction_success_rate": (
+                sum(1 for r in rs if r.extraction_ok) / len(rs) if rs else 0.0
+            ),
+            "probe_char_recall": mean(r.probe_char_recall for r in rs),
+            "probe_char_precision": mean(r.probe_char_precision for r in rs),
+            "citation_char_recall": mean(r.citation_char_recall for r in rs),
+            "citation_char_precision": mean(r.citation_char_precision for r in rs),
+            "answer_token_f1": mean(r.answer_token_f1 for r in rs),
+        }
+
+    per_subset = {subset: _subset_block(rs) for subset, rs in by_subset.items()}
+
+    named_subsets = [s for s in per_subset if s != "_untagged"]
+    if named_subsets:
+        per_subset["_macro_avg"] = {
+            "subset_count": len(named_subsets),
+            "probe_char_recall": mean(
+                per_subset[s]["probe_char_recall"] for s in named_subsets
+            ),
+            "probe_char_precision": mean(
+                per_subset[s]["probe_char_precision"] for s in named_subsets
+            ),
+            "citation_char_recall": mean(
+                per_subset[s]["citation_char_recall"] for s in named_subsets
+            ),
+            "citation_char_precision": mean(
+                per_subset[s]["citation_char_precision"] for s in named_subsets
+            ),
+            "answer_token_f1": mean(
+                per_subset[s]["answer_token_f1"] for s in named_subsets
+            ),
+        }
+    return per_subset
+
+
+def _usage_aggregates(results: list[TaskResult]) -> dict[str, int | float]:
+    """Build the usage slice of :attr:`BenchmarkReport.aggregates`.
+
+    Totals are summed across every result (failed extractions still cost
+    tokens up to the point of failure).  Means are computed only over
+    results that reported that specific token dimension, so a provider
+    that only reports ``total_tokens`` doesn't zero-out the mean for
+    ``input_tokens``.
+    """
+    total_in = total_out = total_total = 0
+    n_in = n_out = n_total = 0
+    total_requests = 0
+    for r in results:
+        total_requests += r.llm_requests
+        if r.input_tokens is not None:
+            total_in += r.input_tokens
+            n_in += 1
+        if r.output_tokens is not None:
+            total_out += r.output_tokens
+            n_out += 1
+        if r.total_tokens is not None:
+            total_total += r.total_tokens
+            n_total += 1
+    task_count = len(results)
+    return {
+        "input_tokens_sum": total_in,
+        "output_tokens_sum": total_out,
+        "total_tokens_sum": total_total,
+        "llm_requests_sum": total_requests,
+        "input_tokens_mean": (total_in / n_in) if n_in else 0.0,
+        "output_tokens_mean": (total_out / n_out) if n_out else 0.0,
+        "total_tokens_mean": (total_total / n_total) if n_total else 0.0,
+        "llm_requests_mean": (
+            (total_requests / task_count) if task_count else 0.0
+        ),
+    }
