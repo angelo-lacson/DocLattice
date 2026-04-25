@@ -5,7 +5,7 @@ GraphQL query mixin for pipeline queries.
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Optional
 
 import graphene
@@ -45,7 +45,7 @@ class PipelineQueryMixin:
     def resolve_pipeline_components(
         self,
         info: graphene.ResolveInfo,
-        mimetype: Optional[FileTypeEnum] = None,
+        mimetype: FileTypeEnum | None = None,
     ) -> PipelineComponentsType:
         """
         Resolver for the pipeline_components query.
@@ -60,7 +60,7 @@ class PipelineQueryMixin:
         Returns:
             PipelineComponentsType: The pipeline components grouped by type.
         """
-        components_data: dict[str, Sequence[PipelineComponentDefinition]]
+        components_data: Mapping[str, Sequence[PipelineComponentDefinition]]
         if mimetype:
             mime_type_str = FILE_TYPE_TO_MIME.get(mimetype.value)
             if mime_type_str is None:
@@ -131,7 +131,7 @@ class PipelineQueryMixin:
             defn: PipelineComponentDefinition, component_type: str
         ) -> PipelineComponentType:
             is_enabled = (not enabled_set) or (defn.class_name in enabled_set)
-            settings_schema: Optional[list[ComponentSettingSchemaType]] = None
+            settings_schema: list[ComponentSettingSchemaType] | None = None
             if user.is_superuser:
                 # Get schema augmented with has_value/current_value from DB
                 augmented_schema = settings_instance.get_component_schema(
