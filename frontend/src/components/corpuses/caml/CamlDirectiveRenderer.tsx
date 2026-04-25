@@ -13,23 +13,8 @@
  * or any specific directive. All behavior comes from registered handlers.
  */
 import React, { useMemo } from "react";
-import type { ComponentType } from "react";
 import type { CamlDocument, CamlProse } from "@os-legal/caml";
-import {
-  CamlArticle as CamlArticleUntyped,
-  CamlThemeProvider,
-} from "@os-legal/caml-react";
-
-// The @os-legal/caml-react@0.1.x source supports `resolveImageSrc`, but the
-// 0.0.1 build still resident in some lockfiles ships d.ts files without it.
-// Until the lockfile catches up, widen the prop surface locally so consumer
-// code keeps the strong type for the props the published d.ts does declare.
-type CamlArticleExtraProps = {
-  resolveImageSrc?: (src: string) => string | undefined;
-};
-const CamlArticle = CamlArticleUntyped as ComponentType<
-  React.ComponentProps<typeof CamlArticleUntyped> & CamlArticleExtraProps
->;
+import { CamlArticle, CamlThemeProvider } from "@os-legal/caml-react";
 
 import { MarkdownMessageRenderer } from "../../threads/MarkdownMessageRenderer";
 import {
