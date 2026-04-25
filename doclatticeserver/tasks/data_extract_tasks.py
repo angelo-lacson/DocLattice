@@ -404,15 +404,44 @@ async def doc_extract_query_task(
                 )
 
         else:
-            # Extraction returned None
-            logger.warning(f"✗ Extraction returned None for cell {cell_id}")
+            # ``result is None`` rolls up at least three distinct failure
+            # modes that we can disambiguate from the captured message log:
+            #
+            #  (a) Agent issued a structured-response part and committed to
+            #      ``None`` after good-faith search → legitimate "not in
+            #      document" outcome.
+            #  (b) Agent's last action was a tool call (no tool-return, no
+            #      final response). pydantic-ai's loop exited early without
+            #      raising — the agent never got a chance to synthesise an
+            #      answer. This is a pipeline / model-config issue, NOT
+            #      evidence about the document.
+            #  (c) Agent looped on tool calls without ever producing a
+            #      final response (multiple responses, none with output) —
+            #      hit some implicit iteration limit.
+            #
+            # Distinguishing them in the failure record makes operations
+            # actionable: (a) is signal, (b)/(c) are bugs to chase.
+            failure_mode, failure_detail = _classify_none_result(messages)
             logger.warning(
-                "  This likely means the requested information is not present in the document"
+                "✗ Extraction returned None for cell %s — failure_mode=%s, %s",
+                cell_id,
+                failure_mode,
+                failure_detail,
             )
             await sync_mark_failed(
                 datacell,
-                "Failed to extract requested data from document",
-                "The extraction returned None - the requested information may not be present in the document.",
+                f"Failed to extract requested data from document ({failure_mode})",
+                (
+                    f"The extraction returned None.\n"
+                    f"Failure mode: {failure_mode}\n"
+                    f"Detail: {failure_detail}\n"
+                    f"For mode 'agent_committed_none' this is most likely a "
+                    f"legitimate 'data not present' outcome. For "
+                    f"'no_final_response' or 'tool_loop_no_output' the "
+                    f"agent loop exited without producing a structured "
+                    f"answer; check llm_call_log and consider it a "
+                    f"pipeline issue rather than evidence about the document."
+                ),
                 llm_log,
             )
 
@@ -428,6 +457,66 @@ async def doc_extract_query_task(
         else:
             logger.error(f"Failed to get datacell for cell_id {cell_id}: {e}\n{tb}")
         raise
+
+
+def _classify_none_result(messages: object) -> tuple[str, str]:
+    """Categorise a ``result is None`` outcome from ``agent.run()``.
+
+    Reads the captured pydantic-ai message history (a list of
+    ``ModelMessage`` objects, post-``capture_run_messages``) and decides
+    whether the None result represents:
+
+      * ``agent_committed_none`` — the model genuinely produced a final
+        response part (text or output_tool) and that response evaluated
+        to None. Treat as legitimate "not in document".
+      * ``no_final_response`` — the run ended on a tool-call response
+        with no subsequent tool-return / final answer. Indicates the
+        pydantic-ai loop exited before synthesising an answer.
+      * ``tool_loop_no_output`` — multiple model responses, all tool
+        calls, no final synthesis. Hit some implicit iteration ceiling.
+      * ``empty_history`` — pathological case: no model responses at all
+        (rare, suggests an exception was swallowed even earlier).
+
+    The detail string includes message-history length and the kind of
+    each ``response``-message's parts so operators can grep for patterns.
+    """
+    if not messages:
+        return "empty_history", "no messages captured"
+
+    response_msgs = [m for m in messages if getattr(m, "kind", None) == "response"]
+    if not response_msgs:
+        return "empty_history", f"messages={len(messages)} but no response messages"
+
+    last_response = response_msgs[-1]
+    last_parts = getattr(last_response, "parts", []) or []
+    last_part_kinds = [getattr(p, "part_kind", "?") for p in last_parts]
+    n_responses = len(response_msgs)
+    n_tool_calls = sum(
+        1
+        for m in response_msgs
+        for p in (getattr(m, "parts", []) or [])
+        if getattr(p, "part_kind", None) == "tool-call"
+    )
+
+    detail = (
+        f"messages={len(messages)}, response_msgs={n_responses}, "
+        f"tool_calls_total={n_tool_calls}, last_response_parts={last_part_kinds}"
+    )
+
+    # If the last response has any non-tool-call output (text, output_tool,
+    # final-result), the model committed to an answer — even if that
+    # answer was None.
+    has_final = any(
+        kind not in (None, "tool-call", "thinking") for kind in last_part_kinds
+    )
+    if has_final:
+        return "agent_committed_none", detail
+
+    if n_responses == 1:
+        # One response, ending on a tool call, never returned to the loop.
+        return "no_final_response", detail
+
+    return "tool_loop_no_output", detail
 
 
 def text_search(document_id: int, query_str: str) -> str:
