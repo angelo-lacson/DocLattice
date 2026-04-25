@@ -7,19 +7,47 @@
 
 ## TL;DR
 
-Across all four LegalBench-RAG subsets at **k=32 retrieval**, in **corpus-wide** mode
-(no per-document filter — directly comparable to the paper protocol):
+> **At the apples-to-apples retrieval-only protocol from the LegalBench-RAG
+> paper**: OpenContracts (multi-qa-MiniLM-L6 + paragraph chunker + no reranker)
+> hits a 4-subset equal-weight macro-avg `char_recall` of **66.2% at k=32**,
+> versus the paper's per-subset best macro-avg of **57.0%**. **+9.2 pts above
+> their best published configurations**, using no reranker and a 384-dim local
+> embedder.
 
-> **OpenContracts (MiniLM + paragraph chunker, no reranker) macro-avg = 66.2%
-> char_recall.** LegalBench-RAG paper's best per-subset macro-avg at k=32 = 57.0%.
-> **+9.2 pts above the paper's best published configurations, with no reranker and
-> a 384-dim local embedder.**
+The win is driven by the new **paragraph chunker** from PR #1353, which preserves
+semantic units that fixed-size chunkers chop. With the chunker held constant
+(sliding-window-500), our numbers track close to the paper's sliding-window
+numbers — confirming the harness is producing honest values, not a measurement
+artifact.
 
-Per-subset we beat the paper on 3 of 4 subsets and lose on CUAD by ~4 pts. The win is
-driven by the new **paragraph chunker** from PR #1353, which preserves semantic units
-that fixed-size chunkers chop. With the chunker held constant (sliding-window-500),
-our numbers track close to the paper's sliding-window numbers — confirming the harness
-is producing honest values.
+## Scope of comparison — what's apples-to-apples and what isn't
+
+LegalBench-RAG measures **single-shot retrieval only**. There is no LLM in their
+loop, no structured extraction, no agent, no citation-grounding pass. Their
+metrics in `legalbenchrag/run_benchmark.py:20-54` score the retriever's raw
+top-k snippets against gold using character-level intersection. Nothing else.
+
+OpenContracts has two layers stacked on top of retrieval: an **agent loop**
+(pydantic-ai, multiple iterative tool calls, structured output extraction) and
+a **citation-grounding pass** (fuzzy alignment of the agent's answer back to
+specific document spans). Both layers produce metrics that have **no analog in
+the paper**. We measure them because they matter for production use, but they
+are not part of the paper-comparison claim.
+
+This report keeps the two cleanly separated:
+
+| Our metric | Comparable to LB-RAG? | Notes |
+|---|---|---|
+| `probe_char_recall` / `probe_char_precision` | **Yes — directly** | Same formula, same single-shot retrieval regime. **This is the only column quoted against the paper's tables.** |
+| `citation_char_recall` / `citation_char_precision` | No analog | Curated by the agent across iterative retrieval calls. The paper doesn't have an agent. |
+| `answer_token_f1` | No analog | SQuAD-style token F1 against the gold passage. Paper doesn't generate or score answers. |
+| `extraction_success_rate` | No analog | Paper has no agent that can fail to extract — their retriever always returns *something*, even if wrong. |
+
+When this report says "OpenContracts beats the paper by +9.2 pts," it always
+means: our probe's `char_recall` vs their published tables, at matched k, on the
+paper's exact metric formulas. The agent results live in their own section
+(["Agent pipeline results"](#agent-pipeline-results)) and make no comparison to
+the paper.
 
 ## Methodology
 
@@ -267,10 +295,18 @@ recall.
 
 ## Agent pipeline results (privacy_qa, k=32, similarity_top_k=32 plumbed)
 
-The numbers above are **retrieval-only**: single-shot top-k probe, no LLM, no
-agent. To exercise the production OpenContracts pipeline (LLM extracts an
-answer + grounds it back to citation annotations), we ran the same
-194-task privacy_qa slice with the full agent loop.
+> **Scope note**: The numbers in this section measure the *full OpenContracts
+> production pipeline* (retrieval + iterative agent loop + LLM extraction +
+> citation grounding). The LegalBench-RAG paper does **not** have an agent
+> loop — there is no number in their report that maps to `citation_char_recall`,
+> `answer_token_f1`, or `extraction_success_rate`. **Nothing in this section
+> is comparable to the paper.** We report it because it characterises what
+> production OpenContracts actually delivers; treat the comparisons here as
+> *intra-OpenContracts* (probe vs agent, model A vs model B), not vs LB-RAG.
+
+To exercise the production OpenContracts pipeline (LLM extracts an answer +
+grounds it back to citation annotations), we ran the same 194-task privacy_qa
+slice with the full agent loop.
 
 | Model | ok% | citation_char_recall | citation_char_prec | char_F1 | answer_F1 | tokens/task | LLM calls/task |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -285,37 +321,37 @@ reliably issues tool calls + planning text but fails to commit to the final
 structured output that pydantic-ai expects. Tracked in [issue #1381]; the
 data point is unusable until that integration is fixed.
 
-### Two distinct things, two distinct metrics
+### Probe vs agent — measuring different things
 
 The probe's `char_recall = 0.784` and the agent's `citation_char_recall =
-0.425` are not in tension — they measure different things:
+0.425` are not in tension; they measure different things at different layers
+of the pipeline:
 
-- **Probe** scores "what was *retrievable* in one shot from the corpus" —
-  the union of the top-k similarity hits, scored against gold.
-- **Citation** scores "what the agent *chose to highlight back to the user
-  / downstream consumer*" — a curated subset of what its similarity-search
-  tools returned across multiple iterative calls.
+- **Probe** measures the **retrieval ceiling**: what was reachable with one
+  shot of top-k similarity search from the corpus. This is what the paper
+  measures; this is the apples-to-apples number.
+- **Citation** measures the **agent's curated output**: a subset of what its
+  similarity-search tools returned across multiple iterative calls, filtered
+  through the agent's judgment of what supports the answer it generated.
+  No analog in the paper.
 
-The agent's job is **curation**: take a noisy retrieval and pick the chunks
-that actually support the extracted answer. The model-sweep shows this
+The agent's job is **curation**: take noisy retrieval and pick the chunks
+that actually support the extracted answer. The model-sweep above shows this
 clearly: gpt-4o is *more* selective than gpt-4o-mini (recall ↓, precision
-↑), and char_F1 inches up. There is no model in our sweep that *widens*
-the citation set — they all aim tighter. **Stronger model = better
-curator, not broader one**. This is by design: a citation set with 32
-weakly-related chunks is worse UX than 8 well-targeted chunks even if the
-former contains more gold characters.
+↑), and char_F1 inches up. There is no model in our sweep that *widens* the
+citation set — they all aim tighter. **Stronger model = better curator, not
+broader one**. This is by design: a citation set of 32 weakly-related chunks
+is worse UX than 8 well-targeted chunks, even if the former contains more
+gold characters.
 
-For benchmark publication, we report both:
+These two numbers should not be averaged, reconciled, or treated as
+competing — they describe different layers of the system, and the
+appropriate column to quote depends entirely on the audience:
 
-- **Retrieval ceiling** (probe): the LegalBench-RAG-comparable number,
-  apples-to-apples with their paper. **78.4% on privacy_qa, +7.2 pts above
-  paper best.**
-- **Pipeline output** (citations): what the production agent actually
-  delivers. **char_F1 = 0.197 (mini) → 0.220 (4o)**, with answer_token_f1
-  ~0.25.
-
-These should not be averaged or reconciled. They describe different layers
-of the system.
+- Comparing to the LegalBench-RAG paper or any other retrieval-only
+  benchmark → **probe**.
+- Reporting what production OpenContracts actually surfaces to a user →
+  **citation**.
 
 ## Open questions / follow-ups
 
@@ -327,6 +363,12 @@ of the system.
   13% of cells because it doesn't commit to the structured output after
   tool-calling — see issue #1381. Need prompt or pydantic-ai config tuning
   before Anthropic models can be benchmarked fairly.
+- **Answer-quality benchmarking against derivative work**: the original
+  LegalBench-RAG paper measures retrieval only, so we have no external
+  reference for the agent's `answer_token_f1` numbers. Need to identify and
+  run against derivative benchmarks (HuggingFace `legalbenchrag_*_qa`
+  datasets, RAGAS-style LLM-judge protocols) to put a defensible answer-
+  quality claim alongside the retrieval claim. Tracked in issue #1382.
 - **Auto-grounding hardening landed in this PR**: per-query timeout
   (FUZZY_PER_QUERY_TIMEOUT_SECONDS=2s), tighter doc-length cap (50K, was 500K),
   query-length cap (2K), and an n-gram anchor pre-filter. The fuzzy matcher
