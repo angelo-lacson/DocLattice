@@ -208,7 +208,7 @@ class CoreAnnotationVectorStore:
         # enumeration attacks.
         # -------------------------------------------------------------------------
         from opencontractserver.corpuses.models import Corpus
-        from opencontractserver.documents.models import Document
+        from opencontractserver.documents.models import Document, DocumentPath
 
         user = None
         if self.user_id:
@@ -289,8 +289,6 @@ class CoreAnnotationVectorStore:
 
         # Check for deleted documents in corpus
         if self.check_corpus_deletion and self.corpus_id and not self.document_id:
-            from opencontractserver.documents.models import DocumentPath
-
             # Lazy subquery — never round-trips through Python, so the
             # generated SQL stays a single statement with a real subquery
             # rather than a giant ``IN (val, val, ...)`` literal even for
@@ -302,6 +300,15 @@ class CoreAnnotationVectorStore:
                 .values("document_id")
                 .distinct()
             )
+            # Trade-off: this ``EXISTS`` adds one extra round-trip on the
+            # happy path, but lets us short-circuit the entire vector search
+            # for empty/all-deleted corpora (returning ``Annotation.none()``
+            # spares a downstream HNSW probe and keeps the existing
+            # operational warning). For corpora with at least one active
+            # document the cost is a single boolean SELECT and is dwarfed
+            # by the main query. Removing the check would also remove the
+            # debug log of the active-doc count that the materialised list
+            # used to provide.
             has_active_docs = await sync_to_async(active_doc_ids_qs.exists)()
 
             if has_active_docs:
