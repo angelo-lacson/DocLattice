@@ -265,12 +265,74 @@ The report aggregates land at `<run-dir>/report.json` and `<run-dir>/report.csv`
 The `aggregates.probe_char_recall` field is the headline LegalBench-RAG-parity
 recall.
 
+## Agent pipeline results (privacy_qa, k=32, similarity_top_k=32 plumbed)
+
+The numbers above are **retrieval-only**: single-shot top-k probe, no LLM, no
+agent. To exercise the production OpenContracts pipeline (LLM extracts an
+answer + grounds it back to citation annotations), we ran the same
+194-task privacy_qa slice with the full agent loop.
+
+| Model | ok% | citation_char_recall | citation_char_prec | char_F1 | answer_F1 | tokens/task | LLM calls/task |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Probe (no agent) | n/a | 0.784 (probe) | 0.009 (probe) | 0.019 | — | 0 | 0 |
+| gpt-4o-mini | 1.000 | 0.425 | 0.128 | **0.197** | 0.242 | 10,096 | 2.61 |
+| gpt-4o | 0.985 | 0.336 | 0.163 | **0.220** | 0.263 | 13,490 | 4.50 |
+| claude-sonnet-4-6 ⚠️ | 0.129 | 0.100 | 0.011 | 0.020 | 0.313\* | 6,881 | 1.27 |
+
+\* Sonnet's `answer_token_f1` is computed over the ~24 cells that succeeded.
+Don't read into it. ⚠️ Sonnet success rate is 13% on this benchmark — it
+reliably issues tool calls + planning text but fails to commit to the final
+structured output that pydantic-ai expects. Tracked in [issue #1381]; the
+data point is unusable until that integration is fixed.
+
+### Two distinct things, two distinct metrics
+
+The probe's `char_recall = 0.784` and the agent's `citation_char_recall =
+0.425` are not in tension — they measure different things:
+
+- **Probe** scores "what was *retrievable* in one shot from the corpus" —
+  the union of the top-k similarity hits, scored against gold.
+- **Citation** scores "what the agent *chose to highlight back to the user
+  / downstream consumer*" — a curated subset of what its similarity-search
+  tools returned across multiple iterative calls.
+
+The agent's job is **curation**: take a noisy retrieval and pick the chunks
+that actually support the extracted answer. The model-sweep shows this
+clearly: gpt-4o is *more* selective than gpt-4o-mini (recall ↓, precision
+↑), and char_F1 inches up. There is no model in our sweep that *widens*
+the citation set — they all aim tighter. **Stronger model = better
+curator, not broader one**. This is by design: a citation set with 32
+weakly-related chunks is worse UX than 8 well-targeted chunks even if the
+former contains more gold characters.
+
+For benchmark publication, we report both:
+
+- **Retrieval ceiling** (probe): the LegalBench-RAG-comparable number,
+  apples-to-apples with their paper. **78.4% on privacy_qa, +7.2 pts above
+  paper best.**
+- **Pipeline output** (citations): what the production agent actually
+  delivers. **char_F1 = 0.197 (mini) → 0.220 (4o)**, with answer_token_f1
+  ~0.25.
+
+These should not be averaged or reconciled. They describe different layers
+of the system.
+
 ## Open questions / follow-ups
 
 - **Reranker that actually helps**: BGE and MiniLM cross-encoders both hurt the
   agent loop in our tests. Tracked in issue #1378 — proposes evaluating Cohere
   `rerank-english-v3.0` and longer-context cross-encoders, plus revisiting the
   integration point (every retrieval call vs final-only).
+- **Anthropic models in the extract task**: claude-sonnet-4-6 succeeds on only
+  13% of cells because it doesn't commit to the structured output after
+  tool-calling — see issue #1381. Need prompt or pydantic-ai config tuning
+  before Anthropic models can be benchmarked fairly.
+- **Auto-grounding hardening landed in this PR**: per-query timeout
+  (FUZZY_PER_QUERY_TIMEOUT_SECONDS=2s), tighter doc-length cap (50K, was 500K),
+  query-length cap (2K), and an n-gram anchor pre-filter. The fuzzy matcher
+  was hanging indefinitely on gpt-4o paraphrased outputs because the legacy
+  caps + lack of timeout made worst-case latency unbounded. Tests in
+  `test_text_alignment.py::TestFuzzyHardening`.
 - **Why we lose on CUAD**: 60.2% vs paper's 64.4%. Likely a chunker mismatch
   with commercial-contract text. Worth a CUAD-specific run with `sliding_window`
   to test.

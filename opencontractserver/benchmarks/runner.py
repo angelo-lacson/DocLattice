@@ -147,10 +147,16 @@ def run_benchmark(
         )
 
     if not retrieval_only:
+        # Match the agent's per-call retrieval budget to the probe's so
+        # citation_char_recall and probe_char_recall can be compared
+        # directly. The agent's production default (similarity_top_k=10)
+        # would otherwise systematically under-retrieve relative to a
+        # probe configured for ``top_k=32``.
         _run_extraction(
             loaded=loaded,
             model=model,
             concurrency=extraction_concurrency,
+            similarity_top_k=top_k,
         )
     else:
         logger.info(
@@ -224,6 +230,7 @@ def _run_extraction(
     loaded: LoadedBenchmark,
     model: str,
     concurrency: int = 1,
+    similarity_top_k: int | None = None,
 ) -> None:
     """Invoke the production extract task for every datacell.
 
@@ -232,13 +239,22 @@ def _run_extraction(
     parallel. Each thread gets its own event loop via ``asyncio.run`` inside
     the celery task's sync wrapper, so this is safe as long as the remote
     LLM can handle the fan-out.
+
+    ``similarity_top_k`` is plumbed into the agent's retrieval tools when
+    set; otherwise the production default (10) is used. Benchmarks that
+    want to compare agent citations against a probe at the same retrieval
+    budget should pass the probe's ``top_k`` here so the agent sees the
+    same per-call chunk count.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     ctx = force_celery_eager()
 
     def _run_one(cell_id: int) -> None:
-        doc_extract_query_task.apply(args=[cell_id], kwargs={"model_override": model})
+        kwargs: dict[str, object] = {"model_override": model}
+        if similarity_top_k is not None:
+            kwargs["similarity_top_k"] = similarity_top_k
+        doc_extract_query_task.apply(args=[cell_id], kwargs=kwargs)
 
     with ctx:
         if concurrency <= 1:
