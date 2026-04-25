@@ -1,16 +1,4 @@
-"""
-Tests for :func:`opencontractserver.tasks.export_tasks.package_annotated_docs`.
-
-Regression coverage for issue #1356:
-
-``build_document_export()`` returns ``("", "", None, {}, {})`` for documents
-whose export failed (e.g. underlying file could not be loaded or all
-annotations were filtered out). Prior to the fix, ``package_annotated_docs``
-iterated those placeholder tuples without any guard, silently writing an
-empty-named file to the zip and inserting ``annotated_docs[""] = None`` into
-the final ``data.json``. The fix adds an explicit skip for failed
-placeholders. These tests verify that behavior.
-"""
+"""Regression tests for ``package_annotated_docs`` skipping failed placeholders."""
 
 from __future__ import annotations
 
@@ -105,13 +93,20 @@ class PackageAnnotatedDocsSkipTestCase(TestCase):
         with patch(
             "opencontractserver.tasks.export_tasks.finalize_export",
             side_effect=capture_fn,
-        ):
+        ), self.assertLogs(
+            "opencontractserver.tasks.export_tasks", level="WARNING"
+        ) as log_cm:
             package_annotated_docs(
                 burned_docs=(good_doc, failed_doc),
                 export_id=self.export.id,
                 corpus_pk=self.corpus.id,
             )
 
+        self.assertTrue(
+            any("Skipping failed burned doc" in line for line in log_cm.output),
+            f"Expected skip-warning log, got: {log_cm.output}",
+        )
+        self.assertIn("bytes", captured, "finalize_export was not called")
         zf = zipfile.ZipFile(io.BytesIO(captured["bytes"]))
         names = set(zf.namelist())
 
@@ -148,6 +143,7 @@ class PackageAnnotatedDocsSkipTestCase(TestCase):
                 corpus_pk=self.corpus.id,
             )
 
+        self.assertIn("bytes", captured, "finalize_export was not called")
         zf = zipfile.ZipFile(io.BytesIO(captured["bytes"]))
         # Only data.json, no empty-filename entry.
         self.assertEqual(set(zf.namelist()), {"data.json"})
