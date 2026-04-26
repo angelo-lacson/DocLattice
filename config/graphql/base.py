@@ -86,8 +86,6 @@ class CountableConnection(graphene.relay.Connection):
 class DRFDeletion(graphene.Mutation):
     class IOSettings(ABC):
         lookup_field: ClassVar[str] = "id"
-        # Concrete subclasses must override ``model`` with their Django model;
-        # see ``_require_io_setting`` for the runtime guard.
         model: ClassVar[Optional[type[django.db.models.Model]]] = None
 
     class Arguments:
@@ -148,8 +146,6 @@ class DRFMutation(graphene.Mutation):
     class IOSettings(ABC):
         pk_fields: ClassVar[list[str]] = []
         lookup_field: ClassVar[str] = "id"
-        # Concrete subclasses must override ``model``, ``graphene_model`` and
-        # ``serializer``; see ``_require_io_setting`` for the runtime guard.
         model: ClassVar[Optional[type[django.db.models.Model]]] = None
         graphene_model: ClassVar[Optional[type[DjangoObjectType]]] = None
         serializer: ClassVar[Optional[type[serializers.Serializer]]] = None
