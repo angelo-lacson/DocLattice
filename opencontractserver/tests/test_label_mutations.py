@@ -171,12 +171,11 @@ class RemoveLabelsFromLabelsetMutationTestCase(TestCase):
         remaining = set(self.labelset.annotation_labels.values_list("pk", flat=True))
         self.assertEqual(remaining, {self.label_a.pk, self.label_b.pk, self.label_c.pk})
 
-    def test_remove_labels_rejects_non_owner_even_for_public_labelset(self) -> None:
-        """Public labelsets are read-only via this mutation for non-creators.
+    def test_remove_labels_rejects_non_owner_even_when_labelset_is_public(self) -> None:
+        """``is_public`` grants READ only — it does not grant UPDATE.
 
-        ``is_public`` exposes a labelset for use, not for mutation. Only the
-        creator may remove labels from it; matches the creator-only lookup in
-        ``CreateLabelForLabelsetMutation``.
+        Without an explicit guardian UPDATE grant a non-creator must not be
+        able to mutate the labelset's membership, regardless of ``is_public``.
         """
 
         self.labelset.is_public = True
@@ -197,3 +196,33 @@ class RemoveLabelsFromLabelsetMutationTestCase(TestCase):
         # Nothing should have changed
         remaining = set(self.labelset.annotation_labels.values_list("pk", flat=True))
         self.assertEqual(remaining, {self.label_a.pk, self.label_b.pk, self.label_c.pk})
+
+    def test_remove_labels_allows_non_owner_with_explicit_update_permission(
+        self,
+    ) -> None:
+        """A non-creator who has been granted UPDATE on the labelset may remove labels.
+
+        Pins the documented model: anyone with edit rights to a LabelSet can
+        add/remove labels — not just the creator. See
+        ``docs/permissioning/consolidated_permissioning_guide.md``.
+        """
+
+        set_permissions_for_obj_to_user(
+            self.other_user, self.labelset, [PermissionTypes.UPDATE]
+        )
+
+        variables = {
+            "labelIds": [to_global_id("AnnotationLabelType", self.label_a.id)],
+            "labelsetId": to_global_id("LabelSetType", self.labelset.id),
+        }
+
+        result = self.other_client.execute(REMOVE_LABELS_MUTATION, variables=variables)
+
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["removeAnnotationLabelsFromLabelset"]
+        self.assertTrue(
+            data["ok"],
+            msg=f"Mutation did not succeed. Message: {data['message']}",
+        )
+        remaining = set(self.labelset.annotation_labels.values_list("pk", flat=True))
+        self.assertEqual(remaining, {self.label_b.pk, self.label_c.pk})

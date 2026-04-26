@@ -19,7 +19,10 @@ from config.graphql.serializers import LabelsetSerializer
 from config.graphql.validation_utils import validate_color
 from opencontractserver.annotations.models import AnnotationLabel, LabelSet
 from opencontractserver.types.enums import PermissionTypes
-from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
+from opencontractserver.utils.permissioning import (
+    set_permissions_for_obj_to_user,
+    user_has_permission_for_obj,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -229,9 +232,15 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
             )
 
         try:
-            labelset = LabelSet.objects.get(
-                pk=from_global_id(labelset_id)[1], creator=info.context.user
-            )
+            labelset = LabelSet.objects.get(pk=from_global_id(labelset_id)[1])
+            if not user_has_permission_for_obj(
+                info.context.user,
+                labelset,
+                PermissionTypes.UPDATE,
+                include_group_permissions=True,
+            ):
+                # Generic deny path — same message and code path as not-found
+                raise LabelSet.DoesNotExist
             logger.debug("CreateLabelForLabelsetMutation - mutate / Labelset", labelset)
             obj = AnnotationLabel.objects.create(
                 text=text,
@@ -288,9 +297,15 @@ class RemoveLabelsFromLabelsetMutation(graphene.Mutation):
             label_pks = list(
                 map(lambda graphene_id: from_global_id(graphene_id)[1], label_ids)
             )
-            labelset = LabelSet.objects.get(
-                pk=from_global_id(labelset_id)[1], creator=user
-            )
+            labelset = LabelSet.objects.get(pk=from_global_id(labelset_id)[1])
+            if not user_has_permission_for_obj(
+                user,
+                labelset,
+                PermissionTypes.UPDATE,
+                include_group_permissions=True,
+            ):
+                # Generic deny path — same message and code path as not-found
+                raise LabelSet.DoesNotExist
             labelset.annotation_labels.remove(*label_pks)
             ok = True
             message = "Success"
