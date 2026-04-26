@@ -1264,6 +1264,8 @@ class TestIOSettingsRequiredFieldsGuard(TestCase):
         """``DRFDeletion.mutate`` must raise ``ValueError`` when the lookup arg is omitted."""
         from unittest.mock import MagicMock
 
+        from graphene import ResolveInfo
+
         from config.graphql.base import DRFDeletion
 
         class _DeleteCorpus(DRFDeletion):
@@ -1271,7 +1273,11 @@ class TestIOSettingsRequiredFieldsGuard(TestCase):
                 model = Corpus
                 lookup_field = "id"
 
-        info = MagicMock()
+        # ``@login_required`` from graphql_jwt looks for a ``ResolveInfo`` arg
+        # via ``isinstance``; spec the mock so the decorator passes through
+        # to the wrapped function where the real lookup-value check fires.
+        info = MagicMock(spec=ResolveInfo)
+        info.context = MagicMock()
         info.context.user = MagicMock(is_authenticated=True)
 
         with self.assertRaises(ValueError) as ctx:

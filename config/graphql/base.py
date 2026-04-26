@@ -86,8 +86,6 @@ class CountableConnection(graphene.relay.Connection):
 class DRFDeletion(graphene.Mutation):
     class IOSettings(ABC):
         lookup_field: ClassVar[str] = "id"
-        # Concrete subclasses must override ``model`` with their Django model;
-        # see ``_require_io_setting`` for the runtime guard.
         model: ClassVar[Optional[type[django.db.models.Model]]] = None
 
     class Arguments:
@@ -148,8 +146,6 @@ class DRFMutation(graphene.Mutation):
     class IOSettings(ABC):
         pk_fields: ClassVar[list[str]] = []
         lookup_field: ClassVar[str] = "id"
-        # Concrete subclasses must override ``model``, ``graphene_model`` and
-        # ``serializer``; see ``_require_io_setting`` for the runtime guard.
         model: ClassVar[Optional[type[django.db.models.Model]]] = None
         graphene_model: ClassVar[Optional[type[DjangoObjectType]]] = None
         serializer: ClassVar[Optional[type[serializers.Serializer]]] = None
@@ -264,7 +260,12 @@ class DRFMutation(graphene.Mutation):
                 obj_serializer.save()
                 ok = True
                 message = "Success"
-                obj_id = to_global_id(graphene_model.__class__.__name__, obj.id)
+                # `graphene_model` is the DjangoObjectType class itself, so
+                # `.__name__` yields the GraphQL type name (e.g. "CorpusType").
+                # The previous `.__class__.__name__` returned the metaclass
+                # name (graphene's `SubclassWithMeta_Meta`) which produced an
+                # incorrect global id.
+                obj_id = to_global_id(graphene_model.__name__, obj.id)
                 logger.info("Succeeded updating obj")
 
             else:
@@ -284,7 +285,12 @@ class DRFMutation(graphene.Mutation):
 
                 ok = True
                 message = "Success"
-                obj_id = to_global_id(graphene_model.__class__.__name__, obj.id)
+                # `graphene_model` is the DjangoObjectType class itself, so
+                # `.__name__` yields the GraphQL type name (e.g. "CorpusType").
+                # The previous `.__class__.__name__` returned the metaclass
+                # name (graphene's `SubclassWithMeta_Meta`) which produced an
+                # incorrect global id.
+                obj_id = to_global_id(graphene_model.__name__, obj.id)
 
         except serializers.ValidationError as ve:
             logger.warning(f"Validation error in mutation: {ve.detail}")
