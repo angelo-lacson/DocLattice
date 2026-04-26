@@ -1084,6 +1084,8 @@ test.describe("CorpusChat", () => {
     await expect(
       page.getByText("Error connecting to the corpus WebSocket.")
     ).not.toBeVisible();
+    // Unknown frames must not stick the input in a processing state — pin it.
+    await expect(input).toBeEnabled({ timeout: 5000 });
 
     await component.unmount();
   });

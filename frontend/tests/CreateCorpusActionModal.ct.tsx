@@ -523,8 +523,8 @@ test.describe("CreateCorpusActionModal", () => {
       .locator('input[placeholder="Enter action name"]')
       .fill("My Fieldset Action");
 
-    // Open the fieldset dropdown (third .oc-dropdown__trigger after trigger + actionType)
-    await page.locator(".oc-dropdown__trigger").nth(2).click();
+    // Open the fieldset dropdown
+    await page.getByRole("combobox", { name: "Fieldset" }).click();
     await page.getByText("Contract Fields", { exact: true }).click();
 
     // Submit
@@ -636,9 +636,8 @@ test.describe("CreateCorpusActionModal", () => {
       page.getByText("Create New Corpus Action", { exact: true })
     ).toBeVisible({ timeout: 20000 });
 
-    // Open the trigger dropdown (the first dropdown trigger in the modal)
-    const triggerDropdown = page.locator(".oc-dropdown__trigger").first();
-    await triggerDropdown.click();
+    // Open the trigger dropdown
+    await page.getByRole("combobox", { name: "Trigger" }).click();
     await page.getByText("On New Thread", { exact: true }).click();
 
     // Forced into agent action type with helper text
@@ -676,7 +675,7 @@ test.describe("CreateCorpusActionModal", () => {
     ).toBeVisible({ timeout: 20000 });
 
     // Switch to agent action type
-    await page.locator(".oc-dropdown__trigger").nth(1).click();
+    await page.getByRole("combobox", { name: "Action Type" }).click();
     await page.getByText("Agent (AI-powered action)").click();
 
     await expect(page.getByText("Agent Configuration")).toBeVisible({
@@ -718,7 +717,7 @@ test.describe("CreateCorpusActionModal", () => {
     ).toBeVisible({ timeout: 20000 });
 
     // Switch action type to agent
-    await page.locator(".oc-dropdown__trigger").nth(1).click();
+    await page.getByRole("combobox", { name: "Action Type" }).click();
     await page.getByText("Agent (AI-powered action)").click();
 
     await expect(page.getByText("Agent Configuration")).toBeVisible({
@@ -752,7 +751,7 @@ test.describe("CreateCorpusActionModal", () => {
     ).toBeVisible({ timeout: 20000 });
 
     // Switch action type to analyzer
-    await page.locator(".oc-dropdown__trigger").nth(1).click();
+    await page.getByRole("combobox", { name: "Action Type" }).click();
     await page.getByText("Analyzer (Run analysis)").click();
 
     await expect(page.getByText("Analyzer Configuration")).toBeVisible({
@@ -791,7 +790,7 @@ test.describe("CreateCorpusActionModal", () => {
       .fill("Outer action name");
 
     // Switch to agent
-    await page.locator(".oc-dropdown__trigger").nth(1).click();
+    await page.getByRole("combobox", { name: "Action Type" }).click();
     await page.getByText("Agent (AI-powered action)").click();
 
     await expect(page.getByText("Agent Configuration")).toBeVisible({
@@ -828,7 +827,7 @@ test.describe("CreateCorpusActionModal", () => {
     await page.locator('input[placeholder="Enter action name"]').fill("Outer");
 
     // Switch to agent
-    await page.locator(".oc-dropdown__trigger").nth(1).click();
+    await page.getByRole("combobox", { name: "Action Type" }).click();
     await page.getByText("Agent (AI-powered action)").click();
 
     await expect(page.getByText("Agent Configuration")).toBeVisible({
@@ -840,9 +839,10 @@ test.describe("CreateCorpusActionModal", () => {
       .locator('input[placeholder="e.g., Document Summarizer"]')
       .fill("Doc Agent");
 
-    // Clear the system-instructions textarea (it's the first of the three textareas)
-    const textareas = page.locator("textarea");
-    await textareas.nth(0).fill("");
+    // Clear the system-instructions textarea (document-trigger variant)
+    await page
+      .locator('textarea[placeholder*="Brief role description"]')
+      .fill("");
 
     await page
       .getByRole("button", { name: "Create Action", exact: true })
@@ -875,7 +875,7 @@ test.describe("CreateCorpusActionModal", () => {
       .fill("Pickless");
 
     // Switch action type to agent and then to "Use Existing Agent"
-    await page.locator(".oc-dropdown__trigger").nth(1).click();
+    await page.getByRole("combobox", { name: "Action Type" }).click();
     await page.getByText("Agent (AI-powered action)").click();
     await expect(page.getByText("Agent Configuration")).toBeVisible({
       timeout: 10000,
@@ -917,6 +917,9 @@ test.describe("CreateCorpusActionModal", () => {
           createAgentInline: true,
           inlineAgentName: "Inline Doc Agent",
           inlineAgentDescription: undefined,
+          // The component initializes the agent-instructions textarea with
+          // DEFAULT_MODERATOR_INSTRUCTIONS; this test does not fill it and
+          // relies on that default matching the mutation variable.
           inlineAgentInstructions: DEFAULT_MODERATOR_INSTRUCTIONS,
           inlineAgentTools: ["read_document_text", "update_document_summary"],
           disabled: false,
@@ -971,7 +974,7 @@ test.describe("CreateCorpusActionModal", () => {
       .fill("Inline Agent Action");
 
     // Switch action type to agent (inline mode is the default for doc triggers)
-    await page.locator(".oc-dropdown__trigger").nth(1).click();
+    await page.getByRole("combobox", { name: "Action Type" }).click();
     await page.getByText("Agent (AI-powered action)").click();
 
     await expect(page.getByText("Agent Configuration")).toBeVisible({
@@ -1053,7 +1056,7 @@ test.describe("CreateCorpusActionModal", () => {
       .locator('input[placeholder="Enter action name"]')
       .fill("Will Fail");
 
-    await page.locator(".oc-dropdown__trigger").nth(2).click();
+    await page.getByRole("combobox", { name: "Fieldset" }).click();
     await page.getByText("Contract Fields", { exact: true }).click();
 
     await page
