@@ -5,7 +5,7 @@ GraphQL query mixin for user, assignment, import, and export queries.
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import graphene
 from django.db.models import Q, QuerySet
@@ -26,6 +26,8 @@ from config.graphql.graphene_types import (
 from opencontractserver.users.models import Assignment, UserExport, UserImport
 
 if TYPE_CHECKING:
+    from django.contrib.auth.models import AnonymousUser
+
     from opencontractserver.users.models import User
 
 
@@ -36,12 +38,12 @@ class UserQueryMixin:
     me = graphene.Field(UserType)
     user_by_slug = graphene.Field(UserType, slug=graphene.String(required=True))
 
-    def resolve_me(self, info: graphene.ResolveInfo) -> "User":
+    def resolve_me(self, info: graphene.ResolveInfo) -> User | AnonymousUser:
         return info.context.user
 
     def resolve_user_by_slug(
         self, info: graphene.ResolveInfo, slug: str
-    ) -> Optional["User"]:
+    ) -> User | None:
         """
         Resolve a user by their slug with profile privacy filtering.
 

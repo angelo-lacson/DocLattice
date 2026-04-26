@@ -10,7 +10,6 @@ See: docs/architecture/social-media-previews.md
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import graphene
 from graphql_relay import from_global_id
@@ -71,7 +70,7 @@ class OGMetadataQueryMixin:
     @graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")
     def resolve_og_corpus_metadata(
         self, info: graphene.ResolveInfo, user_slug: str, corpus_slug: str
-    ) -> Optional[OGCorpusMetadataType]:
+    ) -> OGCorpusMetadataType | None:
         """
         Public OG metadata for corpus - no auth required.
         Only returns data for public corpuses (is_public=True).
@@ -111,7 +110,7 @@ class OGMetadataQueryMixin:
     @graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")
     def resolve_og_document_metadata(
         self, info: graphene.ResolveInfo, user_slug: str, document_slug: str
-    ) -> Optional[OGDocumentMetadataType]:
+    ) -> OGDocumentMetadataType | None:
         """
         Public OG metadata for standalone document - no auth required.
         Only returns data for public documents (is_public=True).
@@ -150,7 +149,7 @@ class OGMetadataQueryMixin:
         user_slug: str,
         corpus_slug: str,
         document_slug: str,
-    ) -> Optional[OGDocumentMetadataType]:
+    ) -> OGDocumentMetadataType | None:
         """
         Public OG metadata for document in corpus context - no auth required.
         Only returns data if both corpus and document are public.
@@ -194,7 +193,7 @@ class OGMetadataQueryMixin:
         user_slug: str,
         corpus_slug: str,
         thread_id: str,
-    ) -> Optional[OGThreadMetadataType]:
+    ) -> OGThreadMetadataType | None:
         """
         Public OG metadata for discussion thread - no auth required.
         Only returns data if parent corpus is public.
@@ -237,7 +236,7 @@ class OGMetadataQueryMixin:
     @graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")
     def resolve_og_extract_metadata(
         self, info: graphene.ResolveInfo, extract_id: str
-    ) -> Optional[OGExtractMetadataType]:
+    ) -> OGExtractMetadataType | None:
         """
         Public OG metadata for data extract - no auth required.
         Only returns data if parent corpus is public.

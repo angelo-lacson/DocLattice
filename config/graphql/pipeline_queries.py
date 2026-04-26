@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
-from typing import Optional
 
 import graphene
 from graphql_jwt.decorators import login_required

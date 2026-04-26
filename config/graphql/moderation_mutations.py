@@ -17,7 +17,6 @@ This module provides mutations for moderating threads and messages:
 from __future__ import annotations
 
 import logging
-from typing import Union
 
 import graphene
 from graphql_jwt.decorators import login_required
@@ -83,7 +82,7 @@ class LockThreadMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate="20/m")
-    def mutate(root, info, conversation_id, reason="") -> "LockThreadMutation":
+    def mutate(root, info, conversation_id, reason="") -> LockThreadMutation:
         ok = False
         obj = None
         message_text = ""
@@ -135,7 +134,7 @@ class UnlockThreadMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate="20/m")
-    def mutate(root, info, conversation_id, reason="") -> "UnlockThreadMutation":
+    def mutate(root, info, conversation_id, reason="") -> UnlockThreadMutation:
         ok = False
         obj = None
         message_text = ""
@@ -187,7 +186,7 @@ class PinThreadMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate="20/m")
-    def mutate(root, info, conversation_id, reason="") -> "PinThreadMutation":
+    def mutate(root, info, conversation_id, reason="") -> PinThreadMutation:
         ok = False
         obj = None
         message_text = ""
@@ -239,7 +238,7 @@ class UnpinThreadMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate="20/m")
-    def mutate(root, info, conversation_id, reason="") -> "UnpinThreadMutation":
+    def mutate(root, info, conversation_id, reason="") -> UnpinThreadMutation:
         ok = False
         obj = None
         message_text = ""
@@ -289,7 +288,7 @@ class DeleteThreadMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate="10/m")
-    def mutate(root, info, conversation_id, reason=None) -> "DeleteThreadMutation":
+    def mutate(root, info, conversation_id, reason=None) -> DeleteThreadMutation:
         user = info.context.user
         ok = False
         message_text = ""
@@ -342,7 +341,7 @@ class RestoreThreadMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate="10/m")
-    def mutate(root, info, conversation_id, reason=None) -> "RestoreThreadMutation":
+    def mutate(root, info, conversation_id, reason=None) -> RestoreThreadMutation:
         user = info.context.user
         ok = False
         message_text = ""
@@ -400,7 +399,7 @@ class AddModeratorMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate="20/m")
-    def mutate(root, info, corpus_id, user_id, permissions) -> "AddModeratorMutation":
+    def mutate(root, info, corpus_id, user_id, permissions) -> AddModeratorMutation:
         ok = False
         message_text = ""
 
@@ -479,7 +478,7 @@ class RemoveModeratorMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate="20/m")
-    def mutate(root, info, corpus_id, user_id) -> "RemoveModeratorMutation":
+    def mutate(root, info, corpus_id, user_id) -> RemoveModeratorMutation:
         ok = False
         message_text = ""
 
@@ -543,7 +542,7 @@ class UpdateModeratorPermissionsMutation(graphene.Mutation):
     @graphql_ratelimit(rate="20/m")
     def mutate(
         root, info, corpus_id, user_id, permissions
-    ) -> "UpdateModeratorPermissionsMutation":
+    ) -> UpdateModeratorPermissionsMutation:
         ok = False
         message_text = ""
 
@@ -632,9 +631,7 @@ class RollbackModerationActionMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate="10/m")
-    def mutate(
-        root, info, action_id, reason=None
-    ) -> "RollbackModerationActionMutation":
+    def mutate(root, info, action_id, reason=None) -> RollbackModerationActionMutation:
         from opencontractserver.conversations.models import (
             ModerationAction,
         )
@@ -698,7 +695,7 @@ class RollbackModerationActionMutation(graphene.Mutation):
         ]
 
         # Determine the target for rollback and the conversation for permission check
-        target: Union[ChatMessage, Conversation, None]
+        target: ChatMessage | Conversation | None
         if target_attr == "message":
             target = original_action.message
             # For message actions, use message's conversation for permission check
