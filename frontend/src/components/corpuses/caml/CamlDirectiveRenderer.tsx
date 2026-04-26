@@ -26,6 +26,7 @@ import {
   DirectiveHandlerContext,
 } from "./directiveRegistry";
 import {
+  OC_COMPONENT_FENCE,
   resolveComponentMarker,
   type CamlComponentRegistry,
 } from "../../../utils/camlComponents";
@@ -187,6 +188,22 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
     componentRegistry,
   ]);
 
+  // Custom block dispatch for the project's `::: oc-component` fence used by
+  // the editor to embed components (e.g. extract grids). The fence wraps a
+  // plain `[component:TYPE ...]` marker, so we delegate to the same
+  // renderMarkdown path that handles inline markers.
+  const customBlocks = useMemo(
+    () => ({
+      [OC_COMPONENT_FENCE]: (block: unknown) => {
+        const body = (
+          (block as { body?: string } | undefined)?.body ?? ""
+        ).trim();
+        return renderMarkdown(body);
+      },
+    }),
+    [renderMarkdown]
+  );
+
   return (
     <CamlThemeProvider>
       <CamlArticle
@@ -194,6 +211,7 @@ export const CamlDirectiveRenderer: React.FC<CamlDirectiveRendererProps> = ({
         stats={stats}
         renderMarkdown={renderMarkdown}
         resolveImageSrc={resolveImageSrc}
+        customBlocks={customBlocks}
       />
     </CamlThemeProvider>
   );

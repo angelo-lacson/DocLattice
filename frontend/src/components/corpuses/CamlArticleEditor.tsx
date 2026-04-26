@@ -373,6 +373,11 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
   // Index of the keyboard-focused option within the extract picker dropdown.
   // `-1` means no option is focused (initial state when the dropdown opens).
   const [activeExtractIndex, setActiveExtractIndex] = useState<number>(-1);
+  // Mirror of `activeExtractIndex` in a ref so that the keyboard handler can
+  // read the latest value when consecutive keystrokes (e.g. ArrowDown then
+  // Enter) arrive faster than React schedules a re-render. Without this, the
+  // Enter handler would observe a stale closure value of `-1` and bail out.
+  const activeExtractIndexRef = useRef<number>(-1);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const extractPickerRef = useRef<HTMLDivElement>(null);
   const extractPickerTriggerRef = useRef<HTMLButtonElement>(null);
@@ -545,9 +550,11 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
   }, [showExtractPicker]);
 
   // Reset the keyboard-focused option whenever the picker closes so the next
-  // open starts in a clean state.
+  // open starts in a clean state. The ref mirror is reset alongside state so
+  // the next ArrowDown reads the fresh `-1` value synchronously.
   useEffect(() => {
     if (!showExtractPicker) {
+      activeExtractIndexRef.current = -1;
       setActiveExtractIndex(-1);
     }
   }, [showExtractPicker]);
@@ -600,43 +607,57 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
       if (!showExtractPicker) return;
       const count = corpusExtracts.length;
 
+      // Helper: update both state (drives render) and ref (drives next
+      // synchronous keystroke). The ref read in the Enter case below would
+      // otherwise observe a stale `-1` if Enter arrives in the same tick as
+      // a preceding ArrowDown.
+      const updateActiveIndex = (next: number) => {
+        activeExtractIndexRef.current = next;
+        setActiveExtractIndex(next);
+      };
+
       switch (event.key) {
         case "Escape":
           event.preventDefault();
           setShowExtractPicker(false);
           extractPickerTriggerRef.current?.focus();
           break;
-        case "ArrowDown":
+        case "ArrowDown": {
           if (count === 0) return;
           event.preventDefault();
-          setActiveExtractIndex((prev) => (prev + 1 >= count ? 0 : prev + 1));
+          const prev = activeExtractIndexRef.current;
+          updateActiveIndex(prev + 1 >= count ? 0 : prev + 1);
           break;
-        case "ArrowUp":
+        }
+        case "ArrowUp": {
           if (count === 0) return;
           event.preventDefault();
           // `prev <= 0` covers both `0` (first item → wrap to last) and `-1`
           // (no item focused → jump to last). This is intentional per WAI-ARIA
           // Authoring Practices for listbox keyboard interaction.
-          setActiveExtractIndex((prev) => (prev <= 0 ? count - 1 : prev - 1));
+          const prev = activeExtractIndexRef.current;
+          updateActiveIndex(prev <= 0 ? count - 1 : prev - 1);
           break;
+        }
         case "Home":
           if (count === 0) return;
           event.preventDefault();
-          setActiveExtractIndex(0);
+          updateActiveIndex(0);
           break;
         case "End":
           if (count === 0) return;
           event.preventDefault();
-          setActiveExtractIndex(count - 1);
+          updateActiveIndex(count - 1);
           break;
         case "Enter": {
           if (count === 0) return;
           // Only act when a menu option is focused — otherwise let the
           // default button behaviour on the trigger toggle the picker.
-          if (activeExtractIndex < 0 || activeExtractIndex >= count) return;
+          const current = activeExtractIndexRef.current;
+          if (current < 0 || current >= count) return;
           event.preventDefault();
           event.stopPropagation();
-          const selected = corpusExtracts[activeExtractIndex];
+          const selected = corpusExtracts[current];
           if (selected) {
             // handleInsertComponent already calls setShowExtractPicker(false)
             // internally, so the picker is closed as part of the insertion.
@@ -649,16 +670,14 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
           break;
       }
     },
-    [
-      showExtractPicker,
-      corpusExtracts,
-      activeExtractIndex,
-      handleInsertComponent,
-    ]
+    [showExtractPicker, corpusExtracts, handleInsertComponent]
   );
 
   // Markdown renderer with generic component marker interception
-  const renderMarkdownPreview = useCamlComponentRenderer(CAML_COMPONENTS);
+  const {
+    renderMarkdown: renderMarkdownPreview,
+    customBlocks: previewCustomBlocks,
+  } = useCamlComponentRenderer(CAML_COMPONENTS);
 
   const handleClose = () => {
     if (hasChanges) {
@@ -744,7 +763,10 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
                           key={ext.id}
                           $active={index === activeExtractIndex}
                           aria-selected={false}
-                          onMouseEnter={() => setActiveExtractIndex(index)}
+                          onMouseEnter={() => {
+                            activeExtractIndexRef.current = index;
+                            setActiveExtractIndex(index);
+                          }}
                           onClick={() =>
                             handleInsertComponent("extract-grid", {
                               extractId: ext.id,
@@ -778,6 +800,7 @@ export const CamlArticleEditor: React.FC<CamlArticleEditorProps> = ({
                 <CamlArticle
                   document={parsedDocument}
                   renderMarkdown={renderMarkdownPreview}
+                  customBlocks={previewCustomBlocks}
                 />
               </CamlThemeProvider>
             )}
