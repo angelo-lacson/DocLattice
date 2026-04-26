@@ -31,29 +31,27 @@ logger = logging.getLogger(__name__)
 def backfill_null_embedder_paths(apps, schema_editor):
     Embedding = apps.get_model("annotations", "Embedding")
 
-    default_embedder_path = getattr(settings, "DEFAULT_EMBEDDER", "") or ""
-    if not default_embedder_path:
-        logger.warning(
-            "settings.DEFAULT_EMBEDDER is empty; NULL embedder_path rows will "
-            "be deleted because no sensible backfill value is available."
-        )
-
     null_rows = Embedding.objects.filter(embedder_path__isnull=True)
     total = null_rows.count()
     if total == 0:
         logger.info("No Embedding rows with NULL embedder_path — nothing to backfill.")
         return
 
+    # Refuse to run if there's no default to backfill with — silently deleting
+    # embedding rows because of a misconfigured env var would be irreversible.
+    default_embedder_path = getattr(settings, "DEFAULT_EMBEDDER", "") or ""
+    if not default_embedder_path:
+        raise ValueError(
+            f"settings.DEFAULT_EMBEDDER is empty but {total} Embedding row(s) "
+            "have NULL embedder_path. Set DEFAULT_EMBEDDER (or manually clean "
+            "up the NULL rows) before running this migration."
+        )
+
     backfilled = 0
     deleted = 0
 
     # Use .iterator() to avoid loading the full set into memory on large tables.
     for emb in null_rows.iterator(chunk_size=500):
-        if not default_embedder_path:
-            emb.delete()
-            deleted += 1
-            continue
-
         emb.embedder_path = default_embedder_path
         try:
             with transaction.atomic():
