@@ -212,12 +212,12 @@ describe("buildComponentMarker()", () => {
 });
 
 describe("buildComponentProseFence()", () => {
-  it("wraps marker in a CAML prose block fence", () => {
+  it("wraps marker in the project's oc-component fence", () => {
     const result = buildComponentProseFence("extract-grid", {
       extractId: "abc",
     });
     expect(result).toBe(
-      "\n::: prose\n[component:extract-grid extractId=abc]\n:::\n"
+      "\n::: oc-component\n[component:extract-grid extractId=abc]\n:::\n"
     );
   });
 });
