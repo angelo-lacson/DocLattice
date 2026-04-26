@@ -538,3 +538,9 @@ export const DEFAULT_MODERATOR_INSTRUCTIONS = `You are a thread moderator for th
 3. Respond helpfully to user questions when appropriate
 
 You have access to thread context, messages, and moderation tools. Use them judiciously.`;
+
+// Default agent task instructions used when creating a document-processing
+// CorpusAction (rendered as the initial value when an add/edit document
+// trigger is selected).
+export const DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS =
+  "You are a document processing agent for this corpus.";
