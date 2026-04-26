@@ -470,10 +470,16 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
             // ASYNC path, it must be appended to `chat` directly or it will never render.
             // No setIsProcessing(false) is needed: ASYNC_START is the only setter for
             // isProcessing(true), and SYNC_CONTENT arrives without a preceding ASYNC_START.
+            //
+            // Capture the message id ONCE so the visible chat entry and the
+            // ChatSourceAtom record agree even if the server omits message_id
+            // (otherwise each `crypto.randomUUID()` call produces a different
+            // value, leaving citations unable to find their parent message).
+            const messageId = data?.message_id ?? crypto.randomUUID();
             setChat((prev) => [
               ...prev,
               {
-                messageId: data?.message_id ?? crypto.randomUUID(),
+                messageId,
                 user: "Assistant",
                 content,
                 timestamp: new Date().toLocaleString(),
@@ -493,7 +499,7 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
             handleCompleteMessage(
               content,
               sourcesToPass,
-              data?.message_id,
+              messageId,
               undefined,
               timelineToPass
             );
