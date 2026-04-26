@@ -171,12 +171,12 @@ class RemoveLabelsFromLabelsetMutationTestCase(TestCase):
         remaining = set(self.labelset.annotation_labels.values_list("pk", flat=True))
         self.assertEqual(remaining, {self.label_a.pk, self.label_b.pk, self.label_c.pk})
 
-    def test_remove_labels_allows_public_labelset(self) -> None:
-        """A public labelset is editable via this mutation by any authed user.
+    def test_remove_labels_rejects_non_owner_even_for_public_labelset(self) -> None:
+        """Public labelsets are read-only via this mutation for non-creators.
 
-        This pins the current resolver behaviour (``Q(creator=user) | Q(is_public=True)``)
-        so that future permission hardening is an intentional change rather than an
-        accidental regression.
+        ``is_public`` exposes a labelset for use, not for mutation. Only the
+        creator may remove labels from it; matches the creator-only lookup in
+        ``CreateLabelForLabelsetMutation``.
         """
 
         self.labelset.is_public = True
@@ -191,6 +191,9 @@ class RemoveLabelsFromLabelsetMutationTestCase(TestCase):
 
         self.assertIsNone(result.get("errors"))
         data = result["data"]["removeAnnotationLabelsFromLabelset"]
-        self.assertTrue(data["ok"])
+        self.assertFalse(data["ok"])
+        self.assertIn("Error removing label(s) from labelset", data["message"])
+
+        # Nothing should have changed
         remaining = set(self.labelset.annotation_labels.values_list("pk", flat=True))
-        self.assertEqual(remaining, {self.label_b.pk, self.label_c.pk})
+        self.assertEqual(remaining, {self.label_a.pk, self.label_b.pk, self.label_c.pk})

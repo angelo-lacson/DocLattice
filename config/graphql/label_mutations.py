@@ -8,7 +8,6 @@ import logging
 import graphene
 from django.conf import settings
 from django.core.files.base import ContentFile
-from django.db.models import Q
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id, to_global_id
 
@@ -290,8 +289,7 @@ class RemoveLabelsFromLabelsetMutation(graphene.Mutation):
                 map(lambda graphene_id: from_global_id(graphene_id)[1], label_ids)
             )
             labelset = LabelSet.objects.get(
-                Q(pk=from_global_id(labelset_id)[1])
-                & (Q(creator=user) | Q(is_public=True))
+                pk=from_global_id(labelset_id)[1], creator=user
             )
             labelset.annotation_labels.remove(*label_pks)
             ok = True
