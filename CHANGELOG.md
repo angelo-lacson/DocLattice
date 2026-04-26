@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`User.__init__` shared-state mutation re-introduced by branch merge** (`opencontractserver/users/models.py:172-180` removed): PR #1374 (commit `50ed6740`) deleted the `User.__init__` override that mutated `Field.validators[0]` on every instantiation, but a subsequent merge (`b68c1cb4 → 6d2cddbf`) resurrected the override along with its mypy-narrowing changes. The current main on commit `6d2cddbf` therefore reproduced the original `#1358` bug: `User(...)` rebound `username_field.validators[0]` and clobbered any third-party validator prepended to the list. Removed the `__init__` override entirely; the class-body declaration `validators=[UserUnicodeUsernameValidator()]` on the `username` field (still present from PR #1374) is the canonical and only declaration. Also dropped the now-unused `Field` import. Regression coverage from PR #1374 (`opencontractserver/tests/test_user_username_validator.py`) was already on main and is what surfaced the regression in CI.
+
 ### Security
 
 - **Cross-corpus structural-annotation leak in `CoreAnnotationVectorStore`** (`opencontractserver/llms/vector_stores/core_vector_stores.py:296-326,371-413`): The corpus-wide retrieval path (`corpus_id` set, `document_id=None`) returned every structural annotation in the database regardless of corpus. Two collaborating defects caused the leak:
