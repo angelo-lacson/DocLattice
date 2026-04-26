@@ -152,7 +152,6 @@ config/graphql/extract_queries.py:95: error: Argument 1 to "from_global_id" has 
 config/graphql/label_mutations.py:112: error: Need type annotation for "pk_fields" (hint: "pk_fields: list[<type>] = ...")  [var-annotated]
 config/graphql/label_mutations.py:127: error: Need type annotation for "pk_fields" (hint: "pk_fields: list[<type>] = ...")  [var-annotated]
 config/graphql/label_mutations.py:249: error: Argument 2 to "set_permissions_for_obj_to_user" has incompatible type "AnnotationLabel"; expected "type[Model]"  [arg-type]
-config/graphql/label_mutations.py:296: error: "LabelSet" has no attribute "documents"  [attr-defined]
 config/graphql/label_mutations.py:71: error: Argument 2 to "set_permissions_for_obj_to_user" has incompatible type "LabelSet"; expected "type[Model]"  [arg-type]
 config/graphql/permissioning/permission_annotator/middleware.py:20: error: Variable "config.graphql.permissioning.permission_annotator.middleware.User" is not valid as a type  [valid-type]
 config/graphql/permissioning/permission_annotator/middleware.py:20: note: See https://mypy.readthedocs.io/en/stable/common_issues.html#variables-vs-type-aliases
