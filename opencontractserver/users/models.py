@@ -1,15 +1,18 @@
 import logging
 import uuid
+from typing import Any, ClassVar, Optional
 
 import django
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import (
+    AbstractBaseUser,
     AbstractUser,
+    AnonymousUser,
     Group,
 )
 from django.contrib.auth.models import UserManager as DjangoUserManager
-from django.db.models import Q
+from django.db.models import Field, Q, QuerySet
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -31,7 +34,7 @@ from opencontractserver.users.validators import UserUnicodeUsernameValidator
 logger = logging.getLogger(__name__)
 
 
-class UserProfileManager(DjangoUserManager):
+class UserProfileManager(DjangoUserManager["User"]):
     """
     Custom manager for User model that implements visible_to_user pattern.
 
@@ -39,7 +42,9 @@ class UserProfileManager(DjangoUserManager):
     Epic: #572 - Social Features Epic
     """
 
-    def visible_to_user(self, user=None):
+    def visible_to_user(
+        self, user: Optional["AbstractBaseUser"] = None
+    ) -> QuerySet["User"]:
         """
         Returns queryset filtered to users whose profiles are visible to the requesting user.
 
@@ -54,8 +59,6 @@ class UserProfileManager(DjangoUserManager):
         Returns:
             QuerySet of User objects visible to the requesting user
         """
-        from django.contrib.auth.models import AnonymousUser
-
         # Handle None user as anonymous
         if user is None or isinstance(user, AnonymousUser):
             # Anonymous users can only see public profiles
@@ -64,7 +67,7 @@ class UserProfileManager(DjangoUserManager):
         # Authenticated users can see:
         # 1. Their own profile (even if private)
         # 2. All public profiles
-        return self.filter(Q(id=user.id) | Q(is_profile_public=True), is_active=True)
+        return self.filter(Q(id=user.pk) | Q(is_profile_public=True), is_active=True)
 
 
 class User(AbstractUser):
@@ -161,12 +164,22 @@ class User(AbstractUser):
     )
 
     # Custom manager for profile visibility
-    objects = UserProfileManager()
+    objects: ClassVar[UserProfileManager] = UserProfileManager()
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.username}: {self.email}"
 
-    def get_absolute_url(self):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        username_field = self._meta.get_field("username")
+        # ``get_field`` is typed as ``Field | ForeignObjectRel``; the
+        # username field is always a plain ``Field``, but narrow here so
+        # mypy can see ``.validators`` without a cast.
+        if isinstance(username_field, Field):
+            username_field.validators[0] = UserUnicodeUsernameValidator()
+
+        super().__init__(*args, **kwargs)
+
+    def get_absolute_url(self) -> str:
         """Get url for user's detail view.
 
         Returns:
@@ -175,7 +188,7 @@ class User(AbstractUser):
         """
         return reverse("users:detail", kwargs={"username": self.username})
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         # Avoid referencing the slug column before it exists in initial migrations
         slug_column_exists = table_has_column(self._meta.db_table, "slug")
 
@@ -287,7 +300,7 @@ class Assignment(django.db.models.Model):
         )
 
     # Override save to update modified on save
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """On save, update timestamps"""
         if not self.pk:
             self.created = timezone.now()
@@ -313,7 +326,7 @@ class AssignmentGroupObjectPermission(GroupObjectPermissionBase):
 
 
 # Can't use lambdas in migrations, sadly, so need to wrap underlying function
-def calculate_export_filename(instance, filename):
+def calculate_export_filename(instance: "UserExport", filename: str) -> str:
     return calc_oc_file_path(
         instance, filename, f"user_{instance.creator.id}/exports/{filename}"
     )
@@ -373,7 +386,7 @@ class UserExport(BaseOCModel):
         )
 
     # Override save to update modified on save
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """On save, update timestamps"""
         if not self.pk:
             self.created = timezone.now()
@@ -398,7 +411,7 @@ class UserExportGroupObjectPermission(GroupObjectPermissionBase):
 
 
 # Can't use lambda functions so need a wrapper
-def calculate_import_filename(instance, filename):
+def calculate_import_filename(instance: "UserImport", filename: str) -> str:
     return calc_oc_file_path(
         instance, filename, f"user_{instance.creator.id}/imports/{filename}"
     )
@@ -433,7 +446,7 @@ class UserImport(BaseOCModel):
         )
 
     # Override save to update modified on save
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """On save, update timestamps"""
         if not self.pk:
             self.created = timezone.now()
@@ -468,7 +481,7 @@ class Installation(django.db.models.Model):
         verbose_name = "Installation"
         verbose_name_plural = "Installation"
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """Ensure only one instance exists"""
         if Installation.objects.exists() and not self.pk:
             raise ValueError("Cannot create multiple Installation instances")
