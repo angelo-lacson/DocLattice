@@ -468,6 +468,8 @@ export const CorpusChat: React.FC<CorpusChatProps> = ({
           case "SYNC_CONTENT": {
             // SYNC_CONTENT is a standalone (non-streaming) assistant reply — unlike the
             // ASYNC path, it must be appended to `chat` directly or it will never render.
+            // No setIsProcessing(false) is needed: ASYNC_START is the only setter for
+            // isProcessing(true), and SYNC_CONTENT arrives without a preceding ASYNC_START.
             setChat((prev) => [
               ...prev,
               {

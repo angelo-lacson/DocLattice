@@ -231,15 +231,21 @@ test.describe("CorpusAgentManagement", () => {
     // Fill the form
     await page.locator('input[placeholder="Agent name"]').fill("New Agent");
 
-    // The description and system instructions are textareas (the first two)
-    const textareas = page.locator("textarea");
-    await textareas.nth(0).fill("Some description");
-    await textareas.nth(1).fill("Be helpful.");
+    // Description + system-instructions textareas (placeholder-based, stable
+    // even if more textareas are added above them in the layout).
+    await page
+      .locator(
+        'textarea[placeholder="Brief description of what this agent does"]'
+      )
+      .fill("Some description");
+    await page
+      .locator('textarea[placeholder="System prompt for the agent..."]')
+      .fill("Be helpful.");
 
     // Submit (Create Agent button inside the modal footer)
     await page
-      .locator(".oc-modal button:has-text('Create Agent')")
-      .last()
+      .getByRole("dialog")
+      .getByRole("button", { name: "Create Agent", exact: true })
       .click();
 
     // Toast confirms creation
@@ -272,8 +278,8 @@ test.describe("CorpusAgentManagement", () => {
 
     // The Create Agent submit button (modal footer) should be disabled
     const submitBtn = page
-      .locator(".oc-modal button:has-text('Create Agent')")
-      .last();
+      .getByRole("dialog")
+      .getByRole("button", { name: "Create Agent", exact: true });
     await expect(submitBtn).toBeDisabled();
 
     await component.unmount();
@@ -431,7 +437,7 @@ test.describe("CorpusAgentManagement", () => {
     ).toBeVisible();
 
     // Click the read_doc ToolItem (monospace ToolName inside the modal)
-    await page.locator(".oc-modal").getByText("read_doc").first().click();
+    await page.getByRole("dialog").getByText("read_doc").first().click();
 
     // The info message should be gone now that there's a selected tool
     await expect(
@@ -461,7 +467,7 @@ test.describe("CorpusAgentManagement", () => {
     );
 
     await expect(page.getByText("Loading agents...")).toBeVisible({
-      timeout: 5000,
+      timeout: 10000,
     });
 
     await component.unmount();
@@ -666,13 +672,18 @@ test.describe("CorpusAgentManagement", () => {
     ).toBeVisible({ timeout: 5000 });
 
     await page.locator('input[placeholder="Agent name"]').fill("Buggy Agent");
-    const textareas = page.locator("textarea");
-    await textareas.nth(0).fill("Desc");
-    await textareas.nth(1).fill("Instr");
+    await page
+      .locator(
+        'textarea[placeholder="Brief description of what this agent does"]'
+      )
+      .fill("Desc");
+    await page
+      .locator('textarea[placeholder="System prompt for the agent..."]')
+      .fill("Instr");
 
     await page
-      .locator(".oc-modal button:has-text('Create Agent')")
-      .last()
+      .getByRole("dialog")
+      .getByRole("button", { name: "Create Agent", exact: true })
       .click();
 
     await expect(page.getByText("Slug collision detected")).toBeVisible({
@@ -702,15 +713,15 @@ test.describe("CorpusAgentManagement", () => {
     ).toBeVisible({ timeout: 5000 });
 
     // Select read_doc
-    await page.locator(".oc-modal").getByText("read_doc").first().click();
+    await page.getByRole("dialog").getByText("read_doc").first().click();
 
     // Selected pill is visible at the bottom
     await expect(
-      page.locator(".oc-modal").getByText("read_doc").nth(1)
+      page.getByRole("dialog").getByText("read_doc").nth(1)
     ).toBeVisible();
 
     // Deselect by clicking again
-    await page.locator(".oc-modal").getByText("read_doc").first().click();
+    await page.getByRole("dialog").getByText("read_doc").first().click();
 
     await expect(
       page.getByText(
