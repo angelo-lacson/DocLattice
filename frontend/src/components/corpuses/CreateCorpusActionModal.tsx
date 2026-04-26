@@ -20,7 +20,10 @@ import { StyledTextArea } from "../widgets/modals/styled";
 import { toast } from "react-toastify";
 import _ from "lodash";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
-import { DEFAULT_MODERATOR_INSTRUCTIONS } from "../../assets/configurations/constants";
+import {
+  DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS,
+  DEFAULT_MODERATOR_INSTRUCTIONS,
+} from "../../assets/configurations/constants";
 import { InlineBadge } from "../agents/AgentBadges";
 import { FormField } from "../widgets/form/FormField";
 
@@ -71,9 +74,6 @@ const DEFAULT_MODERATION_TOOLS = [
   { name: "pin_thread", description: "Pin thread to top of list" },
   { name: "unpin_thread", description: "Unpin a pinned thread" },
 ] as const;
-
-const DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS =
-  "You are a document processing agent for this corpus.";
 
 /**
  * Shape of an existing corpus action for editing
