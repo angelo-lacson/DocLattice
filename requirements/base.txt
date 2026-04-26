@@ -48,7 +48,7 @@ pdf2image>=1.16.0
 tiktoken==0.12.0  # https://github.com/openai/tiktoken
 openai>=2.11.0,<3  # https://github.com/openai/openai-python (pydantic-ai 1.x requires >=2.11.0)
 pytesseract
-pydantic-ai>=1.56.0,<2
+pydantic-ai>=1.87.0,<2
 spacy
 pdfplumber>=0.10.0  # https://github.com/jsvine/pdfplumber - PDF token extraction
 shapely>=2.1.2  # https://github.com/shapely/shapely - spatial operations for bbox intersection
