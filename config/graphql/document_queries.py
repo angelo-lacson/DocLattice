@@ -5,7 +5,7 @@ GraphQL query mixin for document and document-relationship queries.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 import graphene
 from django.conf import settings
@@ -61,7 +61,7 @@ class DocumentQueryMixin:
 
     def resolve_document(
         self, info: graphene.ResolveInfo, **kwargs: Any
-    ) -> Optional[Document]:
+    ) -> Document | None:
         document_id = kwargs.get("id")
         if not document_id:
             return None
@@ -331,7 +331,7 @@ class DocumentQueryMixin:
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
     def resolve_ingestion_source(
         self, info: graphene.ResolveInfo, id: str, **kwargs: Any
-    ) -> Optional[IngestionSource]:
+    ) -> IngestionSource | None:
         try:
             type_name, pk = from_global_id(id)
             if not pk or type_name != INGESTION_SOURCE_GLOBAL_ID_TYPE:
