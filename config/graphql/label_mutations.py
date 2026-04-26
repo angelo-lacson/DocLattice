@@ -240,7 +240,7 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
                 include_group_permissions=True,
             ):
                 # Generic deny path — same message and code path as not-found
-                raise LabelSet.DoesNotExist
+                raise LabelSet.DoesNotExist()
             logger.debug("CreateLabelForLabelsetMutation - mutate / Labelset", labelset)
             obj = AnnotationLabel.objects.create(
                 text=text,
@@ -305,7 +305,7 @@ class RemoveLabelsFromLabelsetMutation(graphene.Mutation):
                 include_group_permissions=True,
             ):
                 # Generic deny path — same message and code path as not-found
-                raise LabelSet.DoesNotExist
+                raise LabelSet.DoesNotExist()
             labelset.annotation_labels.remove(*label_pks)
             ok = True
             message = "Success"
