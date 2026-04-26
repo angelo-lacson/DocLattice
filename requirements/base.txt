@@ -77,7 +77,7 @@ jsonschema==4.26.0
 
 # Model Context Protocol
 # ------------------------------------------------------------------------------
-mcp>=1.0.0  # https://github.com/anthropics/python-sdk
+mcp>=1.27.0  # https://github.com/anthropics/python-sdk
 
 # Not directly required, pinned by Snyk to avoid a vulnerability
 # ------------------------------------------------------------------------------
