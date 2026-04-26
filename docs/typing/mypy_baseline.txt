@@ -1,15 +1,3 @@
-config/admin_auth/backends.py:30: error: Signature of "authenticate" incompatible with supertype "django.contrib.auth.backends.ModelBackend"  [override]
-config/admin_auth/backends.py:30: note:          def authenticate(self, request: Any, auth0_user_id: Any = ..., **kwargs: Any) -> Any
-config/admin_auth/backends.py:30: note:          def authenticate(self, request: HttpRequest | None, username: str | None = ..., password: str | None = ..., **kwargs: Any) -> User | None
-config/admin_auth/backends.py:30: note:      Subclass:
-config/admin_auth/backends.py:30: note:      Superclass:
-config/admin_auth/views.py:262: error: User? has no attribute "is_active"  [attr-defined]
-config/admin_auth/views.py:269: error: User? has no attribute "username"  [attr-defined]
-config/admin_auth/views.py:274: error: User? has no attribute "refresh_from_db"  [attr-defined]
-config/admin_auth/views.py:276: error: User? has no attribute "is_active"  [attr-defined]
-config/admin_auth/views.py:276: error: User? has no attribute "is_staff"  [attr-defined]
-config/admin_auth/views.py:285: error: User? has no attribute "id"  [attr-defined]
-config/admin_auth/views.py:290: error: User? has no attribute "id"  [attr-defined]
 config/graphql/annotation_mutations.py:142: error: Argument 2 to "set_permissions_for_obj_to_user" has incompatible type "UserFeedback"; expected "type[Model]"  [arg-type]
 config/graphql/annotation_mutations.py:205: error: Argument 2 to "set_permissions_for_obj_to_user" has incompatible type "UserFeedback"; expected "type[Model]"  [arg-type]
 config/graphql/annotation_mutations.py:276: error: Argument 2 to "set_permissions_for_obj_to_user" has incompatible type "Annotation"; expected "type[Model]"  [arg-type]
@@ -184,7 +172,6 @@ config/graphql/social_queries.py:693: error: Incompatible type for lookup 'conve
 config/graphql/social_queries.py:715: error: "QuerySet[Conversation, Conversation]" has no attribute "visible_to_user"  [attr-defined]
 config/graphql/social_queries.py:96: error: Argument 1 to "from_global_id" has incompatible type "Any | None"; expected "str"  [arg-type]
 config/graphql/social_queries.py:99: error: Argument 2 to "check_user_badge_visibility" of "BadgeQueryOptimizer" has incompatible type "str"; expected "int"  [arg-type]
-config/graphql_api_token_auth/backends.py:90: error: "ApiKeyBackend" has no attribute "keyword"  [attr-defined]
 config/graphql_auth0_auth/utils.py:114: error: Argument 2 has incompatible type "RSAPrivateKey | RSAPublicKey"; expected "RSAPublicKey | EllipticCurvePublicKey | Ed25519PublicKey | Ed448PublicKey | str | bytes"  [arg-type]
 config/graphql_auth0_auth/utils.py:8: error: Library stubs not installed for "requests"  [import-untyped]
 config/jwt_utils.py:27: error: Variable "config.jwt_utils.User" is not valid as a type  [valid-type]
@@ -7026,13 +7013,6 @@ opencontractserver/tests/websocket/test_unified_agent_consumer.py:751: error: Ca
 opencontractserver/tests/websocket/test_unified_agent_consumer.py:752: error: Cannot assign to a method  [method-assign]
 opencontractserver/tests/websocket/test_unified_agent_consumer.py:785: error: Cannot assign to a method  [method-assign]
 opencontractserver/tests/websocket/test_unified_agent_consumer.py:790: error: Cannot assign to a method  [method-assign]
-opencontractserver/users/models.py:145: error: Cannot override class variable (previously declared on base class "AbstractUser") with instance variable  [misc]
-opencontractserver/users/models.py:151: error: Item "ForeignObjectRel" of "Field[Any, Any] | ForeignObjectRel" has no attribute "validators"  [union-attr]
-opencontractserver/users/models.py:70: error: Couldn't resolve related manager 'corpus_set' for relation 'opencontractserver.corpuses.models.Corpus.creator'.  [django-manager-missing]
-opencontractserver/users/models.py:70: error: Couldn't resolve related manager 'corpusfolder_set' for relation 'opencontractserver.corpuses.models.CorpusFolder.creator'.  [django-manager-missing]
-opencontractserver/users/models.py:70: error: Couldn't resolve related manager 'documentpath_set' for relation 'opencontractserver.documents.models.DocumentPath.creator'.  [django-manager-missing]
-opencontractserver/users/models.py:70: error: Couldn't resolve related manager 'editing_corpuses' for relation 'opencontractserver.corpuses.models.Corpus.user_lock'.  [django-manager-missing]
-opencontractserver/users/models.py:70: error: Couldn't resolve related manager 'locked_documentpath_objects' for relation 'opencontractserver.documents.models.DocumentPath.user_lock'.  [django-manager-missing]
 opencontractserver/users/tasks.py:5: error: Library stubs not installed for "requests"  [import-untyped]
 opencontractserver/utils/analysis.py:44: error: Argument 2 to "set_permissions_for_obj_to_user" has incompatible type "Analysis"; expected "type[Model]"  [arg-type]
 opencontractserver/utils/analyzer.py:134: error: Argument 2 to "set_permissions_for_obj_to_user" has incompatible type "AnnotationLabel"; expected "type[Model]"  [arg-type]
