@@ -1025,3 +1025,188 @@ class TestCalculateEmbeddingsForAnnotationBatch(unittest.TestCase):
         self.assertEqual(result["total"], 1)
         self.assertEqual(result["failed"], 1)
         self.assertIn("Embedder crashed", result["errors"][0])
+
+
+class TestOpenAIEmbedderBatch(unittest.TestCase):
+    """Test OpenAIEmbedder.embed_texts_batch native override.
+
+    The override calls OpenAI's /v1/embeddings endpoint with an array
+    ``input`` so a batch of N texts costs ⌈N/batch_size⌉ HTTP calls
+    rather than the BaseEmbedder fallback's N serial round-trips.
+    """
+
+    def _make_embedder(self, model="text-embedding-3-small", dimensions=1536):
+        from opencontractserver.pipeline.embedders.openai_embedder import (
+            OpenAIEmbedder,
+        )
+
+        embedder = OpenAIEmbedder()
+        embedder._settings = OpenAIEmbedder.Settings(
+            openai_api_key="test-key",
+            openai_embedding_model=model,
+            openai_embedding_dimensions=dimensions,
+            openai_api_base_url="",
+        )
+        return embedder
+
+    def _mock_client(self, return_data):
+        """Build a mock openai.OpenAI client that returns ``return_data``."""
+        client = MagicMock()
+        response = MagicMock()
+        response.data = return_data
+        client.embeddings.create.return_value = response
+        return client
+
+    def _datum(self, vec, idx=0):
+        d = MagicMock()
+        d.embedding = vec
+        d.index = idx
+        return d
+
+    def test_empty_list_returns_empty(self):
+        embedder = self._make_embedder()
+        self.assertEqual(embedder.embed_texts_batch([]), [])
+
+    def test_single_http_call_per_batch(self):
+        embedder = self._make_embedder()
+        vec1 = [0.1] * 1536
+        vec2 = [0.2] * 1536
+        client = self._mock_client([self._datum(vec1, 0), self._datum(vec2, 1)])
+        with patch.object(embedder, "_build_client", return_value=client):
+            result = embedder.embed_texts_batch(["hello", "world"])
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], vec1)
+        self.assertEqual(result[1], vec2)
+        client.embeddings.create.assert_called_once()
+        call_kwargs = client.embeddings.create.call_args.kwargs
+        self.assertEqual(call_kwargs["input"], ["hello", "world"])
+        self.assertEqual(call_kwargs["model"], "text-embedding-3-small")
+        self.assertEqual(call_kwargs["dimensions"], 1536)
+
+    def test_dimensions_omitted_for_ada_002(self):
+        embedder = self._make_embedder(model="text-embedding-ada-002")
+        client = self._mock_client([self._datum([0.1] * 1536, 0)])
+        with patch.object(embedder, "_build_client", return_value=client):
+            embedder.embed_texts_batch(["hello"])
+
+        call_kwargs = client.embeddings.create.call_args.kwargs
+        self.assertNotIn("dimensions", call_kwargs)
+        self.assertEqual(call_kwargs["model"], "text-embedding-ada-002")
+
+    def test_dimensions_passed_for_3_large(self):
+        embedder = self._make_embedder(model="text-embedding-3-large", dimensions=3072)
+        client = self._mock_client([self._datum([0.1] * 3072, 0)])
+        with patch.object(embedder, "_build_client", return_value=client):
+            embedder.embed_texts_batch(["hello"])
+
+        call_kwargs = client.embeddings.create.call_args.kwargs
+        self.assertEqual(call_kwargs["dimensions"], 3072)
+
+    def test_empty_inputs_filtered_and_rethreaded_as_none(self):
+        """Empty/whitespace texts must be filtered from the wire request
+        but appear as None at their original positions in the result.
+
+        The OpenAI API rejects empty strings, so we cannot send them.
+        Critical that we re-thread the gaps so caller indexing matches.
+        """
+        embedder = self._make_embedder()
+        # Inputs: index 0 = valid, 1 = empty, 2 = whitespace, 3 = valid
+        v0 = [0.1] * 1536
+        v3 = [0.3] * 1536
+        client = self._mock_client([self._datum(v0, 0), self._datum(v3, 1)])
+        with patch.object(embedder, "_build_client", return_value=client):
+            result = embedder.embed_texts_batch(["hello", "", "   ", "world"])
+
+        self.assertEqual(len(result), 4)
+        self.assertEqual(result[0], v0)
+        self.assertIsNone(result[1])
+        self.assertIsNone(result[2])
+        self.assertEqual(result[3], v3)
+        # Wire request should only contain the two non-empty texts.
+        call_kwargs = client.embeddings.create.call_args.kwargs
+        self.assertEqual(call_kwargs["input"], ["hello", "world"])
+
+    def test_all_empty_inputs_skip_wire_call(self):
+        """All-empty input must skip the API call entirely."""
+        embedder = self._make_embedder()
+        client = self._mock_client([])
+        with patch.object(embedder, "_build_client", return_value=client):
+            result = embedder.embed_texts_batch(["", "  ", "\t"])
+
+        self.assertEqual(result, [None, None, None])
+        client.embeddings.create.assert_not_called()
+
+    def test_count_mismatch_fails_whole_batch(self):
+        """Defensive guard: refuse to silently realign on a count mismatch."""
+        embedder = self._make_embedder()
+        # Send 3 inputs but mock returns 2 — must yield None, not partial.
+        client = self._mock_client(
+            [self._datum([0.1] * 1536, 0), self._datum([0.2] * 1536, 1)]
+        )
+        with patch.object(embedder, "_build_client", return_value=client):
+            result = embedder.embed_texts_batch(["a", "b", "c"])
+
+        self.assertIsNone(result)
+
+    def test_authentication_error_returns_none(self):
+        import openai
+
+        embedder = self._make_embedder()
+        client = MagicMock()
+        client.embeddings.create.side_effect = openai.AuthenticationError(
+            message="bad key",
+            response=MagicMock(status_code=401),
+            body=None,
+        )
+        with patch.object(embedder, "_build_client", return_value=client):
+            result = embedder.embed_texts_batch(["hello"])
+
+        self.assertIsNone(result)
+
+    def test_rate_limit_error_returns_none(self):
+        import openai
+
+        embedder = self._make_embedder()
+        client = MagicMock()
+        client.embeddings.create.side_effect = openai.RateLimitError(
+            message="slow down",
+            response=MagicMock(status_code=429),
+            body=None,
+        )
+        with patch.object(embedder, "_build_client", return_value=client):
+            result = embedder.embed_texts_batch(["hello"])
+
+        self.assertIsNone(result)
+
+    def test_bad_request_returns_none(self):
+        import openai
+
+        embedder = self._make_embedder()
+        client = MagicMock()
+        client.embeddings.create.side_effect = openai.BadRequestError(
+            message="bad input",
+            response=MagicMock(status_code=400),
+            body=None,
+        )
+        with patch.object(embedder, "_build_client", return_value=client):
+            result = embedder.embed_texts_batch(["hello"])
+
+        self.assertIsNone(result)
+
+    def test_long_input_truncated_to_8k_token_budget(self):
+        """Inputs over ~30K chars are truncated to stay under 8192 tokens.
+
+        Mirrors the per-text path's char-side truncation; the API would
+        otherwise return a 400 'maximum context length' for a single
+        oversized input and tank the whole batch.
+        """
+        embedder = self._make_embedder()
+        long_text = "x" * 50000
+        client = self._mock_client([self._datum([0.1] * 1536, 0)])
+        with patch.object(embedder, "_build_client", return_value=client):
+            embedder.embed_texts_batch([long_text])
+
+        call_kwargs = client.embeddings.create.call_args.kwargs
+        self.assertEqual(len(call_kwargs["input"][0]), 30000)
