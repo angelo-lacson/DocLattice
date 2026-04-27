@@ -100,7 +100,27 @@ def import_annotations(
 
     old_id_to_new_pk: dict[str | int, int] = {}
 
-    # First pass: Create annotations without parents
+    # First pass: Build all Annotation instances in memory then bulk-create.
+    #
+    # Why bulk_create rather than per-row .create:
+    #   * Per-row .create fires the Annotation post_save signal, which
+    #     dispatches one ``calculate_embedding_for_annotation_text`` celery
+    #     task per annotation. Under ``force_celery_eager()`` (benchmark
+    #     harness, tests) and with a single-worker celery deployment, that
+    #     means one synchronous embedding HTTP round-trip per annotation —
+    #     ~400ms each times thousands of paragraph chunks per cuad-style
+    #     contract is the dominant bottleneck.
+    #   * bulk_create skips signals, so we explicitly dispatch one
+    #     ``calculate_embeddings_for_annotation_batch`` task at the end,
+    #     covering every newly-created annotation in a single call. The
+    #     batch task internally sub-batches via ``EMBEDDING_API_BATCH_SIZE``
+    #     and (for OpenAI) hits the embeddings endpoint with array input
+    #     so ⌈N/batch_size⌉ HTTP calls cover N annotations.
+    #   * The badges signal (also post_save) is also skipped here; an
+    #     ingest-time badge tick per annotation is not load-bearing
+    #     anywhere — corpus-level badge checks fire from other paths.
+    instances: list[Annotation] = []
+    parallel_old_ids: list[str | int | None] = []
     for annotation_data in annotations_data:
         label_name: str = annotation_data["annotationLabel"]
         label_obj = label_lookup.get(label_name)
@@ -114,25 +134,46 @@ def import_annotations(
         # if the field is missing or explicitly None
         final_annotation_type = annotation_data.get("annotation_type") or label_type
 
-        annot_obj = Annotation.objects.create(
-            raw_text=annotation_data["rawText"],
-            long_description=annotation_data.get("long_description"),
-            page=annotation_data.get("page", 1),
-            json=annotation_data["annotation_json"],
-            annotation_label=label_obj,
-            document=doc_obj,
-            corpus=corpus_obj,
-            creator_id=user_id,
-            annotation_type=final_annotation_type,
-            structural=annotation_data.get("structural", False),
-            content_modalities=annotation_data.get("content_modalities", []),
+        instances.append(
+            Annotation(
+                raw_text=annotation_data["rawText"],
+                long_description=annotation_data.get("long_description"),
+                page=annotation_data.get("page", 1),
+                json=annotation_data["annotation_json"],
+                annotation_label=label_obj,
+                document=doc_obj,
+                corpus=corpus_obj,
+                creator_id=user_id,
+                annotation_type=final_annotation_type,
+                structural=annotation_data.get("structural", False),
+                content_modalities=annotation_data.get("content_modalities", []),
+            )
+        )
+        parallel_old_ids.append(annotation_data.get("id"))
+
+    if instances:
+        Annotation.objects.bulk_create(instances)
+        for instance, old_id in zip(instances, parallel_old_ids):
+            set_permissions_for_obj_to_user(
+                user_id, instance, [PermissionTypes.ALL]
+            )
+            if old_id is not None:
+                old_id_to_new_pk[old_id] = instance.pk
+
+        # Dispatch ONE batch embedding task covering every annotation we
+        # just created. The task is the existing
+        # ``calculate_embeddings_for_annotation_batch`` which knows how to
+        # sub-batch via the embedder's batch endpoint.
+        from opencontractserver.tasks.embeddings_task import (
+            calculate_embeddings_for_annotation_batch,
         )
 
-        set_permissions_for_obj_to_user(user_id, annot_obj, [PermissionTypes.ALL])
-
-        old_id = annotation_data.get("id")
-        if old_id is not None:
-            old_id_to_new_pk[old_id] = annot_obj.pk
+        annotation_ids = [a.pk for a in instances]
+        corpus_id_for_batch = corpus_obj.id if corpus_obj is not None else None
+        calculate_embeddings_for_annotation_batch.delay(
+            annotation_ids=annotation_ids,
+            corpus_id=corpus_id_for_batch,
+        )
 
     # Second pass: Set parent relationships
     for annotation_data in annotations_data:
