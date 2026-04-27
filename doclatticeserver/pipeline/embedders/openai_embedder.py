@@ -42,6 +42,30 @@ class OpenAIEmbedder(BaseEmbedder):
         FileTypeEnum.DOCX,
     ]
 
+    # OpenAI's /v1/embeddings endpoint accepts up to 2048 inputs and
+    # ~8M tokens per request. 256 inputs at the typical paragraph chunk
+    # size (~1500 chars ≈ ~375 tokens) lands at ~96K tokens per call —
+    # well under the per-request token cap and far enough from the input
+    # cap that we can keep using fixed-count batching. Raising this
+    # collapses HTTP-call count by 5x relative to the historical 50.
+    api_batch_size = 256
+
+    # OpenAI's hosted endpoint comfortably handles a handful of
+    # parallel embedding calls per process; 4 in-flight sub-batches
+    # produce a near-3x wall-clock reduction on a typical ingest while
+    # still staying inside Tier-1 RPM (3000/min) for any realistic
+    # corpus size. ``ThreadPoolExecutor`` in
+    # ``calculate_embeddings_for_annotation_batch`` honours this.
+    embed_max_concurrent_sub_batches = 4
+
+    # Number of retries the OpenAI SDK performs on transient errors
+    # (429, 5xx) before surfacing the exception. The SDK honours the
+    # ``Retry-After`` header on 429, so this primarily controls how
+    # patient we are before bubbling up to celery's own autoretry. 8
+    # retries with exponential backoff covers ~minute-long rate-limit
+    # windows without user-visible failure.
+    OPENAI_CLIENT_MAX_RETRIES = 8
+
     @property
     def vector_size(self) -> int:
         """Derive vector size from effective settings so it reflects runtime config."""
@@ -117,13 +141,24 @@ class OpenAIEmbedder(BaseEmbedder):
         return self.settings if self.settings is not None else self.Settings()
 
     def _build_client(self, **all_kwargs) -> openai.OpenAI:
-        """Build an OpenAI client from settings and runtime overrides."""
+        """Build an OpenAI client from settings and runtime overrides.
+
+        Uses ``max_retries=OPENAI_CLIENT_MAX_RETRIES`` so the SDK rides
+        out brief 429/5xx blips with exponential backoff (it honours the
+        ``Retry-After`` header on 429). Anything that escapes the SDK's
+        retry budget propagates to ``embed_texts_batch`` / ``_embed_text_impl``
+        which decide whether to surface for celery retry.
+        """
         s = self._effective_settings
 
         api_key = all_kwargs.get("openai_api_key", s.openai_api_key)
         base_url = all_kwargs.get("openai_api_base_url", s.openai_api_base_url) or None
 
-        return openai.OpenAI(api_key=api_key, base_url=base_url)
+        return openai.OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            max_retries=self.OPENAI_CLIENT_MAX_RETRIES,
+        )
 
     def _embed_text_impl(self, text: str, **all_kwargs) -> Optional[list[float]]:
         """
@@ -191,11 +226,24 @@ class OpenAIEmbedder(BaseEmbedder):
         except openai.AuthenticationError:
             logger.error("OpenAI API authentication failed. Check your API key.")
             return None
-        except openai.RateLimitError:
-            logger.error("OpenAI API rate limit exceeded.")
-            return None
         except openai.BadRequestError as e:
             logger.error(f"OpenAI API bad request: {e}")
+            return None
+        except (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError):
+            # Transient: re-raise so callers can retry. See the matching
+            # block in ``embed_texts_batch`` for the rationale.
+            logger.warning(
+                "OpenAI transient error after SDK retries; re-raising for celery retry"
+            )
+            raise
+        except openai.APIStatusError as e:
+            if 500 <= e.status_code < 600:
+                logger.warning(
+                    "OpenAI 5xx after SDK retries (status=%s); re-raising for celery retry",
+                    e.status_code,
+                )
+                raise
+            logger.error(f"OpenAI API error (status={e.status_code}): {e}")
             return None
         except Exception as e:
             logger.error(
@@ -287,13 +335,36 @@ class OpenAIEmbedder(BaseEmbedder):
                 out[orig_idx] = list(datum.embedding)
             return out
         except openai.AuthenticationError:
+            # Permanent: a wrong API key won't fix itself with retry.
             logger.error("OpenAI API authentication failed (batch). Check your API key.")
             return None
-        except openai.RateLimitError:
-            logger.error("OpenAI API rate limit exceeded (batch).")
-            return None
         except openai.BadRequestError as e:
+            # Permanent: malformed input (oversize, bad dimensions, etc.).
+            # Returning None prevents celery from burning retries on
+            # something that will fail every time.
             logger.error("OpenAI API bad request (batch): %s", e)
+            return None
+        except (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError):
+            # Transient: re-raise so the celery task's autoretry_for=(Exception,)
+            # can take over with proper backoff. The OpenAI SDK already
+            # absorbed up to OPENAI_CLIENT_MAX_RETRIES of these
+            # internally with Retry-After-honouring exponential backoff;
+            # if we still saw it, the rate-limit window is wider than
+            # the SDK budget and we want celery to wait.
+            logger.warning(
+                "OpenAI transient error after SDK retries (batch); re-raising for celery retry"
+            )
+            raise
+        except openai.APIStatusError as e:
+            # 5xx surfaces as APIStatusError after SDK retries exhaust;
+            # treat the same as the generic transient bucket above.
+            if 500 <= e.status_code < 600:
+                logger.warning(
+                    "OpenAI 5xx after SDK retries (batch, status=%s); re-raising for celery retry",
+                    e.status_code,
+                )
+                raise
+            logger.error("OpenAI API error (batch, status=%s): %s", e.status_code, e)
             return None
         except Exception as e:
             logger.error("OpenAIEmbedder batch failed: %s", e)
