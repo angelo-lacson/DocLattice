@@ -26,11 +26,15 @@ DEFAULT_DOCUMENT_PATH_PREFIX = "/documents"
 # Controls how many annotations are processed per Celery task to prevent queue flooding
 EMBEDDING_BATCH_SIZE = 100
 
-# Maximum number of texts to send in a single embedder API batch request.
-# This is the sub-batch size used *within* a Celery task when calling
-# embedder.embed_texts_batch(). Kept separate from EMBEDDING_BATCH_SIZE
-# (task-level grouping) because API limits may differ from task sizing.
-# Must be <= MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE (currently 100).
+# Default sub-batch size used *within* a Celery task when calling
+# ``embedder.embed_texts_batch()``. Kept separate from
+# ``EMBEDDING_BATCH_SIZE`` (task-level grouping) because API limits may
+# differ from task sizing. This is a global *fallback* — concrete
+# embedders should override ``BaseEmbedder.api_batch_size`` with a value
+# appropriate for their provider (OpenAI accepts up to 2048 inputs;
+# the local microservice caps at MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE).
+# Must be <= MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE for the microservice
+# embedder; the system check in documents/checks.py validates this.
 EMBEDDING_API_BATCH_SIZE = 50
 
 # Maximum number of texts accepted by MicroserviceEmbedder.embed_texts_batch().

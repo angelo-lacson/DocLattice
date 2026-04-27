@@ -254,6 +254,55 @@ class TestBatchEmbedTextAnnotations(unittest.TestCase):
 
         self.assertEqual(result["succeeded"], 10)
 
+    def test_concurrent_sub_batches_fire_in_parallel(self):
+        """When ``embed_max_concurrent_sub_batches > 1``, sub-batches run in parallel.
+
+        Asserted by checking that the second sub-batch's embed call
+        starts before the first one's call returns. We use a barrier
+        with a strict timeout so a serial implementation would deadlock
+        and the test would fail.
+        """
+        import threading
+
+        annots = [_make_mock_annotation(i, f"Text {i}") for i in range(6)]
+
+        class ParallelEmbedder(DummyEmbedder384):
+            embed_max_concurrent_sub_batches = 4
+
+        embedder = ParallelEmbedder()
+        result = self._make_result()
+
+        barrier = threading.Barrier(parties=2, timeout=5)
+
+        def slow_batch(texts, **kw):
+            # Block until a peer thread has also entered this method.
+            # If sub-batches ran serially, the second thread never
+            # arrives and ``barrier.wait()`` raises BrokenBarrierError.
+            barrier.wait()
+            return [[0.1] * 384] * len(texts)
+
+        embedder.embed_texts_batch = slow_batch  # type: ignore[assignment]
+
+        # api_batch_size=3 → exactly 2 sub-batches over 6 annotations.
+        _batch_embed_text_annotations(
+            annots, embedder, "test.ParallelEmbedder", 3, result
+        )
+
+        self.assertEqual(result["succeeded"], 6)
+        self.assertEqual(result["failed"], 0)
+
+    def test_serial_when_concurrency_is_1(self):
+        """Default (serial) path remains intact when concurrency=1."""
+        annots = [_make_mock_annotation(i, f"Text {i}") for i in range(6)]
+        embedder = DummyEmbedder384()  # default embed_max_concurrent_sub_batches=1
+        result = self._make_result()
+
+        _batch_embed_text_annotations(
+            annots, embedder, "test.DummyEmbedder384", 3, result
+        )
+
+        self.assertEqual(result["succeeded"], 6)
+
     def test_batch_api_failure(self):
         """When embed_texts_batch raises, all annotations in that chunk fail."""
         annots = [_make_mock_annotation(i, f"Text {i}") for i in range(3)]
@@ -416,7 +465,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         return resp
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_successful_batch(self, mock_post):
         """Successful batch returns list of vectors."""
@@ -433,7 +482,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         self.assertIn("/embeddings/batch", call_kwargs[0][0])
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_client_error_raises(self, mock_post):
         """4xx response raises EmbeddingClientError.
@@ -451,7 +500,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
             embedder.embed_texts_batch(["hello"])
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_server_error_raises(self, mock_post):
         """5xx response raises EmbeddingServerError for Celery retry."""
@@ -462,7 +511,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
             embedder.embed_texts_batch(["hello"])
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_non_retriable_exception_returns_none(self, mock_post):
         """Non-retriable exception (e.g., builtin ConnectionError) returns None."""
@@ -474,7 +523,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_timeout_raises_for_retry(self, mock_post):
         """requests.Timeout re-raises for Celery retry."""
@@ -485,7 +534,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
             embedder.embed_texts_batch(["hello"])
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_connection_error_raises_for_retry(self, mock_post):
         """requests.ConnectionError re-raises for Celery retry."""
@@ -520,7 +569,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_3d_response_squeezed(self, mock_post):
         """3D response array is squeezed to 2D."""
@@ -536,7 +585,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         self.assertEqual(len(result[0]), 384)
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_vector_count_mismatch_returns_none(self, mock_post):
         """Mismatched vector count returns None."""
@@ -550,7 +599,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_malformed_200_missing_embeddings_key(self, mock_post):
         """200 response missing 'embeddings' key returns None."""
@@ -565,7 +614,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_nan_values_handled_per_item(self, mock_post):
         """NaN values in individual embeddings return None for those items only."""
@@ -606,7 +655,7 @@ class TestMicroserviceEmbedderSingleText(unittest.TestCase):
         return resp
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_embed_text_success_1d(self, mock_post):
         """Successful single-text embedding with 1D response."""
@@ -621,7 +670,7 @@ class TestMicroserviceEmbedderSingleText(unittest.TestCase):
         mock_post.assert_called_once()
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_embed_text_success_2d(self, mock_post):
         """Successful single-text embedding with 2D response."""
@@ -635,7 +684,7 @@ class TestMicroserviceEmbedderSingleText(unittest.TestCase):
         self.assertEqual(len(result), 384)
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_embed_text_malformed_200(self, mock_post):
         """200 response missing 'embeddings' key returns None."""
@@ -647,7 +696,7 @@ class TestMicroserviceEmbedderSingleText(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_embed_text_nan_returns_none(self, mock_post):
         """NaN in single-text response returns None."""
@@ -659,7 +708,7 @@ class TestMicroserviceEmbedderSingleText(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_embed_text_client_error(self, mock_post):
         """4xx response returns None."""
@@ -671,7 +720,7 @@ class TestMicroserviceEmbedderSingleText(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_embed_text_server_error(self, mock_post):
         """5xx response returns None."""
@@ -683,7 +732,7 @@ class TestMicroserviceEmbedderSingleText(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch(
-        "opencontractserver.pipeline.embedders.sent_transformer_microservice.requests.post"
+        "requests.Session.post"
     )
     def test_embed_text_exception(self, mock_post):
         """Network exception returns None."""
@@ -1165,7 +1214,17 @@ class TestOpenAIEmbedderBatch(unittest.TestCase):
 
         self.assertIsNone(result)
 
-    def test_rate_limit_error_returns_none(self):
+    def test_rate_limit_error_re_raises_for_celery_retry(self):
+        """RateLimitError after SDK retries propagates so celery can retry.
+
+        The OpenAI SDK already absorbed up to ``OPENAI_CLIENT_MAX_RETRIES``
+        of these internally with Retry-After-honouring exponential
+        backoff; if we still saw it, the rate-limit window is wider
+        than the SDK budget and we want celery's autoretry_for=(Exception,)
+        to take over with a fresh backoff. Returning None on RateLimitError
+        (the old behaviour) made the whole batch silently fail without
+        triggering a celery retry.
+        """
         import openai
 
         embedder = self._make_embedder()
@@ -1176,9 +1235,73 @@ class TestOpenAIEmbedderBatch(unittest.TestCase):
             body=None,
         )
         with patch.object(embedder, "_build_client", return_value=client):
-            result = embedder.embed_texts_batch(["hello"])
+            with self.assertRaises(openai.RateLimitError):
+                embedder.embed_texts_batch(["hello"])
 
-        self.assertIsNone(result)
+    def test_api_timeout_re_raises_for_celery_retry(self):
+        import openai
+
+        embedder = self._make_embedder()
+        client = MagicMock()
+        client.embeddings.create.side_effect = openai.APITimeoutError(
+            request=MagicMock()
+        )
+        with patch.object(embedder, "_build_client", return_value=client):
+            with self.assertRaises(openai.APITimeoutError):
+                embedder.embed_texts_batch(["hello"])
+
+    def test_api_connection_error_re_raises_for_celery_retry(self):
+        import openai
+
+        embedder = self._make_embedder()
+        client = MagicMock()
+        client.embeddings.create.side_effect = openai.APIConnectionError(
+            request=MagicMock()
+        )
+        with patch.object(embedder, "_build_client", return_value=client):
+            with self.assertRaises(openai.APIConnectionError):
+                embedder.embed_texts_batch(["hello"])
+
+    def test_api_batch_size_default_is_256(self):
+        """OpenAIEmbedder advertises a 256-input sub-batch cap.
+
+        Production sub-batch carving in
+        ``calculate_embeddings_for_annotation_batch`` reads
+        ``embedder.api_batch_size`` to size sub-batches. 256 is sized
+        for paragraph chunks at ~1500 chars each → ~96K tokens per
+        wire request, well under OpenAI's 8M-token-per-request batch
+        cap and the 2048-input cap.
+        """
+        from opencontractserver.pipeline.embedders.openai_embedder import (
+            OpenAIEmbedder,
+        )
+
+        self.assertEqual(OpenAIEmbedder.api_batch_size, 256)
+
+    def test_embed_max_concurrent_sub_batches_default_is_4(self):
+        """OpenAIEmbedder allows up to 4 in-flight sub-batches."""
+        from opencontractserver.pipeline.embedders.openai_embedder import (
+            OpenAIEmbedder,
+        )
+
+        self.assertEqual(OpenAIEmbedder.embed_max_concurrent_sub_batches, 4)
+
+    def test_client_built_with_max_retries(self):
+        """The OpenAI client must be built with ``max_retries`` set so the
+        SDK rides out brief 429/5xx blips with exponential backoff.
+        """
+        import openai
+
+        embedder = self._make_embedder()
+        with patch("openai.OpenAI") as mock_openai_ctor:
+            embedder._build_client()
+            mock_openai_ctor.assert_called_once()
+            kwargs = mock_openai_ctor.call_args.kwargs
+            self.assertIn("max_retries", kwargs)
+            # Sanity: must be >= the historical default (2) and finite.
+            self.assertGreaterEqual(kwargs["max_retries"], 2)
+            # Avoid unused-import warning.
+            _ = openai
 
     def test_bad_request_returns_none(self):
         import openai
@@ -1210,3 +1333,126 @@ class TestOpenAIEmbedderBatch(unittest.TestCase):
 
         call_kwargs = client.embeddings.create.call_args.kwargs
         self.assertEqual(len(call_kwargs["input"][0]), 30000)
+
+
+class TestMicroserviceEmbedderHardening(unittest.TestCase):
+    """Cover the production hardening on MicroserviceEmbedder:
+
+    - shared ``requests.Session`` with urllib3 retry + connection pool
+    - bumped ``embed_max_concurrent_sub_batches`` to fill gunicorn workers
+    - ``api_batch_size`` pinned to the service-side cap
+
+    These knobs collectively determine how aggressive (and how robust)
+    we are against the local sentence-transformer microservice; the
+    tests pin the values so an accidental revert to the old single-
+    request, no-retry, no-pooling behaviour fails loudly in CI.
+    """
+
+    def test_api_batch_size_matches_service_cap(self):
+        """``api_batch_size`` must equal the service-side MAX_TEXTS_PER_BATCH cap.
+
+        Sending a larger batch trips a 400 from the service ("exceeds
+        maximum"); pinning to the cap uses the full per-call capacity
+        without ever asking for more than the service will accept.
+        """
+        from opencontractserver.constants.document_processing import (
+            MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE,
+        )
+
+        self.assertEqual(
+            MicroserviceEmbedder.api_batch_size,
+            MICROSERVICE_EMBEDDER_MAX_BATCH_SIZE,
+        )
+
+    def test_concurrency_matches_gunicorn_workers(self):
+        """``embed_max_concurrent_sub_batches`` lines up with gunicorn --workers.
+
+        The reference deployment uses ``gunicorn --workers 2`` so two
+        in-flight requests can be processed truly in parallel (one per
+        worker process). Setting the embedder concurrency higher just
+        queues at the service; setting it lower wastes the second
+        worker. 2 is the sweet spot for the default deployment.
+        """
+        self.assertEqual(MicroserviceEmbedder.embed_max_concurrent_sub_batches, 2)
+
+    def test_shared_session_is_singleton_per_process(self):
+        """``_get_session()`` returns the same Session on repeated calls.
+
+        Connection pooling and the retry config live on the Session;
+        building a fresh one per call would defeat both. The lazy
+        singleton is the load-bearing guarantee.
+        """
+        from opencontractserver.pipeline.embedders import (
+            sent_transformer_microservice as svc,
+        )
+
+        # Reset to exercise the lazy-build path then verify identity.
+        with svc._SESSION_LOCK:
+            svc._SESSION = None
+
+        s1 = svc._get_session()
+        s2 = svc._get_session()
+        self.assertIs(s1, s2)
+
+    def test_session_has_urllib3_retry_on_5xx_and_429(self):
+        """The Session's HTTPAdapter mounts a Retry config covering
+        429/502/503/504 with ``status_forcelist`` — the 'transient'
+        bucket — but NOT 4xx, which must surface as
+        ``EmbeddingClientError`` immediately.
+        """
+        from opencontractserver.pipeline.embedders import (
+            sent_transformer_microservice as svc,
+        )
+
+        with svc._SESSION_LOCK:
+            svc._SESSION = None
+
+        session = svc._get_session()
+        adapter = session.get_adapter("http://localhost/")
+        retry = adapter.max_retries
+        self.assertGreaterEqual(retry.total, 1)
+        self.assertIn(429, retry.status_forcelist)
+        self.assertIn(502, retry.status_forcelist)
+        self.assertIn(503, retry.status_forcelist)
+        self.assertIn(504, retry.status_forcelist)
+        # 4xx (other than 429) must NOT be in the retry list — those
+        # are permanent failures that should bubble up as
+        # EmbeddingClientError.
+        self.assertNotIn(400, retry.status_forcelist)
+        self.assertNotIn(401, retry.status_forcelist)
+
+    def test_session_retry_allows_post(self):
+        """urllib3 defaults retries to GET-only; we must allow POST since
+        every embedding endpoint is POST.
+        """
+        from opencontractserver.pipeline.embedders import (
+            sent_transformer_microservice as svc,
+        )
+
+        with svc._SESSION_LOCK:
+            svc._SESSION = None
+
+        session = svc._get_session()
+        adapter = session.get_adapter("http://localhost/")
+        retry = adapter.max_retries
+        # urllib3 stores allowed_methods as a frozenset of upper-cased verbs.
+        self.assertIn("POST", set(retry.allowed_methods))
+
+    def test_session_pool_is_sized_for_concurrency(self):
+        """Pool size must comfortably exceed the highest embedder concurrency.
+
+        Otherwise ingest under load logs "Connection pool is full,
+        discarding connection" warnings and pays a fresh handshake
+        cost per evicted connection.
+        """
+        from opencontractserver.pipeline.embedders import (
+            sent_transformer_microservice as svc,
+        )
+
+        with svc._SESSION_LOCK:
+            svc._SESSION = None
+
+        session = svc._get_session()
+        adapter = session.get_adapter("http://localhost/")
+        # Headroom check: must fit OpenAI's 4 + Microservice's 2 + slop.
+        self.assertGreaterEqual(adapter._pool_maxsize, 8)
