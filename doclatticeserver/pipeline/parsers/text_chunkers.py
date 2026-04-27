@@ -242,6 +242,18 @@ class SentenceChunker(BaseTextChunker):
 # even when the separator width varies.
 _PARAGRAPH_SEPARATOR_RE = re.compile(r"\n[ \t]*(?:\n[ \t]*)+")
 
+# Characters that look like whitespace to a human but aren't matched by
+# Python's ``str.strip()``: zero-width spaces, BOM, soft hyphens, etc. A
+# paragraph composed only of these characters has no embeddable content
+# and must be dropped — otherwise the embedding microservice tokenises
+# it down to an empty input and computes mean-of-empty, which returns
+# NaN and aborts the entire ingest pipeline. Observed in CUAD documents
+# (e.g. JuniperPharmaceuticalsInc_…) where copy-paste artifacts left
+# runs of ``​`` characters between real paragraphs.
+_INVISIBLE_CHARS_RE = re.compile(
+    r"[   -‏ -  -⁯⁠　﻿­]"
+)
+
 
 @register_chunker
 class ParagraphChunker(BaseTextChunker):
@@ -303,7 +315,12 @@ class ParagraphChunker(BaseTextChunker):
             if trimmed_end <= trimmed_start:
                 continue
             trimmed_text = text[trimmed_start:trimmed_end]
-            if len(trimmed_text.strip()) < self.min_chars:
+            # Drop invisible-only paragraphs (zero-width spaces, BOM, etc.).
+            # ``str.strip`` only removes ASCII/unicode whitespace; ZWSP
+            # leaks through. A paragraph that is only invisibles tokenises
+            # to an empty input downstream and crashes the embedder.
+            stripped = _INVISIBLE_CHARS_RE.sub("", trimmed_text).strip()
+            if len(stripped) < self.min_chars:
                 continue
 
             if self.max_chars is None or len(trimmed_text) <= self.max_chars:

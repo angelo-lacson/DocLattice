@@ -68,11 +68,24 @@ class TaskResult:
     probe_precision_at_k: float = 0.0
     probe_char_iou: float = 0.0
     # LegalBench-RAG-compatible char-level metrics on the probe spans.
-    # These mirror ``legalbenchrag.run_benchmark`` exactly so our headline
-    # numbers can be quoted against their paper without normalization
-    # caveats.  See ``metrics.char_recall`` / ``metrics.char_precision``.
+    # ``probe_char_recall`` / ``probe_char_precision`` use the
+    # paper-faithful formulas (per-pair overlap accumulation, no
+    # merging — see ``metrics.char_recall_paper`` /
+    # ``metrics.char_precision_paper``) so our headline numbers can
+    # be quoted against the paper without a "near-the-same-formula"
+    # caveat. Equivalence against a vendored copy of upstream
+    # ``QAResult`` is enforced in
+    # ``test_benchmarks.TestUpstreamEquivalence``.
+    #
+    # ``*_merged`` variants are the merged-spans cross-doc formulas
+    # (mathematically more sensible, no double-counting). They are
+    # kept as a sanity column — for paragraph / sliding-window
+    # chunkers where retrieved spans don't overlap each other, the
+    # two variants are identical to within rounding.
     probe_char_recall: float = 0.0
     probe_char_precision: float = 0.0
+    probe_char_recall_merged: float = 0.0
+    probe_char_precision_merged: float = 0.0
     # Same char-level metrics, but applied to the spans the agent
     # **actually cited** (``Datacell.sources``).  This is the OC-specific
     # "what the production pipeline delivered" number — not comparable
@@ -188,6 +201,12 @@ class BenchmarkReport:
             "probe_char_precision": mean(
                 r.probe_char_precision for r in self.task_results
             ),
+            "probe_char_recall_merged": mean(
+                r.probe_char_recall_merged for r in self.task_results
+            ),
+            "probe_char_precision_merged": mean(
+                r.probe_char_precision_merged for r in self.task_results
+            ),
             "citation_char_recall": mean(
                 r.citation_char_recall for r in self.task_results
             ),
@@ -258,6 +277,8 @@ class BenchmarkReport:
                     "probe_char_iou",
                     "probe_char_recall",
                     "probe_char_precision",
+                    "probe_char_recall_merged",
+                    "probe_char_precision_merged",
                     "citation_char_recall",
                     "citation_char_precision",
                     "input_tokens",
@@ -289,6 +310,8 @@ class BenchmarkReport:
                         f"{r.probe_char_iou:.4f}",
                         f"{r.probe_char_recall:.4f}",
                         f"{r.probe_char_precision:.4f}",
+                        f"{r.probe_char_recall_merged:.4f}",
+                        f"{r.probe_char_precision_merged:.4f}",
                         f"{r.citation_char_recall:.4f}",
                         f"{r.citation_char_precision:.4f}",
                         "" if r.input_tokens is None else r.input_tokens,

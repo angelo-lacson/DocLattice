@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,58 @@ LEGALBENCH_RAG_SUBSETS: tuple[str, ...] = (
     "maud",
     "privacy_qa",
 )
+
+#: Upstream ``legalbenchrag/benchmark.py`` caps each subset at this many
+#: tasks (constant value 194 verified verbatim from upstream master).
+PAPER_MAX_TESTS_PER_BENCHMARK: int = 194
+
+
+def _paper_sample_tests(
+    tests: list[dict[str, Any]],
+    max_per_subset: int = PAPER_MAX_TESTS_PER_BENCHMARK,
+) -> list[dict[str, Any]]:
+    """Reproduce upstream ``benchmark.py``'s SORT_BY_DOCUMENT=True selection.
+
+    Upstream code (verbatim from ``legalbenchrag/benchmark.py:46-58``)::
+
+        tests = sorted(
+            tests,
+            key=lambda test: (
+                random.seed(test.snippets[0].file_path),
+                random.random(),
+            )[1],
+        )
+        tests = tests[:MAX_TESTS_PER_BENCHMARK]
+
+    The seeding uses each test's first snippet's ``file_path`` as a
+    deterministic per-test random key, then sorts by the resulting
+    pseudo-random float and truncates to the cap. This is NOT a
+    uniform shuffle — tests sharing a file_path get correlated keys —
+    but it is the published selection rule.
+
+    Tests that lack ``snippets`` or whose first snippet lacks a
+    ``file_path`` are dropped before sorting (they would crash the
+    upstream code too).
+    """
+    if len(tests) <= max_per_subset:
+        return tests
+
+    valid: list[dict[str, Any]] = []
+    for test in tests:
+        snippets = test.get("snippets") or []
+        if not snippets:
+            continue
+        first = snippets[0]
+        if not isinstance(first, dict) or not first.get("file_path"):
+            continue
+        valid.append(test)
+
+    def _seed_key(test: dict[str, Any]) -> float:
+        random.seed(test["snippets"][0]["file_path"])
+        return random.random()
+
+    valid.sort(key=_seed_key)
+    return valid[:max_per_subset]
 
 
 class LegalBenchRAGAdapter(BaseBenchmarkAdapter):
@@ -77,7 +130,22 @@ class LegalBenchRAGAdapter(BaseBenchmarkAdapter):
         *,
         subsets: Iterable[str] | None = None,
         limit: int | None = None,
+        paper_sampling: bool = True,
+        max_per_subset: int = PAPER_MAX_TESTS_PER_BENCHMARK,
     ) -> None:
+        """
+        Args (additions):
+            paper_sampling: When True (the default), reproduce upstream
+                ``legalbenchrag/benchmark.py``'s SORT_BY_DOCUMENT=True
+                sampling — sort by ``random(seed=test.snippets[0].file_path)``
+                then keep the first ``max_per_subset`` tests. This is the
+                exact selection rule the paper's published numbers were
+                computed against. Set to False to load every task in
+                JSON file order (legacy behaviour, useful for fixtures
+                with hand-curated test counts).
+            max_per_subset: Per-subset cap when ``paper_sampling`` is on.
+                Defaults to upstream's ``MAX_TESTS_PER_BENCHMARK = 194``.
+        """
         self.root = Path(root).expanduser().resolve()
         self.corpus_dir = self.root / "corpus"
         self.benchmarks_dir = self.root / "benchmarks"
@@ -102,6 +170,8 @@ class LegalBenchRAGAdapter(BaseBenchmarkAdapter):
 
         self.requested_subsets = requested
         self.limit = limit
+        self.paper_sampling = paper_sampling
+        self.max_per_subset = max_per_subset
 
         self._documents: dict[str, BenchmarkDocument] = {}
         self._tasks: list[BenchmarkTask] = []
@@ -135,6 +205,8 @@ class LegalBenchRAGAdapter(BaseBenchmarkAdapter):
                 list(self.requested_subsets) if self.requested_subsets else None
             ),
             "limit": self.limit,
+            "paper_sampling": self.paper_sampling,
+            "max_per_subset": self.max_per_subset,
         }
 
     # ------------------------------------------------------------------ #
@@ -170,6 +242,19 @@ class LegalBenchRAGAdapter(BaseBenchmarkAdapter):
                 payload = json.load(fh)
 
             tests = payload.get("tests", [])
+            if self.paper_sampling:
+                pre_count = len(tests)
+                tests = _paper_sample_tests(
+                    tests, max_per_subset=self.max_per_subset
+                )
+                logger.info(
+                    "LegalBench-RAG paper-faithful sampling for subset %s: "
+                    "%d -> %d tasks (sorted by random(seed=file_path), cap=%d)",
+                    subset_name,
+                    pre_count,
+                    len(tests),
+                    self.max_per_subset,
+                )
             for test_index, test in enumerate(tests):
                 if self.limit is not None and task_counter >= self.limit:
                     break

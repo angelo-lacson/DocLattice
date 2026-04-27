@@ -100,6 +100,30 @@ class ParagraphChunkerTests(TextChunkOffsetsMixin, TestCase):
         with self.assertRaises(ValueError):
             ParagraphChunker(max_chars=0)
 
+    def test_zero_width_only_paragraphs_are_dropped(self) -> None:
+        """Paragraphs containing only invisible chars must not be emitted.
+
+        Regression: CUAD-style copy-paste artifacts produce paragraphs
+        composed of zero-width spaces (``​``). These tokenise to
+        empty input downstream and crash the embedder microservice with
+        a NaN result. The chunker must drop them before they reach the
+        embedder.
+        """
+        text = (
+            "Real first paragraph.\n\n"
+            "​  ​ ​ ​  ​​  ​\n\n"
+            "Real second paragraph."
+        )
+        chunks = list(ParagraphChunker().chunk(text))
+        emitted = [c.text for c in chunks]
+        self.assertEqual(emitted, ["Real first paragraph.", "Real second paragraph."])
+
+    def test_mixed_invisibles_are_stripped_for_min_chars_check(self) -> None:
+        # BOM + ZWSP + ZWNJ + tabs should not satisfy min_chars=5
+        text = "﻿​‌\t \n\nNormal text long enough"
+        chunks = list(ParagraphChunker(min_chars=5).chunk(text))
+        self.assertEqual([c.text for c in chunks], ["Normal text long enough"])
+
 
 class SlidingWindowChunkerTests(TextChunkOffsetsMixin, TestCase):
     """Behaviour tests for :class:`SlidingWindowChunker`."""

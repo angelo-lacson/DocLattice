@@ -95,7 +95,34 @@ class Command(BaseCommand):
             "--limit",
             type=int,
             default=None,
-            help="Cap total number of tasks (smoke-test mode).",
+            help=(
+                "Cap TOTAL number of tasks across all subsets (smoke-test "
+                "mode). Applies after --paper-sampling truncation."
+            ),
+        )
+        parser.add_argument(
+            "--no-paper-sampling",
+            dest="paper_sampling",
+            action="store_false",
+            default=True,
+            help=(
+                "Disable upstream-faithful per-subset sampling. By default "
+                "the adapter reproduces "
+                "``legalbenchrag/benchmark.py``'s SORT_BY_DOCUMENT=True "
+                "selection (sort by random(seed=file_path), keep first 194 "
+                "per subset). Pass this flag to load every task in JSON "
+                "file order — useful for fixtures, NOT comparable to the "
+                "paper's published numbers."
+            ),
+        )
+        parser.add_argument(
+            "--max-per-subset",
+            type=int,
+            default=194,
+            help=(
+                "Per-subset cap when --paper-sampling is on. Defaults to "
+                "upstream's MAX_TESTS_PER_BENCHMARK = 194."
+            ),
         )
         parser.add_argument(
             "--run-dir",
@@ -158,11 +185,17 @@ class Command(BaseCommand):
 
         benchmark_name = options["benchmark"]
         adapter_cls = BENCHMARK_REGISTRY[benchmark_name]
-        adapter = adapter_cls(
-            root=options["path"],
-            subsets=options.get("subsets") or None,
-            limit=options.get("limit"),
-        )
+        adapter_kwargs: dict[str, object] = {
+            "root": options["path"],
+            "subsets": options.get("subsets") or None,
+            "limit": options.get("limit"),
+        }
+        # Only pass paper-sampling kwargs to adapters that accept them.
+        # Today only LegalBenchRAGAdapter does; future adapters can opt in.
+        if benchmark_name == "legalbench-rag":
+            adapter_kwargs["paper_sampling"] = options.get("paper_sampling", True)
+            adapter_kwargs["max_per_subset"] = options.get("max_per_subset", 194)
+        adapter = adapter_cls(**adapter_kwargs)
 
         self.stdout.write(
             self.style.NOTICE(
