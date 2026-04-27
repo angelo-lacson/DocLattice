@@ -624,3 +624,221 @@ class BenchmarkTaskDataclassTestCase(PyUnitTestCase):
         )
         with self.assertRaises(Exception):
             task.query = "changed"  # type: ignore[misc]
+
+
+# --------------------------------------------------------------------------- #
+# UPSTREAM EQUIVALENCE — paper-faithful metric formulas
+# --------------------------------------------------------------------------- #
+#
+# Vendored copy of upstream ``legalbenchrag/run_benchmark.py`` lines 16-53
+# (commit ``master`` at the time PR #1380 was authored). We assert that
+# our ``char_recall_paper`` / ``char_precision_paper`` produce numerically
+# identical output for randomized (predicted, gold) pairs across many
+# seeds. If upstream changes the formulas, these tests will fail and the
+# port must be updated rather than silently drifting.
+
+
+def _upstream_precision(
+    predicted_spans: list[tuple[int, int]],
+    predicted_doc_ids: list[int | None],
+    target_doc_id: int,
+    gold_spans: list[tuple[int, int]],
+) -> float:
+    """Verbatim port of ``QAResult.precision`` from upstream master."""
+    total_retrieved_len = 0
+    relevant_retrieved_len = 0
+    for (p_start, p_end), p_doc in zip(predicted_spans, predicted_doc_ids):
+        total_retrieved_len += p_end - p_start
+        for g_start, g_end in gold_spans:
+            # file_path equality — only same-document pairs contribute
+            if p_doc != target_doc_id:
+                continue
+            common_min = max(p_start, g_start)
+            common_max = min(p_end, g_end)
+            if common_max > common_min:
+                relevant_retrieved_len += common_max - common_min
+    if total_retrieved_len == 0:
+        return 0.0
+    return relevant_retrieved_len / total_retrieved_len
+
+
+def _upstream_recall(
+    predicted_spans: list[tuple[int, int]],
+    predicted_doc_ids: list[int | None],
+    target_doc_id: int,
+    gold_spans: list[tuple[int, int]],
+) -> float:
+    """Verbatim port of ``QAResult.recall`` from upstream master."""
+    total_relevant_len = 0
+    relevant_retrieved_len = 0
+    for g_start, g_end in gold_spans:
+        total_relevant_len += g_end - g_start
+        for (p_start, p_end), p_doc in zip(predicted_spans, predicted_doc_ids):
+            if p_doc != target_doc_id:
+                continue
+            common_min = max(p_start, g_start)
+            common_max = min(p_end, g_end)
+            if common_max > common_min:
+                relevant_retrieved_len += common_max - common_min
+    if total_relevant_len == 0:
+        return 0.0
+    return relevant_retrieved_len / total_relevant_len
+
+
+class TestUpstreamEquivalence(PyUnitTestCase):
+    """Lock our paper-faithful metrics to upstream's QAResult byte-for-byte."""
+
+    def _random_spans(
+        self, rng, count: int, max_pos: int = 10_000
+    ) -> list[tuple[int, int]]:
+        out: list[tuple[int, int]] = []
+        for _ in range(count):
+            a = rng.randint(0, max_pos)
+            b = a + rng.randint(1, 500)
+            out.append((a, b))
+        return out
+
+    def test_recall_matches_upstream_on_random_inputs(self):
+        from opencontractserver.benchmarks.metrics import char_recall_paper
+
+        import random as rng_module
+
+        rng = rng_module.Random(42)
+        for trial in range(200):
+            n_pred = rng.randint(0, 30)
+            n_gold = rng.randint(0, 5)
+            preds = self._random_spans(rng, n_pred)
+            gold = self._random_spans(rng, n_gold)
+            # Mix in some non-target-document predictions
+            target_doc = 1
+            doc_ids: list[int | None] = []
+            for _ in preds:
+                doc_ids.append(rng.choice([target_doc, 2, 3, None]))
+
+            ours = char_recall_paper(preds, doc_ids, target_doc, gold)
+            upstream = _upstream_recall(preds, doc_ids, target_doc, gold)
+            self.assertAlmostEqual(
+                ours,
+                upstream,
+                places=10,
+                msg=(
+                    f"Trial {trial}: ours={ours} upstream={upstream}\n"
+                    f"  preds={preds}\n  doc_ids={doc_ids}\n  gold={gold}"
+                ),
+            )
+
+    def test_precision_matches_upstream_on_random_inputs(self):
+        from opencontractserver.benchmarks.metrics import char_precision_paper
+
+        import random as rng_module
+
+        rng = rng_module.Random(43)
+        for trial in range(200):
+            n_pred = rng.randint(0, 30)
+            n_gold = rng.randint(0, 5)
+            preds = self._random_spans(rng, n_pred)
+            gold = self._random_spans(rng, n_gold)
+            target_doc = 1
+            doc_ids: list[int | None] = []
+            for _ in preds:
+                doc_ids.append(rng.choice([target_doc, 2, 3, None]))
+
+            ours = char_precision_paper(preds, doc_ids, target_doc, gold)
+            upstream = _upstream_precision(preds, doc_ids, target_doc, gold)
+            self.assertAlmostEqual(
+                ours,
+                upstream,
+                places=10,
+                msg=(
+                    f"Trial {trial}: ours={ours} upstream={upstream}\n"
+                    f"  preds={preds}\n  doc_ids={doc_ids}\n  gold={gold}"
+                ),
+            )
+
+    def test_paper_overcounts_when_predictions_overlap(self):
+        """Document the known divergence vs the merged variant.
+
+        Upstream's per-pair accumulation double-counts overlap when two
+        retrieved spans both intersect the same gold span. The merged
+        variant doesn't. This test pins down the divergence so a future
+        contributor doesn't "fix" the paper variant to silently match
+        the merged one (which would be a regression against the paper).
+        """
+        from opencontractserver.benchmarks.metrics import (
+            char_recall_cross_doc,
+            char_recall_paper,
+        )
+
+        # Two retrieved spans both fully cover the gold span
+        preds = [(0, 100), (10, 90)]
+        doc_ids = [1, 1]
+        gold = [(20, 80)]  # 60 chars
+        # Upstream/paper: 60 (from pred 0) + 60 (from pred 1) = 120, /60 = 2.0
+        paper = char_recall_paper(preds, doc_ids, 1, gold)
+        merged = char_recall_cross_doc(preds, doc_ids, 1, gold)
+        self.assertAlmostEqual(paper, 2.0, places=10)
+        self.assertAlmostEqual(merged, 1.0, places=10)
+
+
+# --------------------------------------------------------------------------- #
+# PAPER SAMPLING — upstream-faithful per-subset selection
+# --------------------------------------------------------------------------- #
+
+
+class TestPaperSampling(PyUnitTestCase):
+    """Lock the SORT_BY_DOCUMENT=True selection rule from upstream."""
+
+    def test_sampling_is_deterministic(self):
+        from opencontractserver.benchmarks.adapters.legalbench_rag import (
+            _paper_sample_tests,
+        )
+
+        tests = [
+            {"query": f"q{i}", "snippets": [{"file_path": f"doc_{i % 7}.txt"}]}
+            for i in range(1000)
+        ]
+        a = _paper_sample_tests(tests, max_per_subset=194)
+        b = _paper_sample_tests(tests, max_per_subset=194)
+        self.assertEqual(len(a), 194)
+        self.assertEqual(
+            [t["query"] for t in a],
+            [t["query"] for t in b],
+            "Paper sampling must be deterministic across calls.",
+        )
+
+    def test_sampling_is_noop_when_below_cap(self):
+        from opencontractserver.benchmarks.adapters.legalbench_rag import (
+            _paper_sample_tests,
+        )
+
+        tests = [
+            {"query": f"q{i}", "snippets": [{"file_path": f"d_{i}.txt"}]}
+            for i in range(50)
+        ]
+        out = _paper_sample_tests(tests, max_per_subset=194)
+        self.assertEqual(len(out), 50)
+        self.assertEqual(out, tests)
+
+    def test_sampling_drops_malformed_tests(self):
+        from opencontractserver.benchmarks.adapters.legalbench_rag import (
+            _paper_sample_tests,
+        )
+
+        # 300 valid + 5 malformed (no snippets / no file_path)
+        tests = [
+            {"query": f"q{i}", "snippets": [{"file_path": f"d_{i}.txt"}]}
+            for i in range(300)
+        ]
+        tests.extend(
+            [
+                {"query": "bad1", "snippets": []},
+                {"query": "bad2", "snippets": [{}]},
+                {"query": "bad3"},
+                {"query": "bad4", "snippets": [{"file_path": ""}]},
+                {"query": "bad5", "snippets": [{"span": [0, 1]}]},
+            ]
+        )
+        out = _paper_sample_tests(tests, max_per_subset=194)
+        self.assertEqual(len(out), 194)
+        for t in out:
+            self.assertTrue(t["snippets"][0].get("file_path"))

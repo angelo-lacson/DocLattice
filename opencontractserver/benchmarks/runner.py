@@ -24,8 +24,10 @@ from opencontractserver.benchmarks.metrics import (
     char_iou,
     char_precision,
     char_precision_cross_doc,
+    char_precision_paper,
     char_recall,
     char_recall_cross_doc,
+    char_recall_paper,
     contains_verbatim_span,
     exact_match,
     overlaps_any,
@@ -373,13 +375,34 @@ def _evaluate(
                 # retrieved annotation belongs to the target doc, so the
                 # cross-doc variants return identical numbers to the
                 # single-doc ones — safe to use unconditionally.
-                probe_char_recall=char_recall_cross_doc(
+                # Headline numbers use the PAPER-FAITHFUL formulas
+                # (per-pair overlap accumulation, no merging) so they are
+                # directly quotable against the paper without a
+                # "near-the-same-formula" caveat. The merged ``cross_doc``
+                # variants are kept on the row below as a sanity column —
+                # they will diverge from the paper variants only when
+                # retrieved spans overlap each other (rare for
+                # paragraph/sliding-window chunkers, possible for
+                # sentence chunkers).
+                probe_char_recall=char_recall_paper(
                     retrieval.spans,
                     retrieval.document_ids,
                     cell.document_id,
                     gold_spans,
                 ),
-                probe_char_precision=char_precision_cross_doc(
+                probe_char_precision=char_precision_paper(
+                    retrieval.spans,
+                    retrieval.document_ids,
+                    cell.document_id,
+                    gold_spans,
+                ),
+                probe_char_recall_merged=char_recall_cross_doc(
+                    retrieval.spans,
+                    retrieval.document_ids,
+                    cell.document_id,
+                    gold_spans,
+                ),
+                probe_char_precision_merged=char_precision_cross_doc(
                     retrieval.spans,
                     retrieval.document_ids,
                     cell.document_id,

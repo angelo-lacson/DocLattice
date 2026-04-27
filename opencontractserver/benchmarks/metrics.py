@@ -321,6 +321,90 @@ def char_recall_cross_doc(
     return char_recall(same_doc_spans, gold)
 
 
+# --------------------------------------------------------------------------- #
+# Paper-faithful (UPSTREAM-EXACT) variants
+# --------------------------------------------------------------------------- #
+#
+# These mirror ``legalbenchrag/run_benchmark.py`` (commit master, lines
+# 16-53) byte-for-byte: per-pair overlap accumulation, NO merging of
+# predicted spans, file_path equality enforced via the parallel
+# document-id list. The merged variants above (``char_recall`` /
+# ``char_precision``) are mathematically more sensible (no
+# double-counting when retrieved spans overlap each other) but they
+# diverge from upstream whenever such overlap exists. The
+# ``_paper`` variants exist so headline numbers can be quoted against
+# the paper without an "almost-the-same-formula" caveat. Equivalence
+# against a vendored copy of upstream is enforced in
+# ``test_benchmarks.TestUpstreamEquivalence``.
+
+
+def char_recall_paper(
+    predicted_spans: Sequence[Span],
+    predicted_doc_ids: Sequence[int | None],
+    target_doc_id: int,
+    gold: Sequence[Span],
+) -> float:
+    """Recall computed exactly as upstream ``QAResult.recall`` does.
+
+    Outer loop over gold, inner over retrieved; per-pair overlap is
+    accumulated into the numerator; denominator is the sum of gold
+    span lengths. Predicted spans are NOT merged, so when two
+    retrieved spans both cover the same gold region the overlap is
+    summed twice. file_path equality is enforced via
+    ``predicted_doc_ids`` (only retrieved spans whose document id
+    matches ``target_doc_id`` contribute).
+    """
+    if len(predicted_spans) != len(predicted_doc_ids):
+        raise ValueError("predicted_spans and predicted_doc_ids must be parallel")
+    total_relevant_len = 0
+    relevant_retrieved_len = 0
+    for g_start, g_end in gold:
+        total_relevant_len += g_end - g_start
+        for (p_start, p_end), p_doc in zip(predicted_spans, predicted_doc_ids):
+            if p_doc != target_doc_id:
+                continue
+            common_min = max(p_start, g_start)
+            common_max = min(p_end, g_end)
+            if common_max > common_min:
+                relevant_retrieved_len += common_max - common_min
+    if total_relevant_len == 0:
+        return 0.0
+    return relevant_retrieved_len / total_relevant_len
+
+
+def char_precision_paper(
+    predicted_spans: Sequence[Span],
+    predicted_doc_ids: Sequence[int | None],
+    target_doc_id: int,
+    gold: Sequence[Span],
+) -> float:
+    """Precision computed exactly as upstream ``QAResult.precision`` does.
+
+    Outer loop over retrieved, inner over gold; per-pair overlap is
+    accumulated into the numerator; denominator is the sum of EVERY
+    retrieved span's length (including spans from non-target
+    documents — they are noise and properly count against precision).
+    Only spans whose document id matches ``target_doc_id`` can
+    contribute to the numerator (file_path equality).
+    """
+    if len(predicted_spans) != len(predicted_doc_ids):
+        raise ValueError("predicted_spans and predicted_doc_ids must be parallel")
+    total_retrieved_len = 0
+    relevant_retrieved_len = 0
+    for (p_start, p_end), p_doc in zip(predicted_spans, predicted_doc_ids):
+        total_retrieved_len += p_end - p_start
+        if p_doc != target_doc_id:
+            continue
+        for g_start, g_end in gold:
+            common_min = max(p_start, g_start)
+            common_max = min(p_end, g_end)
+            if common_max > common_min:
+                relevant_retrieved_len += common_max - common_min
+    if total_retrieved_len == 0:
+        return 0.0
+    return relevant_retrieved_len / total_retrieved_len
+
+
 def char_f1(
     predicted: Sequence[Span],
     gold: Sequence[Span],
