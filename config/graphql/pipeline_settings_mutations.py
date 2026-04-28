@@ -238,7 +238,7 @@ class UpdatePipelineSettingsMutation(graphene.Mutation):
         component_settings=None,
         default_embedder=None,
         enabled_components=None,
-    ):
+    ) -> "UpdatePipelineSettingsMutation":
         """
         Update the pipeline settings.
 
@@ -548,7 +548,7 @@ class ResetPipelineSettingsMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
-    def mutate(root, info):
+    def mutate(root, info) -> "ResetPipelineSettingsMutation":
         """Reset pipeline settings to Django settings defaults."""
         from django.conf import settings as django_settings
 
@@ -674,7 +674,9 @@ class UpdateComponentSecretsMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
-    def mutate(root, info, component_path, secrets, merge=True):
+    def mutate(
+        root, info, component_path, secrets, merge=True
+    ) -> "UpdateComponentSecretsMutation":
         """Update encrypted secrets for a component."""
         from opencontractserver.documents.models import PipelineSettings
 
@@ -797,7 +799,9 @@ class UpdateToolSecretsMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
-    def mutate(root, info, tool_key, secrets=None, settings=None, merge=True):
+    def mutate(
+        root, info, tool_key, secrets=None, settings=None, merge=True
+    ) -> "UpdateToolSecretsMutation":
         """Update secrets and/or settings for an agent tool."""
         from opencontractserver.constants.tools import TOOL_SETTINGS_PREFIX
         from opencontractserver.documents.models import PipelineSettings
@@ -940,7 +944,7 @@ class DeleteToolSecretsMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
-    def mutate(root, info, tool_key):
+    def mutate(root, info, tool_key) -> "DeleteToolSecretsMutation":
         """Delete all settings and secrets for a tool."""
         from opencontractserver.constants.tools import TOOL_SETTINGS_PREFIX
         from opencontractserver.documents.models import PipelineSettings
@@ -1013,7 +1017,7 @@ class DeleteComponentSecretsMutation(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
-    def mutate(root, info, component_path):
+    def mutate(root, info, component_path) -> "DeleteComponentSecretsMutation":
         """Delete all secrets for a component."""
         from opencontractserver.documents.models import PipelineSettings
 

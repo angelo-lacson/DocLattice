@@ -133,8 +133,13 @@ export const CreateCorpusActionModal: React.FC<
   const [inlineAgentName, setInlineAgentName] = React.useState("");
   const [inlineAgentDescription, setInlineAgentDescription] =
     React.useState("");
+  // Initial trigger is "add_document" (a document trigger), so the default
+  // instructions must match — otherwise the textarea opens with the moderator
+  // copy that only applies to thread/message triggers. The dropdown's onChange
+  // swaps this value when the trigger changes; this initialiser keeps the
+  // pre-interaction state aligned with the default trigger.
   const [inlineAgentInstructions, setInlineAgentInstructions] = React.useState(
-    DEFAULT_MODERATOR_INSTRUCTIONS
+    DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS
   );
   const [selectedModerationTools, setSelectedModerationTools] = React.useState<
     string[]
@@ -162,7 +167,9 @@ export const CreateCorpusActionModal: React.FC<
     setUseInlineAgent(true);
     setInlineAgentName("");
     setInlineAgentDescription("");
-    setInlineAgentInstructions(DEFAULT_MODERATOR_INSTRUCTIONS);
+    // Reset to the default-trigger instructions; the trigger itself is reset to
+    // "add_document" above, so the document-agent default is the matching pair.
+    setInlineAgentInstructions(DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS);
     setSelectedModerationTools(DEFAULT_MODERATION_TOOLS.map((t) => t.name));
     setSelectedDocumentTools([]);
     setDisabled(false);

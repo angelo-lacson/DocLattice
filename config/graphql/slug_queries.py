@@ -2,6 +2,8 @@
 GraphQL query mixin for slug-based entity lookups.
 """
 
+from typing import Any
+
 import graphene
 from django.db.models.functions import Coalesce
 
@@ -41,7 +43,7 @@ class SlugQueryMixin:
         ),
     )
 
-    def resolve_corpus_by_slugs(self, info, user_slug, corpus_slug):
+    def resolve_corpus_by_slugs(self, info, user_slug, corpus_slug) -> Any:
         from django.contrib.auth import get_user_model
         from django.db.models import Subquery
 
@@ -63,7 +65,7 @@ class SlugQueryMixin:
 
         return qs.first()
 
-    def resolve_document_by_slugs(self, info, user_slug, document_slug):
+    def resolve_document_by_slugs(self, info, user_slug, document_slug) -> Any:
         from django.contrib.auth import get_user_model
 
         User = get_user_model()
@@ -77,7 +79,7 @@ class SlugQueryMixin:
 
     def resolve_document_in_corpus_by_slugs(
         self, info, user_slug, corpus_slug, document_slug, version_number=None
-    ):
+    ) -> Any:
         from django.contrib.auth import get_user_model
 
         from opencontractserver.documents.models import DocumentPath
