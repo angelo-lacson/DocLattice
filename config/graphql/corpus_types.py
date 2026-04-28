@@ -215,7 +215,7 @@ class CorpusType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         corpus_doc_ids = self.get_documents(include_caml=True).values_list(
             "id", flat=True
         )
-        return Document.objects.filter(id__in=corpus_doc_ids).visible_to_user(user)
+        return Document.objects.visible_to_user(user).filter(id__in=corpus_doc_ids)
 
     def resolve_annotations(self, info) -> Any:
         """
