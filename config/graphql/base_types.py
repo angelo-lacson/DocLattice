@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import graphene
 from graphene.types.generic import GenericScalar
 from graphql_relay import to_global_id
+
+if TYPE_CHECKING:
+    from config.graphql.annotation_types import AnnotationType
+    from config.graphql.corpus_types import CorpusFolderType
+    from config.graphql.user_types import UserType
 
 
 def build_flat_tree(
@@ -31,7 +36,7 @@ def build_flat_tree(
             - "children": list of child node global IDs.
     """
     # Map node IDs to their immediate children IDs
-    id_to_children: dict[Any, list[Any]] = {}
+    id_to_children: dict[int | str, list[int | str]] = {}
     for node in nodes:
         node_id = node["id"]
         parent_id = node["parent_id"]
@@ -231,19 +236,19 @@ class PageAwareAnnotationType(graphene.ObjectType):
     page_annotations = graphene.List(lambda: _get_annotation_type())
 
 
-def _get_user_type() -> type:
+def _get_user_type() -> type[UserType]:
     from config.graphql.user_types import UserType
 
     return UserType
 
 
-def _get_corpus_folder_type() -> type:
+def _get_corpus_folder_type() -> type[CorpusFolderType]:
     from config.graphql.corpus_types import CorpusFolderType
 
     return CorpusFolderType
 
 
-def _get_annotation_type() -> type:
+def _get_annotation_type() -> type[AnnotationType]:
     from config.graphql.annotation_types import AnnotationType
 
     return AnnotationType

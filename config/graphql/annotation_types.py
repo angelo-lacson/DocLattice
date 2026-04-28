@@ -93,14 +93,14 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     all_source_node_in_relationship = graphene.List(lambda: RelationshipType)
 
-    def resolve_feedback_count(self, info) -> Any:
+    def resolve_feedback_count(self, info) -> int:
         # If feedback_count was annotated on the queryset, use it
         if hasattr(self, "feedback_count"):
             return self.feedback_count
         # Otherwise, count it (but this triggers N+1)
         return self.user_feedback.count()
 
-    def resolve_all_source_node_in_relationship(self, info) -> Any:
+    def resolve_all_source_node_in_relationship(self, info) -> QuerySet[Relationship]:
         return self.source_node_in_relationships.all()
 
     all_target_node_in_relationship = graphene.List(lambda: RelationshipType)
