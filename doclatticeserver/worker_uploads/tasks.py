@@ -16,6 +16,7 @@ import logging
 import re
 from datetime import timedelta
 from typing import Any
+from uuid import UUID
 
 from celery import shared_task
 from django.conf import settings
@@ -180,7 +181,7 @@ def recover_stalled_uploads() -> dict[str, int]:
     return {"recovered": count}
 
 
-def _process_single_upload(upload_id: Any) -> None:
+def _process_single_upload(upload_id: UUID) -> None:
     """
     Process one WorkerDocumentUpload: create Document, annotations,
     embeddings, and add to the target corpus.
@@ -487,7 +488,7 @@ def _get_vector_field(dimension: int) -> str | None:
     return _VECTOR_FIELD_MAP.get(dimension)
 
 
-def _fail_upload(upload_id: Any, error_message: str) -> None:
+def _fail_upload(upload_id: UUID, error_message: str) -> None:
     """Mark an upload as FAILED and clean up its staging file."""
     upload = WorkerDocumentUpload.objects.filter(id=upload_id).first()
     if upload is None:

@@ -1103,10 +1103,7 @@ class CoreAnnotationVectorStore:
         return results
 
 
-# ``VectorStoreProtocol`` is imported above so that downstream callers can
-# annotate parameters as ``VectorStoreProtocol`` and mypy will accept any
-# class implementing the same surface as :class:`CoreAnnotationVectorStore`.
-# Re-export to make the dependency explicit for static analysis tools.
+# Re-exported so downstream callers can annotate against the protocol.
 __all__ = [
     "CoreAnnotationVectorStore",
     "VectorSearchQuery",
