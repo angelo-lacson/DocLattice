@@ -8,7 +8,7 @@ ipdb==0.13.13  # https://github.com/gotcha/ipdb
 # Testing
 # ------------------------------------------------------------------------------
 
-mypy==1.20.1  # https://github.com/python/mypy
+mypy==1.20.2  # https://github.com/python/mypy
 django-stubs==6.0.3  # https://github.com/typeddjango/django-stubs
 pytest==9.0.3  # https://github.com/pytest-dev/pytest
 pytest-cov==7.1.0  # https://github.com/pytest-dev/pytest-cov
@@ -52,12 +52,12 @@ python-pptx
 # Not directly required, pinned by Snyk to avoid a vulnerability
 # ------------------------------------------------------------------------------
 django==5.2.13  # https://www.djangoproject.com/
-twisted>=24.7.0rc1 # not directly required, pinned by Snyk to avoid a vulnerability
+twisted>=25.5.0 # not directly required, pinned by Snyk to avoid a vulnerability
 ipython>=9.13.0 # not directly required, pinned by Snyk to avoid a vulnerability
 requests>=2.32.2 # not directly required, pinned by Snyk to avoid a vulnerability
 setuptools>=70.0.0 # not directly required, pinned by Snyk to avoid a vulnerability
 sqlparse>=0.5.0 # not directly required, pinned by Snyk to avoid a vulnerability
-tornado>=6.4.2 # not directly required, pinned by Snyk to avoid a vulnerability
+tornado>=6.5.5 # not directly required, pinned by Snyk to avoid a vulnerability
 urllib3>=2.2.2 # not directly required, pinned by Snyk to avoid a vulnerability
 zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
 pillow>=12.2.0 # not directly required, pinned by Snyk to avoid a vulnerability

@@ -1,5 +1,7 @@
 """GraphQL type definitions for badge, leaderboard, community, notification, and search types."""
 
+from typing import Any
+
 import graphene
 from graphene import relay
 from graphene_django import DjangoObjectType
@@ -137,7 +139,7 @@ class NotificationType(DjangoObjectType):
             "created_at": ["lte", "gte"],
         }
 
-    def resolve_message(self, info):
+    def resolve_message(self, info) -> Any:
         """
         Resolve message field with permission check.
         Returns None if user doesn't have permission to view the message.
@@ -158,7 +160,7 @@ class NotificationType(DjangoObjectType):
             return self.message
         return None
 
-    def resolve_conversation(self, info):
+    def resolve_conversation(self, info) -> Any:
         """
         Resolve conversation field with permission check.
         Returns None if user doesn't have permission to view the conversation.
@@ -179,7 +181,7 @@ class NotificationType(DjangoObjectType):
             return self.conversation
         return None
 
-    def resolve_data(self, info):
+    def resolve_data(self, info) -> Any:
         """
         Resolve data field. The data is stored as JSON and returned as-is.
         Frontend must handle HTML escaping to prevent XSS.
@@ -349,26 +351,26 @@ class SemanticSearchResultType(graphene.ObjectType):
         description="The corpus containing this annotation, if any",
     )
 
-    def resolve_document(self, info):
+    def resolve_document(self, info) -> Any:
         """Resolve the document from the annotation."""
         if self.annotation and self.annotation.document:
             return self.annotation.document
         return None
 
-    def resolve_corpus(self, info):
+    def resolve_corpus(self, info) -> Any:
         """Resolve the corpus from the annotation."""
         if self.annotation:
             return self.annotation.corpus
         return None
 
 
-def _get_document_type():
+def _get_document_type() -> Any:
     from config.graphql.document_types import DocumentType
 
     return DocumentType
 
 
-def _get_corpus_type():
+def _get_corpus_type() -> Any:
     from config.graphql.corpus_types import CorpusType
 
     return CorpusType
