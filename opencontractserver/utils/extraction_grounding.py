@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from asgiref.sync import sync_to_async
@@ -28,6 +28,12 @@ from opencontractserver.utils.text_alignment import (
     AlignmentResult,
     align_text_to_document,
 )
+
+if TYPE_CHECKING:
+    from opencontractserver.annotations.models import Annotation, AnnotationLabel
+    from opencontractserver.corpuses.models import Corpus
+    from opencontractserver.documents.models import Document
+    from opencontractserver.extracts.models import Datacell
 
 logger = logging.getLogger(__name__)
 
@@ -109,20 +115,20 @@ def _is_non_groundable(s: str) -> bool:
 
 
 @sync_to_async
-def _load_document_text_and_layer(document):
+def _load_document_text_and_layer(document: Document) -> tuple[str, Any, str]:
     """Load document text and optional PlasmaPDF translation layer.
 
     Returns:
         (doc_text, pdf_layer_or_none, annotation_type_const)
     """
     from opencontractserver.annotations.models import SPAN_LABEL, TOKEN_LABEL
-    from opencontractserver.constants.document_processing import TEXT_MIMETYPES
+    from opencontractserver.constants.document_processing import (
+        DOCX_MIME_TYPE,
+        TEXT_MIMETYPES,
+    )
     from opencontractserver.utils.compact_pawls import expand_pawls_pages
 
     file_type = (document.file_type or "").lower()
-    docx_mime = (
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
 
     if file_type == "application/pdf":
         if not document.pawls_parse_file:
@@ -138,7 +144,7 @@ def _load_document_text_and_layer(document):
         pdf_layer = build_translation_layer(pawls_tokens)
         return pdf_layer.doc_text, pdf_layer, TOKEN_LABEL
 
-    elif file_type in TEXT_MIMETYPES or file_type == docx_mime:
+    elif file_type in TEXT_MIMETYPES or file_type == DOCX_MIME_TYPE:
         if not document.txt_extract_file:
             raise ValueError(
                 f"Document id={document.id} (type={file_type}) lacks "
@@ -164,19 +170,29 @@ def _load_document_text_and_layer(document):
 @sync_to_async
 def _create_grounding_annotations(
     alignment_results: list[AlignmentResult],
-    document,
-    corpus,
+    document: Document,
+    corpus: Corpus,
     creator_id: int,
-    pdf_layer,
+    pdf_layer: Any,
     annotation_type: str,
-) -> list:
+) -> list[Annotation]:
     """Create Annotation objects for each alignment result.
 
     For PDFs, uses PlasmaPDF to generate token-level annotations with
     bounding boxes.  For text/DOCX, creates span annotations with
     character offsets.
 
-    Returns list of saved Annotation instances.
+    Annotation creation is idempotent: re-running grounding (e.g. after a
+    Celery retry) reuses existing OC_EXTRACT_SOURCE annotations with the
+    same span coordinates rather than creating duplicates.
+
+    The label/labelset lookup is performed inside the per-annotation
+    savepoint so that a transient failure (e.g. a labelset constraint
+    violation) only loses the affected annotation instead of aborting the
+    whole batch.
+
+    Returns list of saved Annotation instances (may include both newly
+    created and previously existing rows on retry).
     """
     from django.db import transaction
 
@@ -189,18 +205,19 @@ def _create_grounding_annotations(
     if not alignment_results:
         return []
 
-    # Get or create the extraction source label
-    label_obj = corpus.ensure_label_and_labelset(
-        label_text=OC_EXTRACT_SOURCE_LABEL,
-        creator_id=creator_id,
-        label_type=annotation_type,
-    )
-
-    annotations = []
+    annotations: list[Annotation] = []
 
     for result in alignment_results:
         try:
             with transaction.atomic():
+                # Resolve label inside the savepoint so a labelset failure
+                # only skips this annotation, not the whole batch.
+                label_obj = corpus.ensure_label_and_labelset(
+                    label_text=OC_EXTRACT_SOURCE_LABEL,
+                    creator_id=creator_id,
+                    label_type=annotation_type,
+                )
+
                 if annotation_type == TOKEN_LABEL and pdf_layer is not None:
                     annot = _create_pdf_annotation(
                         result, document, corpus, creator_id, pdf_layer, label_obj
@@ -212,8 +229,8 @@ def _create_grounding_annotations(
                 else:
                     continue
 
-                annot.save()
-                annotations.append(annot)
+                if annot is not None:
+                    annotations.append(annot)
 
         except Exception:
             logger.warning(
@@ -229,8 +246,23 @@ def _create_grounding_annotations(
     return annotations
 
 
-def _create_pdf_annotation(result, document, corpus, creator_id, pdf_layer, label_obj):
-    """Create a TOKEN_LABEL annotation for a PDF document via PlasmaPDF."""
+def _create_pdf_annotation(
+    result: AlignmentResult,
+    document: Document,
+    corpus: Corpus,
+    creator_id: int,
+    pdf_layer: Any,
+    label_obj: AnnotationLabel,
+) -> Annotation | None:
+    """Create (or fetch) a TOKEN_LABEL annotation for a PDF document via PlasmaPDF.
+
+    Idempotent: returns the existing annotation if one with the same
+    document, label, and span coordinates already exists.
+
+    Returns ``None`` if the annotation cannot be created safely (e.g.
+    PlasmaPDF could not determine the page) so the caller can skip it.
+    Raises inside the savepoint to roll back on hard failures.
+    """
     from plasmapdf.models.types import SpanAnnotation, TextSpan
 
     from opencontractserver.annotations.models import TOKEN_LABEL, Annotation
@@ -246,43 +278,68 @@ def _create_pdf_annotation(result, document, corpus, creator_id, pdf_layer, labe
 
     page = oc_ann.get("page")
     if page is None:
-        logger.warning(
-            "PlasmaPDF annotation missing 'page' key for span [%d:%d] "
-            "in document %d; defaulting to page 1",
-            result.char_start,
-            result.char_end,
-            document.id,
+        # Skipping is preferred over saving with page=1: a wrong page on a
+        # multi-page PDF produces a structurally incorrect annotation that
+        # confuses users clicking through to the source.  Raising rolls
+        # back the savepoint and the outer loop logs it as a failed
+        # grounding attempt.
+        raise ValueError(
+            f"PlasmaPDF could not determine page for span "
+            f"[{result.char_start}:{result.char_end}] in document "
+            f"{document.id}; skipping grounding annotation."
         )
-        page = 1
 
-    return Annotation(
-        raw_text=oc_ann["rawText"],
-        page=page,
-        json=oc_ann["annotation_json"],
-        annotation_label=label_obj,
+    annot, _ = Annotation.objects.get_or_create(
         document=document,
-        corpus=corpus,
-        creator_id=creator_id,
+        annotation_label=label_obj,
+        page=page,
         annotation_type=TOKEN_LABEL,
-        structural=False,
+        raw_text=oc_ann["rawText"],
+        defaults={
+            "json": oc_ann["annotation_json"],
+            "corpus": corpus,
+            "creator_id": creator_id,
+            "structural": False,
+        },
     )
+    return annot
 
 
-def _create_span_annotation(result, document, corpus, creator_id, label_obj):
-    """Create a SPAN_LABEL annotation for a text/DOCX document."""
+def _create_span_annotation(
+    result: AlignmentResult,
+    document: Document,
+    corpus: Corpus,
+    creator_id: int,
+    label_obj: AnnotationLabel,
+) -> Annotation:
+    """Create (or fetch) a SPAN_LABEL annotation for a text/DOCX document.
+
+    Idempotent: returns the existing annotation if one with the same
+    document, label, and span coordinates already exists.
+
+    Note: ``page`` is hardcoded to ``1`` because plain-text and DOCX
+    documents don't carry a page-break map through the txt_extract_file
+    pipeline, so we cannot derive an accurate page from the character
+    offset.  For DOCX in particular this is a known limitation; the field
+    serves as a placeholder and the actual location is encoded by the
+    character offsets in ``json``.
+    """
     from opencontractserver.annotations.models import SPAN_LABEL, Annotation
 
-    return Annotation(
-        raw_text=result.matched_text,
-        page=1,
-        json={"start": result.char_start, "end": result.char_end},
-        annotation_label=label_obj,
+    annot, _ = Annotation.objects.get_or_create(
         document=document,
-        corpus=corpus,
-        creator_id=creator_id,
+        annotation_label=label_obj,
         annotation_type=SPAN_LABEL,
-        structural=False,
+        raw_text=result.matched_text,
+        json={"start": result.char_start, "end": result.char_end},
+        defaults={
+            "page": 1,
+            "corpus": corpus,
+            "creator_id": creator_id,
+            "structural": False,
+        },
     )
+    return annot
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +348,7 @@ def _create_span_annotation(result, document, corpus, creator_id, label_obj):
 
 
 @sync_to_async
-def _resolve_corpus(corpus_id: int):
+def _resolve_corpus(corpus_id: int) -> Corpus | None:
     """Resolve a corpus ID to a Corpus instance."""
     from opencontractserver.corpuses.models import Corpus
 
@@ -303,14 +360,14 @@ def _resolve_corpus(corpus_id: int):
 
 
 async def ground_extraction_to_annotations(
-    datacell,
-    document,
-    corpus,
+    datacell: Datacell,
+    document: Document,
+    corpus: Corpus | int | None,
     user_id: int,
     *,
     fuzzy_threshold: float = 0.75,
     enable_fuzzy: bool = True,
-) -> list:
+) -> list[Annotation]:
     """Auto-ground a completed Datacell's extracted data to source annotations.
 
     This is the main entry point.  Call it after ``datacell.data`` has been
@@ -423,6 +480,6 @@ async def ground_extraction_to_annotations(
 
 
 @sync_to_async
-def _link_sources(datacell, annotations):
+def _link_sources(datacell: Datacell, annotations: list[Annotation]) -> None:
     """Add annotation objects to datacell.sources M2M."""
     datacell.sources.add(*annotations)
