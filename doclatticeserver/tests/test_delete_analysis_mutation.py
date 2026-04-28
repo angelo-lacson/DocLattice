@@ -1,9 +1,8 @@
 """Regression coverage for the DeleteAnalysisMutation return value.
 
-PR #1369 restored the missing ``return DeleteAnalysisMutation(...)`` line in
-``config/graphql/analysis_mutations.py``. Before the fix the mutation kicked
-off the async deletion task correctly but returned ``None`` to the GraphQL
-client, so the frontend never observed ``ok=True`` / a success message.
+The mutation triggers an async deletion task and must return a
+typed ``ok=True`` / ``message`` payload so the frontend can observe
+the success shape rather than receiving ``null``.
 """
 
 from __future__ import annotations

@@ -12,7 +12,7 @@ from django.contrib.auth.models import (
     Group,
 )
 from django.contrib.auth.models import UserManager as DjangoUserManager
-from django.db.models import Field, Q, QuerySet
+from django.db.models import Q, QuerySet
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -168,16 +168,6 @@ class User(AbstractUser):
 
     def __str__(self) -> str:
         return f"{self.username}: {self.email}"
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        username_field = self._meta.get_field("username")
-        # ``get_field`` is typed as ``Field | ForeignObjectRel``; the
-        # username field is always a plain ``Field``, but narrow here so
-        # mypy can see ``.validators`` without a cast.
-        if isinstance(username_field, Field):
-            username_field.validators[0] = UserUnicodeUsernameValidator()
-
-        super().__init__(*args, **kwargs)
 
     def get_absolute_url(self) -> str:
         """Get url for user's detail view.
