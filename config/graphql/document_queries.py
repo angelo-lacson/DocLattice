@@ -12,6 +12,7 @@ from django.conf import settings
 from django.db.models import QuerySet
 from graphene import relay
 from graphene_django.filter import DjangoFilterConnectionField
+from graphql import GraphQLError
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
@@ -142,7 +143,7 @@ class DocumentQueryMixin:
         """
         relay_id = kwargs.get("id")
         if relay_id is None:
-            raise DocumentRelationship.DoesNotExist()
+            raise GraphQLError("DocumentRelationship id is required")
         django_pk = from_global_id(relay_id)[1]
         result = DocumentRelationshipQueryOptimizer.get_relationship_by_id(
             user=info.context.user,

@@ -82,7 +82,7 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         except Exception:
             return 0
 
-    def resolve_total_messages(self, info) -> Any:
+    def resolve_total_messages(self, info) -> int:
         """
         Resolve total messages posted by this user.
         Only counts messages visible to the requesting user.

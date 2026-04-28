@@ -83,7 +83,7 @@ class UserQueryMixin:
     ) -> UserImport:
         relay_id = kwargs.get("id")
         if relay_id is None:
-            raise UserImport.DoesNotExist()
+            raise GraphQLError("UserImport id is required")
         django_pk = from_global_id(relay_id)[1]
         return UserImport.objects.visible_to_user(info.context.user).get(id=django_pk)
 
@@ -106,7 +106,7 @@ class UserQueryMixin:
     ) -> UserExport:
         relay_id = kwargs.get("id")
         if relay_id is None:
-            raise UserExport.DoesNotExist()
+            raise GraphQLError("UserExport id is required")
         django_pk = from_global_id(relay_id)[1]
         return UserExport.objects.visible_to_user(info.context.user).get(id=django_pk)
 
