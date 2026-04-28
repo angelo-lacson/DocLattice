@@ -24,6 +24,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from opencontractserver.benchmarks.adapters.legalbench_rag import (
     LEGALBENCH_RAG_SUBSETS,
+    PAPER_MAX_TESTS_PER_BENCHMARK,
     LegalBenchRAGAdapter,
 )
 from opencontractserver.benchmarks.runner import run_benchmark
@@ -118,10 +119,11 @@ class Command(BaseCommand):
         parser.add_argument(
             "--max-per-subset",
             type=int,
-            default=194,
+            default=PAPER_MAX_TESTS_PER_BENCHMARK,
             help=(
                 "Per-subset cap when --paper-sampling is on. Defaults to "
-                "upstream's MAX_TESTS_PER_BENCHMARK = 194."
+                "upstream's MAX_TESTS_PER_BENCHMARK "
+                f"= {PAPER_MAX_TESTS_PER_BENCHMARK}."
             ),
         )
         parser.add_argument(
@@ -194,7 +196,9 @@ class Command(BaseCommand):
         # Today only LegalBenchRAGAdapter does; future adapters can opt in.
         if benchmark_name == "legalbench-rag":
             adapter_kwargs["paper_sampling"] = options.get("paper_sampling", True)
-            adapter_kwargs["max_per_subset"] = options.get("max_per_subset", 194)
+            adapter_kwargs["max_per_subset"] = options.get(
+                "max_per_subset", PAPER_MAX_TESTS_PER_BENCHMARK
+            )
         # mypy can't statically narrow ``adapter_kwargs: dict[str, object]``
         # against each adapter subclass's specific parameter types. The dict
         # values are sourced from argparse, which already validated them.

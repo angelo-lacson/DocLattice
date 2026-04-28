@@ -175,6 +175,7 @@ def run_benchmark(
         corpus_wide=corpus_wide,
     )
 
+    config["finished_at"] = timezone.now().isoformat()
     report = BenchmarkReport(
         adapter=loaded.adapter_description,
         config=dict(config),  # snapshot; avoid aliasing with the mutable local
@@ -183,7 +184,6 @@ def run_benchmark(
         task_results=task_results,
     )
     # compute_aggregates() is auto-called unconditionally by __post_init__.
-    config["finished_at"] = timezone.now().isoformat()
 
     if write_report:
         resolved_run_dir = _resolve_run_dir(

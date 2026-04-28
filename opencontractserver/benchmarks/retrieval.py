@@ -27,6 +27,25 @@ logger = logging.getLogger(__name__)
 Span = tuple[int, int]
 
 
+# Module-level cache for ``StructuralAnnotationSet → Document`` resolution
+# inside a benchmark process.  A full LegalBench-RAG run probes ~776
+# queries × top_k=32 hits and reuses a small set of structural sets, so
+# making the cache call-local would re-issue the same query hundreds of
+# times.  Keying on ``(corpus_id, struct_set_id)`` keeps separate corpora
+# isolated when the same struct_set appears in multiple corpora.
+_STRUCT_SET_TO_DOC: dict[tuple[int, int], int | None] = {}
+
+
+def _clear_struct_set_cache() -> None:
+    """Test hook: drop cached struct-set→document resolutions.
+
+    The cache is process-wide; tests that recreate corpora between
+    cases need to clear it so a stale ``Document.id`` from a torn-down
+    fixture isn't returned.
+    """
+    _STRUCT_SET_TO_DOC.clear()
+
+
 @dataclass
 class RetrievalResult:
     """Retrieval probe output for a single (query, document) pair.
@@ -113,11 +132,10 @@ def probe_retrieval(
     # off ``StructuralAnnotationSet`` (shared across documents with the
     # same content hash). To produce a per-result document_id we resolve
     # ``structural_set_id`` → ``Document.id`` via the reverse FK on
-    # Document. Cache lookups per-call so a top-k of 64 doesn't trigger
-    # 64 queries when many hits share the same set.
+    # Document.  The cache is module-level (keyed by corpus_id) so a
+    # full benchmark run amortises the lookup across all probe calls
+    # rather than re-querying once per-call.
     from opencontractserver.documents.models import Document
-
-    struct_set_to_doc: dict[int, int | None] = {}
 
     def _resolve_doc_id(annotation: Annotation) -> int | None:
         if annotation.document_id is not None:
@@ -125,7 +143,8 @@ def probe_retrieval(
         struct_set_id = annotation.structural_set_id
         if struct_set_id is None:
             return None
-        if struct_set_id not in struct_set_to_doc:
+        cache_key = (corpus_id, struct_set_id)
+        if cache_key not in _STRUCT_SET_TO_DOC:
             # Resolve to the Document in the *target corpus* — across
             # benchmark runs the same content_hash can reappear, and
             # ``CoreAnnotationVectorStore``'s structural-annotation
@@ -142,8 +161,8 @@ def probe_retrieval(
                 .distinct()
                 .first()
             )
-            struct_set_to_doc[struct_set_id] = doc.id if doc else None
-        return struct_set_to_doc[struct_set_id]
+            _STRUCT_SET_TO_DOC[cache_key] = doc.id if doc else None
+        return _STRUCT_SET_TO_DOC[cache_key]
 
     for hit in results:
         annotation: Annotation = hit.annotation

@@ -108,6 +108,7 @@ def _has_anchor_ngram(
     doc_text: str,
     *,
     n: int = FUZZY_ANCHOR_MIN_NGRAM_WORDS,
+    doc_lower: str | None = None,
 ) -> bool:
     """Cheap pre-filter: does ``query`` share any n consecutive words with
     ``doc_text`` as an exact substring?
@@ -118,6 +119,12 @@ def _has_anchor_ngram(
     on pathological paraphrases for predictable grounding latency.
 
     ``n=0`` short-circuits to ``True`` (filter disabled).
+
+    ``doc_lower`` lets the caller hoist the lowercase conversion out of a
+    per-query loop — at ``MAX_DOC_LENGTH_FOR_FUZZY`` (200 KB) every call
+    otherwise allocates a fresh 200 KB string.  When ``None`` (default),
+    the function falls back to computing it locally so single-call sites
+    don't have to plumb it through.
     """
     if n <= 0:
         return True
@@ -128,8 +135,9 @@ def _has_anchor_ngram(
         return True
     # Case-insensitive substring match: paraphrases often shift case
     # (titles, sentence-initial caps) without breaking the underlying
-    # anchor. Build the doc index once per call rather than per ngram.
-    doc_lower = doc_text.lower()
+    # anchor.
+    if doc_lower is None:
+        doc_lower = doc_text.lower()
     for i in range(len(words) - n + 1):
         ngram = " ".join(words[i : i + n])
         if ngram and ngram in doc_lower:
@@ -287,6 +295,10 @@ def align_text_to_document(
 
     # Pre-build normalized index for tier 2 (amortized across queries)
     norm_doc, char_map = _build_normalized_index(document_text)
+    # Hoist the lowercase conversion used by ``_has_anchor_ngram`` out of
+    # the per-query loop — at the fuzzy cap (200 KB) the per-call
+    # allocation cost dominated the anchor check itself.
+    doc_lower_cached: str | None = None
 
     for query in query_texts:
         if not query or len(query) < min_query_length:
@@ -357,7 +369,9 @@ def align_text_to_document(
                     MAX_QUERY_LENGTH_FOR_FUZZY,
                 )
                 continue
-            if not _has_anchor_ngram(query, document_text):
+            if doc_lower_cached is None:
+                doc_lower_cached = document_text.lower()
+            if not _has_anchor_ngram(query, document_text, doc_lower=doc_lower_cached):
                 logger.debug(
                     "Skipping fuzzy match: query %r has no exact %d-gram "
                     "anchor in document. Most queries that fail this test "

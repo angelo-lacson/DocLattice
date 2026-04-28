@@ -98,11 +98,18 @@ def _paper_sample_tests(
             continue
         valid.append(test)
 
-    def _seed_key(test: dict[str, Any]) -> float:
-        random.seed(test["snippets"][0]["file_path"])
-        return random.random()
+    # Precompute sort keys with an isolated ``random.Random`` instance
+    # so we don't mutate the process-wide random state on every sort
+    # comparison.  Upstream code seeds the global PRNG inside the sort
+    # key; we get the same per-test deterministic value without the
+    # global side effect.
+    def _seed_value(file_path: str) -> float:
+        rng = random.Random()
+        rng.seed(file_path)
+        return rng.random()
 
-    valid.sort(key=_seed_key)
+    keys = {id(test): _seed_value(test["snippets"][0]["file_path"]) for test in valid}
+    valid.sort(key=lambda test: keys[id(test)])
     return valid[:max_per_subset]
 
 

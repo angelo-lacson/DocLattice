@@ -242,15 +242,18 @@ class SentenceChunker(BaseTextChunker):
 # even when the separator width varies.
 _PARAGRAPH_SEPARATOR_RE = re.compile(r"\n[ \t]*(?:\n[ \t]*)+")
 
-# Characters that look like whitespace to a human but aren't matched by
-# Python's ``str.strip()``: zero-width spaces, BOM, soft hyphens, etc. A
-# paragraph composed only of these characters has no embeddable content
-# and must be dropped — otherwise the embedding microservice tokenises
-# it down to an empty input and computes mean-of-empty, which returns
-# NaN and aborts the entire ingest pipeline. Observed in CUAD documents
-# (e.g. JuniperPharmaceuticalsInc_…) where copy-paste artifacts left
-# runs of ``​`` characters between real paragraphs.
-_INVISIBLE_CHARS_RE = re.compile(r"[   -‏ -  -⁯⁠　﻿­]")
+# Targeted allowlist of format characters (Unicode category Cf) — NOT
+# the whole General Punctuation block.  Typographic characters with
+# content meaning (en dash, em dash, thin space, …) must not be
+# stripped.  A paragraph composed only of these characters has no
+# embeddable content and must be dropped — otherwise the embedding
+# microservice tokenises it down to an empty input and computes
+# mean-of-empty, which returns NaN and aborts ingest.  Observed in
+# CUAD documents where copy-paste artifacts left runs of ​
+# (ZWSP) characters between real paragraphs.
+_INVISIBLE_CHARS_RE = re.compile(
+    "[\u00ad\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]"
+)
 
 
 @register_chunker

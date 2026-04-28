@@ -12,9 +12,12 @@ All functions are pure and side-effect free; the evaluator composes them.
 
 from __future__ import annotations
 
+import logging
 import re
 import string
 from collections.abc import Iterable, Sequence
+
+logger = logging.getLogger(__name__)
 
 Span = tuple[int, int]
 
@@ -97,7 +100,15 @@ def token_recall(prediction: str, gold: str) -> float:
     pred_tokens = set(normalize_answer(prediction).split())
     gold_tokens = list(normalize_answer(gold).split())
     if not gold_tokens:
-        return 0.0 if pred_tokens else 1.0
+        # Empty gold is almost always a data-quality bug; treating
+        # ``token_recall("", "")`` as 1.0 silently inflates aggregate
+        # F1.  Mirror :func:`char_recall` and return 0.0 with a warning
+        # so the operator sees the offending row.
+        logger.warning(
+            "token_recall called with empty gold; returning 0.0. "
+            "This usually indicates a data-quality issue in the dataset."
+        )
+        return 0.0
     unique_gold = set(gold_tokens)
     if not pred_tokens:
         return 0.0

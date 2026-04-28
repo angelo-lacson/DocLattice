@@ -24,6 +24,8 @@ BENCHMARK_COLUMN_NAME_MAX_LEN = 128
 BENCHMARK_QUERY_PREVIEW_MAX_LEN = 64
 
 # Character budget left for the query preview after reserving room for the
-# trailing "…" ellipsis marker. Equals
-# ``BENCHMARK_QUERY_PREVIEW_MAX_LEN - 1``.
-BENCHMARK_QUERY_PREVIEW_TRIM_LEN = 63
+# trailing "…" ellipsis marker.  Derived from
+# ``BENCHMARK_QUERY_PREVIEW_MAX_LEN`` so changing the cap auto-updates the
+# trim point — defining as a literal here invites silent skew when the
+# cap moves.
+BENCHMARK_QUERY_PREVIEW_TRIM_LEN = BENCHMARK_QUERY_PREVIEW_MAX_LEN - 1

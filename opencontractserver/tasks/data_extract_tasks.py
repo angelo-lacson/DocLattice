@@ -105,6 +105,15 @@ async def doc_extract_query_task(
             ``"anthropic:claude-opus-4-6"``). When provided it overrides the
             default extraction model. Used by the benchmark runner to sweep
             models without touching production defaults.
+
+            Trust assumption: this string is passed straight to the agent
+            factory and ultimately to the model registry.  Current call
+            sites (CLI ``run_benchmark`` command, internal benchmark
+            runner) are operator-controlled.  If this task is ever
+            exposed to user-controlled input (webhook, public API), gate
+            it behind an allowlist of approved model identifiers — an
+            arbitrary string here can redirect extraction traffic to an
+            unintended model endpoint.
     """
     import traceback
     from typing import get_origin
