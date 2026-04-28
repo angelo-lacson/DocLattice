@@ -31,8 +31,7 @@ logger = logging.getLogger(__name__)
 def backfill_null_embedder_paths(apps, schema_editor):
     Embedding = apps.get_model("annotations", "Embedding")
 
-    null_rows = Embedding.objects.filter(embedder_path__isnull=True)
-    total = null_rows.count()
+    total = Embedding.objects.filter(embedder_path__isnull=True).count()
     if total == 0:
         logger.info("No Embedding rows with NULL embedder_path — nothing to backfill.")
         return
@@ -50,31 +49,56 @@ def backfill_null_embedder_paths(apps, schema_editor):
     backfilled = 0
     deleted = 0
 
-    # Use .iterator() to avoid loading the full set into memory on large tables.
-    for emb in null_rows.iterator(chunk_size=500):
-        emb.embedder_path = default_embedder_path
-        try:
-            with transaction.atomic():
-                emb.save(update_fields=["embedder_path"])
-            backfilled += 1
-        except IntegrityError:
-            # A (default_embedder_path, parent) row already exists and is
-            # covered by the partial unique constraint. The legacy NULL row
-            # cannot be queried (no call site filters on NULL), so dropping
-            # it is a lossless cleanup.
-            logger.info(
-                "Dropping NULL-embedder_path Embedding id=%s: backfill to %r "
-                "would duplicate an existing row under the partial unique "
-                "constraint.",
-                emb.pk,
-                default_embedder_path,
-            )
-            emb.delete()
-            deleted += 1
+    # Keyset pagination: re-query each chunk for rows that still match the
+    # NULL predicate AND have pk > the previous batch's max. Using
+    # `.iterator(chunk_size=N)` here would be unsafe because we mutate or
+    # delete every row we visit, and OFFSET-based chunking against a
+    # shrinking result set would silently skip rows.
+    chunk_size = 500
+    last_pk = 0
+    while True:
+        batch = list(
+            Embedding.objects.filter(
+                embedder_path__isnull=True, pk__gt=last_pk
+            ).order_by("pk")[:chunk_size]
+        )
+        if not batch:
+            break
+        for emb in batch:
+            emb.embedder_path = default_embedder_path
+            try:
+                with transaction.atomic():
+                    emb.save(update_fields=["embedder_path"])
+                backfilled += 1
+            except IntegrityError:
+                # A (default_embedder_path, parent) row already exists and is
+                # covered by the partial unique constraint. The legacy NULL row
+                # cannot be queried (no call site filters on NULL), so dropping
+                # it is a lossless cleanup.
+                logger.info(
+                    "Dropping NULL-embedder_path Embedding id=%s: backfill to %r "
+                    "would duplicate an existing row under the partial unique "
+                    "constraint.",
+                    emb.pk,
+                    default_embedder_path,
+                )
+                emb.delete()
+                deleted += 1
+        last_pk = batch[-1].pk
 
+    if backfilled + deleted != total:
+        logger.warning(
+            "Embedding.embedder_path backfill: processed %s != initial NULL count %s "
+            "(backfilled=%s, deleted=%s). Some rows may have been added/removed by "
+            "concurrent traffic during the migration.",
+            backfilled + deleted,
+            total,
+            backfilled,
+            deleted,
+        )
     logger.info(
         "Embedding.embedder_path backfill complete: backfilled=%s, deleted=%s, "
-        "total=%s.",
+        "initial_null_count=%s.",
         backfilled,
         deleted,
         total,
