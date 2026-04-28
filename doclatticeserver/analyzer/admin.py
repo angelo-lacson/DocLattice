@@ -1,3 +1,5 @@
+from typing import Any
+
 from django.contrib import admin
 from django.urls import path
 from guardian.admin import GuardedModelAdmin
@@ -16,7 +18,7 @@ class AnalyzerAdmin(GuardedModelAdmin):
     list_display = ["id", "description", "task_name", "host_gremlin"]
     change_list_template = "admin/analyzer/analyzer_changelist.html"
 
-    def get_urls(self):
+    def get_urls(self) -> list[Any]:
         urls = super().get_urls()
         custom_urls = [
             path(

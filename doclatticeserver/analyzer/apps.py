@@ -3,10 +3,10 @@ from django.db.models.signals import post_save
 
 
 class AnnotationsConfig(AppConfig):
-    default_auto_field = "django.db.models.BigAutoField"
-    name = "doclatticeserver.analyzer"
+    default_auto_field: str = "django.db.models.BigAutoField"
+    name: str = "doclatticeserver.analyzer"
 
-    def ready(self):
+    def ready(self) -> None:
         try:
             import doclatticeserver.analyzer.signals  # noqa F401
             from doclatticeserver.analyzer.models import GremlinEngine
