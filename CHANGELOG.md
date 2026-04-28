@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Mypy: graduated `opencontractserver/users/tasks.py` out of the baseline** (Issue #1333 follow-up): `tasks.py` was the last `opencontractserver.users` module still suppressed in `mypy.ini`. PR #1370 left it untyped because the file is only loaded when `settings.USE_AUTH0=True`, so it never failed at runtime under the test settings; the typing gap kept the package short of the issue's "all four packages at ≥80% return-annotation coverage" Done-When criterion. Added return + parameter annotations to all five Auth0 sync tasks (`get_new_auth0_token`, `apply_data_to_user`, `sync_remote_user`, `ensure_valid_auth0_token`, `get_user_details_async`), introduced a module-level docstring documenting the `USE_AUTH0` gating, and removed the `[mypy-opencontractserver.users.tasks] ignore_errors = True` section. Local `data` rebound from request body (`dict[str, str]`) to response payload (`dict[str, Any]`) was split into two distinctly-named variables (`request_data` / `payload`) so the types are unambiguous; behavior is unchanged. No callers needed updating — `config/graphql_auth0_auth/utils.py` still consumes `sync_remote_user.delay(...)` exactly as before.
+
 ### Fixed
 
 - **`test_superuser_sees_all_queryset` miscounts personal corpuses by 1** (Issue #1394, `opencontractserver/tests/test_visibility_managers.py`, `opencontractserver/tests/test_resolvers.py`): Two `VisibleToUserTests.test_superuser_sees_all_queryset` cases asserted that `Corpus.objects.visible_to_user(superuser).count() == 4` (public + private + 2 personal), but the actual count is 5 because the test DB starts with a pre-existing personal corpus owned by django-guardian's `AnonymousUser` (created during fixture setup before/around the username-based skip in `opencontractserver/users/signals.py::user_created_signal`). The assertion is now scoped to corpuses created by the test's two users (`creator__in=[self.user, self.superuser]`), making it resilient to any fixture-level corpuses that exist at test DB init time. Production code is unchanged.
