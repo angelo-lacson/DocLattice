@@ -390,7 +390,14 @@ async def doc_extract_query_task(
                     prompt=prompt,
                     target_type=output_type,
                     framework=AgentFramework.PYDANTIC_AI,
-                    temperature=0.3,  # Low temperature for consistent extraction
+                    # Low temperature for consistent extraction. Note: this
+                    # function-level pin bypasses the Anthropic temperature=0
+                    # override in `_structured_response_raw` (issue #1381).
+                    # Safe today because the model is also pinned to
+                    # `openai:gpt-4o-mini`; if the model becomes column-
+                    # configurable, gate this temperature on the model family
+                    # so Claude variants still get the override.
+                    temperature=0.3,
                     similarity_top_k=similarity_top_k,
                     model="openai:gpt-4o-mini",  # Fast and reliable
                     user_id=datacell.creator.id,

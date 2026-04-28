@@ -1352,12 +1352,12 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             # of committing to the structured output when given any wiggle
             # room (issue #1381). Force temperature down to 0 unless the
             # caller explicitly asked for something else (function-level
-            # temperature pin OR a non-zero config.temperature).
+            # temperature pin OR an explicit config.temperature).
             effective_model = model or self.config.model_name
             if (
                 _is_anthropic_model(effective_model)
                 and temperature is None
-                and (self.config.temperature is None or self.config.temperature == 0)
+                and self.config.temperature is None
             ):
                 logger.info(
                     "Forcing temperature=0 for structured extraction with "

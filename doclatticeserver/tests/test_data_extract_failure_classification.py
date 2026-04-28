@@ -86,6 +86,19 @@ class ClassifyNoneResultTests(SimpleTestCase):
         ]
         self.assertEqual(_classify_none_result(messages), NONE_RESULT_TOOL_LOOP)
 
+    def test_repeats_below_threshold_are_not_tool_loop(self) -> None:
+        """Two repeats (threshold - 1) ⇒ no_final_response, not tool_loop.
+
+        Pins the boundary so a future tweak of ``_TOOL_LOOP_THRESHOLD``
+        forces this test to be updated explicitly.
+        """
+        repeated = _tool_call("similarity_search", {"query": "same"})
+        messages = [
+            _make_response(repeated),
+            _make_response(repeated),
+        ]
+        self.assertEqual(_classify_none_result(messages), NONE_RESULT_NO_FINAL)
+
     def test_loop_then_final_is_committed_not_loop(self) -> None:
         """If the agent eventually commits, that wins over loop detection."""
         repeated = _tool_call("similarity_search", {"query": "loop"})
