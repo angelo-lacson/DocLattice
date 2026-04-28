@@ -260,6 +260,120 @@ class CrossCorpusStructuralLeakTests(TestCase):
     # Document-scoped retrieval — must continue to work post-fix
     # ------------------------------------------------------------------ #
 
+    def test_deletion_aware_path_excludes_deleted_document_structural(self) -> None:
+        """Structural rows whose only ``DocumentPath`` is deleted are dropped.
+
+        Covers the deletion side of ``check_corpus_deletion=True``: the
+        ``DocumentPath`` row for ``doc_a`` is flipped to ``is_deleted=True``,
+        so ``active_doc_ids`` in
+        ``CoreAnnotationVectorStore._build_base_queryset`` becomes empty and
+        the corpus-only branch must short-circuit to no results — the
+        document's structural annotation must NOT come back, even though the
+        annotation row itself is otherwise unchanged.
+        """
+        DocumentPath.objects.filter(document=self.doc_a, corpus=self.corpus_a).update(
+            is_deleted=True
+        )
+
+        store = CoreAnnotationVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus_a.id,
+            document_id=None,
+            check_corpus_deletion=True,
+        )
+        query = VectorSearchQuery(
+            query_embedding=_constant_vector(384, 0.5), similarity_top_k=10
+        )
+        results = store.search(query)
+        returned_ids = {r.annotation.id for r in results}
+
+        self.assertNotIn(
+            self.struct_a.id,
+            returned_ids,
+            "Structural annotation whose only DocumentPath is deleted "
+            "leaked through the deletion-aware corpus-only path",
+        )
+
+    def test_deletion_aware_path_partial_deletion_keeps_active_drops_deleted(
+        self,
+    ) -> None:
+        """Partial deletion: with two docs in one corpus, only the active stays.
+
+        The previous test stresses the early-exit branch (every doc deleted
+        → ``has_active_docs`` is False → ``Annotation.none()``). This test
+        stresses the actual subquery filter:
+
+            active_filters &= Q(document_id__in=active_doc_ids_qs) | Q(
+                structural=True, structural_set_id__in=active_struct_set_ids
+            )
+
+        With one active document and one deleted document in the same
+        corpus, ``active_doc_ids_qs`` is non-empty but partial. The
+        deleted document's structural annotation must be excluded while
+        the active document's must come through. This is the scenario
+        most likely to regress silently if the OR clause is rebuilt or
+        the subquery is rewritten incorrectly.
+        """
+        # Add a second document to corpus_a with its own structural set,
+        # then mark its DocumentPath deleted while doc_a's stays active.
+        deleted_set = StructuralAnnotationSet.objects.create(
+            content_hash=hashlib.sha256(b"corpus-a-deleted-doc").hexdigest(),
+            creator=self.user,
+            parser_name="TestParser",
+            parser_version="1.0",
+        )
+        deleted_doc = Document.objects.create(
+            title="Doc A2 (deleted)",
+            creator=self.user,
+            is_public=True,
+            structural_annotation_set=deleted_set,
+        )
+        DocumentPath.objects.create(
+            document=deleted_doc,
+            corpus=self.corpus_a,
+            path="/doc_a2.pdf",
+            version_number=1,
+            is_current=True,
+            is_deleted=True,
+            creator=self.user,
+        )
+        deleted_struct = Annotation.objects.create(
+            structural_set=deleted_set,
+            annotation_label=self.label,
+            creator=self.user,
+            raw_text="Deleted-doc structural paragraph",
+            structural=True,
+            page=1,
+        )
+        deleted_struct.add_embedding(
+            get_default_embedder_path(), _constant_vector(384, 0.15)
+        )
+
+        store = CoreAnnotationVectorStore(
+            user_id=self.user.id,
+            corpus_id=self.corpus_a.id,
+            document_id=None,
+            check_corpus_deletion=True,
+        )
+        query = VectorSearchQuery(
+            query_embedding=_constant_vector(384, 0.5), similarity_top_k=10
+        )
+        results = store.search(query)
+        returned_ids = {r.annotation.id for r in results}
+
+        self.assertIn(
+            self.struct_a.id,
+            returned_ids,
+            "Active document's structural annotation was excluded by the "
+            "partial-deletion subquery filter",
+        )
+        self.assertNotIn(
+            deleted_struct.id,
+            returned_ids,
+            "Deleted document's structural annotation leaked through the "
+            "partial-deletion subquery filter",
+        )
+
     def test_document_scoped_search_still_returns_structural(self) -> None:
         """Document-scoped retrieval is the existing well-tested path.
 
