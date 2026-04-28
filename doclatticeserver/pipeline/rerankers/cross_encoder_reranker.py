@@ -183,7 +183,7 @@ class CrossEncoderReranker(BaseReranker):
         # Some cross-encoders (activation=sigmoid) return 0D arrays per pair
         # or numpy floats — normalize to Python floats.
         try:
-            score_list = [float(s) for s in scores]
+            score_list = [float(score) for score in scores]
         except TypeError:
             # Single-pair responses may come back as a scalar
             score_list = [float(scores)]
