@@ -3,6 +3,7 @@ GraphQL query mixin for corpus action and execution queries.
 """
 
 import logging
+from typing import Any
 
 import graphene
 from graphene_django.fields import DjangoConnectionField
@@ -33,7 +34,7 @@ class ActionQueryMixin:
     )
 
     @login_required
-    def resolve_corpus_action_templates(self, info, **kwargs):
+    def resolve_corpus_action_templates(self, info, **kwargs) -> Any:
         """Return available corpus action templates.
 
         Templates are system-level and read-only — any authenticated user
@@ -58,7 +59,7 @@ class ActionQueryMixin:
     )
 
     @login_required
-    def resolve_corpus_actions(self, info, **kwargs):
+    def resolve_corpus_actions(self, info, **kwargs) -> Any:
         """
         Resolver for corpus_actions that returns actions visible to the current user.
         Can be filtered by corpus_id, trigger type, and disabled status.
@@ -93,7 +94,7 @@ class ActionQueryMixin:
     )
 
     @login_required
-    def resolve_agent_action_results(self, info, **kwargs):
+    def resolve_agent_action_results(self, info, **kwargs) -> Any:
         """
         Resolver for agent_action_results that returns results visible to the current user.
         Can be filtered by corpus_action_id, document_id, and status.
@@ -142,7 +143,7 @@ class ActionQueryMixin:
     )
 
     @login_required
-    def resolve_corpus_action_executions(self, info, **kwargs):
+    def resolve_corpus_action_executions(self, info, **kwargs) -> Any:
         """
         Resolver for corpus_action_executions that returns executions visible to
         the current user.
@@ -220,7 +221,7 @@ class ActionQueryMixin:
     )
 
     @login_required
-    def resolve_corpus_action_trail_stats(self, info, corpus_id, since=None):
+    def resolve_corpus_action_trail_stats(self, info, corpus_id, since=None) -> Any:
         """
         Resolver for corpus_action_trail_stats that returns aggregated statistics
         for corpus action executions.
@@ -291,7 +292,7 @@ class ActionQueryMixin:
         corpus_id=graphene.ID(required=False),
     )
 
-    def resolve_document_corpus_actions(self, info, document_id, corpus_id=None):
+    def resolve_document_corpus_actions(self, info, document_id, corpus_id=None) -> Any:
         """
         Resolve document actions (corpus actions, extracts, analysis rows) with proper
         permission filtering.
