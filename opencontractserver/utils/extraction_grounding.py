@@ -208,8 +208,11 @@ def _create_grounding_annotations(
     annotations: list[Annotation] = []
 
     # Cache the label across iterations so the happy path is one DB lookup,
-    # not N. Reset to None on savepoint rollback so a transient labelset
-    # failure can be retried on the next annotation.
+    # not N. Reset on ANY savepoint rollback (not just label-lookup failures):
+    # if the label/labelset was created inside this iteration's savepoint and
+    # then rolled back due to a downstream failure, the cached reference is
+    # stale. ensure_label_and_labelset is idempotent, so the cost of an
+    # unnecessary re-fetch after, e.g., a page=None ValueError is one SELECT.
     cached_label: AnnotationLabel | None = None
 
     for result in alignment_results:
@@ -336,6 +339,12 @@ def _create_span_annotation(
     offset.  For DOCX in particular this is a known limitation; the field
     serves as a placeholder and the actual location is encoded by the
     character offsets in ``json``.
+
+    Identity key uses ``json={"start": ..., "end": ...}``. PostgreSQL
+    JSON equality is order-sensitive, so the key order in this literal
+    must remain stable for ``get_or_create`` to deduplicate on retry.
+    Python 3.7+ guarantees dict-literal insertion order, and this is the
+    only construction site, so the ordering is locally enforced.
     """
     from opencontractserver.annotations.models import SPAN_LABEL, Annotation
 
