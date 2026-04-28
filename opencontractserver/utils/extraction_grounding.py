@@ -207,16 +207,21 @@ def _create_grounding_annotations(
 
     annotations: list[Annotation] = []
 
+    # Cache the label across iterations so the happy path is one DB lookup,
+    # not N. Reset to None on savepoint rollback so a transient labelset
+    # failure can be retried on the next annotation.
+    cached_label: AnnotationLabel | None = None
+
     for result in alignment_results:
         try:
             with transaction.atomic():
-                # Resolve label inside the savepoint so a labelset failure
-                # only skips this annotation, not the whole batch.
-                label_obj = corpus.ensure_label_and_labelset(
-                    label_text=OC_EXTRACT_SOURCE_LABEL,
-                    creator_id=creator_id,
-                    label_type=annotation_type,
-                )
+                if cached_label is None:
+                    cached_label = corpus.ensure_label_and_labelset(
+                        label_text=OC_EXTRACT_SOURCE_LABEL,
+                        creator_id=creator_id,
+                        label_type=annotation_type,
+                    )
+                label_obj = cached_label
 
                 if annotation_type == TOKEN_LABEL and pdf_layer is not None:
                     annot = _create_pdf_annotation(
@@ -229,10 +234,10 @@ def _create_grounding_annotations(
                 else:
                     continue
 
-                if annot is not None:
-                    annotations.append(annot)
+                annotations.append(annot)
 
         except Exception:
+            cached_label = None
             logger.warning(
                 "Failed to create grounding annotation for %r "
                 "at [%d:%d] in document %d",
@@ -253,15 +258,16 @@ def _create_pdf_annotation(
     creator_id: int,
     pdf_layer: Any,
     label_obj: AnnotationLabel,
-) -> Annotation | None:
+) -> Annotation:
     """Create (or fetch) a TOKEN_LABEL annotation for a PDF document via PlasmaPDF.
 
     Idempotent: returns the existing annotation if one with the same
-    document, label, and span coordinates already exists.
+    document, label, page, and raw text already exists.
 
-    Returns ``None`` if the annotation cannot be created safely (e.g.
-    PlasmaPDF could not determine the page) so the caller can skip it.
-    Raises inside the savepoint to roll back on hard failures.
+    Raises ``ValueError`` inside the savepoint when the annotation cannot
+    be created safely (e.g. PlasmaPDF could not determine the page); the
+    caller's per-annotation ``try/except`` rolls back the savepoint and
+    logs the skip.
     """
     from plasmapdf.models.types import SpanAnnotation, TextSpan
 
@@ -289,6 +295,13 @@ def _create_pdf_annotation(
             f"{document.id}; skipping grounding annotation."
         )
 
+    # Note: ``json`` (bounding boxes) is in ``defaults``, NOT a lookup key.
+    # For PDFs the (document, label, page, raw_text) tuple already uniquely
+    # identifies the span; PlasmaPDF's bounding-box layout is deterministic
+    # for stable input, so on Celery retry we want to reuse the existing
+    # annotation rather than create a near-duplicate that differs only by
+    # bounding-box reformatting. Span annotations key on ``json`` because
+    # the char offsets ARE the identity for a text/DOCX document.
     annot, _ = Annotation.objects.get_or_create(
         document=document,
         annotation_label=label_obj,

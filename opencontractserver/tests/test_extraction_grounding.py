@@ -514,17 +514,18 @@ class TestGroundingPipelinePDFIntegration(TestCase):
             self.assertIsNotNone(annot.annotation_label)
             assert annot.annotation_label is not None  # narrow for mypy
             self.assertEqual(annot.annotation_label.text, OC_EXTRACT_SOURCE_LABEL)
-            # Page must be a positive integer; never the silent default of 1
-            # for a span that actually lives on page 2.
+            # PlasmaPDF returns 0-indexed pages; valid range is
+            # [0, len(pages) - 1]. The bug we're guarding against is the
+            # silent fallback that would have saved everything on a single
+            # default page even when the span lives on a different one.
             self.assertIsInstance(annot.page, int)
-            self.assertGreaterEqual(annot.page, 1)
-            self.assertLessEqual(annot.page, len(self.pages_text))
+            self.assertGreaterEqual(annot.page, 0)
+            self.assertLess(annot.page, len(self.pages_text))
             self.assertTrue(annot.raw_text)
 
-        # "Acme Holdings" is on page 1 (1-indexed) and
-        # "Global Acquisitions" on page 2 — confirm the per-page mapping
-        # actually works by checking we got at least one annotation off
-        # page 1.
+        # "Acme Holdings" is on page 0 (0-indexed) and "Global Acquisitions"
+        # on page 1 — confirm the per-page mapping actually works by
+        # checking we got annotations on more than one page.
         pages_seen = {a.page for a in annotations}
         self.assertGreater(
             len(pages_seen),
@@ -587,11 +588,7 @@ class TestGroundingPipelinePDFIntegration(TestCase):
         def stub_create(self, span_annotation):
             # Mimic PlasmaPDF's payload but force page=None so the grounding
             # pipeline must take the skip-rather-than-fallback path.
-            return {
-                "page": None,
-                "rawText": span_annotation.span["text"],
-                "annotation_json": {},
-            }
+            return {"page": None, "rawText": "stub", "annotation_json": {}}
 
         with patch(
             "plasmapdf.models.PdfDataLayer.PdfDataLayer."
