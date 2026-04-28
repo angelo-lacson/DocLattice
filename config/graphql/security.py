@@ -6,8 +6,11 @@ GraphQL security utilities.
 - DisableIntrospection: Validation rule to block introspection in production.
 """
 
+from __future__ import annotations
+
 import functools
 import logging
+from typing import Any, Callable
 
 from django.conf import settings
 from django.middleware.csrf import CsrfViewMiddleware
@@ -26,7 +29,7 @@ logger = logging.getLogger(__name__)
 _csrf_middleware = CsrfViewMiddleware(lambda req: None)
 
 
-def conditional_csrf_exempt(view_func):
+def conditional_csrf_exempt(view_func: Callable[..., Any]) -> Callable[..., Any]:
     """
     Decorator that exempts a view from CSRF checks **only** when the request
     carries an explicit ``Authorization`` header (Bearer token or API key).
@@ -34,7 +37,7 @@ def conditional_csrf_exempt(view_func):
     """
 
     @functools.wraps(view_func)
-    def wrapped_view(request, *args, **kwargs):
+    def wrapped_view(request: Any, *args: Any, **kwargs: Any) -> Any:
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
         if auth_header:
             # Token-based auth — browser doesn't attach this automatically,
@@ -61,7 +64,12 @@ def conditional_csrf_exempt(view_func):
 GRAPHQL_MAX_QUERY_DEPTH = getattr(settings, "GRAPHQL_MAX_QUERY_DEPTH", 15)
 
 
-def _measure_depth(node, current_depth=0, context=None, visited_fragments=None):
+def _measure_depth(
+    node: Any,
+    current_depth: int = 0,
+    context: Any | None = None,
+    visited_fragments: set[str] | None = None,
+) -> int:
     """Recursively measure the maximum depth of selection sets.
 
     Follows fragment spreads through the fragment registry to prevent
@@ -109,7 +117,7 @@ class DepthLimitValidationRule(ValidationRule):
     queries.
     """
 
-    def enter_operation_definition(self, node, *_args):
+    def enter_operation_definition(self, node: Any, *_args: Any) -> None:
         depth = _measure_depth(node, context=self.context)
         if depth > GRAPHQL_MAX_QUERY_DEPTH:
             self.report_error(
@@ -134,7 +142,7 @@ class DisableIntrospection(ValidationRule):
     in schema.py (only when settings.DEBUG is False).
     """
 
-    def enter_field(self, node, *_args):
+    def enter_field(self, node: Any, *_args: Any) -> None:
         field_name = node.name.value
         if field_name in ("__schema", "__type"):
             self.report_error(
