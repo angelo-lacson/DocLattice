@@ -123,7 +123,7 @@ class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     _VISIBLE_CORPUS_IDS_CACHE_KEY = "_docpath_visible_corpus_ids"
 
     @classmethod
-    def _get_visible_corpus_ids(cls, info):
+    def _get_visible_corpus_ids(cls, info) -> Any:
         """Get visible corpus IDs with request-level caching to prevent N+1 queries."""
         from opencontractserver.corpuses.models import Corpus
 
@@ -1179,19 +1179,19 @@ class DocumentSummaryRevisionType(AnnotatePermissionsForReadMixin, DjangoObjectT
         connection_class = CountableConnection
 
 
-def _get_corpus_folder_type():
+def _get_corpus_folder_type() -> Any:
     from config.graphql.corpus_types import CorpusFolderType
 
     return CorpusFolderType
 
 
-def _get_corpus_action_type():
+def _get_corpus_action_type() -> Any:
     from config.graphql.agent_types import CorpusActionType
 
     return CorpusActionType
 
 
-def _get_extract_type():
+def _get_extract_type() -> Any:
     from config.graphql.extract_types import ExtractType
 
     return ExtractType

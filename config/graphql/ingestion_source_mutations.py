@@ -3,6 +3,7 @@ GraphQL mutations for IngestionSource CRUD operations.
 """
 
 import logging
+from typing import Any
 
 import graphene
 from django.db import IntegrityError
@@ -45,7 +46,7 @@ def _parse_ingestion_source_global_id(
     return pk, None
 
 
-def _resolve_source_type(source_type):
+def _resolve_source_type(source_type) -> Any:
     """Coerce a graphene Enum to its string value, defaulting to MANUAL."""
     if source_type is None:
         return IngestionSourceCategory.MANUAL

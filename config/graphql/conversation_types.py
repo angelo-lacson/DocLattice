@@ -142,7 +142,7 @@ class MessageType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         from opencontractserver.corpuses.models import Corpus
         from opencontractserver.documents.models import Document, DocumentPath
 
-        def _extract_annotation_id(url: str):
+        def _extract_annotation_id(url: str) -> Any:
             """
             Extract annotation ID from URL query params.
 
