@@ -19,7 +19,6 @@ config/graphql/annotation_queries.py:641: error: Argument 1 to "from_global_id" 
 config/graphql/annotation_queries.py:659: error: Argument 1 to "from_global_id" has incompatible type "Any | None"; expected "str"  [arg-type]
 config/graphql/annotation_queries.py:719: error: Argument 1 to "from_global_id" has incompatible type "Any | None"; expected "str"  [arg-type]
 config/graphql/badge_mutations.py:154: error: Argument 2 to "set_permissions_for_obj_to_user" has incompatible type "Badge"; expected "type[Model]"  [arg-type]
-config/graphql/base_types.py:28: error: Need type annotation for "id_to_children" (hint: "id_to_children: dict[<type>, <type>] = ...")  [var-annotated]
 config/graphql/conversation_mutations.py:148: error: Argument 2 to "set_permissions_for_obj_to_user" has incompatible type "Conversation"; expected "type[Model]"  [arg-type]
 config/graphql/conversation_mutations.py:242: error: Argument 2 to "set_permissions_for_obj_to_user" has incompatible type "ChatMessage"; expected "type[Model]"  [arg-type]
 config/graphql/conversation_mutations.py:344: error: Argument 2 to "set_permissions_for_obj_to_user" has incompatible type "ChatMessage"; expected "type[Model]"  [arg-type]
@@ -28,7 +27,6 @@ config/graphql/conversation_queries.py:375: error: Argument 1 to "from_global_id
 config/graphql/conversation_queries.py:440: error: Incompatible type for lookup 'conversation__chat_with_corpus_id': (got "str", expected "Corpus | int | None")  [misc]
 config/graphql/conversation_queries.py:448: error: Incompatible type for lookup 'moderator_id': (got "str", expected "User | int | None")  [misc]
 config/graphql/conversation_queries.py:553: error: Module "django.utils.timezone" does not explicitly export attribute "timedelta"  [attr-defined]
-config/graphql/conversation_types.py:168: error: Module has no attribute "binascii"  [attr-defined]
 config/graphql/corpus_mutations.py:1070: error: Incompatible default for parameter "name" (default has type "None", parameter has type "str")  [assignment]
 config/graphql/corpus_mutations.py:1070: note: PEP 484 prohibits implicit Optional. Accordingly, mypy has changed its default to no_implicit_optional=True
 config/graphql/corpus_mutations.py:1070: note: Use https://github.com/hauntsaninja/no_implicit_optional to automatically upgrade your codebase
@@ -152,12 +150,6 @@ config/graphql/moderation_mutations.py:695: error: Incompatible types in assignm
 config/graphql/moderation_mutations.py:696: error: Incompatible types in assignment (expression has type "ChatMessage | None", variable has type "Conversation | None")  [assignment]
 config/graphql/og_metadata_queries.py:244: error: Item "None" of "Corpus | None" has no attribute "is_public"  [union-attr]
 config/graphql/og_metadata_queries.py:249: error: Item "None" of "Corpus | None" has no attribute "title"  [union-attr]
-config/graphql/permissioning/permission_annotator/middleware.py:20: error: Variable "config.graphql.permissioning.permission_annotator.middleware.User" is not valid as a type  [valid-type]
-config/graphql/permissioning/permission_annotator/middleware.py:20: note: See https://mypy.readthedocs.io/en/stable/common_issues.html#variables-vs-type-aliases
-config/graphql/permissioning/permission_annotator/middleware.py:28: error: Need type annotation for "this_model_permission_id_map" (hint: "this_model_permission_id_map: dict[<type>, <type>] = ...")  [var-annotated]
-config/graphql/permissioning/permission_annotator/middleware.py:30: error: Need type annotation for "permissions_annotated_for_models" (hint: "permissions_annotated_for_models: list[<type>] = ...")  [var-annotated]
-config/graphql/permissioning/permission_annotator/middleware.py:39: error: "type[User?]" has no attribute "get_all_permissions"  [attr-defined]
-config/graphql/permissioning/permission_annotator/middleware.py:48: error: "type[User?]" has no attribute "groups"  [attr-defined]
 config/graphql/permissioning/permission_annotator/mixins.py:113: error: "AnnotatePermissionsForReadMixin" has no attribute "_meta"  [attr-defined]
 config/graphql/permissioning/permission_annotator/mixins.py:139: error: Argument 1 to "list" has incompatible type "set[str]"; expected "Iterable[PermissionTypes]"  [arg-type]
 config/graphql/permissioning/permission_annotator/mixins.py:160: error: "AnnotatePermissionsForReadMixin" has no attribute "_meta"  [attr-defined]
@@ -171,13 +163,10 @@ config/graphql/permissioning/permission_annotator/mixins.py:349: error: Item "di
 config/graphql/permissioning/permission_annotator/mixins.py:47: error: Need type annotation for "user_permission_map" (hint: "user_permission_map: dict[<type>, <type>] = ...")  [var-annotated]
 config/graphql/permissioning/permission_annotator/mixins.py:48: error: "AnnotatePermissionsForReadMixin" has no attribute "_meta"  [attr-defined]
 config/graphql/permissioning/permission_annotator/mixins.py:94: error: "type[User]" has no attribute "get_anonymous"  [attr-defined]
-config/graphql/permissioning/permission_annotator/utils.py:18: error: Variable "config.graphql.permissioning.permission_annotator.utils.User" is not valid as a type  [valid-type]
-config/graphql/permissioning/permission_annotator/utils.py:18: note: See https://mypy.readthedocs.io/en/stable/common_issues.html#variables-vs-type-aliases
 config/graphql/pipeline_queries.py:60: error: Argument 1 to "get_components_by_mimetype_cached" has incompatible type "str | None"; expected "str"  [arg-type]
 config/graphql/pipeline_queries.py:63: error: Incompatible types in assignment (expression has type "dict[str, tuple[PipelineComponentDefinition, ...]]", variable has type "dict[str, list[PipelineComponentDefinition]]")  [assignment]
 config/graphql/security.py:26: error: Argument 1 to "CsrfViewMiddleware" has incompatible type "Callable[[Any], None]"; expected "_GetResponseCallable | _AsyncGetResponseCallable"  [arg-type]
 config/graphql/security.py:53: error: "_Wrapped[[VarArg(Any), KwArg(Any)], Any, [Any, VarArg(Any), KwArg(Any)], Any]" has no attribute "csrf_exempt"  [attr-defined]
-config/graphql/serializers.py:146: error: Need type annotation for "read_only_fields" (hint: "read_only_fields: list[<type>] = ...")  [var-annotated]
 config/graphql/slug_queries.py:118: error: "QuerySet[Document, Document]" has no attribute "visible_to_user"  [attr-defined]
 config/graphql/slug_queries.py:132: error: "QuerySet[Document, Document]" has no attribute "visible_to_user"  [attr-defined]
 config/graphql/slug_queries.py:75: error: "QuerySet[Document, Document]" has no attribute "visible_to_user"  [attr-defined]

@@ -3,6 +3,7 @@ GraphQL query mixin for user, assignment, import, and export queries.
 """
 
 import warnings
+from typing import Any
 
 import graphene
 from django.db.models import Q
@@ -30,10 +31,10 @@ class UserQueryMixin:
     me = graphene.Field(UserType)
     user_by_slug = graphene.Field(UserType, slug=graphene.String(required=True))
 
-    def resolve_me(self, info):
+    def resolve_me(self, info) -> Any:
         return info.context.user
 
-    def resolve_user_by_slug(self, info, slug):
+    def resolve_user_by_slug(self, info, slug) -> Any:
         """
         Resolve a user by their slug with profile privacy filtering.
 
@@ -60,13 +61,13 @@ class UserQueryMixin:
     userimports = DjangoConnectionField(UserImportType)
 
     @login_required
-    def resolve_userimports(self, info, **kwargs):
+    def resolve_userimports(self, info, **kwargs) -> Any:
         return UserImport.objects.visible_to_user(info.context.user)
 
     userimport = relay.Node.Field(UserImportType)
 
     @login_required
-    def resolve_userimport(self, info, **kwargs):
+    def resolve_userimport(self, info, **kwargs) -> Any:
         django_pk = from_global_id(kwargs.get("id", None))[1]
         return UserImport.objects.visible_to_user(info.context.user).get(id=django_pk)
 
@@ -76,13 +77,13 @@ class UserQueryMixin:
     )
 
     @login_required
-    def resolve_userexports(self, info, **kwargs):
+    def resolve_userexports(self, info, **kwargs) -> Any:
         return UserExport.objects.visible_to_user(info.context.user)
 
     userexport = relay.Node.Field(UserExportType)
 
     @login_required
-    def resolve_userexport(self, info, **kwargs):
+    def resolve_userexport(self, info, **kwargs) -> Any:
         django_pk = from_global_id(kwargs.get("id", None))[1]
         return UserExport.objects.visible_to_user(info.context.user).get(id=django_pk)
 
@@ -92,7 +93,7 @@ class UserQueryMixin:
     )
 
     @login_required
-    def resolve_assignments(self, info, **kwargs):
+    def resolve_assignments(self, info, **kwargs) -> Any:
         """
         Resolve assignments.
 
@@ -116,7 +117,7 @@ class UserQueryMixin:
     assignment = relay.Node.Field(AssignmentType)
 
     @login_required
-    def resolve_assignment(self, info, **kwargs):
+    def resolve_assignment(self, info, **kwargs) -> Any:
         """
         Resolve a single assignment by ID.
 
