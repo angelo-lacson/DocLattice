@@ -3,6 +3,7 @@ GraphQL query mixin for document and document-relationship queries.
 """
 
 import logging
+from typing import Any
 
 import graphene
 from django.conf import settings
@@ -45,7 +46,7 @@ class DocumentQueryMixin:
     )
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
-    def resolve_documents(self, info, **kwargs):
+    def resolve_documents(self, info, **kwargs) -> Any:
         # Use lightweight mode to skip heavy prefetches (doc_annotations,
         # rows, relationships, notes) that are unnecessary for list/TOC
         # queries requesting only basic document fields.
@@ -53,7 +54,7 @@ class DocumentQueryMixin:
 
     document = graphene.Field(DocumentType, id=graphene.ID())
 
-    def resolve_document(self, info, **kwargs):
+    def resolve_document(self, info, **kwargs) -> Any:
         document_id = kwargs.get("id")
         if not document_id:
             return None
@@ -84,7 +85,7 @@ class DocumentQueryMixin:
     )
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
-    def resolve_document_relationships(self, info, **kwargs):
+    def resolve_document_relationships(self, info, **kwargs) -> Any:
         """
         Resolve document relationships with proper permission filtering.
         Uses DocumentRelationshipQueryOptimizer for consistent eager loading.
@@ -123,7 +124,7 @@ class DocumentQueryMixin:
     document_relationship = relay.Node.Field(DocumentRelationshipType)
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
-    def resolve_document_relationship(self, info, **kwargs):
+    def resolve_document_relationship(self, info, **kwargs) -> Any:
         """
         Resolve a single document relationship by ID.
         Uses optimizer for IDOR-safe fetching with proper eager loading.
@@ -146,7 +147,7 @@ class DocumentQueryMixin:
     )
 
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
-    def resolve_bulk_doc_relationships(self, info, document_id, **kwargs):
+    def resolve_bulk_doc_relationships(self, info, document_id, **kwargs) -> Any:
         """
         Bulk resolver for document relationships involving a specific document.
         Uses DocumentRelationshipQueryOptimizer for proper eager loading.
@@ -182,7 +183,7 @@ class DocumentQueryMixin:
     )
 
     @login_required
-    def resolve_bulk_document_upload_status(self, info, job_id):
+    def resolve_bulk_document_upload_status(self, info, job_id) -> Any:
         """
         Resolver for the bulk_document_upload_status query.
 
@@ -291,7 +292,7 @@ class DocumentQueryMixin:
 
     @login_required
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
-    def resolve_ingestion_sources(self, info, active_only=False, **kwargs):
+    def resolve_ingestion_sources(self, info, active_only=False, **kwargs) -> Any:
         qs = IngestionSource.objects.visible_to_user(info.context.user)
         if active_only:
             qs = qs.filter(active=True)
@@ -305,7 +306,7 @@ class DocumentQueryMixin:
 
     @login_required
     @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
-    def resolve_ingestion_source(self, info, id, **kwargs):
+    def resolve_ingestion_source(self, info, id, **kwargs) -> Any:
         try:
             type_name, pk = from_global_id(id)
             if not pk or type_name != INGESTION_SOURCE_GLOBAL_ID_TYPE:
