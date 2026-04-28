@@ -260,11 +260,7 @@ class DRFMutation(graphene.Mutation):
                 obj_serializer.save()
                 ok = True
                 message = "Success"
-                # `graphene_model` is the DjangoObjectType class itself, so
-                # `.__name__` yields the GraphQL type name (e.g. "CorpusType").
-                # The previous `.__class__.__name__` returned the metaclass
-                # name (graphene's `SubclassWithMeta_Meta`) which produced an
-                # incorrect global id.
+                # graphene_model is the class; .__name__ is the GraphQL type (.__class__.__name__ is the metaclass).
                 obj_id = to_global_id(graphene_model.__name__, obj.id)
                 logger.info("Succeeded updating obj")
 
@@ -285,11 +281,7 @@ class DRFMutation(graphene.Mutation):
 
                 ok = True
                 message = "Success"
-                # `graphene_model` is the DjangoObjectType class itself, so
-                # `.__name__` yields the GraphQL type name (e.g. "CorpusType").
-                # The previous `.__class__.__name__` returned the metaclass
-                # name (graphene's `SubclassWithMeta_Meta`) which produced an
-                # incorrect global id.
+                # graphene_model is the class; .__name__ is the GraphQL type (.__class__.__name__ is the metaclass).
                 obj_id = to_global_id(graphene_model.__name__, obj.id)
 
         except serializers.ValidationError as ve:
