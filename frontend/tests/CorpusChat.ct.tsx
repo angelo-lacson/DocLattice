@@ -1000,6 +1000,12 @@ test.describe("CorpusChat", () => {
       timeout: 10000,
     });
 
+    // SYNC_CONTENT arrives without a preceding ASYNC_START, so isProcessing
+    // must never flip to true and the input must remain interactive after the
+    // reply lands. Pinning this guards the contract documented in CorpusChat:
+    // ASYNC_START is the only setter for setIsProcessing(true).
+    await expect(input).toBeEnabled({ timeout: 5000 });
+
     await component.unmount();
   });
 
