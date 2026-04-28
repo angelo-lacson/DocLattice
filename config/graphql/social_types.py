@@ -152,9 +152,9 @@ class NotificationType(DjangoObjectType):
             return None
 
         # Check if user can access this message via visible_to_user
-        accessible_messages = ChatMessage.objects.filter(
+        accessible_messages = ChatMessage.objects.visible_to_user(user).filter(
             id=self.message.id
-        ).visible_to_user(user)
+        )
 
         if accessible_messages.exists():
             return self.message
@@ -173,9 +173,9 @@ class NotificationType(DjangoObjectType):
             return None
 
         # Check if user can access this conversation via visible_to_user
-        accessible_conversations = Conversation.objects.filter(
+        accessible_conversations = Conversation.objects.visible_to_user(user).filter(
             id=self.conversation.id
-        ).visible_to_user(user)
+        )
 
         if accessible_conversations.exists():
             return self.conversation
