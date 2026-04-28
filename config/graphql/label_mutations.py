@@ -218,7 +218,16 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
     obj_id = graphene.ID()
 
     @login_required
-    def mutate(root, info, labelset_id, text, description, color, icon, label_type):
+    def mutate(
+        root,
+        info,
+        labelset_id,
+        text=None,
+        description=None,
+        color=None,
+        icon=None,
+        label_type=None,
+    ):
 
         ok = False
         obj = None
@@ -310,6 +319,17 @@ class RemoveLabelsFromLabelsetMutation(graphene.Mutation):
             ok = True
             message = "Success"
 
+        except LabelSet.DoesNotExist:
+            # Legitimate auth rejection or genuine 404 — log without a stack trace
+            # to avoid polluting logs with what looks like real errors.
+            logger.warning(
+                "RemoveLabelsFromLabelsetMutation: labelset not found or "
+                "permission denied (labelset_id=%s)",
+                labelset_id,
+            )
+            message = (
+                f"Error removing label(s) from labelset: {LabelSet.DoesNotExist()}"
+            )
         except Exception as e:
             logger.exception("RemoveLabelsFromLabelsetMutation failed")
             message = f"Error removing label(s) from labelset: {e}"
