@@ -463,11 +463,9 @@ class Embedding(BaseOCModel):
         help_text="References the ChatMessage that this embedding belongs to (if any).",
     )
 
-    # The name/path of the model used to generate this embedding
+    # Required: NULL would silently bypass the partial unique constraints below.
     embedder_path: str = django.db.models.CharField(
         max_length=256,
-        null=True,
-        blank=True,
         help_text="Identifier for the embedding model or pipeline used (e.g. 'openai/text-embedding-ada-002').",
     )
 
@@ -589,7 +587,7 @@ class Embedding(BaseOCModel):
         verbose_name_plural = "Embeddings"
 
     def __str__(self) -> str:
-        return f"Embedding (ID={self.pk}) [{self.embedder_path or 'Unknown Model'}]"
+        return f"Embedding (ID={self.pk}) [{self.embedder_path}]"
 
 
 class StructuralAnnotationSet(BaseOCModel):

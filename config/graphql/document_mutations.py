@@ -140,7 +140,7 @@ class UploadDocument(graphene.Mutation):
         ingestion_source_id=None,
         external_id=None,
         ingestion_metadata=None,
-    ):
+    ) -> "UploadDocument":
         if add_to_corpus_id is not None and add_to_extract_id is not None:
             return UploadDocument(
                 message="Cannot simultaneously add document to both corpus and extract",
@@ -345,7 +345,9 @@ class UpdateDocumentSummary(graphene.Mutation):
     version = graphene.Int(description="The new version number after update")
 
     @login_required
-    def mutate(root, info, document_id, corpus_id, new_content):
+    def mutate(
+        root, info, document_id, corpus_id, new_content
+    ) -> "UpdateDocumentSummary":
         try:
             from opencontractserver.documents.models import DocumentSummaryRevision
 
@@ -468,7 +470,7 @@ class DeleteMultipleDocuments(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(root, info, document_ids_to_delete):
+    def mutate(root, info, document_ids_to_delete) -> "DeleteMultipleDocuments":
         try:
             document_pks = list(
                 map(
@@ -536,7 +538,7 @@ class UploadDocumentsZip(graphene.Mutation):
         description=None,
         custom_meta=None,
         add_to_corpus_id=None,
-    ):
+    ) -> "UploadDocumentsZip":
         # Was going to user a user_passes_test decorator, but I wanted a custom error message
         # that could be easily reflected to user in the GUI.
         if (
@@ -655,7 +657,7 @@ class RetryDocumentProcessing(graphene.Mutation):
     document = graphene.Field(DocumentType)
 
     @login_required
-    def mutate(root, info, document_id):
+    def mutate(root, info, document_id) -> "RetryDocumentProcessing":
         from opencontractserver.documents.models import DocumentProcessingStatus
         from opencontractserver.tasks.doc_tasks import retry_document_processing
         from opencontractserver.types.enums import PermissionTypes
@@ -730,7 +732,9 @@ class UploadAnnotatedDocument(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(root, info, target_corpus_id, document_import_data):
+    def mutate(
+        root, info, target_corpus_id, document_import_data
+    ) -> "UploadAnnotatedDocument":
 
         try:
             ok = True
@@ -768,7 +772,7 @@ class UploadCorpusImportZip(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate=RateLimits.IMPORT)
-    def mutate(root, info, base_64_file_string):
+    def mutate(root, info, base_64_file_string) -> "UploadCorpusImportZip":
 
         if (
             info.context.user.is_usage_capped
@@ -893,7 +897,7 @@ class ImportZipToCorpus(graphene.Mutation):
         title_prefix=None,
         description=None,
         custom_meta=None,
-    ):
+    ) -> "ImportZipToCorpus":
         from celery import chain
 
         from opencontractserver.tasks.import_tasks import (
@@ -1299,7 +1303,7 @@ class RestoreDeletedDocument(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
-    def mutate(root, info, document_id, corpus_id):
+    def mutate(root, info, document_id, corpus_id) -> "RestoreDeletedDocument":
         from opencontractserver.corpuses.folder_service import DocumentFolderService
 
         user = info.context.user
@@ -1395,7 +1399,7 @@ class PermanentlyDeleteDocument(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
-    def mutate(root, info, document_id, corpus_id):
+    def mutate(root, info, document_id, corpus_id) -> "PermanentlyDeleteDocument":
         from opencontractserver.corpuses.folder_service import DocumentFolderService
 
         user = info.context.user
@@ -1456,7 +1460,7 @@ class EmptyTrash(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
-    def mutate(root, info, corpus_id):
+    def mutate(root, info, corpus_id) -> "EmptyTrash":
         from opencontractserver.corpuses.folder_service import DocumentFolderService
 
         user = info.context.user
@@ -1515,7 +1519,7 @@ class RestoreDocumentToVersion(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
-    def mutate(root, info, document_id, corpus_id):
+    def mutate(root, info, document_id, corpus_id) -> "RestoreDocumentToVersion":
         user = info.context.user
 
         try:

@@ -13,7 +13,7 @@ import {
   CREATE_CORPUS_ACTION,
   UPDATE_CORPUS_ACTION,
 } from "../src/graphql/mutations";
-import { DEFAULT_MODERATOR_INSTRUCTIONS } from "../src/assets/configurations/constants";
+import { DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS } from "../src/assets/configurations/constants";
 import { docScreenshot } from "./utils/docScreenshot";
 
 const TEST_CORPUS_ID = "corpus-123";
@@ -900,8 +900,10 @@ test.describe("CreateCorpusActionModal", () => {
   }) => {
     let successCount = 0;
 
-    // DEFAULT_MODERATOR_INSTRUCTIONS is imported from the source module so the
-    // mutation variables stay in sync if the default ever changes.
+    // The default trigger is "add_document" (a document trigger), so the
+    // textarea initialises with DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS. Importing
+    // the constant keeps the mutation variables in sync if the default copy
+    // ever changes.
     const inlineCreateMock: MockedResponse = {
       request: {
         query: CREATE_CORPUS_ACTION,
@@ -917,10 +919,10 @@ test.describe("CreateCorpusActionModal", () => {
           createAgentInline: true,
           inlineAgentName: "Inline Doc Agent",
           inlineAgentDescription: undefined,
-          // The component initializes the agent-instructions textarea with
-          // DEFAULT_MODERATOR_INSTRUCTIONS; this test does not fill it and
-          // relies on that default matching the mutation variable.
-          inlineAgentInstructions: DEFAULT_MODERATOR_INSTRUCTIONS,
+          // The test does not fill the agent-instructions textarea, so the
+          // submitted value is whatever the component initialises it to for the
+          // default (document-add) trigger.
+          inlineAgentInstructions: DEFAULT_DOCUMENT_AGENT_INSTRUCTIONS,
           inlineAgentTools: ["read_document_text", "update_document_summary"],
           disabled: false,
           runOnAllCorpuses: false,
