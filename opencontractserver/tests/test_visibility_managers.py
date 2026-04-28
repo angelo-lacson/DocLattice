@@ -601,13 +601,20 @@ class StructuralAnnotationOptimizerTests(TestCase):
                 assign_perm(perm, cls.owner, cls.private_doc)
                 assign_perm(perm, cls.owner, cls.public_doc)
             except Permission.DoesNotExist:
-                pass
+                logger.debug(
+                    "Skipping permission assignment in test setup; permission '%s' is not available.",
+                    perm,
+                    exc_info=True,
+                )
 
         # Grant collaborator read on the private doc.
         try:
             assign_perm("documents.read_document", cls.collaborator, cls.private_doc)
         except Permission.DoesNotExist:
-            pass
+            logger.debug(
+                "Skipping collaborator read permission assignment in test setup; permission is not available.",
+                exc_info=True,
+            )
 
     def _compute(self, user, doc):
         from opencontractserver.annotations.query_optimizer import (
