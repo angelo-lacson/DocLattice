@@ -205,7 +205,11 @@ class TestOpenAIEmbedderEmbedText(TestCase):
         self.assertIsNone(result)
 
     @patch("opencontractserver.pipeline.embedders.openai_embedder.openai.OpenAI")
-    def test_embed_text_rate_limit_returns_none(self, mock_openai_cls):
+    def test_embed_text_rate_limit_reraises_for_celery_retry(self, mock_openai_cls):
+        """RateLimitError survives the SDK's internal retries and is re-raised
+        so celery's outer ``autoretry_for`` can fire. PR #1380 changed this
+        from returning None — see ``_embed_text_impl`` transient-error block.
+        """
         import openai as openai_module
 
         mock_client = MagicMock()
@@ -217,9 +221,8 @@ class TestOpenAIEmbedderEmbedText(TestCase):
         mock_openai_cls.return_value = mock_client
 
         embedder = OpenAIEmbedder()
-        result = embedder.embed_text("Hello", openai_api_key="test-key")
-
-        self.assertIsNone(result)
+        with self.assertRaises(openai_module.RateLimitError):
+            embedder.embed_text("Hello", openai_api_key="test-key")
 
     @patch("opencontractserver.pipeline.embedders.openai_embedder.openai.OpenAI")
     def test_embed_text_custom_base_url(self, mock_openai_cls):
@@ -237,9 +240,12 @@ class TestOpenAIEmbedderEmbedText(TestCase):
             openai_api_base_url="https://custom.openai.azure.com",
         )
 
+        # PR #1380 added max_retries=OPENAI_CLIENT_MAX_RETRIES (=8) to
+        # the OpenAI() constructor for SDK-level 429/5xx backoff.
         mock_openai_cls.assert_called_with(
             api_key="test-key",
             base_url="https://custom.openai.azure.com",
+            max_retries=OpenAIEmbedder.OPENAI_CLIENT_MAX_RETRIES,
         )
 
     @patch("opencontractserver.pipeline.embedders.openai_embedder.openai.OpenAI")
@@ -254,7 +260,11 @@ class TestOpenAIEmbedderEmbedText(TestCase):
         embedder = OpenAIEmbedder()
         embedder.embed_text("Hello", openai_api_key="test-key")
 
-        mock_openai_cls.assert_called_with(api_key="test-key", base_url=None)
+        mock_openai_cls.assert_called_with(
+            api_key="test-key",
+            base_url=None,
+            max_retries=OpenAIEmbedder.OPENAI_CLIENT_MAX_RETRIES,
+        )
 
     @patch("opencontractserver.pipeline.embedders.openai_embedder.openai.OpenAI")
     def test_embed_text_bad_request_returns_none(self, mock_openai_cls):

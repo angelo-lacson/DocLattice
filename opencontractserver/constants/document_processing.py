@@ -53,6 +53,16 @@ EMBEDDER_SINGLE_REQUEST_TIMEOUT_SECONDS = 30
 # Larger than the single timeout because batches process multiple texts.
 EMBEDDER_BATCH_REQUEST_TIMEOUT_SECONDS = 60
 
+# Character-count guard for OpenAI embedding input. The hosted /embeddings
+# endpoint caps input at 8192 tokens per text; truncating on the char side
+# at ~4x the token budget (English averages ~4 chars/token) keeps us well
+# under the cap for any realistic input. Mirrors the silent-tokenizer
+# truncation that ``sentence-transformers`` applies locally so OpenAI users
+# get the same robustness instead of a fatal 400 "maximum context length"
+# from a long whole-document chunk. See ``OpenAIEmbedder._embed_text_impl``
+# and ``OpenAIEmbedder.embed_texts_batch``.
+OPENAI_EMBEDDER_MAX_INPUT_CHARS = 30_000
+
 # HTTP request timeout (seconds) for reranker microservice calls.
 # Reranking typically runs over tens of candidates (top_k * oversample), so
 # a modest timeout is sufficient. Retrieval degrades gracefully to the

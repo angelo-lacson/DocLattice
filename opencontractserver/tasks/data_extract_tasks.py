@@ -2,6 +2,8 @@
 import json
 import logging
 import os
+from collections.abc import Sequence
+from typing import Any
 
 from asgiref.sync import sync_to_async
 
@@ -161,36 +163,6 @@ async def doc_extract_query_task(
         if doc_path:
             return doc_path.corpus_id
         return None
-
-    @sync_to_async
-    def sync_add_sources(datacell, sources):
-        """Add source annotations to datacell."""
-        if sources:
-            # Extract annotation IDs from SourceNode objects
-            annotation_ids = [s.annotation_id for s in sources if s.annotation_id > 0]
-            if annotation_ids:
-                datacell.sources.add(*annotation_ids)
-
-    @sync_to_async
-    def _link_retrieval_citations(datacell, annotation_ids):
-        """Link raw Annotation PKs retrieved by the agent to ``datacell.sources``.
-
-        Filters defensively: only positive ints that correspond to real
-        Annotation rows are persisted.  Duplicates are deduped by the M2M
-        unique constraint, so ``add(*ids)`` with repeats is safe.
-        """
-        from opencontractserver.annotations.models import Annotation
-
-        valid_ids = [a for a in annotation_ids if isinstance(a, int) and a > 0]
-        if not valid_ids:
-            return
-        # Guard against IDs that don't exist (e.g. race with deletion).
-        existing = set(
-            Annotation.objects.filter(id__in=valid_ids).values_list("id", flat=True)
-        )
-        existing_ids = [aid for aid in valid_ids if aid in existing]
-        if existing_ids:
-            datacell.sources.add(*existing_ids)
 
     # Initialize datacell to None to avoid UnboundLocalError
     datacell = None
@@ -459,7 +431,29 @@ async def doc_extract_query_task(
         raise
 
 
-def _classify_none_result(messages: object) -> tuple[str, str]:
+@sync_to_async
+def _link_retrieval_citations(datacell, annotation_ids):
+    """Link raw Annotation PKs retrieved by the agent to ``datacell.sources``.
+
+    Filters defensively: only positive ints that correspond to real
+    Annotation rows are persisted.  Duplicates are deduped by the M2M
+    unique constraint, so ``add(*ids)`` with repeats is safe.
+    """
+    from opencontractserver.annotations.models import Annotation
+
+    valid_ids = [a for a in annotation_ids if isinstance(a, int) and a > 0]
+    if not valid_ids:
+        return
+    # Guard against IDs that don't exist (e.g. race with deletion).
+    existing = set(
+        Annotation.objects.filter(id__in=valid_ids).values_list("id", flat=True)
+    )
+    existing_ids = [aid for aid in valid_ids if aid in existing]
+    if existing_ids:
+        datacell.sources.add(*existing_ids)
+
+
+def _classify_none_result(messages: Sequence[Any] | None) -> tuple[str, str]:
     """Categorise a ``result is None`` outcome from ``agent.run()``.
 
     Reads the captured pydantic-ai message history (a list of

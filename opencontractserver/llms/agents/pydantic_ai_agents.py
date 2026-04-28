@@ -105,6 +105,48 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+def _make_similarity_search_tool(vector_store: Any) -> Callable:
+    """Build the citation-capturing similarity_search tool for a vector store.
+
+    Both the document and corpus agent factories used to define this closure
+    inline; the only thing that differed was which vector store was bound.
+    Centralising it here keeps the citation-accumulation contract — push
+    every real annotation PK into ``ctx.deps.retrieved_annotation_ids`` —
+    in a single place. The tool name remains ``similarity_search`` so
+    downstream event handlers and source-linking logic are unaffected.
+    """
+
+    async def similarity_search(
+        ctx: RunContext[PydanticAIDependencies],
+        query: str,
+        k: int = 8,
+        modalities: Optional[list[str]] = None,
+    ) -> list[dict[str, Any]]:
+        """Semantic vector search over the corpus annotations.
+
+        Returns the top-k nearest annotations for ``query`` as a list of
+        dicts with keys ``annotation_id``, ``content``, ``document_id``,
+        ``corpus_id``, ``page``, ``similarity_score``, ``label``, and
+        ``json``. Each real annotation's ID is captured into
+        ``ctx.deps.retrieved_annotation_ids`` so the caller can later link
+        citations to the owning object (e.g. ``Datacell.sources``).
+        """
+        results = await vector_store.similarity_search(
+            query, k=k, modalities=modalities
+        )
+        for r in results:
+            if not isinstance(r, dict):
+                continue
+            aid = r.get("annotation_id")
+            # Real annotation PKs are positive ints; synthetic / ad-hoc
+            # match IDs are negative and must not be persisted.
+            if isinstance(aid, int) and aid > 0:
+                ctx.deps.retrieved_annotation_ids.append(aid)
+        return results
+
+    return similarity_search
+
+
 def _get_function_tools(agent: PydanticAIAgent) -> dict:
     """Return the function-tools dict from a pydantic-ai Agent.
 
@@ -2059,42 +2101,10 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
                 **_vs_kwargs
             )
 
-        # Default vector search tool: wraps the store's bound method so we can
-        # append real annotation IDs returned by the retrieval to the per-run
-        # citation accumulator on ``ctx.deps``.  Pydantic-AI inspects the
-        # signature and injects ``ctx`` because its first parameter is typed
-        # as ``RunContext[PydanticAIDependencies]``.  The tool name is
-        # preserved as ``similarity_search`` so existing event handlers that
-        # match on the tool name continue to work.
-        async def similarity_search(
-            ctx: RunContext[PydanticAIDependencies],
-            query: str,
-            k: int = 8,
-            modalities: Optional[list[str]] = None,
-        ) -> list[dict[str, Any]]:
-            """Semantic vector search over the corpus annotations.
-
-            Returns the top-k nearest annotations for ``query`` as a list of
-            dicts with keys ``annotation_id``, ``content``, ``document_id``,
-            ``corpus_id``, ``page``, ``similarity_score``, ``label``, and
-            ``json``.  Each real annotation's ID is captured into
-            ``ctx.deps.retrieved_annotation_ids`` so the caller can later link
-            citations to the owning object (e.g. ``Datacell.sources``).
-            """
-            results = await vector_store.similarity_search(
-                query, k=k, modalities=modalities
-            )
-            for r in results:
-                if not isinstance(r, dict):
-                    continue
-                aid = r.get("annotation_id")
-                # Real annotation PKs are positive ints; synthetic / ad-hoc
-                # match IDs are negative and must not be persisted.
-                if isinstance(aid, int) and aid > 0:
-                    ctx.deps.retrieved_annotation_ids.append(aid)
-            return results
-
-        default_vs_tool: Callable = similarity_search
+        # See ``_make_similarity_search_tool`` for the citation-accumulation
+        # contract; the tool name remains ``similarity_search`` so existing
+        # event handlers that match on the tool name continue to work.
+        default_vs_tool: Callable = _make_similarity_search_tool(vector_store)
 
         # -----------------------------
         # Auto-build pure passthrough tools from registry
@@ -2598,36 +2608,9 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                 **_vs_kwargs
             )
 
-        # Default vector search tool: wraps the store's bound method to
-        # capture real annotation IDs returned during retrieval.  See the
-        # equivalent wrapper in ``PydanticAIDocumentAgent.create`` for the
-        # rationale — we preserve the tool name ``similarity_search`` so
-        # downstream event / source handling is unaffected.
-        async def similarity_search(
-            ctx: RunContext[PydanticAIDependencies],
-            query: str,
-            k: int = 8,
-            modalities: Optional[list[str]] = None,
-        ) -> list[dict[str, Any]]:
-            """Semantic vector search over the corpus annotations.
-
-            Returns the top-k nearest annotations for ``query`` as dicts.
-            Appends every real annotation PK returned to
-            ``ctx.deps.retrieved_annotation_ids`` so the caller can link
-            citations to the owning object after the run completes.
-            """
-            results = await vector_store.similarity_search(
-                query, k=k, modalities=modalities
-            )
-            for r in results:
-                if not isinstance(r, dict):
-                    continue
-                aid = r.get("annotation_id")
-                if isinstance(aid, int) and aid > 0:
-                    ctx.deps.retrieved_annotation_ids.append(aid)
-            return results
-
-        default_vs_tool: Callable = similarity_search
+        # See ``_make_similarity_search_tool`` for the shared citation-capturing
+        # closure used by both the document and corpus agent factories.
+        default_vs_tool: Callable = _make_similarity_search_tool(vector_store)
 
         # -----------------------------
         # Auto-build passthrough tools from registry
