@@ -126,14 +126,32 @@ export function buildComponentMarker(
 }
 
 /**
- * Wrap a marker in a CAML prose block fence, ready for insertion into
- * the editor source.
+ * Name of the custom CAML fence used to embed an OpenContracts component.
+ *
+ * The library's parser does not have a dedicated case for `::: prose`, so a
+ * `::: prose` fence ends up as `{type: "prose", body, ...}` *without* a
+ * `content` field — and `ProseBlock` then crashes inside `splitPullquotes`.
+ * Using a project-specific block type sidesteps the missing case: unknown
+ * types fall through to the renderer's `customBlocks` lookup, where we own
+ * the rendering and can simply pass the marker text to our resolver.
+ */
+export const OC_COMPONENT_FENCE = "oc-component";
+
+/**
+ * Wrap a marker in a CAML fence ready for insertion into the editor source.
+ *
+ * The marker text is preserved verbatim inside the fence body so existing
+ * marker parsers (`parseComponentMarker`, `resolveComponentMarker`) keep
+ * working against the same `[component:TYPE ...]` shape.
  */
 export function buildComponentProseFence(
   type: string,
   props: CamlComponentProps
 ): string {
-  return `\n::: prose\n${buildComponentMarker(type, props)}\n:::\n`;
+  return `\n::: ${OC_COMPONENT_FENCE}\n${buildComponentMarker(
+    type,
+    props
+  )}\n:::\n`;
 }
 
 // ---------------------------------------------------------------------------
