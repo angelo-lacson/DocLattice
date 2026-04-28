@@ -131,12 +131,12 @@ class FailureMessageTests(SimpleTestCase):
         self.assertIn("integration failure", messages[NONE_RESULT_NO_FINAL])
         self.assertIn("looped", messages[NONE_RESULT_TOOL_LOOP])
 
-    def test_integration_failure_messages_reference_issue(self) -> None:
-        """Operators need to find the GitHub issue from the cell stacktrace."""
+    def test_integration_failure_messages_reference_log(self) -> None:
+        """Operators need a pointer to the raw conversation in the cell stacktrace."""
         for classification in (NONE_RESULT_NO_FINAL, NONE_RESULT_TOOL_LOOP):
             with self.subTest(classification=classification):
                 self.assertIn(
-                    "#1381",
+                    "llm_call_log",
                     _failure_message_for_classification(classification),
                 )
 
