@@ -1,5 +1,7 @@
 """GraphQL type definitions for shared utilities, enums, and simple types."""
 
+from typing import Any
+
 import graphene
 from graphene.types.generic import GenericScalar
 from graphql_relay import to_global_id
@@ -25,7 +27,7 @@ def build_flat_tree(
             - "children": list of child node global IDs.
     """
     # Map node IDs to their immediate children IDs
-    id_to_children = {}
+    id_to_children: dict[Any, list[Any]] = {}
     for node in nodes:
         node_id = node["id"]
         parent_id = node["parent_id"]
@@ -225,19 +227,19 @@ class PageAwareAnnotationType(graphene.ObjectType):
     page_annotations = graphene.List(lambda: _get_annotation_type())
 
 
-def _get_user_type():
+def _get_user_type() -> Any:
     from config.graphql.user_types import UserType
 
     return UserType
 
 
-def _get_corpus_folder_type():
+def _get_corpus_folder_type() -> Any:
     from config.graphql.corpus_types import CorpusFolderType
 
     return CorpusFolderType
 
 
-def _get_annotation_type():
+def _get_annotation_type() -> Any:
     from config.graphql.annotation_types import AnnotationType
 
     return AnnotationType

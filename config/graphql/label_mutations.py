@@ -47,7 +47,9 @@ class CreateLabelset(graphene.Mutation):
 
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
-    def mutate(root, info, title, description, filename=None, base64_icon_string=None):
+    def mutate(
+        root, info, title, description, filename=None, base64_icon_string=None
+    ) -> "CreateLabelset":
         if base64_icon_string is None:
             base64_icon_string = settings.DEFAULT_IMAGE
 
@@ -162,7 +164,9 @@ class DeleteMultipleLabelMutation(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(root, info, annotation_label_ids_to_delete):
+    def mutate(
+        root, info, annotation_label_ids_to_delete
+    ) -> "DeleteMultipleLabelMutation":
         user = info.context.user
         try:
             label_pks = list(
@@ -318,7 +322,9 @@ class RemoveLabelsFromLabelsetMutation(graphene.Mutation):
     message = graphene.String()
 
     @login_required
-    def mutate(root, info, label_ids, labelset_id):
+    def mutate(
+        root, info, label_ids, labelset_id
+    ) -> "RemoveLabelsFromLabelsetMutation":
 
         ok = False
 
