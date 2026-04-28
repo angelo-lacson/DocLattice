@@ -282,7 +282,20 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
             message = "SUCCESS"
             logger.debug("Done")
 
+        except LabelSet.DoesNotExist:
+            # Legitimate auth rejection or genuine 404 — log without a stack
+            # trace to avoid polluting logs with what looks like real errors.
+            logger.warning(
+                "CreateLabelForLabelsetMutation: labelset not found or "
+                "permission denied (labelset_id=%s)",
+                labelset_id,
+            )
+            message = (
+                "Failed to create label for labelset due to error: "
+                "LabelSet matching query does not exist."
+            )
         except Exception as e:
+            logger.exception("CreateLabelForLabelsetMutation failed")
             message = f"Failed to create label for labelset due to error: {e}"
 
         return CreateLabelForLabelsetMutation(
@@ -336,7 +349,8 @@ class RemoveLabelsFromLabelsetMutation(graphene.Mutation):
                 labelset_id,
             )
             message = (
-                f"Error removing label(s) from labelset: {LabelSet.DoesNotExist()}"
+                "Error removing label(s) from labelset: "
+                "LabelSet matching query does not exist."
             )
         except Exception as e:
             logger.exception("RemoveLabelsFromLabelsetMutation failed")
