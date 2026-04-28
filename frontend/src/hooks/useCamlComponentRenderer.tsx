@@ -22,16 +22,10 @@ import { MarkdownMessageRenderer } from "../components/threads/MarkdownMessageRe
 import { ErrorBoundary } from "../components/widgets/ErrorBoundary";
 import { ComponentEmbedErrorFallback } from "../components/widgets/ComponentEmbedErrorFallback";
 import {
-  OC_COMPONENT_FENCE,
+  buildOcComponentCustomBlocks,
   resolveComponentMarker,
 } from "../utils/camlComponents";
 export type { CamlComponentRegistry } from "../utils/camlComponents";
-
-interface OcComponentBlock {
-  type: string;
-  body?: string;
-  attrs?: Record<string, string>;
-}
 
 export interface CamlComponentRendererBindings {
   /** Pass to `<CamlArticle renderMarkdown={...}>`. */
@@ -76,12 +70,7 @@ export function useCamlComponentRenderer(
   );
 
   const customBlocks = useMemo(
-    () => ({
-      [OC_COMPONENT_FENCE]: (block: unknown) => {
-        const body = ((block as OcComponentBlock)?.body ?? "").trim();
-        return renderMarkdown(body);
-      },
-    }),
+    () => buildOcComponentCustomBlocks(renderMarkdown),
     [renderMarkdown]
   );
 
