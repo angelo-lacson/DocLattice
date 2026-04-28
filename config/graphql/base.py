@@ -2,6 +2,7 @@ import inspect
 import logging
 import traceback
 from abc import ABC
+from collections.abc import Sequence
 from typing import Any, ClassVar, Optional
 
 import django.db.models
@@ -25,7 +26,11 @@ logger = logging.getLogger(__name__)
 def _require_io_setting(mutation_cls: type, name: str) -> Any:
     """Raise ``NotImplementedError`` if ``cls.IOSettings.<name>`` is missing or ``None``."""
     io_settings = getattr(mutation_cls, "IOSettings", None)
-    value = getattr(io_settings, name, None) if io_settings is not None else None
+    if io_settings is None:
+        raise NotImplementedError(
+            f"{mutation_cls.__name__} must define an IOSettings class."
+        )
+    value = getattr(io_settings, name, None)
     if value is None:
         raise NotImplementedError(
             f"{mutation_cls.__name__}.IOSettings.{name} must be set by the "
@@ -101,6 +106,11 @@ class DRFDeletion(graphene.Mutation):
     @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
     def mutate(cls, root, info, *args, **kwargs) -> "DRFDeletion":
 
+        # Unlike ``DRFMutation.mutate`` below, this method intentionally does
+        # NOT wrap the body in ``except Exception``. Errors (including the
+        # ``NotImplementedError`` from ``_require_io_setting`` and the
+        # ``ValueError`` for missing lookup args) propagate to the GraphQL
+        # framework as raw execution errors.
         ok = False
 
         model = _require_io_setting(cls, "model")
@@ -146,7 +156,9 @@ class DRFDeletion(graphene.Mutation):
 
 class DRFMutation(graphene.Mutation):
     class IOSettings(ABC):
-        pk_fields: ClassVar[list[str]] = []
+        # Frozen default — subclasses override with their own list/tuple.
+        # Using a tuple here avoids the shared-mutable-default footgun.
+        pk_fields: ClassVar[Sequence[str]] = ()
         lookup_field: ClassVar[str] = "id"
         model: ClassVar[Optional[type[django.db.models.Model]]] = None
         graphene_model: ClassVar[Optional[type[DjangoObjectType]]] = None
@@ -200,6 +212,10 @@ class DRFMutation(graphene.Mutation):
             logger.info(f"DRFMutation - kwargs: {kwargs}")
             serializer = _require_io_setting(cls, "serializer")
             model = _require_io_setting(cls, "model")
+            # ``graphene_model`` is the class itself; ``__name__`` is the GraphQL
+            # type name (e.g. ``"CorpusType"``). ``__class__.__name__`` would
+            # return the metaclass name (``"SubclassWithMeta_Meta"``) which is
+            # the bug this PR fixes — kept dereferenced as ``__name__`` below.
             graphene_model = _require_io_setting(cls, "graphene_model")
 
             if hasattr(cls.IOSettings, "pk_fields"):
@@ -262,7 +278,6 @@ class DRFMutation(graphene.Mutation):
                 obj_serializer.save()
                 ok = True
                 message = "Success"
-                # graphene_model is the class; .__name__ is the GraphQL type (.__class__.__name__ is the metaclass).
                 obj_id = to_global_id(graphene_model.__name__, obj.id)
                 logger.info("Succeeded updating obj")
 
@@ -283,7 +298,6 @@ class DRFMutation(graphene.Mutation):
 
                 ok = True
                 message = "Success"
-                # graphene_model is the class; .__name__ is the GraphQL type (.__class__.__name__ is the metaclass).
                 obj_id = to_global_id(graphene_model.__name__, obj.id)
 
         except serializers.ValidationError as ve:

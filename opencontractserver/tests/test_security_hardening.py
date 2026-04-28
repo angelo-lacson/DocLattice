@@ -1224,7 +1224,8 @@ class TestIOSettingsRequiredFieldsGuard(TestCase):
         with self.assertRaises(NotImplementedError) as ctx:
             _require_io_setting(MisconfiguredMutation, "model")
         self.assertIn("MisconfiguredMutation", str(ctx.exception))
-        self.assertIn("model", str(ctx.exception))
+        # Distinct message for the missing-class case (vs. missing-field).
+        self.assertIn("IOSettings", str(ctx.exception))
 
     def test_require_io_setting_raises_when_attribute_none(self):
         """Each of model/serializer/graphene_model must independently fail when ``None``."""
@@ -1276,6 +1277,8 @@ class TestIOSettingsRequiredFieldsGuard(TestCase):
         # ``@login_required`` from graphql_jwt looks for a ``ResolveInfo`` arg
         # via ``isinstance``; spec the mock so the decorator passes through
         # to the wrapped function where the real lookup-value check fires.
+        # This relies on ``@graphql_ratelimit`` being a no-op under test
+        # conditions (no real cache backend is consulted before the body).
         info = MagicMock(spec=ResolveInfo)
         info.context = MagicMock()
         info.context.user = MagicMock(is_authenticated=True)
@@ -1283,3 +1286,40 @@ class TestIOSettingsRequiredFieldsGuard(TestCase):
         with self.assertRaises(ValueError) as ctx:
             _DeleteCorpus.mutate(None, info)
         self.assertIn("id", str(ctx.exception))
+
+    def test_drf_mutation_obj_id_uses_graphene_type_name_not_metaclass(self):
+        """Regression: ``to_global_id`` must use ``graphene_model.__name__``
+        (the GraphQL type, e.g. ``"CorpusType"``), not
+        ``graphene_model.__class__.__name__`` (the metaclass name like
+        ``"SubclassWithMeta_Meta"``).
+        """
+        from graphene.test import Client
+        from graphql_relay import from_global_id
+
+        from config.graphql.schema import schema
+        from opencontractserver.corpuses.models import Corpus
+
+        user = User.objects.create_user(username="objIdRegressionUser", password="x")
+
+        class _Ctx:
+            def __init__(self, user):
+                self.user = user
+
+        client = Client(schema, context_value=_Ctx(user))
+        result = client.execute("""
+            mutation {
+                createCorpus(title: "ObjIdRegression") {
+                    ok
+                    objId
+                }
+            }
+            """)
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["createCorpus"]["ok"])
+
+        obj_id = result["data"]["createCorpus"]["objId"]
+        type_name, pk = from_global_id(obj_id)
+        # The fix: ``__name__`` produces the graphene type name.
+        self.assertEqual(type_name, "CorpusType")
+        # Underlying row exists at that pk — proves the global id is decodable.
+        self.assertTrue(Corpus.objects.filter(pk=int(pk)).exists())
