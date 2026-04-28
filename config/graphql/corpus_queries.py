@@ -29,7 +29,7 @@ from opencontractserver.feedback.models import UserFeedback
 logger = logging.getLogger(__name__)
 
 
-def _corpus_count_subqueries() -> Any:
+def _corpus_count_subqueries() -> tuple[Any, Any]:
     """
     Build subqueries for efficient document and annotation counting on Corpus
     querysets. Used by resolve_corpuses and resolve_corpus_by_slugs to annotate

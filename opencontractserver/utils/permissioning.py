@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from functools import reduce
+from typing import TYPE_CHECKING
 
 import django
 from django.contrib.auth import get_user_model
@@ -13,12 +14,15 @@ from guardian.shortcuts import assign_perm, remove_perm
 from config.graphql.permissioning.permission_annotator.middleware import combine
 from opencontractserver.types.enums import PermissionTypes
 
+if TYPE_CHECKING:
+    from opencontractserver.users.models import User as UserModel
+
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
 def set_permissions_for_obj_to_user(
-    user_val: int | str | User,
+    user_val: int | str | UserModel,
     instance: django.db.models.Model,
     permissions: list[PermissionTypes],
     *,
@@ -178,7 +182,7 @@ def set_permissions_for_obj_to_user(
             assign_perm(f"{app_name}.publish_{model_name}", user, instance)
 
 
-def get_users_group_ids(user_instance=User) -> list[str | int]:
+def get_users_group_ids(user_instance: UserModel) -> list[str | int]:
     """
     For a given user, return list of group ids it belongs to.
     """
@@ -187,8 +191,8 @@ def get_users_group_ids(user_instance=User) -> list[str | int]:
 
 
 def get_permission_id_to_name_map_for_model(
-    instance: type[django.db.models.Model],
-) -> dict:
+    instance: django.db.models.Model,
+) -> dict[int, str]:
     """
     Constantly ran into issues with Django Guardian's helper methods, but working with the database directly I can get
     what I want... namely for each of the permission types that were created in the various models' Meta fields,
@@ -207,7 +211,9 @@ def get_permission_id_to_name_map_for_model(
             "id", "codename"
         )
     )
-    this_model_permission_id_map = reduce(combine, this_model_permission_objs, {})
+    this_model_permission_id_map: dict[int, str] = reduce(
+        combine, this_model_permission_objs, {}
+    )
     # logger.info(
     #     f"get_permission_id_to_name_map_for_model - resulting map: {this_model_permission_id_map}"
     # )
@@ -215,8 +221,8 @@ def get_permission_id_to_name_map_for_model(
 
 
 def get_users_permissions_for_obj(
-    user: type[User],
-    instance: type[django.db.models.Model],
+    user: UserModel,
+    instance: django.db.models.Model,
     include_group_permissions: bool = False,
 ) -> set[str]:
 
@@ -313,8 +319,8 @@ def get_users_permissions_for_obj(
 
 
 def user_has_permission_for_obj(
-    user_val: int | str | type[User],
-    instance: type[django.db.models.Model],
+    user_val: int | str | UserModel,
+    instance: django.db.models.Model,
     permission: PermissionTypes,
     include_group_permissions: bool = False,
 ) -> bool:
@@ -392,10 +398,10 @@ def user_has_permission_for_obj(
                 # For private annotations, permissions are limited by BOTH the source object AND doc+corpus
                 # We need to check the source object permissions match or exceed what's being requested
                 if instance.created_by_analysis_id:
-                    # Check if user has the requested permission level on the analysis
-                    if not user_has_permission_for_obj(
+                    source_analysis = instance.created_by_analysis
+                    if source_analysis is None or not user_has_permission_for_obj(
                         user,
-                        instance.created_by_analysis,
+                        source_analysis,
                         permission,  # Check for the same permission level being requested
                         include_group_permissions=include_group_permissions,
                     ):
@@ -405,10 +411,10 @@ def user_has_permission_for_obj(
                         )
                         return False
                 elif instance.created_by_extract_id:
-                    # Check if user has the requested permission level on the extract
-                    if not user_has_permission_for_obj(
+                    source_extract = instance.created_by_extract
+                    if source_extract is None or not user_has_permission_for_obj(
                         user,
-                        instance.created_by_extract,
+                        source_extract,
                         permission,  # Check for the same permission level being requested
                         include_group_permissions=include_group_permissions,
                     ):
@@ -418,7 +424,11 @@ def user_has_permission_for_obj(
                         )
                         return False
 
-            # Now check document+corpus permissions using the query optimizer
+            # Now check document+corpus permissions using the query optimizer.
+            # An annotation without a parent document has no inheritable scope,
+            # so non-superuser access is denied (the superuser branch is above).
+            if instance.document_id is None:
+                return False
             can_read, can_create, can_update, can_delete, can_comment = (
                 AnnotationQueryOptimizer._compute_effective_permissions(
                     user=user,
@@ -476,8 +486,12 @@ def user_has_permission_for_obj(
                 )
                 return False
 
-            # Relationships inherit permissions from document+corpus
-            # Use the same logic as annotations
+            # Relationships inherit permissions from document+corpus.
+            # Relationships without a document have no inheritable scope, so
+            # we deny all non-superuser access (the superuser short-circuit
+            # above is the only escape).
+            if instance.document_id is None:
+                return False
             can_read, can_create, can_update, can_delete, can_comment = (
                 AnnotationQueryOptimizer._compute_effective_permissions(
                     user=user,
