@@ -15,6 +15,7 @@ from opencontractserver.constants.search import (
     HYBRID_SEARCH_OVERSAMPLE_FACTOR,
     VALID_EMBEDDING_DIMS,
 )
+from opencontractserver.types.protocols import VectorStoreProtocol
 from opencontractserver.utils.embeddings import (
     agenerate_embeddings_from_text,
     generate_embeddings_from_text,
@@ -1100,3 +1101,15 @@ class CoreAnnotationVectorStore:
             )
 
         return results
+
+
+# ``VectorStoreProtocol`` is imported above so that downstream callers can
+# annotate parameters as ``VectorStoreProtocol`` and mypy will accept any
+# class implementing the same surface as :class:`CoreAnnotationVectorStore`.
+# Re-export to make the dependency explicit for static analysis tools.
+__all__ = [
+    "CoreAnnotationVectorStore",
+    "VectorSearchQuery",
+    "VectorSearchResult",
+    "VectorStoreProtocol",
+]
