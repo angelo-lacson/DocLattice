@@ -251,13 +251,21 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
                 # Generic deny path — same message and code path as not-found
                 raise LabelSet.DoesNotExist()
             logger.debug("CreateLabelForLabelsetMutation - mutate / Labelset", labelset)
+            # Drop None values so model field defaults apply (description,
+            # color, icon, text are NOT NULL with sensible defaults).
+            create_kwargs = {
+                k: v
+                for k, v in {
+                    "text": text,
+                    "description": description,
+                    "color": color,
+                    "icon": icon,
+                    "label_type": label_type,
+                }.items()
+                if v is not None
+            }
             obj = AnnotationLabel.objects.create(
-                text=text,
-                description=description,
-                color=color,
-                icon=icon,
-                label_type=label_type,
-                creator=info.context.user,
+                creator=info.context.user, **create_kwargs
             )
             obj_id = to_global_id("AnnotationLabelType", obj.id)
             logger.debug("CreateLabelForLabelsetMutation - mutate / Created label", obj)
