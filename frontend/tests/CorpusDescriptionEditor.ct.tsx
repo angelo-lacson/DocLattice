@@ -1,4 +1,5 @@
 import React from "react";
+import type { Page, Route } from "@playwright/test";
 import { test, expect } from "./utils/coverage";
 import { MockedResponse } from "@apollo/client/testing";
 import { CorpusDescriptionEditorTestWrapper } from "./CorpusDescriptionEditorTestWrapper";
@@ -87,8 +88,8 @@ const buildCorpusMockNoMd = (): MockedResponse => ({
   },
 });
 
-const setupMdRoute = async (page: any, body: string = INITIAL_MD) => {
-  await page.route("**/test-md/**", async (route: any) => {
+const setupMdRoute = async (page: Page, body: string = INITIAL_MD) => {
+  await page.route("**/test-md/**", async (route: Route) => {
     await route.fulfill({
       status: 200,
       contentType: "text/markdown",
@@ -237,7 +238,7 @@ test.describe("CorpusDescriptionEditor", () => {
     await expect(page.getByText("Version History")).toBeVisible({
       timeout: 5000,
     });
-    await expect(page.locator(".version-number")).toContainText("Version 1");
+    await expect(page.getByTestId("version-number")).toContainText("Version 1");
 
     // Hide again
     await page
@@ -271,7 +272,7 @@ test.describe("CorpusDescriptionEditor", () => {
       .getByRole("button", { name: /Show History/, exact: false })
       .click();
 
-    const versionNumber = page.locator(".version-number");
+    const versionNumber = page.getByTestId("version-number");
     await expect(versionNumber).toContainText("Version 1", { timeout: 5000 });
 
     // Click the version row to expand details
@@ -425,7 +426,7 @@ test.describe("CorpusDescriptionEditor", () => {
     await page
       .getByRole("button", { name: /Show History/, exact: false })
       .click();
-    const versionNumber = page.locator(".version-number");
+    const versionNumber = page.getByTestId("version-number");
     await expect(versionNumber).toContainText("Version 1", { timeout: 5000 });
     await versionNumber.first().click();
 
@@ -488,7 +489,7 @@ test.describe("CorpusDescriptionEditor", () => {
     await page
       .getByRole("button", { name: /Show History/, exact: false })
       .click();
-    const versionNumber = page.locator(".version-number");
+    const versionNumber = page.getByTestId("version-number");
     await expect(versionNumber).toContainText("Version 1", { timeout: 5000 });
     await versionNumber.first().click();
 
@@ -628,7 +629,7 @@ test.describe("CorpusDescriptionEditor", () => {
       .getByRole("button", { name: /Show History/, exact: false })
       .click();
 
-    const versionNumber = page.locator(".version-number");
+    const versionNumber = page.getByTestId("version-number");
     await expect(versionNumber).toContainText("Version 1", { timeout: 5000 });
     await versionNumber.first().click();
 
@@ -662,7 +663,7 @@ test.describe("CorpusDescriptionEditor", () => {
       .getByRole("button", { name: /Show History/, exact: false })
       .click();
 
-    const versionNumber = page.locator(".version-number");
+    const versionNumber = page.getByTestId("version-number");
     await expect(versionNumber).toContainText("Version 1", { timeout: 5000 });
 
     // Expand
@@ -718,7 +719,7 @@ test.describe("CorpusDescriptionEditor", () => {
       .click();
 
     // Expand the OLDER version (v1) — not the current one
-    const versionRows = page.locator(".version-number");
+    const versionRows = page.getByTestId("version-number");
     const olderRow = versionRows.filter({ hasText: "Version 1" }).first();
     await olderRow.click();
 
@@ -745,7 +746,7 @@ test.describe("CorpusDescriptionEditor", () => {
   }) => {
     // Abort the network request so the fetch promise rejects and the
     // component's .catch() branch (setCurrentContent("")) runs.
-    await page.route("**/test-md/**", async (route: any) => {
+    await page.route("**/test-md/**", async (route: Route) => {
       await route.abort("failed");
     });
 
