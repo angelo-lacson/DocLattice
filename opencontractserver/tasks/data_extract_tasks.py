@@ -83,7 +83,11 @@ def _classify_none_result(messages: Optional[list[Any]]) -> str:
                 if tool_name.startswith("final_result"):
                     saw_final_result = True
                 else:
-                    args_repr = repr(getattr(part, "args", None))
+                    raw_args = getattr(part, "args", None)
+                    try:
+                        args_repr = json.dumps(raw_args, sort_keys=True, default=str)
+                    except (TypeError, ValueError):
+                        args_repr = repr(raw_args)
                     tool_call_signatures.append((tool_name, args_repr))
 
     if saw_final_result:
@@ -113,13 +117,15 @@ def _failure_message_for_classification(classification: str) -> str:
             "The extraction agent never produced a final structured response. "
             "This is an integration failure (the model exhausted its tool-use "
             "budget without committing to the result tool), not a statement "
-            "about the document. See issue #1381."
+            "about the document. Check ``llm_call_log`` for the raw message "
+            "history."
         )
     if classification == NONE_RESULT_TOOL_LOOP:
         return (
             "The extraction agent looped on the same tool call without "
             "producing a final structured response. This is an integration "
-            "failure, not a statement about the document. See issue #1381."
+            "failure, not a statement about the document. Check "
+            "``llm_call_log`` for the repeated tool call."
         )
     return (
         "The extraction returned None and the cause could not be classified. "
@@ -269,8 +275,9 @@ async def doc_extract_query_task(
             if annotation_ids:
                 datacell.sources.add(*annotation_ids)
 
-    # Initialize datacell to None to avoid UnboundLocalError
+    # Initialize to None to avoid UnboundLocalError in the outer except block
     datacell = None
+    llm_log: Optional[str] = None
 
     logger.info("=" * 60)
     logger.info(f"doc_extract_query_task STARTED for cell_id: {cell_id}")
@@ -371,7 +378,7 @@ async def doc_extract_query_task(
         logger.info(f"  - Corpus ID: {corpus_id}")
 
         # Capture LLM messages for debugging
-        llm_log = None
+        messages: Optional[list[Any]] = None
 
         try:
             # Wrap the agent call in the context manager to capture messages
@@ -396,7 +403,7 @@ async def doc_extract_query_task(
 
         except Exception as e:
             # If we have messages, capture them before re-raising
-            if "messages" in locals():
+            if messages:
                 llm_log = ModelMessagesTypeAdapter.dump_json(
                     messages, indent=2
                 ).decode()
@@ -454,9 +461,7 @@ async def doc_extract_query_task(
             # Extraction returned None — classify *why* so operators can
             # distinguish legitimate "data not present" outcomes from
             # pipeline bugs (issue #1381).
-            classification = _classify_none_result(
-                messages if "messages" in locals() else None
-            )
+            classification = _classify_none_result(messages)
             failure_message = _failure_message_for_classification(classification)
             logger.warning(
                 f"✗ Extraction returned None for cell {cell_id} "
@@ -477,9 +482,7 @@ async def doc_extract_query_task(
         # Only try to mark failed if we have a datacell
         if datacell:
             # Pass llm_log if we have it
-            await sync_mark_failed(
-                datacell, e, tb, llm_log if "llm_log" in locals() else None
-            )
+            await sync_mark_failed(datacell, e, tb, llm_log)
         else:
             logger.error(f"Failed to get datacell for cell_id {cell_id}: {e}\n{tb}")
         raise

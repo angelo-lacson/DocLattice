@@ -1351,15 +1351,19 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             # Anthropic models tend to keep narrating / calling tools instead
             # of committing to the structured output when given any wiggle
             # room (issue #1381). Force temperature down to 0 unless the
-            # caller explicitly asked for something else.
+            # caller explicitly asked for something else (function-level
+            # temperature pin OR a non-zero config.temperature).
             effective_model = model or self.config.model_name
-            if _is_anthropic_model(effective_model) and temperature is None:
-                if self.config.temperature is None or self.config.temperature > 0:
-                    logger.info(
-                        "Forcing temperature=0 for structured extraction with "
-                        "Anthropic model %s (issue #1381).",
-                        effective_model,
-                    )
+            if (
+                _is_anthropic_model(effective_model)
+                and temperature is None
+                and (self.config.temperature is None or self.config.temperature == 0)
+            ):
+                logger.info(
+                    "Forcing temperature=0 for structured extraction with "
+                    "Anthropic model %s (issue #1381).",
+                    effective_model,
+                )
                 model_settings["temperature"] = 0
 
             # Seed tools from the main agent so the structured run has the same capabilities
