@@ -110,9 +110,7 @@ class ParagraphChunkerTests(TextChunkOffsetsMixin, TestCase):
         embedder.
         """
         text = (
-            "Real first paragraph.\n\n"
-            "​  ​ ​ ​  ​​  ​\n\n"
-            "Real second paragraph."
+            "Real first paragraph.\n\n" "​  ​ ​ ​  ​​  ​\n\n" "Real second paragraph."
         )
         chunks = list(ParagraphChunker().chunk(text))
         emitted = [c.text for c in chunks]

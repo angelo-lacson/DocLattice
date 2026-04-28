@@ -195,7 +195,10 @@ class Command(BaseCommand):
         if benchmark_name == "legalbench-rag":
             adapter_kwargs["paper_sampling"] = options.get("paper_sampling", True)
             adapter_kwargs["max_per_subset"] = options.get("max_per_subset", 194)
-        adapter = adapter_cls(**adapter_kwargs)
+        # mypy can't statically narrow ``adapter_kwargs: dict[str, object]``
+        # against each adapter subclass's specific parameter types. The dict
+        # values are sourced from argparse, which already validated them.
+        adapter = adapter_cls(**adapter_kwargs)  # type: ignore[arg-type]
 
         self.stdout.write(
             self.style.NOTICE(

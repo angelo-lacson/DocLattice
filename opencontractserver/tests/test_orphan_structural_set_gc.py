@@ -35,9 +35,7 @@ class OrphanStructuralSetGCTests(TransactionTestCase):
     def setUp(self) -> None:
         self.user = User.objects.create(username="orphan-gc-user")
 
-    def _make_set_with_annotation(
-        self, content_hash: str
-    ) -> StructuralAnnotationSet:
+    def _make_set_with_annotation(self, content_hash: str) -> StructuralAnnotationSet:
         ss = StructuralAnnotationSet.objects.create(
             content_hash=content_hash,
             parser_name="test",
@@ -52,9 +50,7 @@ class OrphanStructuralSetGCTests(TransactionTestCase):
         )
         return ss
 
-    def _make_doc(
-        self, ss: StructuralAnnotationSet, *, title: str
-    ) -> Document:
+    def _make_doc(self, ss: StructuralAnnotationSet, *, title: str) -> Document:
         # ``processing_started`` short-circuits the
         # ``process_doc_on_create_atomic`` post_save handler, which would
         # otherwise eagerly chain a celery PDF-ingest task that fails on
@@ -140,12 +136,8 @@ class CleanupCommandTests(TransactionTestCase):
 
         call_command("cleanup_orphan_structural_sets")
 
-        self.assertFalse(
-            StructuralAnnotationSet.objects.filter(pk=orphan.id).exists()
-        )
-        self.assertTrue(
-            StructuralAnnotationSet.objects.filter(pk=alive.id).exists()
-        )
+        self.assertFalse(StructuralAnnotationSet.objects.filter(pk=orphan.id).exists())
+        self.assertTrue(StructuralAnnotationSet.objects.filter(pk=alive.id).exists())
 
     def test_command_dry_run_makes_no_changes(self) -> None:
         orphan = StructuralAnnotationSet.objects.create(

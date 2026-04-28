@@ -699,9 +699,9 @@ class TestUpstreamEquivalence(PyUnitTestCase):
         return out
 
     def test_recall_matches_upstream_on_random_inputs(self):
-        from opencontractserver.benchmarks.metrics import char_recall_paper
-
         import random as rng_module
+
+        from opencontractserver.benchmarks.metrics import char_recall_paper
 
         rng = rng_module.Random(42)
         for trial in range(200):
@@ -728,9 +728,9 @@ class TestUpstreamEquivalence(PyUnitTestCase):
             )
 
     def test_precision_matches_upstream_on_random_inputs(self):
-        from opencontractserver.benchmarks.metrics import char_precision_paper
-
         import random as rng_module
+
+        from opencontractserver.benchmarks.metrics import char_precision_paper
 
         rng = rng_module.Random(43)
         for trial in range(200):

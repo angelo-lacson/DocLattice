@@ -194,9 +194,7 @@ def _gc_orphan_structural_set(sender, instance, **kwargs):
     set_id = getattr(instance, "_structural_set_id_at_delete", None)
     if set_id is None:
         return
-    StructuralAnnotationSet = apps.get_model(
-        "annotations", "StructuralAnnotationSet"
-    )
+    StructuralAnnotationSet = apps.get_model("annotations", "StructuralAnnotationSet")
     Document = apps.get_model("documents", "Document")
     if Document.objects.filter(structural_annotation_set_id=set_id).exists():
         return

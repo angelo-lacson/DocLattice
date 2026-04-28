@@ -234,12 +234,8 @@ class TestImportAnnotationsPermissionInvariants(TestCase):
         from opencontractserver.documents.models import Document
 
         User = get_user_model()
-        cls.creator = User.objects.create_user(
-            username="creator", password="pw"
-        )
-        cls.outsider = User.objects.create_user(
-            username="outsider", password="pw"
-        )
+        cls.creator = User.objects.create_user(username="creator", password="pw")
+        cls.outsider = User.objects.create_user(username="outsider", password="pw")
         cls.collaborator = User.objects.create_user(
             username="collaborator", password="pw"
         )
@@ -282,13 +278,9 @@ class TestImportAnnotationsPermissionInvariants(TestCase):
         )
 
         for obj in (cls.public_doc, cls.private_doc):
-            set_permissions_for_obj_to_user(
-                cls.creator, obj, [PermissionTypes.ALL]
-            )
+            set_permissions_for_obj_to_user(cls.creator, obj, [PermissionTypes.ALL])
         for obj in (cls.public_corpus, cls.private_corpus):
-            set_permissions_for_obj_to_user(
-                cls.creator, obj, [PermissionTypes.ALL]
-            )
+            set_permissions_for_obj_to_user(cls.creator, obj, [PermissionTypes.ALL])
 
         # Grant collaborator doc+corpus read so they can see annotations
         # via the doc/corpus path (this is the legitimate sharing flow,
@@ -341,9 +333,7 @@ class TestImportAnnotationsPermissionInvariants(TestCase):
         still see the annotations (because the optimizer derives perms
         from doc+corpus, not from ``AnnotationUserObjectPermission``).
         """
-        annots = self._ingest(
-            self.private_doc, self.private_corpus, structural=False
-        )
+        annots = self._ingest(self.private_doc, self.private_corpus, structural=False)
         visible = Annotation.objects.visible_to_user(self.collaborator)
         for a in annots:
             self.assertIn(
@@ -355,9 +345,7 @@ class TestImportAnnotationsPermissionInvariants(TestCase):
 
     def test_outsider_blocked_by_doc_and_corpus_perms(self):
         """Outsider with no doc/corpus perms cannot see private annotations."""
-        annots = self._ingest(
-            self.private_doc, self.private_corpus, structural=False
-        )
+        annots = self._ingest(self.private_doc, self.private_corpus, structural=False)
         visible = Annotation.objects.visible_to_user(self.outsider)
         for a in annots:
             self.assertNotIn(
@@ -391,9 +379,7 @@ class TestImportAnnotationsPermissionInvariants(TestCase):
         from opencontractserver.types.enums import PermissionTypes
         from opencontractserver.utils.permissioning import user_has_permission_for_obj
 
-        annots = self._ingest(
-            self.private_doc, self.private_corpus, structural=False
-        )
+        annots = self._ingest(self.private_doc, self.private_corpus, structural=False)
         for a in annots:
             # Creator: doc creator → has all perms via doc.
             self.assertTrue(
@@ -401,9 +387,7 @@ class TestImportAnnotationsPermissionInvariants(TestCase):
             )
             # Collaborator: granted doc+corpus read → can read annotation.
             self.assertTrue(
-                user_has_permission_for_obj(
-                    self.collaborator, a, PermissionTypes.READ
-                )
+                user_has_permission_for_obj(self.collaborator, a, PermissionTypes.READ)
             )
             # Outsider: no doc/corpus perms → cannot read.
             self.assertFalse(
@@ -456,12 +440,8 @@ class TestImportAnnotationsPermissionInvariants(TestCase):
                 "Outsider must still be blocked via doc/corpus perms.",
             )
             self.assertTrue(
-                user_has_permission_for_obj(
-                    self.collaborator, a, PermissionTypes.READ
-                )
+                user_has_permission_for_obj(self.collaborator, a, PermissionTypes.READ)
             )
             self.assertFalse(
-                user_has_permission_for_obj(
-                    self.outsider, a, PermissionTypes.READ
-                )
+                user_has_permission_for_obj(self.outsider, a, PermissionTypes.READ)
             )

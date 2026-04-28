@@ -250,9 +250,7 @@ _PARAGRAPH_SEPARATOR_RE = re.compile(r"\n[ \t]*(?:\n[ \t]*)+")
 # NaN and aborts the entire ingest pipeline. Observed in CUAD documents
 # (e.g. JuniperPharmaceuticalsInc_…) where copy-paste artifacts left
 # runs of ``​`` characters between real paragraphs.
-_INVISIBLE_CHARS_RE = re.compile(
-    r"[   -‏ -  -⁯⁠　﻿­]"
-)
+_INVISIBLE_CHARS_RE = re.compile(r"[   -‏ -  -⁯⁠　﻿­]")
 
 
 @register_chunker

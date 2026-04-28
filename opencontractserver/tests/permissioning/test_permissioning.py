@@ -993,9 +993,7 @@ class SetPermissionsIsNewTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user(
-            username="is_new_test_user", password="pw"
-        )
+        cls.user = User.objects.create_user(username="is_new_test_user", password="pw")
 
     def test_is_new_skips_remove_perm_calls(self):
         """When called with ``is_new=True`` on a fresh object, the function
@@ -1005,9 +1003,7 @@ class SetPermissionsIsNewTests(TestCase):
 
         new_corpus = Corpus.objects.create(title="brand new", creator=self.user)
 
-        with patch(
-            "opencontractserver.utils.permissioning.remove_perm"
-        ) as mock_remove:
+        with patch("opencontractserver.utils.permissioning.remove_perm") as mock_remove:
             set_permissions_for_obj_to_user(
                 self.user, new_corpus, [PermissionTypes.ALL], is_new=True
             )
@@ -1090,7 +1086,5 @@ class SetPermissionsIsNewTests(TestCase):
             self.user.id, new_corpus, [PermissionTypes.ALL], is_new=True
         )
         self.assertTrue(
-            user_has_permission_for_obj(
-                self.user, new_corpus, PermissionTypes.READ
-            )
+            user_has_permission_for_obj(self.user, new_corpus, PermissionTypes.READ)
         )
