@@ -362,3 +362,19 @@ class CreateLabelForLabelsetMutationTestCase(TestCase):
         new_label = self.labelset.annotation_labels.first()
         self.assertEqual(new_label.text, "Collaborator Label")
         self.assertEqual(new_label.creator_id, self.other_user.id)
+
+    def test_blank_text_is_rejected(self) -> None:
+        """An empty/whitespace ``text`` must NOT silently fall back to the
+        ``"Text Label"`` model default — clients should see a validation error.
+        """
+
+        result = self.client.execute(
+            CREATE_LABEL_FOR_LABELSET_MUTATION,
+            variables=self._create_variables("   "),
+        )
+
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["createAnnotationLabelForLabelset"]
+        self.assertFalse(data["ok"])
+        self.assertIn("blank", data["message"].lower())
+        self.assertEqual(self.labelset.annotation_labels.count(), 0)

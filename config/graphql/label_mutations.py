@@ -237,6 +237,19 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
         obj = None
         obj_id = None
 
+        # Reject blank ``text`` early.  ``text`` is GraphQL-optional so the
+        # model default ("Text Label") would silently apply, which produces
+        # surprising labels for clients that forgot to pass a value or
+        # passed an empty string.  Django's ``blank=False`` is form-only
+        # and is NOT enforced by ``objects.create()``.
+        if text is not None and not text.strip():
+            return CreateLabelForLabelsetMutation(
+                obj=None,
+                obj_id=None,
+                message="Label text cannot be blank.",
+                ok=False,
+            )
+
         # Validate color format (defense in depth)
         is_valid_color, color_error = validate_color(color)
         if not is_valid_color:
@@ -255,8 +268,10 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
                 # Generic deny path — same message and code path as not-found
                 raise LabelSet.DoesNotExist()
             logger.debug("CreateLabelForLabelsetMutation - mutate / Labelset", labelset)
-            # Drop None values so model field defaults apply (description,
-            # color, icon, text are NOT NULL with sensible defaults).
+            # Drop None and empty-string values so model field defaults
+            # apply (description, color, icon, text are NOT NULL with
+            # sensible defaults).  Empty strings would bypass those
+            # defaults at the DB level and write a row with blank values.
             create_kwargs = {
                 k: v
                 for k, v in {
@@ -266,7 +281,7 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
                     "icon": icon,
                     "label_type": label_type,
                 }.items()
-                if v is not None
+                if v is not None and v != ""
             }
             obj = AnnotationLabel.objects.create(
                 creator=info.context.user, **create_kwargs
