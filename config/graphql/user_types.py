@@ -1,5 +1,7 @@
 """GraphQL type definitions for user-related types."""
 
+from typing import Any
+
 import graphene
 from django.contrib.auth import get_user_model
 from graphene import relay
@@ -38,7 +40,7 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         description="Total number of documents uploaded by this user (visible to requester)"
     )
 
-    def resolve_reputation_global(self, info):
+    def resolve_reputation_global(self, info) -> Any:
         """
         Resolve global reputation for this user.
 
@@ -60,7 +62,7 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         except UserReputation.DoesNotExist:
             return 0
 
-    def resolve_reputation_for_corpus(self, info, corpus_id):
+    def resolve_reputation_for_corpus(self, info, corpus_id) -> Any:
         """
         Resolve reputation for this user in a specific corpus.
 
@@ -80,7 +82,7 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         except Exception:
             return 0
 
-    def resolve_total_messages(self, info):
+    def resolve_total_messages(self, info) -> Any:
         """
         Resolve total messages posted by this user.
         Only counts messages visible to the requesting user.
@@ -98,7 +100,7 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             .count()
         )
 
-    def resolve_total_threads_created(self, info):
+    def resolve_total_threads_created(self, info) -> Any:
         """
         Resolve total threads created by this user.
         Only counts threads visible to the requesting user.
@@ -113,7 +115,7 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             .count()
         )
 
-    def resolve_total_annotations_created(self, info):
+    def resolve_total_annotations_created(self, info) -> Any:
         """
         Resolve total annotations created by this user.
         Only counts annotations visible to the requesting user.
@@ -128,7 +130,7 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             .count()
         )
 
-    def resolve_total_documents_uploaded(self, info):
+    def resolve_total_documents_uploaded(self, info) -> Any:
         """
         Resolve total documents uploaded by this user.
         Only counts documents visible to the requesting user.
@@ -157,7 +159,7 @@ class AssignmentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
 
 class UserExportType(AnnotatePermissionsForReadMixin, DjangoObjectType):
-    def resolve_file(self, info):
+    def resolve_file(self, info) -> Any:
         return "" if not self.file else info.context.build_absolute_uri(self.file.url)
 
     class Meta:
@@ -167,7 +169,7 @@ class UserExportType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
 
 class UserImportType(AnnotatePermissionsForReadMixin, DjangoObjectType):
-    def resolve_zip(self, info):
+    def resolve_zip(self, info) -> Any:
         return "" if not self.file else info.context.build_absolute_uri(self.zip.url)
 
     class Meta:
@@ -200,7 +202,7 @@ class UserFeedbackType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     # https://docs.graphene-python.org/projects/django/en/latest/queries/#default-queryset
     @classmethod
-    def get_queryset(cls, queryset, info):
+    def get_queryset(cls, queryset, info) -> Any:
         from django.db.models import QuerySet
 
         if issubclass(type(queryset), QuerySet):

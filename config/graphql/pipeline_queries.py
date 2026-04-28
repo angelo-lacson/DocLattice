@@ -3,7 +3,7 @@ GraphQL query mixin for pipeline queries.
 """
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 import graphene
 from graphql_jwt.decorators import login_required
@@ -94,7 +94,7 @@ class PipelineQueryMixin:
                     settings_instance.component_settings.keys()
                 )
 
-            def filter_configured(definitions):
+            def filter_configured(definitions) -> Any:
                 return [
                     defn
                     for defn in definitions
@@ -215,7 +215,7 @@ class PipelineQueryMixin:
     )
 
     @login_required
-    def resolve_pipeline_settings(self, info):
+    def resolve_pipeline_settings(self, info) -> Any:
         """
         Resolve the singleton PipelineSettings instance.
 
