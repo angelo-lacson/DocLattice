@@ -2,6 +2,8 @@
 import json
 import logging
 import os
+from collections import Counter
+from typing import Any, Optional
 
 from asgiref.sync import sync_to_async
 
@@ -14,6 +16,115 @@ from opencontractserver.utils.extraction_grounding import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Failure-mode classification for structured-extraction None results
+# ---------------------------------------------------------------------------
+# When pydantic-ai returns ``None`` from the structured extraction agent, we
+# previously reported a single error message that conflated three very
+# different outcomes:
+#
+# 1. ``agent_committed_none``   — the agent searched, decided the data was
+#                                 absent, and explicitly returned None.
+#                                 Legitimate signal: the document doesn't
+#                                 contain the requested information.
+# 2. ``no_final_response``      — the agent never produced a final structured
+#                                 response. The pydantic-ai loop exhausted
+#                                 without the model calling the result tool.
+#                                 Common with Anthropic models (issue #1381).
+#                                 This is an integration failure, not a
+#                                 statement about the document.
+# 3. ``tool_loop_no_output``    — the agent issued the same tool call multiple
+#                                 times without ever synthesising a final
+#                                 answer. Also an integration failure.
+#
+# Operators want to grep ``failure_mode=`` to separate legitimate "data not
+# present" outcomes from pipeline bugs.
+
+NONE_RESULT_AGENT_COMMITTED = "agent_committed_none"
+NONE_RESULT_NO_FINAL = "no_final_response"
+NONE_RESULT_TOOL_LOOP = "tool_loop_no_output"
+NONE_RESULT_UNKNOWN = "unknown"
+
+# Threshold for declaring a tool loop. If any single tool name + arguments
+# combination appears at least this many times in the captured message log
+# without a final structured response, classify as ``tool_loop_no_output``.
+_TOOL_LOOP_THRESHOLD = 3
+
+
+def _classify_none_result(messages: Optional[list[Any]]) -> str:
+    """Classify *why* a structured extraction returned ``None``.
+
+    Examines the captured pydantic-ai message history and returns one of the
+    ``NONE_RESULT_*`` constants. Designed to be defensive: any unexpected
+    shape falls back to :data:`NONE_RESULT_UNKNOWN` rather than raising.
+    """
+    if not messages:
+        return NONE_RESULT_UNKNOWN
+
+    try:
+        from pydantic_ai.messages import ModelResponse, ToolCallPart
+    except ImportError:  # pragma: no cover - pydantic_ai is a hard dep
+        return NONE_RESULT_UNKNOWN
+
+    # Scan the log for ``ModelResponse`` parts. A "final structured response"
+    # is a ToolCallPart whose tool_name starts with ``final_result`` —
+    # pydantic-ai routes structured outputs through this synthetic tool.
+    saw_final_result = False
+    tool_call_signatures: list[tuple[str, str]] = []
+
+    for msg in messages:
+        if not isinstance(msg, ModelResponse):
+            continue
+        for part in getattr(msg, "parts", []) or []:
+            if isinstance(part, ToolCallPart):
+                tool_name = getattr(part, "tool_name", "") or ""
+                if tool_name.startswith("final_result"):
+                    saw_final_result = True
+                else:
+                    args_repr = repr(getattr(part, "args", None))
+                    tool_call_signatures.append((tool_name, args_repr))
+
+    if saw_final_result:
+        # Pydantic-ai received a final_result call but the structured output
+        # was None. That means the agent explicitly committed to the absence
+        # of data — legitimate.
+        return NONE_RESULT_AGENT_COMMITTED
+
+    # No final_result anywhere. Look for tool-call repetition.
+    if tool_call_signatures:
+        most_common = Counter(tool_call_signatures).most_common(1)
+        if most_common and most_common[0][1] >= _TOOL_LOOP_THRESHOLD:
+            return NONE_RESULT_TOOL_LOOP
+
+    return NONE_RESULT_NO_FINAL
+
+
+def _failure_message_for_classification(classification: str) -> str:
+    """Human-readable failure message for a ``NONE_RESULT_*`` classification."""
+    if classification == NONE_RESULT_AGENT_COMMITTED:
+        return (
+            "The extraction agent committed to a None result — the requested "
+            "information was not found in the document."
+        )
+    if classification == NONE_RESULT_NO_FINAL:
+        return (
+            "The extraction agent never produced a final structured response. "
+            "This is an integration failure (the model exhausted its tool-use "
+            "budget without committing to the result tool), not a statement "
+            "about the document. See issue #1381."
+        )
+    if classification == NONE_RESULT_TOOL_LOOP:
+        return (
+            "The extraction agent looped on the same tool call without "
+            "producing a final structured response. This is an integration "
+            "failure, not a statement about the document. See issue #1381."
+        )
+    return (
+        "The extraction returned None and the cause could not be classified. "
+        "See ``llm_call_log`` for the full message history."
+    )
 
 
 @sync_to_async
@@ -340,15 +451,23 @@ async def doc_extract_query_task(
                 )
 
         else:
-            # Extraction returned None
-            logger.warning(f"✗ Extraction returned None for cell {cell_id}")
-            logger.warning(
-                "  This likely means the requested information is not present in the document"
+            # Extraction returned None — classify *why* so operators can
+            # distinguish legitimate "data not present" outcomes from
+            # pipeline bugs (issue #1381).
+            classification = _classify_none_result(
+                messages if "messages" in locals() else None
             )
+            failure_message = _failure_message_for_classification(classification)
+            logger.warning(
+                f"✗ Extraction returned None for cell {cell_id} "
+                f"(failure_mode={classification})"
+            )
+            logger.warning(f"  {failure_message}")
             await sync_mark_failed(
                 datacell,
-                "Failed to extract requested data from document",
-                "The extraction returned None - the requested information may not be present in the document.",
+                f"Failed to extract requested data from document "
+                f"(failure_mode={classification})",
+                f"failure_mode={classification}\n\n{failure_message}",
                 llm_log,
             )
 
