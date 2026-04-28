@@ -286,6 +286,8 @@ class TestGroundingPipelineIntegration(TestCase):
             self.assertEqual(annot.document, self.document)
             self.assertEqual(annot.corpus, self.corpus)
             self.assertFalse(annot.structural)
+            self.assertIsNotNone(annot.annotation_label)
+            assert annot.annotation_label is not None  # narrow for mypy
             self.assertEqual(annot.annotation_label.text, OC_EXTRACT_SOURCE_LABEL)
 
             # Verify span data
@@ -509,6 +511,8 @@ class TestGroundingPipelinePDFIntegration(TestCase):
             self.assertEqual(annot.document, self.document)
             self.assertEqual(annot.corpus, self.corpus)
             self.assertFalse(annot.structural)
+            self.assertIsNotNone(annot.annotation_label)
+            assert annot.annotation_label is not None  # narrow for mypy
             self.assertEqual(annot.annotation_label.text, OC_EXTRACT_SOURCE_LABEL)
             # Page must be a positive integer; never the silent default of 1
             # for a span that actually lives on page 2.
