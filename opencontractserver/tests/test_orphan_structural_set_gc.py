@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase
+from django.utils import timezone
 
 from opencontractserver.annotations.models import (
     Annotation,
@@ -54,11 +55,18 @@ class OrphanStructuralSetGCTests(TransactionTestCase):
     def _make_doc(
         self, ss: StructuralAnnotationSet, *, title: str
     ) -> Document:
+        # ``processing_started`` short-circuits the
+        # ``process_doc_on_create_atomic`` post_save handler, which would
+        # otherwise eagerly chain a celery PDF-ingest task that fails on
+        # this file-less test fixture and aborts the whole class. Same
+        # pattern documented for ``test_pydantic_ai_agents.py`` /
+        # ``test_structural_annotation_portability.py``.
         return Document.objects.create(
             title=title,
             description="",
             structural_annotation_set=ss,
             creator=self.user,
+            processing_started=timezone.now(),
         )
 
     def test_last_document_delete_gcs_orphan_set(self) -> None:
@@ -98,7 +106,10 @@ class OrphanStructuralSetGCTests(TransactionTestCase):
         # ``structural_annotation_set`` is nullable; deleting a Document
         # that never had one must not crash the GC signal.
         doc = Document.objects.create(
-            title="bare", description="", creator=self.user
+            title="bare",
+            description="",
+            creator=self.user,
+            processing_started=timezone.now(),
         )
         doc.delete()  # must not raise
 
@@ -122,6 +133,7 @@ class CleanupCommandTests(TransactionTestCase):
             description="",
             structural_annotation_set=alive,
             creator=self.user,
+            processing_started=timezone.now(),
         )
 
         from django.core.management import call_command
