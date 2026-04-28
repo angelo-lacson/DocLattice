@@ -7,7 +7,7 @@ celery==5.6.3  # pyup: < 6.0  # https://github.com/celery/celery
 flower==2.0.1  # https://github.com/mher/flower
 django-celery-beat==2.9.0  # https://github.com/celery/django-celery-beat
 pyjwt==2.12.1  # https://github.com/jpadilla/pyjwt
-cryptography==46.0.7  # https://github.com/pyca/cryptography
+cryptography==47.0.0  # https://github.com/pyca/cryptography
 pydantic==2.*
 typing-extensions==4.*  # https://github.com/python/typing_extensions
 requests==2.*  # https://requests.readthedocs.io/en/latest/
@@ -31,7 +31,7 @@ pgvector>=0.4.0  # Python binding for pgvector; PostgreSQL extension v0.8.2+ req
 channels==4.3.2  # https://github.com/django/channels
 daphne==4.2.1  # https://github.com/django/daphne
 channels-redis==4.3.0
-Twisted[tls,http2]
+Twisted[tls,http2]>=25.5.0
 
 # Django REST Framework
 # ------------------------------------------------------------------------------
@@ -86,7 +86,7 @@ ipython>=9.13.0 # not directly required, pinned by Snyk to avoid a vulnerability
 requests>=2.32.2 # not directly required, pinned by Snyk to avoid a vulnerability
 setuptools>=70.0.0 # not directly required, pinned by Snyk to avoid a vulnerability
 sqlparse>=0.5.0 # not directly required, pinned by Snyk to avoid a vulnerability
-tornado>=6.4.2 # not directly required, pinned by Snyk to avoid a vulnerability
+tornado>=6.5.5 # not directly required, pinned by Snyk to avoid a vulnerability
 urllib3>=2.2.2 # not directly required, pinned by Snyk to avoid a vulnerability
 zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
 pillow>=10.3.0 # not directly required, pinned by Snyk to avoid a vulnerability
