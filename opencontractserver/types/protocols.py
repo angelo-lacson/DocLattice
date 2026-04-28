@@ -21,7 +21,7 @@ visibility-manager pattern.
 from __future__ import annotations
 
 from collections.abc import Awaitable
-from typing import TYPE_CHECKING, Any, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -149,7 +149,7 @@ class PermissionedQueryManagerProtocol(Protocol):
     accept ``None`` (treated as anonymous) still satisfy the protocol.
     """
 
-    def visible_to_user(self, user: Optional[Any] = ...) -> "QuerySet[Any]":
+    def visible_to_user(self, user: Any | None = ...) -> QuerySet[Any]:
         """Return a queryset filtered to objects visible to ``user``."""
         ...
 
