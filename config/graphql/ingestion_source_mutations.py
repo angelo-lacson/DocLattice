@@ -129,10 +129,10 @@ class UpdateIngestionSourceMutation(graphene.Mutation):
         user = info.context.user
 
         pk, error = _parse_ingestion_source_global_id(id)
-        if error:
+        if pk is None:
             return UpdateIngestionSourceMutation(
                 ok=False,
-                message=error,
+                message=error or _NOT_FOUND_MSG,
                 ingestion_source=None,
             )
 
@@ -197,10 +197,10 @@ class DeleteIngestionSourceMutation(graphene.Mutation):
         user = info.context.user
 
         pk, error = _parse_ingestion_source_global_id(id)
-        if error:
+        if pk is None:
             return DeleteIngestionSourceMutation(
                 ok=False,
-                message=error,
+                message=error or _NOT_FOUND_MSG,
             )
 
         # Intentionally scoped to creator even for superusers — see

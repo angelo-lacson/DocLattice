@@ -1205,3 +1205,121 @@ class TestDRFMutationValidationError(TestCase):
         message = DRFMutation.format_validation_error(exc)
         self.assertIn("Error one.", message)
         self.assertIn("Error two.", message)
+
+
+# ---------------------------------------------------------------------------
+# DRFMutation / DRFDeletion IOSettings misconfiguration guard
+# ---------------------------------------------------------------------------
+
+
+class TestIOSettingsRequiredFieldsGuard(TestCase):
+    """Misconfigured IOSettings must raise ``NotImplementedError`` at mutation time."""
+
+    def test_require_io_setting_raises_when_io_settings_missing(self):
+        from config.graphql.base import _require_io_setting
+
+        class MisconfiguredMutation:
+            pass
+
+        with self.assertRaises(NotImplementedError) as ctx:
+            _require_io_setting(MisconfiguredMutation, "model")
+        self.assertIn("MisconfiguredMutation", str(ctx.exception))
+        # Distinct message for the missing-class case (vs. missing-field).
+        self.assertIn("IOSettings", str(ctx.exception))
+
+    def test_require_io_setting_raises_when_attribute_none(self):
+        """Each of model/serializer/graphene_model must independently fail when ``None``."""
+        from config.graphql.base import _require_io_setting
+
+        class MisconfiguredMutation:
+            class IOSettings:
+                model = None
+                serializer = None
+                graphene_model = None
+
+        for field in ("model", "serializer", "graphene_model"):
+            with self.assertRaises(NotImplementedError) as ctx:
+                _require_io_setting(MisconfiguredMutation, field)
+            self.assertIn("MisconfiguredMutation", str(ctx.exception))
+            self.assertIn(field, str(ctx.exception))
+
+    def test_require_io_setting_returns_configured_value(self):
+        from config.graphql.base import _require_io_setting
+
+        class ConfiguredMutation:
+            class IOSettings:
+                model = Corpus
+
+        self.assertIs(_require_io_setting(ConfiguredMutation, "model"), Corpus)
+
+    def test_base_iosettings_defaults_are_none_on_mutation(self):
+        """Base ``IOSettings`` must default to ``None`` so the runtime guard can fire."""
+        from config.graphql.base import DRFDeletion, DRFMutation
+
+        self.assertIsNone(DRFMutation.IOSettings.model)
+        self.assertIsNone(DRFMutation.IOSettings.serializer)
+        self.assertIsNone(DRFMutation.IOSettings.graphene_model)
+        self.assertIsNone(DRFDeletion.IOSettings.model)
+
+    def test_drf_deletion_mutate_raises_when_lookup_value_missing(self):
+        """``DRFDeletion.mutate`` must raise ``ValueError`` when the lookup arg is omitted."""
+        from unittest.mock import MagicMock
+
+        from graphene import ResolveInfo
+
+        from config.graphql.base import DRFDeletion
+
+        class _DeleteCorpus(DRFDeletion):
+            class IOSettings(DRFDeletion.IOSettings):
+                model = Corpus
+                lookup_field = "id"
+
+        # ``@login_required`` from graphql_jwt looks for a ``ResolveInfo`` arg
+        # via ``isinstance``; spec the mock so the decorator passes through
+        # to the wrapped function where the real lookup-value check fires.
+        # This relies on ``@graphql_ratelimit`` being a no-op under test
+        # conditions (no real cache backend is consulted before the body).
+        info = MagicMock(spec=ResolveInfo)
+        info.context = MagicMock()
+        info.context.user = MagicMock(is_authenticated=True)
+
+        with self.assertRaises(ValueError) as ctx:
+            _DeleteCorpus.mutate(None, info)
+        self.assertIn("id", str(ctx.exception))
+
+    def test_drf_mutation_obj_id_uses_graphene_type_name_not_metaclass(self):
+        """Regression: ``to_global_id`` must use ``graphene_model.__name__``
+        (the GraphQL type, e.g. ``"CorpusType"``), not
+        ``graphene_model.__class__.__name__`` (the metaclass name like
+        ``"SubclassWithMeta_Meta"``).
+        """
+        from graphene.test import Client
+        from graphql_relay import from_global_id
+
+        from config.graphql.schema import schema
+        from opencontractserver.corpuses.models import Corpus
+
+        user = User.objects.create_user(username="objIdRegressionUser", password="x")
+
+        class _Ctx:
+            def __init__(self, user):
+                self.user = user
+
+        client = Client(schema, context_value=_Ctx(user))
+        result = client.execute("""
+            mutation {
+                createCorpus(title: "ObjIdRegression") {
+                    ok
+                    objId
+                }
+            }
+            """)
+        self.assertIsNone(result.get("errors"))
+        self.assertTrue(result["data"]["createCorpus"]["ok"])
+
+        obj_id = result["data"]["createCorpus"]["objId"]
+        type_name, pk = from_global_id(obj_id)
+        # The fix: ``__name__`` produces the graphene type name.
+        self.assertEqual(type_name, "CorpusType")
+        # Underlying row exists at that pk — proves the global id is decodable.
+        self.assertTrue(Corpus.objects.filter(pk=int(pk)).exists())

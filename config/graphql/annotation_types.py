@@ -93,14 +93,14 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     all_source_node_in_relationship = graphene.List(lambda: RelationshipType)
 
-    def resolve_feedback_count(self, info) -> Any:
+    def resolve_feedback_count(self, info) -> int:
         # If feedback_count was annotated on the queryset, use it
         if hasattr(self, "feedback_count"):
             return self.feedback_count
         # Otherwise, count it (but this triggers N+1)
         return self.user_feedback.count()
 
-    def resolve_all_source_node_in_relationship(self, info) -> Any:
+    def resolve_all_source_node_in_relationship(self, info) -> QuerySet[Relationship]:
         return self.source_node_in_relationships.all()
 
     all_target_node_in_relationship = graphene.List(lambda: RelationshipType)
@@ -131,7 +131,7 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         """
         from django_cte import CTE, with_cte
 
-        def get_descendants(cte) -> Any:
+        def get_descendants(cte):
             base_qs = Annotation.objects.filter(parent_id=self.id).values(
                 "id", "parent_id", "raw_text"
             )
@@ -161,7 +161,7 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         while root.parent_id is not None:
             root = root.parent
 
-        def get_full_tree(cte) -> Any:
+        def get_full_tree(cte):
             base_qs = Annotation.objects.filter(id=root.id).values(
                 "id", "parent_id", "raw_text"
             )
@@ -197,7 +197,7 @@ class AnnotationType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         ancestor_ids = [ancestor.id for ancestor in ancestors]
 
         # Get all descendants of the current node
-        def get_descendants(cte) -> Any:
+        def get_descendants(cte):
             base_qs = Annotation.objects.filter(parent_id=self.id).values(
                 "id", "parent_id", "raw_text"
             )
@@ -357,7 +357,7 @@ class NoteType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         """
         from django_cte import CTE, with_cte
 
-        def get_descendants(cte) -> Any:
+        def get_descendants(cte):
             base_qs = Note.objects.filter(parent_id=self.id).values(
                 "id", "parent_id", "content"
             )
@@ -387,7 +387,7 @@ class NoteType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         while root.parent_id is not None:
             root = root.parent
 
-        def get_full_tree(cte) -> Any:
+        def get_full_tree(cte):
             base_qs = Note.objects.filter(id=root.id).values(
                 "id", "parent_id", "content"
             )
@@ -421,7 +421,7 @@ class NoteType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         ancestor_ids = [ancestor.id for ancestor in ancestors]
 
         # Get all descendants of the current node
-        def get_descendants(cte) -> Any:
+        def get_descendants(cte):
             base_qs = Note.objects.filter(parent_id=self.id).values(
                 "id", "parent_id", "content"
             )
