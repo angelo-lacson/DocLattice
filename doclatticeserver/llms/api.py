@@ -395,6 +395,12 @@ class AgentAPI:
         if framework is None:
             framework = AgentFramework.PYDANTIC_AI
 
+        # Config-time kwargs (vector store / agent construction) belong on
+        # ``for_document``; ``structured_response`` only accepts run-time
+        # kwargs (filtered through its own allowlist), so don't double-pass.
+        config_only_keys = {"similarity_top_k"}
+        run_kwargs = {k: v for k, v in kwargs.items() if k not in config_only_keys}
+
         agent = await AgentAPI.for_document(
             document=document,
             corpus=corpus,
@@ -416,7 +422,7 @@ class AgentAPI:
             model=model,
             temperature=temperature,
             max_tokens=max_tokens,
-            **kwargs,
+            **run_kwargs,
         )
 
         # The tool implementations appended to this list during the run.

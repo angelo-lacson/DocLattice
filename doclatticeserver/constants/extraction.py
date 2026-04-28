@@ -17,11 +17,12 @@ MAX_GROUNDABLE_STRINGS = 50
 # attempted. Fuzzy matching is O(n * m) where n = doc length and m = query
 # length, so it becomes prohibitively expensive on very large documents.
 # Documents exceeding this threshold fall back to exact + normalized only.
-# 50 KB covers most production legal documents (avg ~10-25 KB) while keeping
-# worst-case fuzzy cost bounded — was 500 KB which let 25 KB privacy-policy
-# corpora hang the grounder when an LLM paraphrased its answer past the
-# normalized-match tier.
-MAX_DOC_LENGTH_FOR_FUZZY = 50_000
+# 200 KB comfortably covers most production legal documents (MSAs, ISDA
+# schedules, EPC agreements routinely run 100-200 KB). Worst-case fuzzy
+# cost is already bounded by FUZZY_PER_QUERY_TIMEOUT_SECONDS and the
+# n-gram anchor pre-filter (FUZZY_ANCHOR_MIN_NGRAM_WORDS) — those are
+# the real safety valves; this cap is the outer guard.
+MAX_DOC_LENGTH_FOR_FUZZY = 200_000
 
 # Maximum query length (in characters) accepted by the fuzzy fallback.
 # Some models occasionally return entire paragraphs as a single extracted
