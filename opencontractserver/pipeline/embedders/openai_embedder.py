@@ -287,13 +287,11 @@ class OpenAIEmbedder(BaseEmbedder):
         if not texts:
             return []
 
-        # Map original positions to the texts that survive the empty filter
         kept: list[tuple[int, str]] = []
-        max_chars = 30000  # mirror _embed_text_impl's 8192-token guard
         for i, raw in enumerate(texts):
             if not raw or not raw.strip():
                 continue
-            kept.append((i, raw[:max_chars]))
+            kept.append((i, raw[:OPENAI_EMBEDDER_MAX_INPUT_CHARS]))
 
         # Output skeleton — slots for filtered-out texts stay None forever.
         out: list[Optional[list[float]]] = [None] * len(texts)

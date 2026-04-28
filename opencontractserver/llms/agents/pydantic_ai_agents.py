@@ -105,21 +105,19 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
-def _make_similarity_search_tool(vector_store: Any) -> Callable:
+def _make_similarity_search_tool(vector_store: Any, default_k: int = 8) -> Callable:
     """Build the citation-capturing similarity_search tool for a vector store.
 
-    Both the document and corpus agent factories used to define this closure
-    inline; the only thing that differed was which vector store was bound.
-    Centralising it here keeps the citation-accumulation contract — push
-    every real annotation PK into ``ctx.deps.retrieved_annotation_ids`` —
-    in a single place. The tool name remains ``similarity_search`` so
-    downstream event handlers and source-linking logic are unaffected.
+    ``default_k`` is the LLM-facing default when the model does not supply
+    its own ``k`` argument. Wired through from ``AgentConfig.similarity_top_k``
+    so callers controlling retrieval depth via the config field actually win
+    when the model omits ``k``.
     """
 
     async def similarity_search(
         ctx: RunContext[PydanticAIDependencies],
         query: str,
-        k: int = 8,
+        k: int = default_k,
         modalities: Optional[list[str]] = None,
     ) -> list[dict[str, Any]]:
         """Semantic vector search over the corpus annotations.
@@ -2104,7 +2102,9 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
         # See ``_make_similarity_search_tool`` for the citation-accumulation
         # contract; the tool name remains ``similarity_search`` so existing
         # event handlers that match on the tool name continue to work.
-        default_vs_tool: Callable = _make_similarity_search_tool(vector_store)
+        default_vs_tool: Callable = _make_similarity_search_tool(
+            vector_store, default_k=config.similarity_top_k
+        )
 
         # -----------------------------
         # Auto-build pure passthrough tools from registry
@@ -2610,7 +2610,9 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
 
         # See ``_make_similarity_search_tool`` for the shared citation-capturing
         # closure used by both the document and corpus agent factories.
-        default_vs_tool: Callable = _make_similarity_search_tool(vector_store)
+        default_vs_tool: Callable = _make_similarity_search_tool(
+            vector_store, default_k=config.similarity_top_k
+        )
 
         # -----------------------------
         # Auto-build passthrough tools from registry
