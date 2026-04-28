@@ -59,7 +59,9 @@ def load_or_create_labels(
             label_serializer = AnnotationLabelSerializer(data=label_data)
             label_serializer.is_valid(raise_exception=True)
             label_obj = label_serializer.save()
-            set_permissions_for_obj_to_user(user_id, label_obj, [PermissionTypes.ALL])
+            set_permissions_for_obj_to_user(
+                user_id, label_obj, [PermissionTypes.ALL], is_new=True
+            )
 
             if labelset_obj:
                 labelset_obj.annotation_labels.add(label_obj)
@@ -153,10 +155,19 @@ def import_annotations(
 
     if instances:
         Annotation.objects.bulk_create(instances)
+        # NB: We deliberately do NOT call set_permissions_for_obj_to_user on
+        # individual annotations. The annotation visibility/permission model
+        # is derived from doc + corpus (+ structural flag, creator,
+        # analysis/extract privacy) — see:
+        #   * AnnotationQuerySet.visible_to_user (shared/QuerySets.py)
+        #   * AnnotationQueryOptimizer._compute_effective_permissions
+        #   * user_has_permission_for_obj (special-cases annotations)
+        # None of those consult AnnotationUserObjectPermission rows, so
+        # writing ~14 DB ops per annotation here is dead work. Locked in
+        # by ``test_no_per_annotation_guardian_rows_are_required`` in
+        # ``test_import_utils.py`` — that test deletes any pre-existing
+        # rows and re-asserts visibility outcomes are unchanged.
         for instance, old_id in zip(instances, parallel_old_ids):
-            set_permissions_for_obj_to_user(
-                user_id, instance, [PermissionTypes.ALL]
-            )
             if old_id is not None:
                 old_id_to_new_pk[old_id] = instance.pk
 
@@ -284,7 +295,7 @@ def import_relationships(
             structural=structural,
         )
         set_permissions_for_obj_to_user(
-            user_id, new_relationship, [PermissionTypes.ALL]
+            user_id, new_relationship, [PermissionTypes.ALL], is_new=True
         )
 
         # Map source annotations
@@ -496,7 +507,9 @@ def create_document_from_export_data(
         processing_started=timezone.now(),
     )
 
-    set_permissions_for_obj_to_user(user_obj, doc_obj, [PermissionTypes.ALL])
+    set_permissions_for_obj_to_user(
+        user_obj, doc_obj, [PermissionTypes.ALL], is_new=True
+    )
     return doc_obj
 
 
@@ -536,7 +549,9 @@ def import_doc_annotations(
                 corpus=corpus_obj,
                 creator_id=user_id,
             )
-            set_permissions_for_obj_to_user(user_id, annot_obj, [PermissionTypes.ALL])
+            set_permissions_for_obj_to_user(
+                user_id, annot_obj, [PermissionTypes.ALL], is_new=True
+            )
             doc_labels_created += 1
 
     # Import text annotations
