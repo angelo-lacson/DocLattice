@@ -6,13 +6,8 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from opencontractserver.llms.types import AgentFramework
-from opencontractserver.types.protocols import ToolProtocol  # noqa: F401
 
 logger = logging.getLogger(__name__)
-
-# ``ToolProtocol`` mirrors the public surface of :class:`CoreTool` so that
-# framework adapters (e.g. PydanticAI) can accept any object exposing the
-# same ``name``/``description``/``parameters``/``requires_approval`` API.
 
 
 def build_inject_params_for_context(

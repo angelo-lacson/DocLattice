@@ -12,14 +12,6 @@ from opencontractserver.shared.QuerySets import (
     PermissionQuerySet,
     UserFeedbackQuerySet,
 )
-from opencontractserver.types.protocols import (  # noqa: F401
-    PermissionedQueryManagerProtocol,
-)
-
-# ``PermissionedQueryManagerProtocol`` (in ``opencontractserver.types.protocols``)
-# describes the public ``visible_to_user(user)`` contract that every manager
-# below honours. Importing it here makes the dependency explicit so callers
-# typing on the protocol get static checks for free.
 
 if TYPE_CHECKING:
     from django.contrib.auth import get_user_model
@@ -247,7 +239,7 @@ class UserFeedbackManager(BaseVisibilityManager):
         """Delegate to the queryset's visible_to_user method"""
         return self.get_queryset().visible_to_user(user)
 
-    def get_or_none(self, *args, **kwargs) -> Optional[Any]:
+    def get_or_none(self, *args: Any, **kwargs: Any) -> Optional[Any]:
         try:
             return self.get(*args, **kwargs)
         except self.model.DoesNotExist:

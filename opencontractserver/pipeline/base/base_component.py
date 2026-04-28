@@ -5,15 +5,7 @@ from typing import Any, ClassVar, Optional
 
 from django.conf import settings
 
-from opencontractserver.types.protocols import PipelineComponentProtocol  # noqa: F401
-
 logger = logging.getLogger(__name__)
-
-# ``PipelineComponentProtocol`` (re-exported here) describes the duck-typed
-# surface that registry consumers rely on (``title``, ``description``,
-# ``author``, ``dependencies``). Concrete subclasses of
-# :class:`PipelineComponentBase` (parsers, embedders, thumbnailers,
-# post-processors) all satisfy that protocol structurally.
 
 
 class PipelineComponentBase(ABC):

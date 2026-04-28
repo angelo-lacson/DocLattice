@@ -20,7 +20,6 @@ visibility-manager pattern.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
@@ -149,7 +148,7 @@ class PermissionedQueryManagerProtocol(Protocol):
     accept ``None`` (treated as anonymous) still satisfy the protocol.
     """
 
-    def visible_to_user(self, user: Any | None = ...) -> QuerySet[Any]:
+    def visible_to_user(self, user: Any | None = None) -> QuerySet[Any]:
         """Return a queryset filtered to objects visible to ``user``."""
         ...
 
@@ -165,9 +164,13 @@ class StreamObserverProtocol(Protocol):
     Mirrors :class:`opencontractserver.llms.types.StreamObserver` so it
     can be referenced from non-LLM code (notifications, websockets)
     without importing ``llms.types``.
+
+    Not ``@runtime_checkable``: ``isinstance`` checks against an
+    async-only ``__call__`` protocol cannot distinguish sync from async
+    callables, so we leave verification to the static type checker.
     """
 
-    async def __call__(self, event: Any) -> Awaitable[None]: ...
+    async def __call__(self, event: Any) -> None: ...
 
 
 __all__ = [

@@ -1,6 +1,5 @@
-from typing import Any
-
 from django.contrib import admin
+from django.db.models import QuerySet
 from django.http import HttpRequest
 from django.utils.html import format_html
 from guardian.admin import GuardedModelAdmin
@@ -268,7 +267,7 @@ class AgentActionResultAdmin(GuardedModelAdmin):
 
     execution_metadata_display.short_description = "Execution Metadata"
 
-    def get_queryset(self, request: HttpRequest) -> Any:
+    def get_queryset(self, request: HttpRequest) -> QuerySet[AgentActionResult]:
         """Optimize queryset with select_related."""
         return (
             super()
