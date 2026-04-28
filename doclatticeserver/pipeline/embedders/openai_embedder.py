@@ -229,7 +229,11 @@ class OpenAIEmbedder(BaseEmbedder):
         except openai.BadRequestError as e:
             logger.error(f"OpenAI API bad request: {e}")
             return None
-        except (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError):
+        except (
+            openai.RateLimitError,
+            openai.APITimeoutError,
+            openai.APIConnectionError,
+        ):
             # Transient: re-raise so callers can retry. See the matching
             # block in ``embed_texts_batch`` for the rationale.
             logger.warning(
@@ -304,9 +308,7 @@ class OpenAIEmbedder(BaseEmbedder):
         all_kwargs = {**self.get_component_settings(), **direct_kwargs}
         model = all_kwargs.get("openai_embedding_model", s.openai_embedding_model)
         dimensions = int(
-            all_kwargs.get(
-                "openai_embedding_dimensions", s.openai_embedding_dimensions
-            )
+            all_kwargs.get("openai_embedding_dimensions", s.openai_embedding_dimensions)
         )
 
         try:
@@ -336,7 +338,9 @@ class OpenAIEmbedder(BaseEmbedder):
             return out
         except openai.AuthenticationError:
             # Permanent: a wrong API key won't fix itself with retry.
-            logger.error("OpenAI API authentication failed (batch). Check your API key.")
+            logger.error(
+                "OpenAI API authentication failed (batch). Check your API key."
+            )
             return None
         except openai.BadRequestError as e:
             # Permanent: malformed input (oversize, bad dimensions, etc.).
@@ -344,7 +348,11 @@ class OpenAIEmbedder(BaseEmbedder):
             # something that will fail every time.
             logger.error("OpenAI API bad request (batch): %s", e)
             return None
-        except (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError):
+        except (
+            openai.RateLimitError,
+            openai.APITimeoutError,
+            openai.APIConnectionError,
+        ):
             # Transient: re-raise so the celery task's autoretry_for=(Exception,)
             # can take over with proper backoff. The OpenAI SDK already
             # absorbed up to OPENAI_CLIENT_MAX_RETRIES of these

@@ -464,9 +464,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
             resp.json.return_value = {"embeddings": embeddings}
         return resp
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_successful_batch(self, mock_post):
         """Successful batch returns list of vectors."""
         embedder = self._make_embedder()
@@ -481,9 +479,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         call_kwargs = mock_post.call_args
         self.assertIn("/embeddings/batch", call_kwargs[0][0])
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_client_error_raises(self, mock_post):
         """4xx response raises EmbeddingClientError.
 
@@ -499,9 +495,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         with self.assertRaises(EmbeddingClientError):
             embedder.embed_texts_batch(["hello"])
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_server_error_raises(self, mock_post):
         """5xx response raises EmbeddingServerError for Celery retry."""
         embedder = self._make_embedder()
@@ -510,9 +504,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         with self.assertRaises(EmbeddingServerError):
             embedder.embed_texts_batch(["hello"])
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_non_retriable_exception_returns_none(self, mock_post):
         """Non-retriable exception (e.g., builtin ConnectionError) returns None."""
         embedder = self._make_embedder()
@@ -522,9 +514,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_timeout_raises_for_retry(self, mock_post):
         """requests.Timeout re-raises for Celery retry."""
         embedder = self._make_embedder()
@@ -533,9 +523,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         with self.assertRaises(requests.exceptions.Timeout):
             embedder.embed_texts_batch(["hello"])
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_connection_error_raises_for_retry(self, mock_post):
         """requests.ConnectionError re-raises for Celery retry."""
         embedder = self._make_embedder()
@@ -568,9 +556,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         result = embedder.embed_texts_batch(["hello"])
         self.assertIsNone(result)
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_3d_response_squeezed(self, mock_post):
         """3D response array is squeezed to 2D."""
         embedder = self._make_embedder()
@@ -584,9 +570,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertEqual(len(result[0]), 384)
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_vector_count_mismatch_returns_none(self, mock_post):
         """Mismatched vector count returns None."""
         embedder = self._make_embedder()
@@ -598,9 +582,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_malformed_200_missing_embeddings_key(self, mock_post):
         """200 response missing 'embeddings' key returns None."""
         embedder = self._make_embedder()
@@ -613,9 +595,7 @@ class TestMicroserviceEmbedderBatch(unittest.TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_nan_values_handled_per_item(self, mock_post):
         """NaN values in individual embeddings return None for those items only."""
         embedder = self._make_embedder()
@@ -654,9 +634,7 @@ class TestMicroserviceEmbedderSingleText(unittest.TestCase):
             resp.json.return_value = {"embeddings": embeddings}
         return resp
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_embed_text_success_1d(self, mock_post):
         """Successful single-text embedding with 1D response."""
         embedder = self._make_embedder()
@@ -669,9 +647,7 @@ class TestMicroserviceEmbedderSingleText(unittest.TestCase):
         self.assertEqual(len(result), 384)
         mock_post.assert_called_once()
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_embed_text_success_2d(self, mock_post):
         """Successful single-text embedding with 2D response."""
         embedder = self._make_embedder()
@@ -683,9 +659,7 @@ class TestMicroserviceEmbedderSingleText(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(len(result), 384)
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_embed_text_malformed_200(self, mock_post):
         """200 response missing 'embeddings' key returns None."""
         embedder = self._make_embedder()
@@ -695,9 +669,7 @@ class TestMicroserviceEmbedderSingleText(unittest.TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_embed_text_nan_returns_none(self, mock_post):
         """NaN in single-text response returns None."""
         embedder = self._make_embedder()
@@ -707,9 +679,7 @@ class TestMicroserviceEmbedderSingleText(unittest.TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_embed_text_client_error(self, mock_post):
         """4xx response returns None."""
         embedder = self._make_embedder()
@@ -719,9 +689,7 @@ class TestMicroserviceEmbedderSingleText(unittest.TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_embed_text_server_error(self, mock_post):
         """5xx response returns None."""
         embedder = self._make_embedder()
@@ -731,9 +699,7 @@ class TestMicroserviceEmbedderSingleText(unittest.TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "requests.Session.post"
-    )
+    @patch("requests.Session.post")
     def test_embed_text_exception(self, mock_post):
         """Network exception returns None."""
         embedder = self._make_embedder()

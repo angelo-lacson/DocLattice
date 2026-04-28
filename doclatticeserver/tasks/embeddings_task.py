@@ -483,8 +483,7 @@ def _batch_embed_text_annotations(
 
     # Carve into sub-batches up front so we can fan them out concurrently.
     chunks: list[list[tuple[Annotation, str]]] = [
-        items[i : i + api_batch_size]
-        for i in range(0, len(items), api_batch_size)
+        items[i : i + api_batch_size] for i in range(0, len(items), api_batch_size)
     ]
 
     # ------------------------------------------------------------------ #
@@ -523,8 +522,7 @@ def _batch_embed_text_annotations(
     # Map future -> chunk index for logging/sub-batch numbering.
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_idx = {
-            executor.submit(_embed_one, chunk): idx
-            for idx, chunk in enumerate(chunks)
+            executor.submit(_embed_one, chunk): idx for idx, chunk in enumerate(chunks)
         }
         for future in as_completed(future_to_idx):
             idx = future_to_idx[future]
@@ -616,9 +614,7 @@ def _batch_embed_text_annotations(
                         f"Failed to store embedding for annotation {annot.id}: {e}"
                     )
                     result["failed"] += 1
-                    result["errors"].append(
-                        f"Annotation {annot.id}: store failed: {e}"
-                    )
+                    result["errors"].append(f"Annotation {annot.id}: store failed: {e}")
 
 
 @shared_task(
@@ -744,9 +740,7 @@ def calculate_embeddings_for_annotation_batch(
         # Per-embedder ``api_batch_size`` falls back to the global default
         # for embedders that haven't overridden it (and for legacy paths
         # that pass an embedder instance without the attribute).
-        api_batch_size = getattr(
-            embedder, "api_batch_size", EMBEDDING_API_BATCH_SIZE
-        )
+        api_batch_size = getattr(embedder, "api_batch_size", EMBEDDING_API_BATCH_SIZE)
         if text_only_annots:
             logger.info(
                 f"Batch-embedding {len(text_only_annots)} text-only annotations "

@@ -244,9 +244,7 @@ class LegalBenchRAGAdapter(BaseBenchmarkAdapter):
             tests = payload.get("tests", [])
             if self.paper_sampling:
                 pre_count = len(tests)
-                tests = _paper_sample_tests(
-                    tests, max_per_subset=self.max_per_subset
-                )
+                tests = _paper_sample_tests(tests, max_per_subset=self.max_per_subset)
                 logger.info(
                     "LegalBench-RAG paper-faithful sampling for subset %s: "
                     "%d -> %d tasks (sorted by random(seed=file_path), cap=%d)",
