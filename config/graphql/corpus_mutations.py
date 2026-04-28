@@ -3,6 +3,7 @@ GraphQL mutations for corpus CRUD, visibility, fork, and action operations.
 """
 
 import logging
+from typing import Any
 
 import graphene
 from django.conf import settings
@@ -536,7 +537,7 @@ class StartCorpusFork(graphene.Mutation):
                 _corpus_id=corpus.id,
                 _collected=collected,
                 _user_id=info.context.user.id,
-            ):
+            ) -> Any:
                 fork_corpus.si(
                     _corpus_id,
                     _collected.document_ids,

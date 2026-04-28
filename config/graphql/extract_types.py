@@ -64,7 +64,7 @@ class DatacellType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         connection_class = CountableConnection
 
 
-def _get_datacell_qs(extract, user):
+def _get_datacell_qs(extract, user) -> Any:
     """Return the permission-filtered, deterministically ordered queryset.
 
     Note: this is a module-level function because Graphene-Django resolvers

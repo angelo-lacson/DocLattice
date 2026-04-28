@@ -73,5 +73,5 @@ class ObtainJSONWebTokenWithUser(graphql_jwt.ObtainJSONWebToken):
     user = graphene.Field(UserType)
 
     @classmethod
-    def resolve(cls, root, info, **kwargs):
+    def resolve(cls, root, info, **kwargs) -> "ObtainJSONWebTokenWithUser":
         return cls(user=info.context.user)

@@ -62,7 +62,7 @@ class CorpusSerializer(serializers.ModelSerializer):
         # created_with_embedder is set automatically at creation and never changes.
         read_only_fields = ["id", "is_public", "created_with_embedder"]
 
-    def validate(self, attrs):
+    def validate(self, attrs) -> Any:
         attrs = super().validate(attrs)
 
         # Resolve effective values for partial updates by merging with instance.
@@ -263,7 +263,7 @@ class AnnotationSerializer(serializers.ModelSerializer):
 
         return value
 
-    def to_representation(self, instance):
+    def to_representation(self, instance) -> Any:
         """
         Override to_representation to ensure that bounds values are integers when serializing.
         """

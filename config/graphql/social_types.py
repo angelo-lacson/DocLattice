@@ -364,13 +364,13 @@ class SemanticSearchResultType(graphene.ObjectType):
         return None
 
 
-def _get_document_type():
+def _get_document_type() -> Any:
     from config.graphql.document_types import DocumentType
 
     return DocumentType
 
 
-def _get_corpus_type():
+def _get_corpus_type() -> Any:
     from config.graphql.corpus_types import CorpusType
 
     return CorpusType
