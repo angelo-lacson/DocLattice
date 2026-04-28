@@ -160,7 +160,7 @@ class ActionQueryMixin:
         # Filter by corpus if provided (with access check)
         corpus_id = kwargs.get("corpus_id")
         if corpus_id:
-            corpus_pk = from_global_id(corpus_id)[1]
+            corpus_pk = int(from_global_id(corpus_id)[1])
             # Defense-in-depth: verify user has access to this corpus
             if not Corpus.objects.visible_to_user(user).filter(pk=corpus_pk).exists():
                 return queryset.none()
@@ -169,7 +169,7 @@ class ActionQueryMixin:
         # Filter by document if provided (with access check)
         document_id = kwargs.get("document_id")
         if document_id:
-            document_pk = from_global_id(document_id)[1]
+            document_pk = int(from_global_id(document_id)[1])
             # Defense-in-depth: verify user has access to this document
             if (
                 not Document.objects.visible_to_user(user)
@@ -231,7 +231,7 @@ class ActionQueryMixin:
         from opencontractserver.corpuses.models import Corpus, CorpusActionExecution
 
         user = info.context.user
-        corpus_pk = from_global_id(corpus_id)[1]
+        corpus_pk = int(from_global_id(corpus_id)[1])
 
         # Defense-in-depth: verify user has access to this corpus
         if not Corpus.objects.visible_to_user(user).filter(pk=corpus_pk).exists():

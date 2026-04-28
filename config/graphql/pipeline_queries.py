@@ -2,8 +2,10 @@
 GraphQL query mixin for pipeline queries.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Any, Optional
+from collections.abc import Mapping, Sequence
 
 import graphene
 from graphql_jwt.decorators import login_required
@@ -13,11 +15,13 @@ from config.graphql.graphene_types import (
     FileTypeEnum,
     PipelineComponentsType,
     PipelineComponentType,
+    PipelineSettingsType,
     StageCoverageType,
     SupportedMimeTypeType,
 )
 from opencontractserver.pipeline.base.file_types import FILE_TYPE_TO_MIME
 from opencontractserver.pipeline.registry import (
+    PipelineComponentDefinition,
     get_all_components_cached,
     get_components_by_mimetype_cached,
     get_supported_mime_types,
@@ -38,7 +42,9 @@ class PipelineQueryMixin:
 
     @login_required
     def resolve_pipeline_components(
-        self, info, mimetype: Optional[FileTypeEnum] = None
+        self,
+        info: graphene.ResolveInfo,
+        mimetype: FileTypeEnum | None = None,
     ) -> PipelineComponentsType:
         """
         Resolver for the pipeline_components query.
@@ -53,11 +59,19 @@ class PipelineQueryMixin:
         Returns:
             PipelineComponentsType: The pipeline components grouped by type.
         """
+        components_data: Mapping[str, Sequence[PipelineComponentDefinition]]
         if mimetype:
             mime_type_str = FILE_TYPE_TO_MIME.get(mimetype.value)
-
-            # Get compatible components from cached registry
-            components_data = get_components_by_mimetype_cached(mime_type_str)
+            if mime_type_str is None:
+                components_data = {
+                    "parsers": [],
+                    "embedders": [],
+                    "thumbnailers": [],
+                    "post_processors": [],
+                }
+            else:
+                # Get compatible components from cached registry
+                components_data = get_components_by_mimetype_cached(mime_type_str)
         else:
             # Get all components from cached registry
             components_data = get_all_components_cached()
@@ -91,7 +105,9 @@ class PipelineQueryMixin:
                     settings_instance.component_settings.keys()
                 )
 
-            def filter_configured(definitions) -> Any:
+            def filter_configured(
+                definitions: Sequence[PipelineComponentDefinition],
+            ) -> list[PipelineComponentDefinition]:
                 return [
                     defn
                     for defn in definitions
@@ -110,9 +126,11 @@ class PipelineQueryMixin:
         # Convert PipelineComponentDefinition objects to GraphQL types
         enabled_set = set(settings_instance.enabled_components or [])
 
-        def to_graphql_type(defn, component_type: str) -> PipelineComponentType:
+        def to_graphql_type(
+            defn: PipelineComponentDefinition, component_type: str
+        ) -> PipelineComponentType:
             is_enabled = (not enabled_set) or (defn.class_name in enabled_set)
-            settings_schema = None
+            settings_schema: list[ComponentSettingSchemaType] | None = None
             if user.is_superuser:
                 # Get schema augmented with has_value/current_value from DB
                 augmented_schema = settings_instance.get_component_schema(
@@ -177,7 +195,9 @@ class PipelineQueryMixin:
     )
 
     @login_required
-    def resolve_supported_mime_types(self, info) -> list[SupportedMimeTypeType]:
+    def resolve_supported_mime_types(
+        self, info: graphene.ResolveInfo
+    ) -> list[SupportedMimeTypeType]:
         """
         Resolver for the supported_mime_types query.
 
@@ -207,7 +227,9 @@ class PipelineQueryMixin:
     )
 
     @login_required
-    def resolve_pipeline_settings(self, info) -> Any:
+    def resolve_pipeline_settings(
+        self, info: graphene.ResolveInfo
+    ) -> PipelineSettingsType:
         """
         Resolve the singleton PipelineSettings instance.
 
@@ -218,7 +240,6 @@ class PipelineQueryMixin:
         Returns:
             PipelineSettingsType: The singleton pipeline settings.
         """
-        from config.graphql.graphene_types import PipelineSettingsType
         from opencontractserver.documents.models import PipelineSettings
 
         settings_instance = PipelineSettings.get_instance()

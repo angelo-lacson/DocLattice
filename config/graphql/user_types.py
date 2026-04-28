@@ -82,7 +82,7 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         except Exception:
             return 0
 
-    def resolve_total_messages(self, info) -> Any:
+    def resolve_total_messages(self, info) -> int:
         """
         Resolve total messages posted by this user.
         Only counts messages visible to the requesting user.
@@ -95,8 +95,8 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         )
 
         return (
-            ChatMessage.objects.filter(creator=self, msg_type=MessageTypeChoices.HUMAN)
-            .visible_to_user(info.context.user)
+            ChatMessage.objects.visible_to_user(info.context.user)
+            .filter(creator=self, msg_type=MessageTypeChoices.HUMAN)
             .count()
         )
 
@@ -110,8 +110,8 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         from opencontractserver.conversations.models import Conversation
 
         return (
-            Conversation.objects.filter(creator=self, conversation_type="thread")
-            .visible_to_user(info.context.user)
+            Conversation.objects.visible_to_user(info.context.user)
+            .filter(creator=self, conversation_type="thread")
             .count()
         )
 
@@ -140,8 +140,8 @@ class UserType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         from opencontractserver.documents.models import Document
 
         return (
-            Document.objects.filter(creator=self)
-            .visible_to_user(info.context.user)
+            Document.objects.visible_to_user(info.context.user)
+            .filter(creator=self)
             .count()
         )
 
