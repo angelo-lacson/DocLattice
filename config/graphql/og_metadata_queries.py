@@ -8,6 +8,7 @@ See: docs/architecture/social-media-previews.md
 """
 
 import logging
+from typing import Any
 
 import graphene
 from graphql_relay import from_global_id
@@ -66,7 +67,7 @@ class OGMetadataQueryMixin:
     )
 
     @graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")
-    def resolve_og_corpus_metadata(self, info, user_slug, corpus_slug):
+    def resolve_og_corpus_metadata(self, info, user_slug, corpus_slug) -> Any:
         """
         Public OG metadata for corpus - no auth required.
         Only returns data for public corpuses (is_public=True).
@@ -104,7 +105,7 @@ class OGMetadataQueryMixin:
             return None
 
     @graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")
-    def resolve_og_document_metadata(self, info, user_slug, document_slug):
+    def resolve_og_document_metadata(self, info, user_slug, document_slug) -> Any:
         """
         Public OG metadata for standalone document - no auth required.
         Only returns data for public documents (is_public=True).
@@ -139,7 +140,7 @@ class OGMetadataQueryMixin:
     @graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")
     def resolve_og_document_in_corpus_metadata(
         self, info, user_slug, corpus_slug, document_slug
-    ):
+    ) -> Any:
         """
         Public OG metadata for document in corpus context - no auth required.
         Only returns data if both corpus and document are public.
@@ -177,7 +178,9 @@ class OGMetadataQueryMixin:
             return None
 
     @graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")
-    def resolve_og_thread_metadata(self, info, user_slug, corpus_slug, thread_id):
+    def resolve_og_thread_metadata(
+        self, info, user_slug, corpus_slug, thread_id
+    ) -> Any:
         """
         Public OG metadata for discussion thread - no auth required.
         Only returns data if parent corpus is public.
@@ -218,7 +221,7 @@ class OGMetadataQueryMixin:
             return None
 
     @graphql_ratelimit(key="ip", rate="60/m", group="og_metadata")
-    def resolve_og_extract_metadata(self, info, extract_id):
+    def resolve_og_extract_metadata(self, info, extract_id) -> Any:
         """
         Public OG metadata for data extract - no auth required.
         Only returns data if parent corpus is public.

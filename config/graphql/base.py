@@ -2,6 +2,7 @@ import inspect
 import logging
 import traceback
 from abc import ABC
+from typing import Any
 
 import django.db.models
 import graphene
@@ -26,7 +27,9 @@ class OpenContractsNode(Node):
         name = "Node"
 
     @classmethod
-    def get_node_from_global_id(cls, info, global_id, only_type=None):
+    def get_node_from_global_id(
+        cls, info: Any, global_id: str, only_type: Any | None = None
+    ) -> Any:
 
         _type, _id = from_global_id(global_id)
 
@@ -63,7 +66,7 @@ class CountableConnection(graphene.relay.Connection):
 
     total_count = graphene.Int()
 
-    def resolve_total_count(root, info, **kwargs):
+    def resolve_total_count(root, info, **kwargs) -> Any:
         if isinstance(root.iterable, django.db.models.QuerySet):
             return root.iterable.count()
         else:
@@ -83,7 +86,7 @@ class DRFDeletion(graphene.Mutation):
     @classmethod
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_LIGHT)
-    def mutate(cls, root, info, *args, **kwargs):
+    def mutate(cls, root, info, *args, **kwargs) -> "DRFDeletion":
 
         ok = False
 
@@ -137,7 +140,7 @@ class DRFMutation(graphene.Mutation):
     obj_id = graphene.ID()
 
     @staticmethod
-    def format_validation_error(ve):
+    def format_validation_error(ve: serializers.ValidationError) -> str:
         """Surface validation errors with clean formatting.
 
         ``str(ValidationError)`` renders as
@@ -158,7 +161,7 @@ class DRFMutation(graphene.Mutation):
     @classmethod
     @login_required
     @graphql_ratelimit(rate=RateLimits.WRITE_MEDIUM)
-    def mutate(cls, root, info, *args, **kwargs):
+    def mutate(cls, root, info, *args, **kwargs) -> "DRFMutation":
 
         ok = False
         obj_id = None
