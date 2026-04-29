@@ -1,5 +1,7 @@
 """GraphQL type definitions for extract and analysis types."""
 
+from typing import Any
+
 import graphene
 from graphene import relay
 from graphene.types.generic import GenericScalar
@@ -44,7 +46,7 @@ class FieldsetType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         """
         return self.extracts.filter(started__isnull=False).exists()
 
-    def resolve_full_column_list(self, info):
+    def resolve_full_column_list(self, info) -> Any:
         return self.columns.all()
 
 
@@ -53,7 +55,7 @@ class DatacellType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     corrected_data = GenericScalar()
     full_source_list = graphene.List(AnnotationType)
 
-    def resolve_full_source_list(self, info):
+    def resolve_full_source_list(self, info) -> Any:
         return self.sources.all()
 
     class Meta:
@@ -62,7 +64,7 @@ class DatacellType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         connection_class = CountableConnection
 
 
-def _get_datacell_qs(extract, user):
+def _get_datacell_qs(extract, user) -> Any:
     """Return the permission-filtered, deterministically ordered queryset.
 
     Note: this is a module-level function because Graphene-Django resolvers
@@ -114,7 +116,7 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     )
 
     @classmethod
-    def get_node(cls, info, id):
+    def get_node(cls, info, id) -> Any:
         """
         Override the default node resolution to apply permission checks.
         """
@@ -130,7 +132,7 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         interfaces = [relay.Node]
         connection_class = CountableConnection
 
-    def resolve_full_datacell_list(self, info, limit=None, offset=None):
+    def resolve_full_datacell_list(self, info, limit=None, offset=None) -> Any:
         qs = _get_datacell_qs(self, info.context.user)
 
         # Guard against negative offset — Django does not support negative
@@ -152,7 +154,7 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         # add a DataLoader before exposing this field on list queries.
         return _get_datacell_qs(self, info.context.user).count()
 
-    def resolve_full_document_list(self, info):
+    def resolve_full_document_list(self, info) -> Any:
         from opencontractserver.types.enums import PermissionTypes
         from opencontractserver.utils.permissioning import user_has_permission_for_obj
 
@@ -175,7 +177,7 @@ class ExtractType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 class AnalyzerType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     analyzer_id = graphene.String()
 
-    def resolve_analyzer_id(self, info):
+    def resolve_analyzer_id(self, info) -> Any:
         return self.id.__str__()
 
     input_schema = GenericScalar(
@@ -186,10 +188,10 @@ class AnalyzerType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     full_label_list = graphene.List(AnnotationLabelType)
 
-    def resolve_full_label_list(self, info):
+    def resolve_full_label_list(self, info) -> Any:
         return self.annotation_labels.all()
 
-    def resolve_icon(self, info):
+    def resolve_icon(self, info) -> Any:
         return "" if not self.icon else info.context.build_absolute_uri(self.icon.url)
 
     class Meta:
@@ -219,7 +221,7 @@ class AnalysisType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         document_id=graphene.ID(),
     )
 
-    def resolve_full_annotation_list(self, info, document_id=None):
+    def resolve_full_annotation_list(self, info, document_id=None) -> Any:
         from opencontractserver.annotations.query_optimizer import (
             AnalysisQueryOptimizer,
         )
@@ -234,7 +236,7 @@ class AnalysisType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         )
 
     @classmethod
-    def get_node(cls, info, id):
+    def get_node(cls, info, id) -> Any:
         """
         Override the default node resolution to apply permission checks.
         """
