@@ -7,6 +7,13 @@ from typing import Any, Callable, Optional
 
 from doclatticeserver.llms.types import AgentFramework
 
+# Re-exported so framework adapters can accept any ``ToolProtocol`` rather
+# than depending on the concrete ``CoreTool`` dataclass below.  The
+# protocol pins the minimum surface (`name` / `description` /
+# `parameters` / `requires_approval`) — the dataclass adds optional
+# behaviour like ``inject_params`` on top.
+from doclatticeserver.types.protocols import ToolProtocol  # noqa: F401
+
 logger = logging.getLogger(__name__)
 
 
