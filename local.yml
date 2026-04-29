@@ -127,7 +127,7 @@ services:
     env_file:
       - ./.envs/.local/.django
       - ./.envs/.local/.postgres
-    command: /start-celeryworker
+    command: /app/compose/local/django/celery/worker/start
 
 
   celerybeat:
