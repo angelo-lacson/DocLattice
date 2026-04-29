@@ -429,3 +429,24 @@ class CreateLabelForLabelsetMutationTestCase(TestCase):
         # request was structurally valid but rejected by permission.
         self.assertNotIn("blank", data["message"].lower())
         self.assertIn("does not exist", data["message"].lower())
+
+    def test_nonexistent_labelset_returns_same_not_found_message(self) -> None:
+        """A valid relay-encoded ID for a PK that does not exist must
+        produce the same not-found response as a permission denial,
+        pinning the IDOR-safe behaviour against future refactors.
+        """
+        variables = self._create_variables("Should Not Be Created")
+        variables["labelsetId"] = to_global_id("LabelSetType", 999_999)
+
+        result = self.client.execute(
+            CREATE_LABEL_FOR_LABELSET_MUTATION,
+            variables=variables,
+        )
+
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["createAnnotationLabelForLabelset"]
+        self.assertFalse(data["ok"])
+        self.assertIn("does not exist", data["message"].lower())
+        self.assertFalse(
+            AnnotationLabel.objects.filter(text="Should Not Be Created").exists()
+        )
