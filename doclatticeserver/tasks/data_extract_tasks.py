@@ -134,10 +134,11 @@ def _failure_message_for_classification(classification: str) -> str:
     elif classification == NONE_RESULT_NO_FINAL:
         return (
             "The extraction agent never produced a final structured response. "
-            "This is an integration failure (the model exhausted its tool-use "
-            "budget without committing to the result tool), not a statement "
-            "about the document. Check ``llm_call_log`` for the raw message "
-            "history."
+            "This is an integration failure — either the model only emitted "
+            "narrative text without ever calling the result tool, or it "
+            "exhausted its tool-use budget without committing — not a "
+            "statement about the document. Check ``llm_call_log`` for the "
+            "raw message history."
         )
     elif classification == NONE_RESULT_TOOL_LOOP:
         return (

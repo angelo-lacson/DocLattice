@@ -7,9 +7,14 @@
 STRUCTURED_OUTPUT_RETRIES = 3
 
 # Same-call repetition count that ``_classify_none_result`` treats as a
-# pipeline bug (post-mortem heuristic, not a pydantic-ai input). Keep
-# >= STRUCTURED_OUTPUT_RETRIES so legitimate retries don't trip it.
-TOOL_LOOP_THRESHOLD = 3
+# pipeline bug (post-mortem heuristic, not a pydantic-ai input). Kept
+# strictly greater than ``STRUCTURED_OUTPUT_RETRIES`` so a worst-case
+# legitimate ``final_result`` retry budget can never trip the loop
+# detector even though pydantic-ai's ``output_retries`` only governs
+# ``final_result`` retries today (regular tool calls are not retried by
+# the same budget). The margin is defensive: if pydantic-ai ever extends
+# retry coverage to other tools, the threshold still has headroom.
+TOOL_LOOP_THRESHOLD = 4
 
 # Vocabulary written to ``Datacell.stacktrace`` as ``failure_mode=...``.
 # Operators grep these; changing the strings breaks downstream dashboards.

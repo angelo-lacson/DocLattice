@@ -18,6 +18,7 @@ from doclatticeserver.constants.llm import (
     NONE_RESULT_NO_FINAL,
     NONE_RESULT_TOOL_LOOP,
     NONE_RESULT_UNKNOWN,
+    TOOL_LOOP_THRESHOLD,
 )
 from doclatticeserver.tasks.data_extract_tasks import (
     _classify_none_result,
@@ -84,33 +85,23 @@ class ClassifyNoneResultTests(SimpleTestCase):
     def test_repeated_tool_call_classifies_as_tool_loop(self) -> None:
         """Same tool call repeated >= threshold without final ⇒ tool_loop."""
         repeated = _tool_call("similarity_search", {"query": "the same thing"})
-        messages = [
-            _make_response(repeated),
-            _make_response(repeated),
-            _make_response(repeated),
-        ]
+        messages = [_make_response(repeated) for _ in range(TOOL_LOOP_THRESHOLD)]
         self.assertEqual(_classify_none_result(messages), NONE_RESULT_TOOL_LOOP)
 
     def test_repeats_below_threshold_are_not_tool_loop(self) -> None:
-        """Two repeats (threshold - 1) ⇒ no_final_response, not tool_loop.
+        """``TOOL_LOOP_THRESHOLD - 1`` repeats ⇒ no_final_response, not tool_loop.
 
         Pins the boundary so a future tweak of ``TOOL_LOOP_THRESHOLD``
         forces this test to be updated explicitly.
         """
         repeated = _tool_call("similarity_search", {"query": "same"})
-        messages = [
-            _make_response(repeated),
-            _make_response(repeated),
-        ]
+        messages = [_make_response(repeated) for _ in range(TOOL_LOOP_THRESHOLD - 1)]
         self.assertEqual(_classify_none_result(messages), NONE_RESULT_NO_FINAL)
 
     def test_loop_then_final_is_committed_not_loop(self) -> None:
         """If the agent eventually commits, that wins over loop detection."""
         repeated = _tool_call("similarity_search", {"query": "loop"})
-        messages = [
-            _make_response(repeated),
-            _make_response(repeated),
-            _make_response(repeated),
+        messages = [_make_response(repeated) for _ in range(TOOL_LOOP_THRESHOLD)] + [
             _make_response(_tool_call("final_result", {"value": None})),
         ]
         self.assertEqual(_classify_none_result(messages), NONE_RESULT_AGENT_COMMITTED)
@@ -159,14 +150,17 @@ class ClassifyNoneResultTests(SimpleTestCase):
         Pydantic-AI emits ``ArgsJson`` (str) and ``ArgsDict`` (dict)
         interchangeably across model providers; conflating them in the
         Counter keeps loop detection accurate (issue #1381).
+
+        Alternating dict/str args ``TOOL_LOOP_THRESHOLD`` times must trip
+        the loop detector — without normalisation each variant would only
+        count to half the threshold and the loop would be missed.
         """
         dict_call = _tool_call("similarity_search", {"query": "same"})
         # Same logical args, but as a JSON string.
         str_call = _tool_call("similarity_search", '{"query": "same"}')
         messages = [
-            _make_response(dict_call),
-            _make_response(str_call),
-            _make_response(dict_call),
+            _make_response(dict_call if i % 2 == 0 else str_call)
+            for i in range(TOOL_LOOP_THRESHOLD)
         ]
         self.assertEqual(_classify_none_result(messages), NONE_RESULT_TOOL_LOOP)
 
@@ -188,7 +182,11 @@ class ClassifyNoneResultTests(SimpleTestCase):
             def __repr__(self) -> str:
                 return "<bad>"
 
-            def __str__(self) -> str:  # pragma: no cover - exercised via default=str
+            def __str__(self) -> str:
+                # Invoked by ``json.dumps(..., default=str)`` when it tries
+                # to coerce ``_BadArgs``; deliberately raises so the
+                # classifier's ``except (TypeError, ValueError)`` branch
+                # takes over.
                 raise TypeError("nope")
 
         # Two repeats below threshold ⇒ no_final_response; the test is that
