@@ -7,6 +7,12 @@ def seed_default_reranker(apps, schema_editor):
 
     Intentionally a no-op when ``DEFAULT_RERANKER`` is not defined, so
     existing deployments keep reranking disabled until an operator opts in.
+
+    One-shot semantics: re-running ``migrate`` after a value has already been
+    persisted will NOT re-seed it (the existing value is preserved by the
+    ``not instance.default_reranker`` guard). Operators changing rerankers
+    should update via the admin / pipeline settings UI, not by re-running
+    this migration.
     """
     PipelineSettings = apps.get_model("documents", "PipelineSettings")
     initial = getattr(django_settings, "DEFAULT_RERANKER", "")

@@ -106,18 +106,22 @@ async def doc_extract_query_task(
             default extraction model. Used by the benchmark runner to sweep
             models without touching production defaults.
 
-            Trust assumption: this string is passed straight to the agent
-            factory and ultimately to the model registry.  Current call
+            Trust boundary: this string is passed straight to the agent
+            factory and ultimately to the model registry. Current call
             sites (CLI ``run_benchmark`` command, internal benchmark
-            runner) are operator-controlled.  If this task is ever
-            exposed to user-controlled input (webhook, public API), gate
-            it behind an allowlist of approved model identifiers — an
-            arbitrary string here can redirect extraction traffic to an
+            runner) are operator-controlled. The optional Django setting
+            ``BENCHMARK_ALLOWED_MODEL_OVERRIDES`` (iterable of allowed
+            identifiers) gates this parameter at runtime — by default it is
+            unset, meaning no enforcement (operator-only path). Operators
+            exposing this task to user-controlled input (webhook, public
+            API) must set the allowlist to lock down the surface so an
+            arbitrary string cannot redirect extraction traffic to an
             unintended model endpoint.
     """
     import traceback
     from typing import get_origin
 
+    from django.conf import settings
     from django.utils import timezone
     from pydantic import BaseModel
     from pydantic_ai import capture_run_messages
@@ -156,7 +160,15 @@ async def doc_extract_query_task(
 
     @sync_to_async
     def sync_mark_failed(dc, exc, tb, llm_log=None):
-        """Mark datacell as failed with error and optional LLM log."""
+        """Mark datacell as failed with error and optional LLM log.
+
+        Convention: ``Datacell.stacktrace`` is the only persisted text field
+        for failure context, so we use it for both real exception
+        tracebacks AND the structured ``failure_mode=`` lines that
+        ``_classify_none_result`` produces for None outcomes. Operators
+        ``grep failure_mode=`` to separate legitimate "data not present"
+        outcomes from pipeline bugs.
+        """
         dc.stacktrace = f"Error: {exc}\n\nTraceback:\n{tb}"
         dc.failed = timezone.now()
         if llm_log:
@@ -187,6 +199,19 @@ async def doc_extract_query_task(
         logger.info(f"Retrieved datacell {cell_id}")
         await sync_mark_started(datacell)
         logger.info(f"Marked datacell {cell_id} as started")
+
+        # Optional allowlist guard for ``model_override``. When
+        # ``BENCHMARK_ALLOWED_MODEL_OVERRIDES`` is unset (default), no
+        # enforcement runs — preserves operator-only workflows while
+        # giving operators a no-code-change path to lock down this
+        # surface if the task is ever exposed to untrusted input.
+        if model_override is not None:
+            allowed = getattr(settings, "BENCHMARK_ALLOWED_MODEL_OVERRIDES", None)
+            if allowed is not None and model_override not in allowed:
+                raise ValueError(
+                    f"model_override {model_override!r} is not in "
+                    f"BENCHMARK_ALLOWED_MODEL_OVERRIDES"
+                )
 
         document = datacell.document
         column = datacell.column
