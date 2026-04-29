@@ -15,6 +15,7 @@ from opencontractserver.constants.search import (
     HYBRID_SEARCH_OVERSAMPLE_FACTOR,
     VALID_EMBEDDING_DIMS,
 )
+from opencontractserver.types.protocols import VectorStoreProtocol
 from opencontractserver.utils.embeddings import (
     agenerate_embeddings_from_text,
     generate_embeddings_from_text,
@@ -1100,3 +1101,12 @@ class CoreAnnotationVectorStore:
             )
 
         return results
+
+
+# Re-exported so downstream callers can annotate against the protocol.
+__all__ = [
+    "CoreAnnotationVectorStore",
+    "VectorSearchQuery",
+    "VectorSearchResult",
+    "VectorStoreProtocol",
+]
