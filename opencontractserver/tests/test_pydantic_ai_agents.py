@@ -1236,3 +1236,322 @@ class TestPydanticAIAgentsCoverage(TransactionTestCase):
             events.append(event)
 
         self.assertTrue(len(events) > 0)
+
+    # ========================================================================
+    # Group 5: _structured_response_raw — Anthropic reliability fix (issue #1381)
+    # ========================================================================
+
+    async def _build_core_agent_for_structured_test(
+        self,
+        mock_pyd_ai_cls: MagicMock,
+        *,
+        model_name: Optional[str] = None,
+        config_temperature: Optional[float] = None,
+    ):
+        """Build a ``PydanticAICoreAgent`` for ``_structured_response_raw`` tests.
+
+        Patches the ``PydanticAIAgent`` symbol so the *structured* agent
+        constructor is tracked, mocks history retrieval to avoid DB I/O,
+        and stubs the seeded function-tools dict so deduplication is a
+        no-op.  Returns the agent and the mock for the structured agent's
+        ``run`` result so callers can assert on ``call_args``.
+        """
+        from opencontractserver.llms.agents.core_agents import (
+            AgentConfig,
+            CoreConversationManager,
+        )
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICoreAgent,
+            _HistoryResult,
+        )
+
+        # Structured agent built inside _structured_response_raw will hit
+        # the patched class — wire up a runnable mock.
+        structured_run_result = MagicMock()
+        structured_run_result.output = "extracted-value"
+        structured_agent_mock = MagicMock()
+        structured_agent_mock.run = AsyncMock(return_value=structured_run_result)
+        mock_pyd_ai_cls.return_value = structured_agent_mock
+
+        config = AgentConfig(
+            user_id=self.user.id,
+            model_name=model_name,
+            temperature=config_temperature,
+        )
+        conv_mgr = MagicMock(spec=CoreConversationManager)
+        conv_mgr.conversation = None
+        conv_mgr.config = config
+
+        # The agent passed in at construction is unrelated to the
+        # structured agent — it just has to expose a function-tools dict.
+        prebuilt_agent = MagicMock()
+        prebuilt_agent._function_tools = {}
+
+        agent = PydanticAICoreAgent(
+            config=config,
+            conversation_manager=conv_mgr,
+            pydantic_ai_agent=prebuilt_agent,
+            agent_deps=MagicMock(),
+        )
+        # Skip DB-backed history retrieval; we only care about agent ctor args.
+        agent._get_message_history = AsyncMock(
+            return_value=_HistoryResult(messages=None)
+        )
+        return agent, structured_agent_mock
+
+    @staticmethod
+    def _structured_agent_call(mock_pyd_ai_cls: MagicMock):
+        """Find the constructor call that built the structured agent.
+
+        ``output_retries`` is set only on the structured agent so it makes
+        a reliable signature.  Returns ``None`` if no such call was made.
+        """
+        for call in mock_pyd_ai_cls.call_args_list:
+            if call.kwargs.get("output_retries") is not None:
+                return call
+        return None
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    async def test_structured_response_anthropic_forces_temperature_zero(
+        self, mock_pyd_ai_cls: MagicMock
+    ) -> None:
+        """Anthropic + temperature=None ⇒ structured run gets temperature=0."""
+        from opencontractserver.constants.llm import STRUCTURED_OUTPUT_RETRIES
+
+        class DummyOutput(BaseModel):
+            value: str
+
+        agent, _ = await self._build_core_agent_for_structured_test(
+            mock_pyd_ai_cls,
+            model_name="anthropic:claude-sonnet-4-6",
+        )
+
+        await agent._structured_response_raw(
+            prompt="any",
+            target_type=DummyOutput,
+            model="anthropic:claude-sonnet-4-6",
+            temperature=None,
+        )
+
+        structured_call = self._structured_agent_call(mock_pyd_ai_cls)
+        self.assertIsNotNone(
+            structured_call,
+            "Expected _structured_response_raw to build a PydanticAIAgent",
+        )
+        self.assertEqual(
+            structured_call.kwargs["model_settings"]["temperature"],
+            0,
+            "Anthropic structured runs must force temperature=0 (issue #1381)",
+        )
+        self.assertEqual(
+            structured_call.kwargs["output_retries"],
+            STRUCTURED_OUTPUT_RETRIES,
+            "Structured runs must use the configured retry budget",
+        )
+        self.assertEqual(
+            structured_call.kwargs["model"],
+            "anthropic:claude-sonnet-4-6",
+        )
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    async def test_structured_response_explicit_temperature_not_overridden(
+        self, mock_pyd_ai_cls: MagicMock
+    ) -> None:
+        """A caller-supplied temperature wins over the Anthropic override."""
+
+        class DummyOutput(BaseModel):
+            value: str
+
+        agent, _ = await self._build_core_agent_for_structured_test(
+            mock_pyd_ai_cls,
+            model_name="anthropic:claude-sonnet-4-6",
+        )
+
+        await agent._structured_response_raw(
+            prompt="any",
+            target_type=DummyOutput,
+            model="anthropic:claude-sonnet-4-6",
+            temperature=0.5,
+        )
+
+        structured_call = self._structured_agent_call(mock_pyd_ai_cls)
+        self.assertIsNotNone(structured_call)
+        self.assertEqual(
+            structured_call.kwargs["model_settings"]["temperature"],
+            0.5,
+            "Function-level temperature pin must NOT be overridden by Anthropic guard",
+        )
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    async def test_structured_response_config_temperature_not_overridden(
+        self, mock_pyd_ai_cls: MagicMock
+    ) -> None:
+        """``config.temperature`` (non-None) blocks the Anthropic override."""
+
+        class DummyOutput(BaseModel):
+            value: str
+
+        agent, _ = await self._build_core_agent_for_structured_test(
+            mock_pyd_ai_cls,
+            model_name="anthropic:claude-sonnet-4-6",
+            config_temperature=0.7,
+        )
+
+        await agent._structured_response_raw(
+            prompt="any",
+            target_type=DummyOutput,
+            model="anthropic:claude-sonnet-4-6",
+            temperature=None,
+        )
+
+        structured_call = self._structured_agent_call(mock_pyd_ai_cls)
+        self.assertIsNotNone(structured_call)
+        # config.temperature is propagated by _prepare_pydantic_ai_model_settings
+        self.assertEqual(
+            structured_call.kwargs["model_settings"]["temperature"],
+            0.7,
+            "config.temperature must be preserved when caller did not override",
+        )
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    def test_document_agent_structured_prompt_commits_to_result(
+        self, mock_pyd_ai_cls: MagicMock
+    ) -> None:
+        """``PydanticAIDocumentAgent._build_structured_system_prompt`` must
+        instruct the model to commit to the result tool (issue #1381)."""
+        from opencontractserver.llms.agents.core_agents import (
+            AgentConfig,
+            CoreConversationManager,
+            DocumentAgentContext,
+        )
+
+        cfg = MagicMock(spec=AgentConfig)
+        cfg.store_user_messages = cfg.store_llm_messages = True
+
+        ctx = MagicMock(spec=DocumentAgentContext)
+        ctx.document = self.doc1
+        ctx.config = cfg
+
+        conv_mgr = MagicMock(spec=CoreConversationManager)
+
+        agent = PydanticAIDocumentAgent(
+            context=ctx,
+            conversation_manager=conv_mgr,
+            pydantic_ai_agent=MagicMock(),
+            agent_deps=MagicMock(),
+        )
+
+        class DummyOutput(BaseModel):
+            value: str
+
+        prompt = agent._build_structured_system_prompt(DummyOutput, "user query")
+
+        self.assertIn("EXTRACTION PROTOCOL", prompt)
+        self.assertIn("MUST commit", prompt)
+        self.assertIn("result tool", prompt)
+        self.assertIn(str(self.doc1.id), prompt)
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    def test_corpus_agent_structured_prompt_commits_to_result(
+        self, mock_pyd_ai_cls: MagicMock
+    ) -> None:
+        """``PydanticAICorpusAgent._build_structured_system_prompt`` must
+        instruct the model to commit to the result tool (issue #1381)."""
+        from opencontractserver.llms.agents.core_agents import (
+            AgentConfig,
+            CoreConversationManager,
+            CorpusAgentContext,
+        )
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICorpusAgent,
+        )
+
+        cfg = MagicMock(spec=AgentConfig)
+        cfg.store_user_messages = cfg.store_llm_messages = True
+
+        ctx = MagicMock(spec=CorpusAgentContext)
+        ctx.corpus = self.corpus
+        ctx.config = cfg
+
+        conv_mgr = MagicMock(spec=CoreConversationManager)
+
+        agent = PydanticAICorpusAgent(
+            context=ctx,
+            conversation_manager=conv_mgr,
+            pydantic_ai_agent=MagicMock(),
+            agent_deps=MagicMock(),
+        )
+
+        class DummyOutput(BaseModel):
+            value: str
+
+        prompt = agent._build_structured_system_prompt(DummyOutput, "user query")
+
+        self.assertIn("EXTRACTION PROTOCOL", prompt)
+        self.assertIn("MUST commit", prompt)
+        self.assertIn("result tool", prompt)
+        self.assertIn(str(self.corpus.id), prompt)
+
+    def test_core_agent_base_structured_prompt_commits_to_result(self) -> None:
+        """Base ``_build_structured_system_prompt`` must also enforce commit."""
+        from opencontractserver.llms.agents.core_agents import (
+            AgentConfig,
+            CoreConversationManager,
+        )
+        from opencontractserver.llms.agents.pydantic_ai_agents import (
+            PydanticAICoreAgent,
+        )
+
+        config = AgentConfig(user_id=self.user.id)
+        conv_mgr = MagicMock(spec=CoreConversationManager)
+
+        agent = PydanticAICoreAgent(
+            config=config,
+            conversation_manager=conv_mgr,
+            pydantic_ai_agent=MagicMock(),
+            agent_deps=MagicMock(),
+        )
+
+        class DummyOutput(BaseModel):
+            value: str
+
+        prompt = agent._build_structured_system_prompt(DummyOutput, "user query")
+
+        # Universal phrasing for both Anthropic and OpenAI
+        self.assertIn("MUST", prompt)
+        self.assertIn("result tool", prompt)
+        # Negative wording must mention "genuinely" so the model only
+        # bails out when the data is actually absent.
+        self.assertIn("genuinely cannot be found", prompt)
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    async def test_structured_response_openai_skips_anthropic_override(
+        self, mock_pyd_ai_cls: MagicMock
+    ) -> None:
+        """OpenAI models never get the Anthropic temperature=0 nudge."""
+
+        class DummyOutput(BaseModel):
+            value: str
+
+        agent, _ = await self._build_core_agent_for_structured_test(
+            mock_pyd_ai_cls,
+            model_name="openai:gpt-4o-mini",
+        )
+
+        await agent._structured_response_raw(
+            prompt="any",
+            target_type=DummyOutput,
+            model="openai:gpt-4o-mini",
+            temperature=None,
+        )
+
+        structured_call = self._structured_agent_call(mock_pyd_ai_cls)
+        self.assertIsNotNone(structured_call)
+        # No temperature override fired ⇒ model_settings has no temperature key
+        # (or an empty model_settings dict because _prepare returned None).
+        ms = structured_call.kwargs.get("model_settings") or {}
+        self.assertNotIn(
+            "temperature",
+            ms,
+            "OpenAI structured runs must not get the Anthropic temperature override",
+        )

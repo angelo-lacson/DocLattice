@@ -31,7 +31,10 @@ from pydantic_ai.messages import (
 from pydantic_graph import End
 
 from opencontractserver.constants.context_guardrails import COMPACTION_SUMMARY_PREFIX
-from opencontractserver.constants.llm import STRUCTURED_OUTPUT_RETRIES
+from opencontractserver.constants.llm import (
+    STRUCTURED_OUTPUT_RETRIES,
+    is_anthropic_model,
+)
 from opencontractserver.conversations.models import Conversation
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
@@ -103,19 +106,6 @@ logger = logging.getLogger(__name__)
 
 # Type variable for structured responses
 T = TypeVar("T")
-
-
-def _is_anthropic_model(model_name: Optional[str]) -> bool:
-    """Return True if ``model_name`` looks like an Anthropic / Claude model.
-
-    Accepts both pydantic-ai-style ``"anthropic:..."`` prefixes and bare model
-    names containing ``"claude"``. Used to apply Anthropic-specific structured
-    extraction tweaks (lower temperature, etc.).
-    """
-    if not model_name:
-        return False
-    name = model_name.lower()
-    return name.startswith("anthropic:") or "claude" in name
 
 
 def _get_function_tools(agent: PydanticAIAgent) -> dict:
@@ -1357,7 +1347,7 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             # temperature pin OR an explicit config.temperature).
             effective_model = model or self.config.model_name
             if (
-                _is_anthropic_model(effective_model)
+                is_anthropic_model(effective_model)
                 and temperature is None
                 and self.config.temperature is None
             ):

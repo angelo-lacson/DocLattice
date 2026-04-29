@@ -17,6 +17,7 @@ from opencontractserver.constants.llm import (
     NONE_RESULT_TOOL_LOOP,
     NONE_RESULT_UNKNOWN,
     TOOL_LOOP_THRESHOLD,
+    is_anthropic_model,
 )
 from opencontractserver.extracts.models import Datacell
 from opencontractserver.shared.decorators import celery_task_with_async_to_sync
@@ -112,6 +113,20 @@ def _classify_none_result(messages: Optional[list[Any]]) -> str:
     # "model spoke but never called a tool" — both are integration
     # failures from the pipeline's perspective.
     return NONE_RESULT_NO_FINAL
+
+
+def _resolve_extract_temperature(model_name: Optional[str]) -> Optional[float]:
+    """Pick the temperature to pass to ``get_structured_response_from_document``.
+
+    Returns ``None`` when ``model_name`` is an Anthropic / Claude model so the
+    Anthropic guard in ``_structured_response_raw`` can apply ``temperature=0``
+    automatically (issue #1381). Returns :data:`EXTRACT_DEFAULT_TEMPERATURE`
+    otherwise. Pulled out as a helper so the model-family→temperature
+    coupling is unit-testable without standing up the full extract task.
+    """
+    if is_anthropic_model(model_name):
+        return None
+    return EXTRACT_DEFAULT_TEMPERATURE
 
 
 def _failure_message_for_classification(classification: str) -> str:
@@ -349,26 +364,22 @@ async def doc_extract_query_task(
         # Capture LLM messages for debugging
         messages: Optional[list[Any]] = None
 
+        # Gate the explicit temperature pin on the model family so the
+        # Anthropic ``temperature=0`` override in
+        # ``_structured_response_raw`` activates automatically when
+        # ``EXTRACT_DEFAULT_MODEL`` is a Claude model (issue #1381).
+        extract_temperature = _resolve_extract_temperature(EXTRACT_DEFAULT_MODEL)
+
         try:
             # Wrap the agent call in the context manager to capture messages
             with capture_run_messages() as messages:
-                # Create a temporary agent and extract
-                # ``EXTRACT_DEFAULT_TEMPERATURE`` (=0.3) is safe ONLY while
-                # ``EXTRACT_DEFAULT_MODEL`` is OpenAI; passing it to a
-                # Claude model would silently regress the issue #1381
-                # reliability fix (Anthropic structured runs need T=0).
-                # Both constants live next to each other in
-                # ``constants/llm.py`` so this coupling stays visible.
-                # TODO(#1381 follow-up): when the model becomes
-                # column-configurable, gate the temperature on the model
-                # family in the call site rather than the constants file.
                 result = await agents.get_structured_response_from_document(
                     document=document.id,
                     corpus=corpus_id,
                     prompt=prompt,
                     target_type=output_type,
                     framework=AgentFramework.PYDANTIC_AI,
-                    temperature=EXTRACT_DEFAULT_TEMPERATURE,
+                    temperature=extract_temperature,
                     similarity_top_k=similarity_top_k,
                     model=EXTRACT_DEFAULT_MODEL,
                     user_id=datacell.creator.id,
