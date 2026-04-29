@@ -4,8 +4,19 @@
 **Subsets**: all four (privacy_qa, contractnli, cuad, maud) — 194 tasks each
 **Sampling**: paper-faithful — `legalbenchrag/benchmark.py:46-58` `SORT_BY_DOCUMENT=True` (random key seeded by `test.snippets[0].file_path`), then truncate to first 194 per subset
 **Metrics**: paper-faithful — verbatim port of `legalbenchrag/run_benchmark.py:16-53` `QAResult.precision`/`.recall`, equivalence-tested against a vendored copy in `test_benchmarks.TestUpstreamEquivalence`
-**Last updated**: 2026-04-26
-**Run artifacts**: every number below resolves to one row in [`runs/MANIFEST.md`](./runs/MANIFEST.md)
+**Last updated**: 2026-04-28
+**Reproduction**: every number below is reproducible via the
+`python manage.py run_benchmark` CLI.  Run artifacts are intentionally
+not committed to git — see [Reproduction](#reproduction) below.
+
+> **Scope**: this PR validates the **retrieval probe only**.  An
+> end-to-end agent benchmark was attempted on this branch but uncovered
+> a production-pipeline bug (multi-tool-call → no final structured
+> output, `no_final_response` failure mode on 775 of 776 cells); that
+> work is being landed separately in PR #1399 / issue #1381.  The probe
+> reads the same vector store the agent does, so retrieval numbers
+> remain valid; only the LLM-extraction pass and citation grounding
+> are deferred.
 
 ## TL;DR
 
@@ -34,16 +45,7 @@
 > retrieval budget) we trade precision for recall on three of four
 > subsets, on the same operating-point trajectory the paper documents.
 
-The agent layer of the production pipeline is currently broken on this
-branch (only 1 of 776 cells succeeds end-to-end; pydantic-ai exits the
-loop after a multi-tool-call message without producing a final structured
-output — same `no_final_response` failure mode the [PR #1380 audit thread]
-flagged). The probe still works correctly. Probe and agent results live
-in their own clearly-labelled sections.
-
 ## What changed since PR #1380's first numbers
-
-[PR #1380 audit thread]: TODO replace with link
 
 The earlier version of this report claimed `78.4% on privacy_qa`,
 `100.0% on contractnli`, `66.2% macro`. Those numbers were wrong because:
@@ -243,7 +245,6 @@ All headline runs use `--retrieval-only --corpus-wide`:
 | Config A | `multi-qa-MiniLM-L6-cos-v1` (384d, microservice) | `paragraph`, `max_chars=None` | none |
 | Config B | `text-embedding-3-large` (3072d, OpenAI) | `sliding_window`, `window_size=500`, `overlap=0`, `respect_word_boundaries=False` | none |
 | Config C | `text-embedding-3-large` (3072d, OpenAI) | `paragraph`, `max_chars=6000` | none |
-| Agent | Config A's pipeline + `openai:gpt-4o-mini` extractor + grounding | (same as A) | none |
 
 `max_chars=6000` for Config C keeps individual paragraph embeddings under
 OpenAI's 8,192-token context limit (~6000 chars ≈ 1500 tokens);
@@ -332,101 +333,42 @@ capture maud's clause-level gold spans well) but should be read as
 deep questions about merger-agreement clauses where gold answers are
 often discriminator phrases embedded in long boilerplate paragraphs.
 
-## Agent-pipeline results (production end-to-end)
-
-> **Scope**: This section measures the full OpenContracts production
-> pipeline (retrieval → iterative agent loop → LLM extraction → citation
-> grounding) on the same 776 paper-faithful task slice, using Config A
-> (MiniLM + paragraph) for retrieval and `openai:gpt-4o-mini` for
-> extraction at `extraction-concurrency=4`. The LegalBench-RAG paper has
-> no agent-loop equivalent, so **none of the metrics in this section
-> are comparable to the paper**. They characterise what production
-> OpenContracts actually surfaces to a user.
-
-### Headline
-
-| Metric | Value |
-|---|---:|
-| `extraction_success_rate` | **0.0013** (1 of 776 cells succeeded) |
-| `answer_token_f1` | 0.31 (over the 1 successful cell) |
-| `citation_char_recall` | 0.0000 |
-| `citation_char_precision` | 0.0000 |
-| `citation_span_overlaps_gold` | 0.0000 |
-| `probe_char_recall` (control) | 0.6339 (matches Config A retrieval-only exactly) |
-| total tokens consumed | 1,288,282 (1.23M in / 58K out) |
-| LLM requests | 795 |
-
-### What this means
-
-The probe column reproduces Config A's retrieval-only number exactly
-(0.6339), so the retrieval stack is fine. The agent integration is broken:
-each cell hits the same `no_final_response` failure mode the original
-PR #1380 audit thread flagged:
-
-> The agent issues a tool call, the message log ends there with no
-> tool-return / no synthesis. The pydantic-ai loop exited without
-> producing a structured answer. **Pipeline bug**, not a data signal.
-
-Sample failing cell from `report.json`:
-
-```text
-task: contractnli::0000
-prediction: ''
-error: Failed to extract requested data from document (no_final_response)
-       messages=2, response_msgs=1, tool_calls_total=3,
-       last_response_parts=['tool-call', 'tool-call', 'tool-call']
-```
-
-The agent emits 3 tool calls in one assistant message, then the loop
-terminates without producing a structured-output assistant message, and
-`doc_extract_query_task` records `no_final_response` and returns None.
-This happens on 775 of 776 cells.
-
-The original PR #1380 included a "prompt-tightening fix" in
-`pydantic_ai_agents.py` that was supposed to address this exact failure
-mode. Either:
-1. That fix didn't apply to this branch's pydantic-ai version,
-2. The fix regressed in a later commit, or
-3. gpt-4o-mini's behaviour changed enough that the prompt tightening no
-   longer prevents the multi-tool-call-then-stop pattern.
-
-Either way, **the production agent path is currently unusable on this
-branch with gpt-4o-mini**. The prior report's claim of `0.197 char_F1`
-and `0.242 answer_token_f1` for this exact config does not reproduce
-on a clean run today.
-
-This is now follow-up work tracked in PR #1380's audit thread; the
-report's headline retrieval claims do not depend on it.
-
 ## Reproduction
 
-Every run directory under [`runs/`](./runs/) contains:
+Run artifacts are NOT committed to git — they are large (~22 MB across
+the four configs above) and the LegalBench-RAG `gold.json` files contain
+verbatim contract excerpts whose redistribution licensing is unsettled.
+Every config above is reproducible from the local stack:
 
-| File | Source |
-|---|---|
-| `report.json` | `BenchmarkReport.write` — per-task metrics + aggregates |
-| `report.csv` | same data flattened |
-| `config.json` | adapter description, top_k, model id, sampling parameters |
-| `gold.json` | per-datacell gold spans + answer text + tags |
-| `command.txt` | exact `manage.py run_benchmark` invocation that produced the artifacts |
-
-To re-execute any run:
-
-1. Bring up the local stack: `docker compose -f local.yml up -d postgres redis vector-embedder django`.
+1. Bring up local services: `docker compose -f local.yml up -d postgres redis vector-embedder django`.
 2. Apply migrations: `python manage.py migrate`.
-3. Stage the LegalBench-RAG dataset under `/data/legalbenchrag/` (corpus + benchmarks subdirs, exactly as shipped by the upstream Dropbox link).
-4. Configure `PipelineSettings.default_embedder` + `parser_kwargs[TxtParser]` per the run's `config.json`.
-5. Run the command in `command.txt`.
+3. Stage the LegalBench-RAG dataset under `/data/legalbenchrag/`
+   (corpus + benchmarks subdirs, exactly as shipped by the upstream
+   Dropbox link).
+4. Configure `PipelineSettings.default_embedder` and
+   `parser_kwargs[TxtParser]` per the configuration you want to
+   reproduce (see the [Configurations](#configurations) section).
+5. Invoke the harness:
+   ```bash
+   python manage.py run_benchmark legalbench-rag \
+       --top-k 32 --paper-sampling --retrieval-only \
+       --run-dir <output-dir>
+   ```
+
+`<output-dir>` will receive `report.json`, `report.csv`, `config.json`,
+`gold.json`, and `command.txt` — the same artifact shape that earlier
+versions of this PR committed in-tree.
 
 The harness is deterministic given identical inputs and identical
-settings; `aggregates.probe_char_recall` should match the committed
-`report.json` to within rounding.
+settings; `aggregates.probe_char_recall` reproduces to within rounding.
 
 ## Open issues
 
-- **Agent integration broken** (above section) — pydantic-ai loop exits
-  on multi-tool-call response without producing structured output.
-  Blocks all production-pipeline numbers.
+- **End-to-end agent benchmark deferred** — pydantic-ai loop exits on
+  multi-tool-call response without producing structured output, leaving
+  the production extraction path unusable on this branch with
+  `gpt-4o-mini`.  Tracked in PR #1399 / issue #1381.  Once the agent
+  fix lands, an end-to-end column will be added back to this report.
 - **Precision gap at the paper's operating point** — Config B at k=32
   matches the paper's recall on cuad/maud but its precision is roughly
   flat (0.0240 macro vs paper's ~0.034). This is mostly the k=32 vs k=10
@@ -436,7 +378,7 @@ settings; `aggregates.probe_char_recall` should match the committed
 - **Config C precision is microscopic for the same reason** — 0.0104
   macro is what you get when you retrieve 30K-136K chars per query. Not
   a defect; just the cost of a bigger budget. PR #1354's reranker
-  framework hasn't yet produced a reranker that helps the agent loop
+  framework hasn't yet produced a reranker that helps in this regime
   (see #1378).
 - **Sampling matches PAPER but not source dataset** — our 194-per-subset
   slice is selected via the upstream codebase's
