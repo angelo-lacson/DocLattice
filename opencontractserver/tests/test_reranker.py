@@ -298,6 +298,165 @@ class CohereRerankerTest(TestCase):
         results = reranker.rerank("query", ["a", "b"])
         self.assertEqual([r.index for r in results], [0, 1])
 
+    def test_request_exception_falls_back_to_identity(self) -> None:
+        reranker = self._reranker()
+        with patch(
+            "requests.post",
+            side_effect=requests.exceptions.ConnectionError("network down"),
+        ):
+            results = reranker.rerank("query", ["p0", "p1"])
+        self.assertEqual([r.index for r in results], [0, 1])
+
+    def test_non_200_status_falls_back_to_identity(self) -> None:
+        reranker = self._reranker()
+        with patch("requests.post", return_value=_FakeResponse(status_code=503)):
+            results = reranker.rerank("query", ["p0", "p1"])
+        self.assertEqual([r.index for r in results], [0, 1])
+
+    def test_non_json_body_falls_back_to_identity(self) -> None:
+        class _BadJsonResponse:
+            status_code = 200
+            text = "not json"
+
+            def json(self):
+                raise ValueError("bad json")
+
+        reranker = self._reranker()
+        with patch("requests.post", return_value=_BadJsonResponse()):
+            results = reranker.rerank("query", ["p0", "p1"])
+        self.assertEqual([r.index for r in results], [0, 1])
+
+    def test_missing_results_key_falls_back_to_identity(self) -> None:
+        reranker = self._reranker()
+        with patch(
+            "requests.post",
+            return_value=_FakeResponse(status_code=200, payload={"nope": []}),
+        ):
+            results = reranker.rerank("query", ["p0", "p1"])
+        self.assertEqual([r.index for r in results], [0, 1])
+
+    def test_malformed_items_are_skipped(self) -> None:
+        reranker = self._reranker()
+        fake = _FakeResponse(
+            status_code=200,
+            payload={
+                "results": [
+                    {"index": 0, "relevance_score": "not-a-float"},
+                    {"index": "bad", "relevance_score": 0.9},
+                    {"missing_keys": True},
+                    {"index": 1, "relevance_score": 0.42},
+                ]
+            },
+        )
+        with patch("requests.post", return_value=fake):
+            results = reranker.rerank("query", ["p0", "p1"])
+        # Only the well-formed item survives.
+        self.assertEqual([r.index for r in results], [1])
+
+    def test_empty_results_falls_back_to_identity(self) -> None:
+        reranker = self._reranker()
+        fake = _FakeResponse(status_code=200, payload={"results": []})
+        with patch("requests.post", return_value=fake):
+            results = reranker.rerank("query", ["p0", "p1"])
+        self.assertEqual([r.index for r in results], [0, 1])
+
+
+# --------------------------------------------------------------------------- #
+# Cross-encoder reranker tests (uses an injected stub model so no
+# ``sentence-transformers`` / ``torch`` install is required in CI).
+# --------------------------------------------------------------------------- #
+
+
+class _StubCrossEncoder:
+    """Stand-in for sentence_transformers.CrossEncoder used in tests."""
+
+    def __init__(self, scores):
+        self._scores = scores
+        self.max_length: int | None = None
+        self.last_pairs: list = []
+
+    def predict(self, pairs, batch_size=None, show_progress_bar=False):
+        self.last_pairs = list(pairs)
+        return self._scores
+
+
+class CrossEncoderRerankerTest(TestCase):
+    def setUp(self) -> None:
+        from opencontractserver.pipeline.rerankers import cross_encoder_reranker
+
+        # Reset the module-level cache between tests so each gets a fresh
+        # stub model.
+        cross_encoder_reranker._MODEL_CACHE.clear()
+
+    def _reranker(self):
+        from opencontractserver.pipeline.rerankers.cross_encoder_reranker import (
+            CrossEncoderReranker,
+        )
+
+        rk = CrossEncoderReranker()
+        rk._settings = CrossEncoderReranker.Settings(
+            model_name="stub-model",
+            device="cpu",
+            batch_size=8,
+            max_length=128,
+        )
+        return rk
+
+    def test_successful_rerank_returns_scores(self) -> None:
+        stub = _StubCrossEncoder([0.1, 0.9, 0.5])
+        with patch(
+            "opencontractserver.pipeline.rerankers.cross_encoder_reranker."
+            "_load_cross_encoder",
+            return_value=stub,
+        ):
+            results = self._reranker().rerank("q", ["a", "b", "c"])
+        scores = {r.index: r.score for r in results}
+        self.assertAlmostEqual(scores[0], 0.1)
+        self.assertAlmostEqual(scores[1], 0.9)
+        self.assertAlmostEqual(scores[2], 0.5)
+        # max_length is forwarded onto the underlying model.
+        self.assertEqual(stub.max_length, 128)
+        # Empty/None passages are normalized to "" before pairing.
+        self.assertEqual(stub.last_pairs[0], ("q", "a"))
+
+    def test_pads_when_model_returns_too_few_scores(self) -> None:
+        stub = _StubCrossEncoder([0.7])  # only 1 score for 3 passages
+        with patch(
+            "opencontractserver.pipeline.rerankers.cross_encoder_reranker."
+            "_load_cross_encoder",
+            return_value=stub,
+        ):
+            results = self._reranker().rerank("q", ["a", "b", "c"])
+        # First passage keeps the real score; the rest get -inf padding.
+        self.assertAlmostEqual(results[0].score, 0.7)
+        self.assertEqual(results[1].score, float("-inf"))
+        self.assertEqual(results[2].score, float("-inf"))
+
+    def test_scalar_score_is_normalized_to_list(self) -> None:
+        # Some single-pair responses come back as a 0-D scalar instead of a
+        # sequence; the reranker normalizes by wrapping it.
+        stub = _StubCrossEncoder(0.42)
+        with patch(
+            "opencontractserver.pipeline.rerankers.cross_encoder_reranker."
+            "_load_cross_encoder",
+            return_value=stub,
+        ):
+            results = self._reranker().rerank("q", ["only"])
+        self.assertEqual(len(results), 1)
+        self.assertAlmostEqual(results[0].score, 0.42)
+
+    def test_load_cross_encoder_caches_model_per_key(self) -> None:
+        from opencontractserver.pipeline.rerankers import cross_encoder_reranker
+
+        sentinel = object()
+        with patch(
+            "opencontractserver.pipeline.rerankers.cross_encoder_reranker."
+            "_MODEL_CACHE",
+            {("model-a", "cpu"): sentinel},
+        ):
+            got = cross_encoder_reranker._load_cross_encoder("model-a", "cpu")
+        self.assertIs(got, sentinel)
+
 
 # --------------------------------------------------------------------------- #
 # Pipeline utility tests

@@ -842,3 +842,114 @@ class TestPaperSampling(PyUnitTestCase):
         self.assertEqual(len(out), 194)
         for t in out:
             self.assertTrue(t["snippets"][0].get("file_path"))
+
+
+# --------------------------------------------------------------------------- #
+# Management command tests (``python manage.py run_benchmark``)
+# --------------------------------------------------------------------------- #
+
+
+class RunBenchmarkCommandTest(TransactionTestCase):
+    """Cover the CLI entry point so user lookup, adapter wiring and
+    aggregate printing are exercised end-to-end with the runner mocked.
+    """
+
+    def test_user_not_found_raises(self):
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        with self.assertRaisesRegex(CommandError, "not found"):
+            call_command(
+                "run_benchmark",
+                "--path=/tmp/does-not-matter",
+                "--user=nope-no-such-user",
+            )
+
+    @patch(
+        "opencontractserver.benchmarks.management.commands.run_benchmark."
+        "run_benchmark"
+    )
+    def test_happy_path_invokes_runner_and_prints_aggregates(self, mock_run):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from opencontractserver.benchmarks.report import BenchmarkReport
+
+        user = User.objects.create_user(username="bench-cli-user")
+
+        # Use the real BenchmarkReport so __post_init__ populates aggregates
+        # — covers the float/dict/value formatting branches in handle().
+        report = BenchmarkReport(
+            adapter={"name": "test"},
+            config={"model": "test:m"},
+            corpus_id=42,
+            extract_id=7,
+            task_results=[],
+            run_dir=Path("/tmp/run-x"),
+        )
+        mock_run.return_value = report
+
+        out = StringIO()
+        call_command(
+            "run_benchmark",
+            f"--path={MICRO_FIXTURE}",
+            "--user=bench-cli-user",
+            "--top-k=3",
+            "--limit=5",
+            stdout=out,
+        )
+
+        # Runner called with the parsed CLI options.
+        run_kwargs = mock_run.call_args.kwargs
+        self.assertEqual(run_kwargs["top_k"], 3)
+        self.assertEqual(run_kwargs["user"], user)
+        self.assertFalse(run_kwargs["retrieval_only"])
+        self.assertFalse(run_kwargs["corpus_wide"])
+        # The adapter passed to run_benchmark is a real LegalBenchRAGAdapter.
+        from opencontractserver.benchmarks.adapters.legalbench_rag import (
+            LegalBenchRAGAdapter,
+        )
+
+        self.assertIsInstance(run_kwargs["adapter"], LegalBenchRAGAdapter)
+
+        text = out.getvalue()
+        self.assertIn("Benchmark run complete", text)
+        self.assertIn("Corpus ID:  42", text)
+        self.assertIn("Extract ID: 7", text)
+        self.assertIn("Report dir: /tmp/run-x", text)
+        # Aggregate lines emitted (BenchmarkReport.__post_init__ populates
+        # task_count and float metrics, exercising the int-else and float
+        # branches of the handle() output loop).
+        self.assertIn("task_count", text)
+        self.assertIn("answer_token_f1", text)
+
+    @patch(
+        "opencontractserver.benchmarks.management.commands.run_benchmark."
+        "run_benchmark"
+    )
+    def test_retrieval_only_and_corpus_wide_flags_pass_through(self, mock_run):
+        from django.core.management import call_command
+
+        from opencontractserver.benchmarks.report import BenchmarkReport
+
+        User.objects.create_user(username="bench-flag-user")
+        mock_run.return_value = BenchmarkReport(
+            adapter={},
+            config={},
+            corpus_id=1,
+            extract_id=1,
+            task_results=[],
+            run_dir=None,  # exercise the no-run-dir branch in handle()
+        )
+        call_command(
+            "run_benchmark",
+            f"--path={MICRO_FIXTURE}",
+            "--user=bench-flag-user",
+            "--retrieval-only",
+            "--corpus-wide",
+            "--no-paper-sampling",
+        )
+        run_kwargs = mock_run.call_args.kwargs
+        self.assertTrue(run_kwargs["retrieval_only"])
+        self.assertTrue(run_kwargs["corpus_wide"])

@@ -299,6 +299,74 @@ class TestOpenAIEmbedderEmbedText(TestCase):
         result = embedder.embed_image("base64data", "jpeg")
         self.assertIsNone(result)
 
+    @patch("opencontractserver.pipeline.embedders.openai_embedder.openai.OpenAI")
+    def test_embed_text_truncates_oversize_input(self, mock_openai_cls):
+        """Inputs longer than OPENAI_EMBEDDER_MAX_INPUT_CHARS are truncated."""
+        from opencontractserver.constants.document_processing import (
+            OPENAI_EMBEDDER_MAX_INPUT_CHARS,
+        )
+
+        fake_embedding = [0.1] * DEFAULT_OPENAI_EMBEDDING_DIMENSIONS
+        mock_client = MagicMock()
+        mock_client.embeddings.create.return_value = self._make_mock_response(
+            fake_embedding
+        )
+        mock_openai_cls.return_value = mock_client
+
+        oversize = "a" * (OPENAI_EMBEDDER_MAX_INPUT_CHARS + 5_000)
+        embedder = OpenAIEmbedder()
+        result = embedder.embed_text(oversize, openai_api_key="test-key")
+
+        self.assertIsNotNone(result)
+        sent = mock_client.embeddings.create.call_args.kwargs["input"]
+        self.assertEqual(len(sent), OPENAI_EMBEDDER_MAX_INPUT_CHARS)
+
+    @patch("opencontractserver.pipeline.embedders.openai_embedder.openai.OpenAI")
+    def test_embed_texts_batch_truncates_and_skips_blanks(self, mock_openai_cls):
+        """Batch path: blanks become None slots, oversize inputs are clipped."""
+        from opencontractserver.constants.document_processing import (
+            OPENAI_EMBEDDER_MAX_INPUT_CHARS,
+        )
+
+        oversize = "z" * (OPENAI_EMBEDDER_MAX_INPUT_CHARS + 1_000)
+        texts = ["hi", "", oversize, "  "]
+        # Two non-empty inputs survive — return one fake embedding for each.
+        fake_a = [0.1] * DEFAULT_OPENAI_EMBEDDING_DIMENSIONS
+        fake_b = [0.2] * DEFAULT_OPENAI_EMBEDDING_DIMENSIONS
+        mock_response = MagicMock()
+        d0, d1 = MagicMock(), MagicMock()
+        d0.embedding = fake_a
+        d1.embedding = fake_b
+        mock_response.data = [d0, d1]
+        mock_client = MagicMock()
+        mock_client.embeddings.create.return_value = mock_response
+        mock_openai_cls.return_value = mock_client
+
+        embedder = OpenAIEmbedder()
+        result = embedder.embed_texts_batch(texts, openai_api_key="test-key")
+
+        self.assertEqual(len(result), 4)
+        self.assertEqual(result[0], fake_a)  # "hi"
+        self.assertIsNone(result[1])  # "" filtered out
+        self.assertEqual(result[2], fake_b)  # oversize → truncated then sent
+        self.assertIsNone(result[3])  # whitespace-only filtered out
+
+        # Confirm the wire payload carried only the two surviving inputs and
+        # that the oversize one was truncated to the cap.
+        sent = mock_client.embeddings.create.call_args.kwargs["input"]
+        self.assertEqual(len(sent), 2)
+        self.assertEqual(sent[0], "hi")
+        self.assertEqual(len(sent[1]), OPENAI_EMBEDDER_MAX_INPUT_CHARS)
+
+    def test_embed_texts_batch_empty_returns_empty_list(self):
+        embedder = OpenAIEmbedder()
+        self.assertEqual(embedder.embed_texts_batch([]), [])
+
+    def test_embed_texts_batch_all_blank_returns_all_none(self):
+        embedder = OpenAIEmbedder()
+        result = embedder.embed_texts_batch(["", "  ", None])  # type: ignore[list-item]
+        self.assertEqual(result, [None, None, None])
+
 
 class TestOpenAIEmbedderDiscovery(TestCase):
     """Tests that OpenAIEmbedder is properly discovered by the registry."""
