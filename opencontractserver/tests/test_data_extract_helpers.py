@@ -323,5 +323,65 @@ class CrossEncoderRerankerTests(TestCase):
         self.assertEqual(results[1].score, float("-inf"))
 
 
+class ModelOverrideAllowlistTests(TestCase):
+    """``BENCHMARK_ALLOWED_MODEL_OVERRIDES`` guard fires before any Datacell
+    work runs, so a rejected override marks the cell as failed without
+    touching the agent runtime.
+    """
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(
+            username="allowlist_user", password="testpass"
+        )
+        corpus = Corpus.objects.create(title="Allowlist Corpus", creator=self.user)
+        document = Document.objects.create(
+            title="Allowlist Doc", creator=self.user, file_type="text/plain"
+        )
+        corpus.add_document(document=document, user=self.user)
+        fieldset = Fieldset.objects.create(name="fs", creator=self.user)
+        column = Column.objects.create(
+            fieldset=fieldset,
+            name="col",
+            query="anything",
+            output_type="str",
+            creator=self.user,
+        )
+        extract = Extract.objects.create(
+            corpus=corpus, fieldset=fieldset, name="ex", creator=self.user
+        )
+        self.cell = Datacell.objects.create(
+            extract=extract,
+            column=column,
+            document=document,
+            data_definition="x",
+            creator=self.user,
+        )
+
+    def test_unknown_model_override_marks_cell_failed(self) -> None:
+        from django.test import override_settings
+
+        from opencontractserver.tasks.data_extract_tasks import (
+            doc_extract_query_task,
+        )
+
+        with override_settings(
+            BENCHMARK_ALLOWED_MODEL_OVERRIDES=["openai:gpt-4o-mini"]
+        ):
+            # The task re-raises after marking the cell failed; the
+            # operator-facing celery worker logs the error and the cell
+            # carries the explanation in its stacktrace for ops review.
+            with self.assertRaises(ValueError):
+                doc_extract_query_task.si(
+                    self.cell.id, model_override="anthropic:not-allowed"
+                ).apply().get()
+
+        self.cell.refresh_from_db()
+        self.assertIsNotNone(self.cell.failed)
+        self.assertIn(
+            "BENCHMARK_ALLOWED_MODEL_OVERRIDES",
+            self.cell.stacktrace or "",
+        )
+
+
 # Suppress unused-import warning for the SimpleNamespace shim used elsewhere
 _ = SimpleNamespace

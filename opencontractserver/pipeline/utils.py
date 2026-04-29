@@ -613,6 +613,12 @@ def get_default_reranker_instance(
     in one worker must not pin that worker to degraded behaviour while
     siblings continue reranking successfully. See the module-level comment
     for the rationale.
+
+    Cache invalidation: the cache key includes ``PipelineSettings.modified``,
+    so DB writes bust it process-wide. Tests that patch settings purely
+    in-memory will hit stale instances — set ``STRICT_RERANKER`` (which
+    bypasses the cache fast-path) or call :func:`invalidate_reranker_cache`
+    explicitly if you need a fresh instance from a fixture.
     """
     from django.conf import settings as django_settings
 

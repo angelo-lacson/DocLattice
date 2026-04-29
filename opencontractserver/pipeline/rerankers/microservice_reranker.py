@@ -56,7 +56,12 @@ logger = logging.getLogger(__name__)
 
 
 class MicroserviceReranker(BaseReranker):
-    """Reranker that delegates to an external HTTP microservice."""
+    """Reranker that delegates to an external HTTP microservice.
+
+    TLS: HTTPS endpoints are verified via the system trust store
+    (``requests`` defaults to ``verify=True``). Self-signed/internal CAs
+    must be trusted at the OS level — there is no per-instance opt-out.
+    """
 
     title = "Microservice Reranker"
     description = (
