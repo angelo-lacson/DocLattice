@@ -176,7 +176,7 @@ class DeleteAnalysisMutation(graphene.Mutation):
         id = graphene.String(required=True)
 
     @login_required
-    def mutate(root, info, id) -> "DeleteAnalysisMutation | None":
+    def mutate(root, info, id) -> "DeleteAnalysisMutation":
 
         # ok = False
         # message = "Could not complete"
@@ -206,4 +206,5 @@ class DeleteAnalysisMutation(graphene.Mutation):
 
         # Kick off an async task to delete the analysis (as it can be very large)
         delete_analysis_and_annotations_task.si(analysis_pk=analysis_pk).apply_async()
-        return None
+
+        return DeleteAnalysisMutation(ok=True, message="SUCCESS")
