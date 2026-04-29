@@ -1517,12 +1517,17 @@ class TestPydanticAIAgentsCoverage(TransactionTestCase):
 
         prompt = agent._build_structured_system_prompt(DummyOutput, "user query")
 
-        # Universal phrasing for both Anthropic and OpenAI
+        # Universal phrasing for both Anthropic and OpenAI: agent must
+        # commit to the result tool after gathering data (issue #1381).
         self.assertIn("MUST", prompt)
         self.assertIn("result tool", prompt)
-        # Negative wording must mention "genuinely" so the model only
-        # bails out when the data is actually absent.
-        self.assertIn("genuinely cannot be found", prompt)
+        # SEARCH PROTOCOL nudge: don't bail after a single failed query.
+        self.assertIn("SEARCH PROTOCOL", prompt)
+        self.assertIn(
+            "multiple search attempts",
+            prompt,
+            "Negative case must require multiple attempts before committing to None",
+        )
 
     @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
     async def test_structured_response_openai_skips_anthropic_override(
@@ -1553,4 +1558,81 @@ class TestPydanticAIAgentsCoverage(TransactionTestCase):
         self.assertIsNone(
             structured_call.kwargs.get("model_settings"),
             "OpenAI structured runs without pins must pass model_settings=None",
+        )
+
+    @patch("opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent")
+    async def test_document_agent_inherits_anthropic_temperature_guard(
+        self, mock_pyd_ai_cls: MagicMock
+    ) -> None:
+        """``PydanticAIDocumentAgent`` inherits ``_structured_response_raw``
+        from ``PydanticAICoreAgent``, so the Anthropic ``temperature=0``
+        guard must fire when extraction runs on a document agent too.
+
+        The base-class test covers the implementation itself; this test
+        explicitly exercises the inheritance path so a future override
+        on a subclass cannot silently regress the fix.
+        """
+        from opencontractserver.constants.llm import STRUCTURED_OUTPUT_RETRIES
+        from opencontractserver.llms.agents.core_agents import (
+            AgentConfig,
+            CoreConversationManager,
+            DocumentAgentContext,
+        )
+        from opencontractserver.llms.agents.pydantic_ai_agents import _HistoryResult
+
+        # Wire up the structured-agent mock the same way the core helper does.
+        structured_run_result = MagicMock()
+        structured_run_result.output = "extracted-value"
+        structured_agent_mock = MagicMock()
+        structured_agent_mock.run = AsyncMock(return_value=structured_run_result)
+        mock_pyd_ai_cls.return_value = structured_agent_mock
+
+        config = AgentConfig(
+            user_id=self.user.id,
+            model_name="anthropic:claude-sonnet-4-6",
+            temperature=None,
+        )
+        ctx = MagicMock(spec=DocumentAgentContext)
+        ctx.document = self.doc1
+        ctx.config = config
+        conv_mgr = MagicMock(spec=CoreConversationManager)
+        conv_mgr.conversation = None
+        conv_mgr.config = config
+
+        prebuilt_agent = MagicMock()
+        prebuilt_agent._function_tools = {}
+
+        agent = PydanticAIDocumentAgent(
+            context=ctx,
+            conversation_manager=conv_mgr,
+            pydantic_ai_agent=prebuilt_agent,
+            agent_deps=MagicMock(),
+        )
+        agent._get_message_history = AsyncMock(
+            return_value=_HistoryResult(messages=None)
+        )
+
+        class DummyOutput(BaseModel):
+            value: str
+
+        await agent._structured_response_raw(
+            prompt="any",
+            target_type=DummyOutput,
+            model="anthropic:claude-sonnet-4-6",
+            temperature=None,
+        )
+
+        structured_call = self._structured_agent_call(mock_pyd_ai_cls)
+        self.assertIsNotNone(
+            structured_call,
+            "Document agent must reach the inherited _structured_response_raw",
+        )
+        self.assertEqual(
+            structured_call.kwargs["model_settings"]["temperature"],
+            0,
+            "Document agents must also force Anthropic temperature=0 (issue #1381)",
+        )
+        self.assertEqual(
+            structured_call.kwargs["output_retries"],
+            STRUCTURED_OUTPUT_RETRIES,
         )
