@@ -238,12 +238,10 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
         obj_id = None
 
         try:
-            # Permission check FIRST — runs before any field validation
-            # so a non-owner can't distinguish "reached validation" from
-            # "denied by permission" via different error messages
-            # (defense-in-depth; consistent with the IDOR-safe deny
-            # pattern documented in
-            # ``docs/permissioning/consolidated_permissioning_guide.md``).
+            # Permission check runs before validation so a non-owner cannot
+            # distinguish "reached validation" from "denied" via different
+            # error messages (IDOR mitigation — see
+            # docs/permissioning/consolidated_permissioning_guide.md).
             labelset = LabelSet.objects.get(pk=from_global_id(labelset_id)[1])
             if not user_has_permission_for_obj(
                 info.context.user,
@@ -251,16 +249,11 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
                 PermissionTypes.UPDATE,
                 include_group_permissions=True,
             ):
-                # Generic deny path — same message and code path as not-found
                 raise LabelSet.DoesNotExist()
 
-            # ``text`` is GraphQL-optional so without this guard the model
-            # default ("Text Label") would silently apply, producing
-            # surprising labels for clients that forgot to pass a value
-            # or passed whitespace.  Django's ``blank=False`` is
-            # form-only and NOT enforced by ``objects.create()``.  The
-            # ``not (text and text.strip())`` form covers ``None``,
-            # empty string, and whitespace-only in one expression.
+            # Reject blank text explicitly: Django's ``blank=False`` is
+            # form-only and ``objects.create()`` would silently apply the
+            # "Text Label" model default.
             if not (text and text.strip()):
                 return CreateLabelForLabelsetMutation(
                     obj=None,
@@ -269,10 +262,6 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
                     ok=False,
                 )
 
-            # Validate color format (defense in depth).  ``color=""`` is
-            # normalised to ``None`` so the model default ("#FFFFFF")
-            # applies, matching the silent-default behaviour clients
-            # already get from omitting the argument.
             if color == "":
                 color = None
             is_valid_color, color_error = validate_color(color)
@@ -282,10 +271,8 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
                 )
 
             logger.debug("CreateLabelForLabelsetMutation - mutate / Labelset", labelset)
-            # Drop None and empty-string values so model field defaults
-            # apply (description, color, icon, text are NOT NULL with
-            # sensible defaults).  Empty strings would bypass those
-            # defaults at the DB level and write a row with blank values.
+            # Drop None/"" so model field defaults apply rather than
+            # writing blank values at the DB level.
             create_kwargs = {
                 k: v
                 for k, v in {
@@ -316,8 +303,7 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
             logger.debug("Done")
 
         except LabelSet.DoesNotExist:
-            # Legitimate auth rejection or genuine 404 — log without a stack
-            # trace to avoid polluting logs with what looks like real errors.
+            # Auth rejection or genuine 404 — warn without stack trace.
             logger.warning(
                 "CreateLabelForLabelsetMutation: labelset not found or "
                 "permission denied (labelset_id=%s)",
@@ -369,15 +355,13 @@ class RemoveLabelsFromLabelsetMutation(graphene.Mutation):
                 PermissionTypes.UPDATE,
                 include_group_permissions=True,
             ):
-                # Generic deny path — same message and code path as not-found
                 raise LabelSet.DoesNotExist()
             labelset.annotation_labels.remove(*label_pks)
             ok = True
             message = "Success"
 
         except LabelSet.DoesNotExist:
-            # Legitimate auth rejection or genuine 404 — log without a stack trace
-            # to avoid polluting logs with what looks like real errors.
+            # Auth rejection or genuine 404 — warn without stack trace.
             logger.warning(
                 "RemoveLabelsFromLabelsetMutation: labelset not found or "
                 "permission denied (labelset_id=%s)",
