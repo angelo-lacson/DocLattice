@@ -6,8 +6,16 @@ from collections import Counter
 from typing import Any, Optional
 
 from asgiref.sync import sync_to_async
+from pydantic_ai.messages import ModelResponse, ToolCallPart
 
 from opencontractserver.annotations.compact_json import iter_page_annotations
+from opencontractserver.constants.llm import (
+    NONE_RESULT_AGENT_COMMITTED,
+    NONE_RESULT_NO_FINAL,
+    NONE_RESULT_TOOL_LOOP,
+    NONE_RESULT_UNKNOWN,
+    TOOL_LOOP_THRESHOLD,
+)
 from opencontractserver.extracts.models import Datacell
 from opencontractserver.shared.decorators import celery_task_with_async_to_sync
 from opencontractserver.utils.compact_pawls import expand_pawls_pages
@@ -42,16 +50,6 @@ logger = logging.getLogger(__name__)
 # Operators want to grep ``failure_mode=`` to separate legitimate "data not
 # present" outcomes from pipeline bugs.
 
-NONE_RESULT_AGENT_COMMITTED = "agent_committed_none"
-NONE_RESULT_NO_FINAL = "no_final_response"
-NONE_RESULT_TOOL_LOOP = "tool_loop_no_output"
-NONE_RESULT_UNKNOWN = "unknown"
-
-# Threshold for declaring a tool loop. If any single tool name + arguments
-# combination appears at least this many times in the captured message log
-# without a final structured response, classify as ``tool_loop_no_output``.
-_TOOL_LOOP_THRESHOLD = 3
-
 
 def _classify_none_result(messages: Optional[list[Any]]) -> str:
     """Classify *why* a structured extraction returned ``None``.
@@ -61,11 +59,6 @@ def _classify_none_result(messages: Optional[list[Any]]) -> str:
     shape falls back to :data:`NONE_RESULT_UNKNOWN` rather than raising.
     """
     if not messages:
-        return NONE_RESULT_UNKNOWN
-
-    try:
-        from pydantic_ai.messages import ModelResponse, ToolCallPart
-    except ImportError:  # pragma: no cover - pydantic_ai is a hard dep
         return NONE_RESULT_UNKNOWN
 
     # Scan the log for ``ModelResponse`` parts. A "final structured response"
@@ -84,6 +77,17 @@ def _classify_none_result(messages: Optional[list[Any]]) -> str:
                     saw_final_result = True
                 else:
                     raw_args = getattr(part, "args", None)
+                    # ``ToolCallPart.args`` is typed ``str | dict`` in
+                    # pydantic-ai (``ArgsJson`` vs ``ArgsDict``).  Normalise
+                    # the JSON-string variant so identical calls hash to the
+                    # same Counter key regardless of which variant the model
+                    # returned, otherwise tool-loop detection silently
+                    # under-counts.
+                    if isinstance(raw_args, str):
+                        try:
+                            raw_args = json.loads(raw_args)
+                        except (json.JSONDecodeError, ValueError):
+                            pass
                     try:
                         args_repr = json.dumps(raw_args, sort_keys=True, default=str)
                     except (TypeError, ValueError):
@@ -99,7 +103,7 @@ def _classify_none_result(messages: Optional[list[Any]]) -> str:
     # No final_result anywhere. Look for tool-call repetition.
     if tool_call_signatures:
         most_common = Counter(tool_call_signatures).most_common(1)
-        if most_common and most_common[0][1] >= _TOOL_LOOP_THRESHOLD:
+        if most_common and most_common[0][1] >= TOOL_LOOP_THRESHOLD:
             return NONE_RESULT_TOOL_LOOP
 
     return NONE_RESULT_NO_FINAL
@@ -394,9 +398,14 @@ async def doc_extract_query_task(
                     # function-level pin bypasses the Anthropic temperature=0
                     # override in `_structured_response_raw` (issue #1381).
                     # Safe today because the model is also pinned to
-                    # `openai:gpt-4o-mini`; if the model becomes column-
-                    # configurable, gate this temperature on the model family
-                    # so Claude variants still get the override.
+                    # `openai:gpt-4o-mini`.
+                    #
+                    # TODO(#1381 follow-up): if/when the model becomes
+                    # column-configurable, gate this temperature on the
+                    # model family — passing ``temperature=0.3`` to a
+                    # Claude model silently regresses the structured-output
+                    # reliability fix this PR introduced.  Track removal
+                    # of this pin alongside the column-model feature.
                     temperature=0.3,
                     similarity_top_k=similarity_top_k,
                     model="openai:gpt-4o-mini",  # Fast and reliable

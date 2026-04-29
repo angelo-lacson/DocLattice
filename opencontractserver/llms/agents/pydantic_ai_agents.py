@@ -31,6 +31,7 @@ from pydantic_ai.messages import (
 from pydantic_graph import End
 
 from opencontractserver.constants.context_guardrails import COMPACTION_SUMMARY_PREFIX
+from opencontractserver.constants.llm import STRUCTURED_OUTPUT_RETRIES
 from opencontractserver.conversations.models import Conversation
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
@@ -102,12 +103,6 @@ logger = logging.getLogger(__name__)
 
 # Type variable for structured responses
 T = TypeVar("T")
-
-# Number of retries pydantic-ai will attempt when the model fails to produce
-# a valid structured response. Bumped above pydantic-ai's default of 1 because
-# Anthropic models routinely need an extra round-trip after tool calls before
-# they commit to the final result tool. See issue #1381.
-STRUCTURED_OUTPUT_RETRIES = 3
 
 
 def _is_anthropic_model(model_name: Optional[str]) -> bool:
@@ -1339,7 +1334,14 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         )
 
         try:
-            # Build model settings with overrides
+            # Build model settings with overrides.
+            # ``_prepare_pydantic_ai_model_settings`` returns ``None`` when
+            # both temperature and max_tokens are unset on ``self.config``
+            # (the helper signals "no settings to pass" rather than
+            # returning an empty dict).  We need a mutable dict here so
+            # the function-level ``temperature`` / ``max_tokens`` overrides
+            # — and the Anthropic temperature-0 nudge below — have
+            # somewhere to land.
             model_settings = _prepare_pydantic_ai_model_settings(self.config)
             if model_settings is None:
                 model_settings = {}

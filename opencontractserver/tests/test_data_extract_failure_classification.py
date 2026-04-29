@@ -89,7 +89,7 @@ class ClassifyNoneResultTests(SimpleTestCase):
     def test_repeats_below_threshold_are_not_tool_loop(self) -> None:
         """Two repeats (threshold - 1) ⇒ no_final_response, not tool_loop.
 
-        Pins the boundary so a future tweak of ``_TOOL_LOOP_THRESHOLD``
+        Pins the boundary so a future tweak of ``TOOL_LOOP_THRESHOLD``
         forces this test to be updated explicitly.
         """
         repeated = _tool_call("similarity_search", {"query": "same"})
