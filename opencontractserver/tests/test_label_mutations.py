@@ -402,9 +402,7 @@ class CreateLabelForLabelsetMutationTestCase(TestCase):
         self.assertFalse(data["ok"])
         self.assertIn("blank", data["message"].lower())
         self.assertEqual(self.labelset.annotation_labels.count(), 0)
-        self.assertFalse(
-            AnnotationLabel.objects.filter(text="Text Label").exists()
-        )
+        self.assertFalse(AnnotationLabel.objects.filter(text="Text Label").exists())
 
     def test_permission_denied_message_does_not_leak_validation_state(
         self,
