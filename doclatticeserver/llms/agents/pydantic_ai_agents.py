@@ -31,10 +31,7 @@ from pydantic_ai.messages import (
 from pydantic_graph import End
 
 from doclatticeserver.constants.context_guardrails import COMPACTION_SUMMARY_PREFIX
-from doclatticeserver.constants.llm import (
-    STRUCTURED_OUTPUT_RETRIES,
-    is_anthropic_model,
-)
+from doclatticeserver.constants.llm import STRUCTURED_OUTPUT_RETRIES
 from doclatticeserver.conversations.models import Conversation
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
@@ -92,6 +89,7 @@ from doclatticeserver.llms.vector_stores.pydantic_ai_vector_stores import (
     PydanticAIAnnotationVectorStore,
 )
 from doclatticeserver.utils.embeddings import aget_embedder
+from doclatticeserver.utils.llm import is_anthropic_model
 from doclatticeserver.utils.prompt_sanitization import (
     UNTRUSTED_CONTENT_NOTICE,
     fence_user_content,
@@ -1387,13 +1385,17 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
             logger.info(f"Structured system prompt: {structured_system_prompt}")
 
+            # Preserve the pre-issue-#1381 behaviour of passing
+            # ``model_settings=None`` to ``PydanticAIAgent`` when nothing
+            # ended up being set, so non-Anthropic structured runs without
+            # caller pins are bit-identical to before.
             structured_agent = PydanticAIAgent(
                 model=effective_model,
                 instructions=structured_system_prompt,
                 output_type=target_type,
                 deps_type=PydanticAIDependencies,
                 tools=final_tools,
-                model_settings=model_settings,
+                model_settings=model_settings or None,
                 # Give pydantic-ai room to retry the structured output when
                 # the model fails to commit on the first pass (issue #1381).
                 output_retries=STRUCTURED_OUTPUT_RETRIES,
