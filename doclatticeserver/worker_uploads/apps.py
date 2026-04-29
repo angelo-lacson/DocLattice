@@ -2,9 +2,9 @@ from django.apps import AppConfig
 
 
 class WorkerUploadsConfig(AppConfig):
-    default_auto_field = "django.db.models.BigAutoField"
-    name = "doclatticeserver.worker_uploads"
-    verbose_name = "Worker Uploads"
+    default_auto_field: str = "django.db.models.BigAutoField"
+    name: str = "doclatticeserver.worker_uploads"
+    verbose_name: str = "Worker Uploads"
 
-    def ready(self):
+    def ready(self) -> None:
         pass  # Placeholder for future signal registrations
