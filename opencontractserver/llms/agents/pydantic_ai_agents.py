@@ -29,6 +29,7 @@ from pydantic_ai.messages import (
     ToolReturnPart,
     UserPromptPart,
 )
+from pydantic_ai.toolsets import FunctionToolset
 from pydantic_graph import End
 
 from opencontractserver.constants.context_guardrails import COMPACTION_SUMMARY_PREFIX
@@ -148,18 +149,16 @@ def _make_similarity_search_tool(vector_store: Any, default_k: int = 8) -> Calla
 def _get_function_tools(agent: PydanticAIAgent) -> dict:
     """Return the function-tools dict from a pydantic-ai Agent.
 
-    Handles both pydantic-ai 0.2.x (``agent._function_tools``) and
-    1.x (``agent._function_toolset.tools``).
+    Uses only the public surface: ``Agent.toolsets`` (documented property
+    that includes the auto-built function toolset for tools registered
+    directly on the agent) and ``FunctionToolset.tools`` (public dict of
+    tool name -> ``Tool``).
     """
-    # pydantic-ai 0.2.x
-    ft = getattr(agent, "_function_tools", None)
-    if ft is not None:
-        return ft
-    # pydantic-ai 1.x
-    toolset = getattr(agent, "_function_toolset", None)
-    if toolset is not None:
-        return getattr(toolset, "tools", {})
-    return {}
+    merged: dict = {}
+    for toolset in agent.toolsets:
+        if isinstance(toolset, FunctionToolset):
+            merged.update(toolset.tools)
+    return merged
 
 
 @dataclasses.dataclass
@@ -1605,27 +1604,17 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                         # Don't retry here, fall through to registry lookup
 
                 if not tool_executed:
-                    # Resort to pydantic-ai registry – may return Tool object.
+                    # Resort to pydantic-ai registry – returns a public ``Tool``.
                     tool_obj = _get_function_tools(self.pydantic_ai_agent).get(
                         tool_name
                     )
                     if tool_obj is None:
                         raise ValueError(f"Tool '{tool_name}' not found for execution")
 
-                    # Try common attributes to reach the underlying callable.
-                    candidate = None
-                    for attr in (
-                        "function",
-                        "_wrapped_function",
-                        "callable_function",
-                    ):
-                        candidate = getattr(tool_obj, attr, None)
-                        if callable(candidate):
-                            break
-
-                    if candidate is None or not callable(candidate):
+                    candidate = tool_obj.function
+                    if not callable(candidate):
                         raise TypeError(
-                            "Tool object is not callable and no inner function found"
+                            f"Tool '{tool_name}' has a non-callable function"
                         )
 
                     logger.info(
@@ -1933,36 +1922,24 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     if hasattr(tool, "requires_approval"):
                         return tool.requires_approval
 
-        # Check tools registered with pydantic-ai agent
+        # Check tools registered with pydantic-ai agent. Tools registered as
+        # plain async callables (our common case) carry their CoreTool on the
+        # underlying function, not on the Tool object — pydantic-ai 1.x's
+        # Tool.requires_approval defaults to False unless the caller passes it
+        # in, so we must consult the function attribute first.
         function_tools = _get_function_tools(self.pydantic_ai_agent)
         if function_tools:
             tool_obj = function_tools.get(tool_name)
-            if tool_obj:
-                # Check various possible attributes where the CoreTool might be stored
-                for attr in ("core_tool", "_core_tool", "wrapped_tool"):
-                    core_tool = getattr(tool_obj, attr, None)
-                    if core_tool and hasattr(core_tool, "requires_approval"):
-                        return core_tool.requires_approval
-
-                # Check the wrapped function (must come before the native
-                # tool_obj.requires_approval check because pydantic-ai 1.x
-                # Tool has a native requires_approval field that defaults to
-                # False, shadowing the custom attribute on the function).
-                for attr in ("function", "_wrapped_function", "callable_function"):
-                    func = getattr(tool_obj, attr, None)
-                    if func:
-                        # Check if the function has a core_tool attribute
-                        if hasattr(func, "core_tool") and hasattr(
-                            func.core_tool, "requires_approval"
-                        ):
-                            return func.core_tool.requires_approval
-                        # Check if the function itself has requires_approval
-                        if hasattr(func, "requires_approval"):
-                            return func.requires_approval
-
-                # Fall back to the tool object's own requires_approval
-                if hasattr(tool_obj, "requires_approval"):
-                    return tool_obj.requires_approval
+            if tool_obj is not None:
+                func = tool_obj.function
+                core_tool = getattr(func, "core_tool", None)
+                if core_tool is not None and getattr(
+                    core_tool, "requires_approval", False
+                ):
+                    return True
+                if getattr(func, "requires_approval", False):
+                    return True
+                return tool_obj.requires_approval
 
         # Default to not requiring approval
         return False
