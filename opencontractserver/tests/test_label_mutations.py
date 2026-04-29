@@ -378,3 +378,56 @@ class CreateLabelForLabelsetMutationTestCase(TestCase):
         self.assertFalse(data["ok"])
         self.assertIn("blank", data["message"].lower())
         self.assertEqual(self.labelset.annotation_labels.count(), 0)
+
+    def test_omitted_text_is_rejected(self) -> None:
+        """A client that omits ``text`` entirely must NOT receive a
+        ``"Text Label"`` row by default — the model default is hidden
+        behind a required-field guard.
+        """
+        # GraphQL doesn't support omitting an argument from variables,
+        # but the resolver default is ``text=None``; build a custom
+        # variables dict that simulates the omission by passing None
+        # via JSON null (the GraphQL coercion that sends ``null`` for an
+        # unsupplied optional argument).
+        variables = self._create_variables("placeholder")
+        variables["text"] = None
+
+        result = self.client.execute(
+            CREATE_LABEL_FOR_LABELSET_MUTATION,
+            variables=variables,
+        )
+
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["createAnnotationLabelForLabelset"]
+        self.assertFalse(data["ok"])
+        self.assertIn("blank", data["message"].lower())
+        self.assertEqual(self.labelset.annotation_labels.count(), 0)
+        self.assertFalse(
+            AnnotationLabel.objects.filter(text="Text Label").exists()
+        )
+
+    def test_permission_denied_message_does_not_leak_validation_state(
+        self,
+    ) -> None:
+        """A non-owner caller hitting validation should still get the
+        same generic 404-style denial as if the labelset didn't exist —
+        the permission check runs FIRST so blank-text vs
+        permission-denied are indistinguishable to outsiders.
+        """
+        # ``other_user`` has no permission on ``self.labelset``.  Send
+        # an *invalid* mutation (blank text) — the response must look
+        # like a "does not exist", NOT like "blank text".
+        variables = self._create_variables("   ")
+
+        result = self.other_client.execute(
+            CREATE_LABEL_FOR_LABELSET_MUTATION,
+            variables=variables,
+        )
+
+        self.assertIsNone(result.get("errors"))
+        data = result["data"]["createAnnotationLabelForLabelset"]
+        self.assertFalse(data["ok"])
+        # Must NOT mention "blank" — that would leak that the caller's
+        # request was structurally valid but rejected by permission.
+        self.assertNotIn("blank", data["message"].lower())
+        self.assertIn("does not exist", data["message"].lower())

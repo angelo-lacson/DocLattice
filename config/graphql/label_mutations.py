@@ -237,27 +237,13 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
         obj = None
         obj_id = None
 
-        # Reject blank ``text`` early.  ``text`` is GraphQL-optional so the
-        # model default ("Text Label") would silently apply, which produces
-        # surprising labels for clients that forgot to pass a value or
-        # passed an empty string.  Django's ``blank=False`` is form-only
-        # and is NOT enforced by ``objects.create()``.
-        if text is not None and not text.strip():
-            return CreateLabelForLabelsetMutation(
-                obj=None,
-                obj_id=None,
-                message="Label text cannot be blank.",
-                ok=False,
-            )
-
-        # Validate color format (defense in depth)
-        is_valid_color, color_error = validate_color(color)
-        if not is_valid_color:
-            return CreateLabelForLabelsetMutation(
-                obj=None, obj_id=None, message=color_error, ok=False
-            )
-
         try:
+            # Permission check FIRST — runs before any field validation
+            # so a non-owner can't distinguish "reached validation" from
+            # "denied by permission" via different error messages
+            # (defense-in-depth; consistent with the IDOR-safe deny
+            # pattern documented in
+            # ``docs/permissioning/consolidated_permissioning_guide.md``).
             labelset = LabelSet.objects.get(pk=from_global_id(labelset_id)[1])
             if not user_has_permission_for_obj(
                 info.context.user,
@@ -267,6 +253,34 @@ class CreateLabelForLabelsetMutation(graphene.Mutation):
             ):
                 # Generic deny path — same message and code path as not-found
                 raise LabelSet.DoesNotExist()
+
+            # ``text`` is GraphQL-optional so without this guard the model
+            # default ("Text Label") would silently apply, producing
+            # surprising labels for clients that forgot to pass a value
+            # or passed whitespace.  Django's ``blank=False`` is
+            # form-only and NOT enforced by ``objects.create()``.  The
+            # ``not (text and text.strip())`` form covers ``None``,
+            # empty string, and whitespace-only in one expression.
+            if not (text and text.strip()):
+                return CreateLabelForLabelsetMutation(
+                    obj=None,
+                    obj_id=None,
+                    message="Label text is required and cannot be blank.",
+                    ok=False,
+                )
+
+            # Validate color format (defense in depth).  ``color=""`` is
+            # normalised to ``None`` so the model default ("#FFFFFF")
+            # applies, matching the silent-default behaviour clients
+            # already get from omitting the argument.
+            if color == "":
+                color = None
+            is_valid_color, color_error = validate_color(color)
+            if not is_valid_color:
+                return CreateLabelForLabelsetMutation(
+                    obj=None, obj_id=None, message=color_error, ok=False
+                )
+
             logger.debug("CreateLabelForLabelsetMutation - mutate / Labelset", labelset)
             # Drop None and empty-string values so model field defaults
             # apply (description, color, icon, text are NOT NULL with
