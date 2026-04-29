@@ -1294,16 +1294,22 @@ class TestArrayFormatHandling(unittest.TestCase):
         embedder = MicroserviceEmbedder()
 
         # Simulate 1D response: [0.1, 0.2, 0.3]
-        with patch("requests.post") as mock_post:
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {"embeddings": [0.1, 0.2, 0.3]}
-            mock_post.return_value = mock_response
+        # PR #1380 routes embedder requests through a shared session, so
+        # patch the session getter instead of the global requests.post.
+        mock_session = MagicMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"embeddings": [0.1, 0.2, 0.3]}
+        mock_session.post.return_value = mock_response
 
+        with patch(
+            "opencontractserver.pipeline.embedders.sent_transformer_microservice._get_session",
+            return_value=mock_session,
+        ):
             result = embedder.embed_text("test")
 
-            self.assertEqual(result, [0.1, 0.2, 0.3])
-            self.assertIsInstance(result, list)
+        self.assertEqual(result, [0.1, 0.2, 0.3])
+        self.assertIsInstance(result, list)
 
     def test_microservice_embedder_handles_2d_array(self):
         """Test that MicroserviceEmbedder correctly handles 2D array responses."""
@@ -1314,16 +1320,20 @@ class TestArrayFormatHandling(unittest.TestCase):
         embedder = MicroserviceEmbedder()
 
         # Simulate 2D response: [[0.1, 0.2, 0.3]]
-        with patch("requests.post") as mock_post:
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {"embeddings": [[0.1, 0.2, 0.3]]}
-            mock_post.return_value = mock_response
+        mock_session = MagicMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"embeddings": [[0.1, 0.2, 0.3]]}
+        mock_session.post.return_value = mock_response
 
+        with patch(
+            "opencontractserver.pipeline.embedders.sent_transformer_microservice._get_session",
+            return_value=mock_session,
+        ):
             result = embedder.embed_text("test")
 
-            self.assertEqual(result, [0.1, 0.2, 0.3])
-            self.assertIsInstance(result, list)
+        self.assertEqual(result, [0.1, 0.2, 0.3])
+        self.assertIsInstance(result, list)
 
     def test_multimodal_embedder_handles_1d_array(self):
         """Test that CLIPMicroserviceEmbedder correctly handles 1D array responses."""
@@ -1377,15 +1387,19 @@ class TestArrayFormatHandling(unittest.TestCase):
         # Force settings to None to exercise the fallback path
         embedder._settings = None
 
-        with patch("requests.post") as mock_post:
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {"embeddings": [0.1, 0.2, 0.3]}
-            mock_post.return_value = mock_response
+        mock_session = MagicMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"embeddings": [0.1, 0.2, 0.3]}
+        mock_session.post.return_value = mock_response
 
+        with patch(
+            "opencontractserver.pipeline.embedders.sent_transformer_microservice._get_session",
+            return_value=mock_session,
+        ):
             result = embedder.embed_text("test")
 
-            self.assertEqual(result, [0.1, 0.2, 0.3])
+        self.assertEqual(result, [0.1, 0.2, 0.3])
 
     def test_clip_embedder_settings_none_fallback(self):
         """CLIPMicroserviceEmbedder._get_service_config falls back to Settings()."""

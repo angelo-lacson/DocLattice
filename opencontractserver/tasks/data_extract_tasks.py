@@ -2,10 +2,13 @@
 import json
 import logging
 import os
+from collections.abc import Sequence
+from typing import Any
 
 from asgiref.sync import sync_to_async
 
 from opencontractserver.annotations.compact_json import iter_page_annotations
+from opencontractserver.constants.extraction import DEFAULT_EXTRACT_MODEL
 from opencontractserver.extracts.models import Datacell
 from opencontractserver.shared.decorators import celery_task_with_async_to_sync
 from opencontractserver.utils.compact_pawls import expand_pawls_pages
@@ -84,16 +87,41 @@ def get_column_extraction_params(datacell):
 
 @celery_task_with_async_to_sync()
 async def doc_extract_query_task(
-    cell_id: int, similarity_top_k: int = 10, max_token_length: int = 64000
+    cell_id: int,
+    similarity_top_k: int = 10,
+    max_token_length: int = 64000,
+    model_override: str | None = None,
 ) -> None:
     """
     OpenContracts' BLAZING FAST agent-based data extraction pipeline.
     Powered by our battle-tested structured extraction API.
     No more marvin. No more flakiness. Just pure extraction power! 🚀
+
+    Args:
+        cell_id: Primary key of the Datacell to populate.
+        similarity_top_k: Top-k neighbours to retrieve when calling the agent.
+        max_token_length: Soft cap on prompt tokens (reserved for future use).
+        model_override: Optional model identifier (e.g. ``"openai:gpt-4o"``,
+            ``"anthropic:claude-opus-4-6"``). When provided it overrides the
+            default extraction model. Used by the benchmark runner to sweep
+            models without touching production defaults.
+
+            Trust boundary: this string is passed straight to the agent
+            factory and ultimately to the model registry. Current call
+            sites (CLI ``run_benchmark`` command, internal benchmark
+            runner) are operator-controlled. The optional Django setting
+            ``BENCHMARK_ALLOWED_MODEL_OVERRIDES`` (iterable of allowed
+            identifiers) gates this parameter at runtime — by default it is
+            unset, meaning no enforcement (operator-only path). Operators
+            exposing this task to user-controlled input (webhook, public
+            API) must set the allowlist to lock down the surface so an
+            arbitrary string cannot redirect extraction traffic to an
+            unintended model endpoint.
     """
     import traceback
     from typing import get_origin
 
+    from django.conf import settings
     from django.utils import timezone
     from pydantic import BaseModel
     from pydantic_ai import capture_run_messages
@@ -132,7 +160,15 @@ async def doc_extract_query_task(
 
     @sync_to_async
     def sync_mark_failed(dc, exc, tb, llm_log=None):
-        """Mark datacell as failed with error and optional LLM log."""
+        """Mark datacell as failed with error and optional LLM log.
+
+        Convention: ``Datacell.stacktrace`` is the only persisted text field
+        for failure context, so we use it for both real exception
+        tracebacks AND the structured ``failure_mode=`` lines that
+        ``_classify_none_result`` produces for None outcomes. Operators
+        ``grep failure_mode=`` to separate legitimate "data not present"
+        outcomes from pipeline bugs.
+        """
         dc.stacktrace = f"Error: {exc}\n\nTraceback:\n{tb}"
         dc.failed = timezone.now()
         if llm_log:
@@ -149,15 +185,6 @@ async def doc_extract_query_task(
             return doc_path.corpus_id
         return None
 
-    @sync_to_async
-    def sync_add_sources(datacell, sources):
-        """Add source annotations to datacell."""
-        if sources:
-            # Extract annotation IDs from SourceNode objects
-            annotation_ids = [s.annotation_id for s in sources if s.annotation_id > 0]
-            if annotation_ids:
-                datacell.sources.add(*annotation_ids)
-
     # Initialize datacell to None to avoid UnboundLocalError
     datacell = None
 
@@ -172,6 +199,19 @@ async def doc_extract_query_task(
         logger.info(f"Retrieved datacell {cell_id}")
         await sync_mark_started(datacell)
         logger.info(f"Marked datacell {cell_id} as started")
+
+        # Optional allowlist guard for ``model_override``. When
+        # ``BENCHMARK_ALLOWED_MODEL_OVERRIDES`` is unset (default), no
+        # enforcement runs — preserves operator-only workflows while
+        # giving operators a no-code-change path to lock down this
+        # surface if the task is ever exposed to untrusted input.
+        if model_override is not None:
+            allowed = getattr(settings, "BENCHMARK_ALLOWED_MODEL_OVERRIDES", None)
+            if allowed is not None and model_override not in allowed:
+                raise ValueError(
+                    f"model_override {model_override!r} is not in "
+                    f"BENCHMARK_ALLOWED_MODEL_OVERRIDES"
+                )
 
         document = datacell.document
         column = datacell.column
@@ -265,8 +305,15 @@ async def doc_extract_query_task(
         try:
             # Wrap the agent call in the context manager to capture messages
             with capture_run_messages() as messages:
-                # Create a temporary agent and extract
-                result = await agents.get_structured_response_from_document(
+                # Create a temporary agent and extract.  The ``_and_sources``
+                # variant also returns the real Annotation PKs that the
+                # agent's retrieval tools (similarity_search, ...) returned
+                # during this run, so we can link them to ``datacell.sources``
+                # without relying on the post-hoc fuzzy-match grounder.
+                (
+                    result,
+                    retrieved_annotation_ids,
+                ) = await agents.get_structured_response_and_sources_from_document(
                     document=document.id,
                     corpus=corpus_id,
                     prompt=prompt,
@@ -274,7 +321,7 @@ async def doc_extract_query_task(
                     framework=AgentFramework.PYDANTIC_AI,
                     temperature=0.3,  # Low temperature for consistent extraction
                     similarity_top_k=similarity_top_k,
-                    model="openai:gpt-4o-mini",  # Fast and reliable
+                    model=model_override or DEFAULT_EXTRACT_MODEL,
                     user_id=datacell.creator.id,
                 )
 
@@ -317,6 +364,29 @@ async def doc_extract_query_task(
             logger.info(f"  Final saved data: {data}")
             logger.info(f"  LLM log saved: {len(llm_log) if llm_log else 0} characters")
 
+            # Link the annotations the agent actually retrieved to
+            # ``datacell.sources``.  This is the TRUE citation signal — what
+            # the retrieval tools surfaced to the model — and it sidesteps
+            # the fragile fuzzy-match grounder below for answers where the
+            # retrieval already pinpointed the right spans.  The grounder
+            # still runs as a complementary pass for extracted substrings
+            # that weren't part of a retrieved annotation.
+            if retrieved_annotation_ids:
+                try:
+                    await _link_retrieval_citations(datacell, retrieved_annotation_ids)
+                    logger.info(
+                        "Linked %d retrieval citations to datacell %s",
+                        len(retrieved_annotation_ids),
+                        cell_id,
+                    )
+                except Exception as link_err:
+                    logger.warning(
+                        "Failed to link retrieval citations for datacell %s: %s",
+                        cell_id,
+                        link_err,
+                        exc_info=True,
+                    )
+
             # Auto-ground: find extracted text values in the source document
             # and create linked source annotations with PDF/text coordinates.
             try:
@@ -345,15 +415,44 @@ async def doc_extract_query_task(
                 )
 
         else:
-            # Extraction returned None
-            logger.warning(f"✗ Extraction returned None for cell {cell_id}")
+            # ``result is None`` rolls up at least three distinct failure
+            # modes that we can disambiguate from the captured message log:
+            #
+            #  (a) Agent issued a structured-response part and committed to
+            #      ``None`` after good-faith search → legitimate "not in
+            #      document" outcome.
+            #  (b) Agent's last action was a tool call (no tool-return, no
+            #      final response). pydantic-ai's loop exited early without
+            #      raising — the agent never got a chance to synthesise an
+            #      answer. This is a pipeline / model-config issue, NOT
+            #      evidence about the document.
+            #  (c) Agent looped on tool calls without ever producing a
+            #      final response (multiple responses, none with output) —
+            #      hit some implicit iteration limit.
+            #
+            # Distinguishing them in the failure record makes operations
+            # actionable: (a) is signal, (b)/(c) are bugs to chase.
+            failure_mode, failure_detail = _classify_none_result(messages)
             logger.warning(
-                "  This likely means the requested information is not present in the document"
+                "✗ Extraction returned None for cell %s — failure_mode=%s, %s",
+                cell_id,
+                failure_mode,
+                failure_detail,
             )
             await sync_mark_failed(
                 datacell,
-                "Failed to extract requested data from document",
-                "The extraction returned None - the requested information may not be present in the document.",
+                f"Failed to extract requested data from document ({failure_mode})",
+                (
+                    f"The extraction returned None.\n"
+                    f"Failure mode: {failure_mode}\n"
+                    f"Detail: {failure_detail}\n"
+                    f"For mode 'agent_committed_none' this is most likely a "
+                    f"legitimate 'data not present' outcome. For "
+                    f"'no_final_response' or 'tool_loop_no_output' the "
+                    f"agent loop exited without producing a structured "
+                    f"answer; check llm_call_log and consider it a "
+                    f"pipeline issue rather than evidence about the document."
+                ),
                 llm_log,
             )
 
@@ -369,6 +468,88 @@ async def doc_extract_query_task(
         else:
             logger.error(f"Failed to get datacell for cell_id {cell_id}: {e}\n{tb}")
         raise
+
+
+@sync_to_async
+def _link_retrieval_citations(datacell, annotation_ids):
+    """Link raw Annotation PKs retrieved by the agent to ``datacell.sources``.
+
+    Filters defensively: only positive ints that correspond to real
+    Annotation rows are persisted.  Duplicates are deduped by the M2M
+    unique constraint, so ``add(*ids)`` with repeats is safe.
+    """
+    from opencontractserver.annotations.models import Annotation
+
+    valid_ids = [a for a in annotation_ids if isinstance(a, int) and a > 0]
+    if not valid_ids:
+        return
+    # Guard against IDs that don't exist (e.g. race with deletion).
+    existing = set(
+        Annotation.objects.filter(id__in=valid_ids).values_list("id", flat=True)
+    )
+    existing_ids = [aid for aid in valid_ids if aid in existing]
+    if existing_ids:
+        datacell.sources.add(*existing_ids)
+
+
+def _classify_none_result(messages: Sequence[Any] | None) -> tuple[str, str]:
+    """Categorise a ``result is None`` outcome from ``agent.run()``.
+
+    Reads the captured pydantic-ai message history (a list of
+    ``ModelMessage`` objects, post-``capture_run_messages``) and decides
+    whether the None result represents:
+
+      * ``agent_committed_none`` — the model genuinely produced a final
+        response part (text or output_tool) and that response evaluated
+        to None. Treat as legitimate "not in document".
+      * ``no_final_response`` — the run ended on a tool-call response
+        with no subsequent tool-return / final answer. Indicates the
+        pydantic-ai loop exited before synthesising an answer.
+      * ``tool_loop_no_output`` — multiple model responses, all tool
+        calls, no final synthesis. Hit some implicit iteration ceiling.
+      * ``empty_history`` — pathological case: no model responses at all
+        (rare, suggests an exception was swallowed even earlier).
+
+    The detail string includes message-history length and the kind of
+    each ``response``-message's parts so operators can grep for patterns.
+    """
+    if not messages:
+        return "empty_history", "no messages captured"
+
+    response_msgs = [m for m in messages if getattr(m, "kind", None) == "response"]
+    if not response_msgs:
+        return "empty_history", f"messages={len(messages)} but no response messages"
+
+    last_response = response_msgs[-1]
+    last_parts = getattr(last_response, "parts", []) or []
+    last_part_kinds = [getattr(p, "part_kind", "?") for p in last_parts]
+    n_responses = len(response_msgs)
+    n_tool_calls = sum(
+        1
+        for m in response_msgs
+        for p in (getattr(m, "parts", []) or [])
+        if getattr(p, "part_kind", None) == "tool-call"
+    )
+
+    detail = (
+        f"messages={len(messages)}, response_msgs={n_responses}, "
+        f"tool_calls_total={n_tool_calls}, last_response_parts={last_part_kinds}"
+    )
+
+    # If the last response has any non-tool-call output (text, output_tool,
+    # final-result), the model committed to an answer — even if that
+    # answer was None.
+    has_final = any(
+        kind not in (None, "tool-call", "thinking") for kind in last_part_kinds
+    )
+    if has_final:
+        return "agent_committed_none", detail
+
+    if n_responses == 1:
+        # One response, ending on a tool call, never returned to the loop.
+        return "no_final_response", detail
+
+    return "tool_loop_no_output", detail
 
 
 def text_search(document_id: int, query_str: str) -> str:

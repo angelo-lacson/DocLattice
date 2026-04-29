@@ -130,7 +130,15 @@ TELEMETRY_ENABLED = False
 #
 # Integration tests that need to verify actual service connectivity should
 # explicitly instantiate the real embedder class (e.g., MicroserviceEmbedder).
-DEFAULT_EMBEDDER = "opencontractserver.pipeline.embedders.test_embedder.TestEmbedder"
+#
+# Intentionally env-overridable: benchmark runs via the test.yml compose
+# stack (see opencontractserver/benchmarks/) need to swap in a real embedder
+# at runtime without editing settings. Standard CI never sets DEFAULT_EMBEDDER,
+# so the default TestEmbedder keeps regular test runs hermetic.
+DEFAULT_EMBEDDER = env(
+    "DEFAULT_EMBEDDER",
+    default="opencontractserver.pipeline.embedders.test_embedder.TestEmbedder",
+)
 
 # Auth0 settings for tests
 # ------------------------------------------------------------------------------
