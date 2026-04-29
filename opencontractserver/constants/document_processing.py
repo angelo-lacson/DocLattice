@@ -10,6 +10,11 @@ AppRegistryNotReady errors during settings loading.
 # ingestion and in the parser pipeline for type detection.
 MARKDOWN_MIME_TYPE = "text/markdown"
 
+# MIME type for Microsoft Word (DOCX) documents.
+DOCX_MIME_TYPE = (
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+)
+
 # File types that are stored as txt_extract_file (plain text, no parsing needed).
 # Shared between versioning.py and corpus models.py — single source of truth.
 TEXT_MIMETYPES = {"text/plain", MARKDOWN_MIME_TYPE, "application/txt"}

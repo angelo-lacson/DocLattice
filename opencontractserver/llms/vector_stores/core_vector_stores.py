@@ -22,6 +22,7 @@ from opencontractserver.pipeline.base.reranker import (
     safe_arerank,
     safe_rerank,
 )
+from opencontractserver.types.protocols import VectorStoreProtocol
 from opencontractserver.utils.embeddings import (
     agenerate_embeddings_from_text,
     generate_embeddings_from_text,
@@ -1276,3 +1277,12 @@ class CoreAnnotationVectorStore:
         return await self._aapply_rerank(
             results, query.query_text, query.similarity_top_k, reranker
         )
+
+
+# Re-exported so downstream callers can annotate against the protocol.
+__all__ = [
+    "CoreAnnotationVectorStore",
+    "VectorSearchQuery",
+    "VectorSearchResult",
+    "VectorStoreProtocol",
+]
