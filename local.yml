@@ -86,6 +86,9 @@ services:
     image: ghcr.io/open-source-legal/docxodus-service:1.1.0-docxodus5.4.2
     container_name: docxodus-parser
 
+  # API_KEY values below are LOCAL DEVELOPMENT ONLY placeholders.  Override
+  # via environment / .env before exposing these services on any network
+  # other than the local docker bridge.
   vector-embedder:
     image: ghcr.io/jsv4/vectorembeddermicroservice:latest
     container_name: vector-embedder
@@ -93,6 +96,7 @@ services:
       PORT: 8000
       TRANSFORMERS_OFFLINE: 1
       HF_DATASETS_OFFLINE: 1
+      API_KEY: abc123  # local-only placeholder; override before deploying
 
   multimodal-embedder:
     image: ghcr.io/jsv4/vectorembeddermicroservice-multimodal:latest
@@ -101,7 +105,7 @@ services:
       PORT: 8000
       TRANSFORMERS_OFFLINE: 1
       HF_DATASETS_OFFLINE: 1
-      API_KEY: abc123
+      API_KEY: abc123  # local-only placeholder; override before deploying
 
   celeryworker:
     image: opencontractserver_local_django

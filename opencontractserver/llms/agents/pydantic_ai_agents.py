@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional, TypeVar, Union
 from uuid import uuid4
 
 from asgiref.sync import sync_to_async
+from pydantic_ai import RunContext
 from pydantic_ai.agent import Agent as PydanticAIAgent
 from pydantic_ai.agent import (
     CallToolsNode,
@@ -28,6 +29,7 @@ from pydantic_ai.messages import (
     ToolReturnPart,
     UserPromptPart,
 )
+from pydantic_ai.toolsets import FunctionToolset
 from pydantic_graph import End
 
 from opencontractserver.constants.context_guardrails import COMPACTION_SUMMARY_PREFIX
@@ -106,21 +108,59 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+def _make_similarity_search_tool(vector_store: Any, default_k: int = 8) -> Callable:
+    """Build the citation-capturing similarity_search tool for a vector store.
+
+    ``default_k`` is the LLM-facing default when the model does not supply
+    its own ``k`` argument. Wired through from ``AgentConfig.similarity_top_k``
+    so callers controlling retrieval depth via the config field actually win
+    when the model omits ``k``.
+    """
+
+    async def similarity_search(
+        ctx: RunContext[PydanticAIDependencies],
+        query: str,
+        k: int = default_k,
+        modalities: Optional[list[str]] = None,
+    ) -> list[dict[str, Any]]:
+        """Semantic vector search over the corpus annotations.
+
+        Returns the top-k nearest annotations for ``query`` as a list of
+        dicts with keys ``annotation_id``, ``content``, ``document_id``,
+        ``corpus_id``, ``page``, ``similarity_score``, ``label``, and
+        ``json``. Each real annotation's ID is captured into
+        ``ctx.deps.retrieved_annotation_ids`` so the caller can later link
+        citations to the owning object (e.g. ``Datacell.sources``).
+        """
+        results = await vector_store.similarity_search(
+            query, k=k, modalities=modalities
+        )
+        for r in results:
+            if not isinstance(r, dict):
+                continue
+            aid = r.get("annotation_id")
+            # Real annotation PKs are positive ints; synthetic / ad-hoc
+            # match IDs are negative and must not be persisted.
+            if isinstance(aid, int) and aid > 0:
+                ctx.deps.retrieved_annotation_ids.append(aid)
+        return results
+
+    return similarity_search
+
+
 def _get_function_tools(agent: PydanticAIAgent) -> dict:
     """Return the function-tools dict from a pydantic-ai Agent.
 
-    Handles both pydantic-ai 0.2.x (``agent._function_tools``) and
-    1.x (``agent._function_toolset.tools``).
+    Uses only the public surface: ``Agent.toolsets`` (documented property
+    that includes the auto-built function toolset for tools registered
+    directly on the agent) and ``FunctionToolset.tools`` (public dict of
+    tool name -> ``Tool``).
     """
-    # pydantic-ai 0.2.x
-    ft = getattr(agent, "_function_tools", None)
-    if ft is not None:
-        return ft
-    # pydantic-ai 1.x
-    toolset = getattr(agent, "_function_toolset", None)
-    if toolset is not None:
-        return getattr(toolset, "tools", {})
-    return {}
+    merged: dict = {}
+    for toolset in agent.toolsets:
+        if isinstance(toolset, FunctionToolset):
+            merged.update(toolset.tools)
+    return merged
 
 
 @dataclasses.dataclass
@@ -513,9 +553,17 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             "tool. Do not narrate further; do not keep invoking tools "
             "indefinitely.\n"
             "Return ONLY the raw value matching the target type. "
-            "No explanations, no citations, no extra words.\n"
-            "If the information genuinely cannot be found after using the "
-            "tools, return null/None."
+            "No explanations, no citations, no extra words.\n\n"
+            "SEARCH PROTOCOL:\n"
+            "Before concluding the requested information is absent, you MUST "
+            "issue at least 2-3 distinct search queries that approach the "
+            "question from different angles (e.g. paraphrase the question, "
+            "search for key terms, search for likely answer phrasings). A "
+            "single failed search is NOT sufficient evidence that the "
+            "information is missing — most documents need multiple targeted "
+            "queries to surface a relevant span.\n\n"
+            "Only return null/None after multiple search attempts have all "
+            "failed to find relevant content."
         )
 
     async def _chat_raw(
@@ -1602,27 +1650,17 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                         # Don't retry here, fall through to registry lookup
 
                 if not tool_executed:
-                    # Resort to pydantic-ai registry – may return Tool object.
+                    # Resort to pydantic-ai registry – returns a public ``Tool``.
                     tool_obj = _get_function_tools(self.pydantic_ai_agent).get(
                         tool_name
                     )
                     if tool_obj is None:
                         raise ValueError(f"Tool '{tool_name}' not found for execution")
 
-                    # Try common attributes to reach the underlying callable.
-                    candidate = None
-                    for attr in (
-                        "function",
-                        "_wrapped_function",
-                        "callable_function",
-                    ):
-                        candidate = getattr(tool_obj, attr, None)
-                        if callable(candidate):
-                            break
-
-                    if candidate is None or not callable(candidate):
+                    candidate = tool_obj.function
+                    if not callable(candidate):
                         raise TypeError(
-                            "Tool object is not callable and no inner function found"
+                            f"Tool '{tool_name}' has a non-callable function"
                         )
 
                     logger.info(
@@ -1930,36 +1968,24 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
                     if hasattr(tool, "requires_approval"):
                         return tool.requires_approval
 
-        # Check tools registered with pydantic-ai agent
+        # Check tools registered with pydantic-ai agent. Tools registered as
+        # plain async callables (our common case) carry their CoreTool on the
+        # underlying function, not on the Tool object — pydantic-ai 1.x's
+        # Tool.requires_approval defaults to False unless the caller passes it
+        # in, so we must consult the function attribute first.
         function_tools = _get_function_tools(self.pydantic_ai_agent)
         if function_tools:
             tool_obj = function_tools.get(tool_name)
-            if tool_obj:
-                # Check various possible attributes where the CoreTool might be stored
-                for attr in ("core_tool", "_core_tool", "wrapped_tool"):
-                    core_tool = getattr(tool_obj, attr, None)
-                    if core_tool and hasattr(core_tool, "requires_approval"):
-                        return core_tool.requires_approval
-
-                # Check the wrapped function (must come before the native
-                # tool_obj.requires_approval check because pydantic-ai 1.x
-                # Tool has a native requires_approval field that defaults to
-                # False, shadowing the custom attribute on the function).
-                for attr in ("function", "_wrapped_function", "callable_function"):
-                    func = getattr(tool_obj, attr, None)
-                    if func:
-                        # Check if the function has a core_tool attribute
-                        if hasattr(func, "core_tool") and hasattr(
-                            func.core_tool, "requires_approval"
-                        ):
-                            return func.core_tool.requires_approval
-                        # Check if the function itself has requires_approval
-                        if hasattr(func, "requires_approval"):
-                            return func.requires_approval
-
-                # Fall back to the tool object's own requires_approval
-                if hasattr(tool_obj, "requires_approval"):
-                    return tool_obj.requires_approval
+            if tool_obj is not None:
+                func = tool_obj.function
+                core_tool = getattr(func, "core_tool", None)
+                if core_tool is not None and getattr(
+                    core_tool, "requires_approval", False
+                ):
+                    return True
+                if getattr(func, "requires_approval", False):
+                    return True
+                return tool_obj.requires_approval
 
         # Default to not requiring approval
         return False
@@ -2007,18 +2033,22 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
             f"You are a data extraction specialist for document {fenced_title} (ID: {document_id}).\n\n"
             "EXTRACTION PROTOCOL:\n"
-            "1. You have access to tools to analyze this document. "
-            "Use them to find the requested information.\n"
-            "2. Use vector search, summary loaders, and note access as "
-            "needed to locate data.\n"
-            "3. After gathering enough information from the tools, you "
-            "MUST commit to the final structured response by calling the "
-            "result tool. Do not narrate further; do not keep invoking "
-            "tools indefinitely.\n"
-            "4. Return ONLY the raw extracted value matching the target type.\n"
-            "5. No explanations, no citations, no commentary – just the data.\n\n"
-            "If the information genuinely cannot be found after using the "
-            "tools, return null/None."
+            "1. You have access to tools to analyze this document. Use them to find the requested information.\n"
+            "2. Use vector search, summary loaders, and note access as needed to locate data.\n"
+            "3. Before concluding that information is absent, you MUST issue at "
+            "least 2-3 distinct search queries that approach the question from "
+            "different angles (paraphrase the question, search for key terms, "
+            "search for likely answer phrasings). A single failed search is NOT "
+            "sufficient evidence that the information is missing — most legal "
+            "documents need multiple targeted queries to surface a relevant span.\n"
+            "4. After gathering enough information from the tools, you MUST "
+            "commit to the final structured response by calling the result "
+            "tool. Do not narrate further; do not keep invoking tools "
+            "indefinitely.\n"
+            "5. Return ONLY the raw extracted value matching the target type.\n"
+            "6. No explanations, no citations, no commentary – just the data.\n\n"
+            "Only return null/None after multiple search attempts have all "
+            "failed to find relevant content."
         )
 
     @classmethod
@@ -2096,10 +2126,12 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
                 **_vs_kwargs
             )
 
-        # Default vector search tool: bound method on the store. Pydantic-AI
-        # will inspect the signature (query: str, k: int) and build the
-        # schema automatically.
-        default_vs_tool: Callable = vector_store.similarity_search
+        # See ``_make_similarity_search_tool`` for the citation-accumulation
+        # contract; the tool name remains ``similarity_search`` so existing
+        # event handlers that match on the tool name continue to work.
+        default_vs_tool: Callable = _make_similarity_search_tool(
+            vector_store, default_k=config.similarity_top_k
+        )
 
         # -----------------------------
         # Auto-build pure passthrough tools from registry
@@ -2519,18 +2551,22 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             f"{UNTRUSTED_CONTENT_NOTICE}\n\n"
             f"You are a data extraction specialist for corpus {fenced_title} (ID: {corpus_id}).\n\n"
             "EXTRACTION PROTOCOL:\n"
-            "1. You have access to tools to analyze this corpus. "
-            "Use them to find the requested information.\n"
-            "2. Leverage vector search and document coordination tools "
-            "as needed.\n"
-            "3. After gathering enough information from the tools, you "
-            "MUST commit to the final structured response by calling the "
-            "result tool. Do not narrate further; do not keep invoking "
-            "tools indefinitely.\n"
-            "4. Return ONLY the raw extracted value matching the target type.\n"
-            "5. No explanations, no citations, no commentary – just the data.\n\n"
-            "If the information genuinely cannot be found after using the "
-            "tools, return null/None."
+            "1. You have access to tools to analyze this corpus. Use them to find the requested information.\n"
+            "2. Leverage vector search and document coordination tools as needed.\n"
+            "3. Before concluding that information is absent, you MUST issue at "
+            "least 2-3 distinct search queries that approach the question from "
+            "different angles (paraphrase the question, search for key terms, "
+            "search for likely answer phrasings). A single failed search is NOT "
+            "sufficient evidence that the information is missing — most legal "
+            "documents need multiple targeted queries to surface a relevant span.\n"
+            "4. After gathering enough information from the tools, you MUST "
+            "commit to the final structured response by calling the result "
+            "tool. Do not narrate further; do not keep invoking tools "
+            "indefinitely.\n"
+            "5. Return ONLY the raw extracted value matching the target type.\n"
+            "6. No explanations, no citations, no commentary – just the data.\n\n"
+            "Only return null/None after multiple search attempts have all "
+            "failed to find relevant content."
         )
 
     @classmethod
@@ -2603,10 +2639,11 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
                 **_vs_kwargs
             )
 
-        # Default vector search tool: bound method on the store. Pydantic-AI
-        # will inspect the signature (query: str, k: int) and build the
-        # schema automatically.
-        default_vs_tool: Callable = vector_store.similarity_search
+        # See ``_make_similarity_search_tool`` for the shared citation-capturing
+        # closure used by both the document and corpus agent factories.
+        default_vs_tool: Callable = _make_similarity_search_tool(
+            vector_store, default_k=config.similarity_top_k
+        )
 
         # -----------------------------
         # Auto-build passthrough tools from registry

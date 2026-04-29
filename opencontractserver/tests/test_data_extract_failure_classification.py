@@ -11,8 +11,8 @@ from typing import Any
 
 from django.test import SimpleTestCase
 
+from opencontractserver.constants.extraction import DEFAULT_EXTRACT_MODEL
 from opencontractserver.constants.llm import (
-    EXTRACT_DEFAULT_MODEL,
     EXTRACT_DEFAULT_TEMPERATURE,
     NONE_RESULT_AGENT_COMMITTED,
     NONE_RESULT_NO_FINAL,
@@ -258,7 +258,7 @@ class ResolveExtractTemperatureTests(SimpleTestCase):
     Anthropic models so the agent layer's ``temperature=0`` guard fires
     automatically (issue #1381).  For OpenAI models the default 0.3 is
     safe and gives the model a little wiggle room.  This test pins the
-    coupling so flipping ``EXTRACT_DEFAULT_MODEL`` to a Claude model
+    coupling so flipping ``DEFAULT_EXTRACT_MODEL`` to a Claude model
     cannot silently regress the fix.
     """
 
@@ -290,11 +290,11 @@ class ResolveExtractTemperatureTests(SimpleTestCase):
     def test_current_default_model_is_openai(self) -> None:
         """Sanity check: today's default model wants the OpenAI temperature.
 
-        If a future PR flips ``EXTRACT_DEFAULT_MODEL`` to a Claude model
+        If a future PR flips ``DEFAULT_EXTRACT_MODEL`` to a Claude model
         without thinking through the Anthropic guard, this test fails and
         forces a deliberate decision rather than a silent regression.
         """
         self.assertEqual(
-            _resolve_extract_temperature(EXTRACT_DEFAULT_MODEL),
+            _resolve_extract_temperature(DEFAULT_EXTRACT_MODEL),
             EXTRACT_DEFAULT_TEMPERATURE,
         )

@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
-from guardian.shortcuts import assign_perm
+from guardian.shortcuts import assign_perm, remove_perm
 
 from config.graphql.permissioning.permission_annotator.middleware import combine
 from opencontractserver.types.enums import PermissionTypes
@@ -25,6 +25,8 @@ def set_permissions_for_obj_to_user(
     user_val: int | str | UserModel,
     instance: django.db.models.Model,
     permissions: list[PermissionTypes],
+    *,
+    is_new: bool = False,
 ) -> None:
     """
     Given an instance of a django Model, a user id or instance, and a list of desired permissions,
@@ -34,6 +36,15 @@ def set_permissions_for_obj_to_user(
     This doesn't affect permissions provided from other avenues besides object-level permissions. For example, if
     they're a superuser, they'll still have permissions. Also, if an object is public, they'll still have read
     permissions (assuming they're part of the read public objects group).
+
+    Args:
+        is_new: When True, skip the upfront ``remove_perm`` sweep — safe and
+            correct on freshly-created objects (no prior permissions to clear).
+            Saves 7 DB ops per call. The default of False preserves the full
+            replace semantics for sharing flows / permission downgrades that
+            depend on prior perms being cleared (e.g. CRUD → READ-only).
+            Ingest paths (``import_annotations``, ``corpus.add_document``,
+            label-creation, etc.) should pass ``is_new=True``.
     """
 
     # logger.info(
@@ -53,26 +64,30 @@ def set_permissions_for_obj_to_user(
     # logger.info(f"grant_permissions_for_obj_to_user - App name: {app_name}")
 
     # First, remove ALL existing permissions for this user on this object ############################################
-    from guardian.shortcuts import remove_perm
+    # ``is_new`` callers (ingest paths granting perms on freshly-created
+    # objects) skip the upfront sweep — there's nothing to clear and
+    # each ``remove_perm`` is a DB op that adds up across N annotations.
+    # Sharing flows / downgrade flows leave ``is_new`` at the default
+    # so that a CRUD → READ-only downgrade still clears UPDATE/DELETE.
+    if not is_new:
+        # List all possible permissions for this model type
+        all_perms = [
+            f"{app_name}.create_{model_name}",
+            f"{app_name}.read_{model_name}",
+            f"{app_name}.update_{model_name}",
+            f"{app_name}.remove_{model_name}",
+            f"{app_name}.comment_{model_name}",
+            f"{app_name}.permission_{model_name}",
+            f"{app_name}.publish_{model_name}",
+        ]
 
-    # List all possible permissions for this model type
-    all_perms = [
-        f"{app_name}.create_{model_name}",
-        f"{app_name}.read_{model_name}",
-        f"{app_name}.update_{model_name}",
-        f"{app_name}.remove_{model_name}",
-        f"{app_name}.comment_{model_name}",
-        f"{app_name}.permission_{model_name}",
-        f"{app_name}.publish_{model_name}",
-    ]
-
-    # Remove all existing permissions
-    for perm in all_perms:
-        try:
-            remove_perm(perm, user, instance)
-        except Exception:
-            # Permission might not exist for this model type
-            pass
+        # Remove all existing permissions
+        for perm in all_perms:
+            try:
+                remove_perm(perm, user, instance)
+            except Exception:
+                # Permission might not exist for this model type
+                pass
 
     # Now, add specified permissions ###################################################################################
     requested_permission_set = set(permissions)

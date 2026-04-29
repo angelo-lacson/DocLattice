@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, Optional, Union
 
 import requests
@@ -480,104 +481,140 @@ def _batch_embed_text_annotations(
     if not items:
         return
 
-    # Process in sub-batches
-    for chunk_start in range(0, len(items), api_batch_size):
-        chunk = items[chunk_start : chunk_start + api_batch_size]
-        texts = [text for _, text in chunk]
+    # Carve into sub-batches up front so we can fan them out concurrently.
+    chunks: list[list[tuple[Annotation, str]]] = [
+        items[i : i + api_batch_size] for i in range(0, len(items), api_batch_size)
+    ]
 
-        logger.info(
-            f"Calling embed_texts_batch for {len(texts)} texts "
-            f"(sub-batch {chunk_start // api_batch_size + 1}, "
-            f"embedder={embedder_path})"
-        )
+    # ------------------------------------------------------------------ #
+    # Concurrency model
+    # ------------------------------------------------------------------ #
+    #
+    # ``embedder.embed_max_concurrent_sub_batches`` controls how many
+    # sub-batches the task is allowed to fly in parallel against the
+    # provider. For local microservice embedders the default is 1
+    # (single in-flight request); hosted embedders that comfortably
+    # tolerate parallel requests (OpenAI) override it to 4-8.
+    #
+    # We deliberately keep the *DB writes* in the main thread:
+    # ``add_embedding`` chains into Django ORM calls, and Django
+    # connection management is per-thread — pinning writes to the
+    # caller dodges that bookkeeping. The futures only own the HTTP
+    # call, then return ``(chunk, vectors_or_exc)`` for the main
+    # thread to drain.
+    #
+    # On a transient exception in any future, we re-raise immediately
+    # so celery's autoretry can fire; in-flight peers are abandoned
+    # (the main thread exits the executor's ``with`` block which
+    # cancels still-queued futures and waits for in-flight ones to
+    # exit naturally).
+    max_workers = max(1, getattr(embedder, "embed_max_concurrent_sub_batches", 1))
+    log_prefix = (
+        f"embed_texts_batch (sub-batches={len(chunks)}, parallel={max_workers}, "
+        f"embedder={embedder_path})"
+    )
+    logger.info(log_prefix)
 
-        try:
-            vectors = embedder.embed_texts_batch(texts)
-        except ValueError:
-            # ValueError indicates a caller contract violation (e.g., batch size
-            # exceeds embedder maximum). Re-raise rather than silently recording
-            # as an annotation failure so the programming error surfaces loudly.
-            raise
-        except (
-            requests.exceptions.Timeout,
-            requests.exceptions.ConnectionError,
-            EmbeddingServerError,
-        ):
-            # Transient HTTP errors: re-raise so the task-level Celery
-            # autoretry_for=(Exception,) decorator can fire a retry.
-            raise
-        except EmbeddingClientError as e:
-            # Client errors (4xx): non-retriable, record as permanent
-            # per-annotation failures. We explicitly swallow the exception
-            # here (instead of letting it propagate) so the task's
-            # autoretry_for=(Exception,) decorator does NOT burn retries
-            # on invalid input that will never succeed.
-            logger.error(f"embed_texts_batch client error (4xx): {e}")
-            for annot, _ in chunk:
-                result["failed"] += 1
-                result["errors"].append(
-                    f"Annotation {annot.id}: client error (4xx): {e}"
-                )
-            continue
-        except Exception as e:
-            # Non-retriable errors (malformed response, unexpected data, etc.)
-            # are recorded as permanent per-annotation failures.
-            logger.error(f"embed_texts_batch failed: {e}")
-            for annot, _ in chunk:
-                result["failed"] += 1
-                result["errors"].append(
-                    f"Annotation {annot.id}: batch embed call failed: {e}"
-                )
-            continue
+    def _embed_one(chunk):
+        texts_only = [text for _, text in chunk]
+        return chunk, embedder.embed_texts_batch(texts_only)
 
-        if vectors is None:
-            logger.error("embed_texts_batch returned None for entire sub-batch")
-            for annot, _ in chunk:
-                result["failed"] += 1
-                result["errors"].append(
-                    f"Annotation {annot.id}: batch embed returned None"
-                )
-            continue
-
-        if len(vectors) != len(chunk):
-            logger.error(
-                f"Vector count mismatch: sent {len(chunk)} texts, "
-                f"received {len(vectors)} vectors. Failing entire chunk."
-            )
-            for annot, _ in chunk:
-                result["failed"] += 1
-                result["errors"].append(
-                    f"Annotation {annot.id}: vector count mismatch "
-                    f"({len(vectors)} vectors for {len(chunk)} texts)"
-                )
-            continue
-
-        # Store each vector.
-        # add_embedding() is idempotent (upserts via store_embedding), so
-        # Celery retries of the whole task won't create duplicate records for
-        # annotations that already succeeded in a previous attempt.
-        for (annot, _), vector in zip(chunk, vectors):
-            if vector is None:
-                result["failed"] += 1
-                result["errors"].append(
-                    f"Annotation {annot.id}: individual vector was None in batch"
-                )
-                continue
+    # Map future -> chunk index for logging/sub-batch numbering.
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_idx = {
+            executor.submit(_embed_one, chunk): idx for idx, chunk in enumerate(chunks)
+        }
+        for future in as_completed(future_to_idx):
+            idx = future_to_idx[future]
             try:
-                embedding = annot.add_embedding(embedder_path, vector)
-                if embedding:
-                    result["succeeded"] += 1
-                else:
+                chunk, vectors = future.result()
+            except ValueError:
+                # ValueError indicates a caller contract violation (e.g., batch size
+                # exceeds embedder maximum). Re-raise rather than silently recording
+                # as an annotation failure so the programming error surfaces loudly.
+                raise
+            except (
+                requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError,
+                EmbeddingServerError,
+            ):
+                # Transient HTTP errors: re-raise so the task-level Celery
+                # autoretry_for=(Exception,) decorator can fire a retry.
+                raise
+            except EmbeddingClientError as e:
+                # Client errors (4xx): non-retriable, record as permanent
+                # per-annotation failures. We explicitly swallow the exception
+                # here (instead of letting it propagate) so the task's
+                # autoretry_for=(Exception,) decorator does NOT burn retries
+                # on invalid input that will never succeed.
+                logger.error(f"sub-batch {idx + 1} client error (4xx): {e}")
+                for annot, _ in chunks[idx]:
                     result["failed"] += 1
                     result["errors"].append(
-                        f"Annotation {annot.id}: add_embedding returned None"
+                        f"Annotation {annot.id}: client error (4xx): {e}"
                     )
+                continue
             except Exception as e:
+                # Non-retriable errors (malformed response, unexpected data, etc.)
+                # are recorded as permanent per-annotation failures.
+                logger.error(f"sub-batch {idx + 1} failed: {e}")
+                for annot, _ in chunks[idx]:
+                    result["failed"] += 1
+                    result["errors"].append(
+                        f"Annotation {annot.id}: batch embed call failed: {e}"
+                    )
+                continue
+
+            if vectors is None:
                 logger.error(
-                    f"Failed to store embedding for annotation {annot.id}: {e}"
+                    f"sub-batch {idx + 1}: embed_texts_batch returned None for entire sub-batch"
                 )
-                result["failed"] += 1
-                result["errors"].append(f"Annotation {annot.id}: store failed: {e}")
+                for annot, _ in chunk:
+                    result["failed"] += 1
+                    result["errors"].append(
+                        f"Annotation {annot.id}: batch embed returned None"
+                    )
+                continue
+
+            if len(vectors) != len(chunk):
+                logger.error(
+                    f"sub-batch {idx + 1}: vector count mismatch — sent {len(chunk)} texts, "
+                    f"received {len(vectors)} vectors. Failing entire chunk."
+                )
+                for annot, _ in chunk:
+                    result["failed"] += 1
+                    result["errors"].append(
+                        f"Annotation {annot.id}: vector count mismatch "
+                        f"({len(vectors)} vectors for {len(chunk)} texts)"
+                    )
+                continue
+
+            # Store each vector in the main thread.
+            # add_embedding() is idempotent (upserts via store_embedding), so
+            # Celery retries of the whole task won't create duplicate records for
+            # annotations that already succeeded in a previous attempt.
+            for (annot, _), vector in zip(chunk, vectors):
+                if vector is None:
+                    result["failed"] += 1
+                    result["errors"].append(
+                        f"Annotation {annot.id}: individual vector was None in batch"
+                    )
+                    continue
+                try:
+                    embedding = annot.add_embedding(embedder_path, vector)
+                    if embedding:
+                        result["succeeded"] += 1
+                    else:
+                        result["failed"] += 1
+                        result["errors"].append(
+                            f"Annotation {annot.id}: add_embedding returned None"
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to store embedding for annotation {annot.id}: {e}"
+                    )
+                    result["failed"] += 1
+                    result["errors"].append(f"Annotation {annot.id}: store failed: {e}")
 
 
 @shared_task(
@@ -699,11 +736,15 @@ def calculate_embeddings_for_annotation_batch(
             else:
                 text_only_annots.append(annot)
 
-        # Batch-embed text-only annotations
+        # Batch-embed text-only annotations.
+        # Per-embedder ``api_batch_size`` falls back to the global default
+        # for embedders that haven't overridden it (and for legacy paths
+        # that pass an embedder instance without the attribute).
+        api_batch_size = getattr(embedder, "api_batch_size", EMBEDDING_API_BATCH_SIZE)
         if text_only_annots:
             logger.info(
                 f"Batch-embedding {len(text_only_annots)} text-only annotations "
-                f"with {embedder_path} (api_batch_size={EMBEDDING_API_BATCH_SIZE})"
+                f"with {embedder_path} (api_batch_size={api_batch_size})"
             )
             # Snapshot all three outcome counters before the batch call so we
             # can compute how many text-only annotations were already accounted
@@ -721,7 +762,7 @@ def calculate_embeddings_for_annotation_batch(
                     text_only_annots,
                     embedder,
                     embedder_path,
-                    EMBEDDING_API_BATCH_SIZE,
+                    api_batch_size,
                     result,
                 )
             except ValueError as e:
