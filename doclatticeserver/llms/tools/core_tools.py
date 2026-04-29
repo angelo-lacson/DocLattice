@@ -409,15 +409,18 @@ async def aget_notes_for_document_corpus(
 # --------------------------------------------------------------------------- #
 
 try:
+    # ``channels`` ships no type stubs and ``thread_sensitive`` is a kwarg
+    # mypy cannot introspect on the resulting partial.
     from channels.db import (
-        database_sync_to_async as _database_sync_to_async,  # type: ignore
+        database_sync_to_async as _database_sync_to_async,  # type: ignore[import-not-found]
     )
 
-    _db_sync_to_async = partial(_database_sync_to_async, thread_sensitive=False)  # type: ignore
+    _db_sync_to_async = partial(_database_sync_to_async, thread_sensitive=False)  # type: ignore[call-arg]
 except ModuleNotFoundError:  # Channels not installed – fall back gracefully
-    from asgiref.sync import sync_to_async as _sync_to_async  # type: ignore
+    # asgiref is typed but the kwarg-aware partial below confuses mypy.
+    from asgiref.sync import sync_to_async as _sync_to_async
 
-    _db_sync_to_async = partial(_sync_to_async, thread_sensitive=False)  # type: ignore
+    _db_sync_to_async = partial(_sync_to_async, thread_sensitive=False)  # type: ignore[call-arg]
 
 
 # --------------------------------------------------------------------------- #
