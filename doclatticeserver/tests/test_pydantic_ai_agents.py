@@ -859,7 +859,7 @@ class TestPydanticAIAgentsCoverage(TransactionTestCase):
         config = AgentConfig(user_id=self.user.id, tools=[mock_tool])
 
         mock_pydantic_agent = MagicMock()
-        mock_pydantic_agent._function_tools = {}
+        mock_pydantic_agent.toolsets = []
         mock_agent_cls.return_value = mock_pydantic_agent
 
         agent = PydanticAICoreAgent(
@@ -885,7 +885,7 @@ class TestPydanticAIAgentsCoverage(TransactionTestCase):
         config = AgentConfig(user_id=self.user.id)
 
         mock_pydantic_agent = MagicMock()
-        mock_pydantic_agent._function_tools = {}
+        mock_pydantic_agent.toolsets = []
         mock_agent_cls.return_value = mock_pydantic_agent
 
         agent = PydanticAICoreAgent(
@@ -1048,7 +1048,7 @@ class TestPydanticAIAgentsCoverage(TransactionTestCase):
         )
 
         mock_pydantic_agent = MagicMock()
-        mock_pydantic_agent._function_tools = {}
+        mock_pydantic_agent.toolsets = []
 
         agent = PydanticAICoreAgent(
             config=config,
@@ -1203,7 +1203,7 @@ class TestPydanticAIAgentsCoverage(TransactionTestCase):
         )
 
         mock_pydantic_agent = MagicMock()
-        mock_pydantic_agent._function_tools = {}
+        mock_pydantic_agent.toolsets = []
 
         agent = PydanticAICoreAgent(
             config=config,

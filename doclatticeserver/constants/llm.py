@@ -18,5 +18,4 @@ NONE_RESULT_NO_FINAL = "no_final_response"
 NONE_RESULT_TOOL_LOOP = "tool_loop_no_output"
 NONE_RESULT_UNKNOWN = "unknown"
 
-EXTRACT_DEFAULT_MODEL = "openai:gpt-4o-mini"
 EXTRACT_DEFAULT_TEMPERATURE = 0.3
