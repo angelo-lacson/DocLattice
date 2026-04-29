@@ -13,6 +13,14 @@ from opencontractserver.shared.QuerySets import (
     UserFeedbackQuerySet,
 )
 
+# Re-exported so callers receiving "a permissioned manager" can annotate
+# against ``PermissionedQueryManagerProtocol`` instead of any concrete
+# manager class.  Every visibility manager defined below satisfies the
+# ``visible_to_user(user) -> QuerySet`` contract.
+from opencontractserver.types.protocols import (  # noqa: F401
+    PermissionedQueryManagerProtocol,
+)
+
 if TYPE_CHECKING:
     from django.contrib.auth import get_user_model
 
@@ -222,7 +230,7 @@ class PermissionManager(BaseVisibilityManager):
     ) -> "PermissionQuerySet":
         return self.get_queryset().for_user(user, perm, extra_conditions)
 
-    def visible_to_user(self, user) -> PermissionQuerySet:
+    def visible_to_user(self, user: Any) -> PermissionQuerySet:
         """
         Returns queryset filtered by user permission via PermissionQuerySet.
         This overrides BaseVisibilityManager's implementation to use

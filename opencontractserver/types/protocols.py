@@ -144,11 +144,13 @@ class PermissionedQueryManagerProtocol(Protocol):
     "permissioned manager" (e.g. for analytics or graphene resolvers)
     should depend on this protocol, not on a concrete manager class.
 
-    The trailing ``Optional`` argument is widened so that managers that
-    accept ``None`` (treated as anonymous) still satisfy the protocol.
+    The argument default is ``None`` so managers that accept anonymous
+    callers still satisfy the protocol; ``Any`` is used because the
+    concrete user type varies across managers (``AbstractUser``,
+    ``AnonymousUser``, or a ``Q`` for compound filters).
     """
 
-    def visible_to_user(self, user: Any | None = None) -> QuerySet[Any]:
+    def visible_to_user(self, user: Any = None) -> QuerySet[Any]:
         """Return a queryset filtered to objects visible to ``user``."""
         ...
 
