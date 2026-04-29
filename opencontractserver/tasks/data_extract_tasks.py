@@ -17,7 +17,6 @@ from opencontractserver.constants.llm import (
     NONE_RESULT_TOOL_LOOP,
     NONE_RESULT_UNKNOWN,
     TOOL_LOOP_THRESHOLD,
-    is_anthropic_model,
 )
 from opencontractserver.extracts.models import Datacell
 from opencontractserver.shared.decorators import celery_task_with_async_to_sync
@@ -25,6 +24,7 @@ from opencontractserver.utils.compact_pawls import expand_pawls_pages
 from opencontractserver.utils.extraction_grounding import (
     ground_extraction_to_annotations,
 )
+from opencontractserver.utils.llm import is_anthropic_model
 
 logger = logging.getLogger(__name__)
 
@@ -116,13 +116,8 @@ def _classify_none_result(messages: Optional[list[Any]]) -> str:
 
 
 def _resolve_extract_temperature(model_name: Optional[str]) -> Optional[float]:
-    """Pick the temperature to pass to ``get_structured_response_from_document``.
-
-    Returns ``None`` when ``model_name`` is an Anthropic / Claude model so the
-    Anthropic guard in ``_structured_response_raw`` can apply ``temperature=0``
-    automatically (issue #1381). Returns :data:`EXTRACT_DEFAULT_TEMPERATURE`
-    otherwise. Pulled out as a helper so the model-family→temperature
-    coupling is unit-testable without standing up the full extract task.
+    """Return ``None`` for Anthropic models (so the structured-response guard
+    can force ``temperature=0``), otherwise :data:`EXTRACT_DEFAULT_TEMPERATURE`.
     """
     if is_anthropic_model(model_name):
         return None
@@ -136,7 +131,7 @@ def _failure_message_for_classification(classification: str) -> str:
             "The extraction agent committed to a None result — the requested "
             "information was not found in the document."
         )
-    if classification == NONE_RESULT_NO_FINAL:
+    elif classification == NONE_RESULT_NO_FINAL:
         return (
             "The extraction agent never produced a final structured response. "
             "This is an integration failure (the model exhausted its tool-use "
@@ -144,7 +139,7 @@ def _failure_message_for_classification(classification: str) -> str:
             "about the document. Check ``llm_call_log`` for the raw message "
             "history."
         )
-    if classification == NONE_RESULT_TOOL_LOOP:
+    elif classification == NONE_RESULT_TOOL_LOOP:
         return (
             "The extraction agent looped on the same tool call without "
             "producing a final structured response. This is an integration "
@@ -368,7 +363,11 @@ async def doc_extract_query_task(
         # Anthropic ``temperature=0`` override in
         # ``_structured_response_raw`` activates automatically when
         # ``EXTRACT_DEFAULT_MODEL`` is a Claude model (issue #1381).
-        extract_temperature = _resolve_extract_temperature(EXTRACT_DEFAULT_MODEL)
+        # NOTE: if this task is refactored to accept a caller-supplied
+        # model, pass that same value to ``_resolve_extract_temperature``
+        # so the temperature stays in lock-step with the model family.
+        extract_model = EXTRACT_DEFAULT_MODEL
+        extract_temperature = _resolve_extract_temperature(extract_model)
 
         try:
             # Wrap the agent call in the context manager to capture messages
@@ -381,7 +380,7 @@ async def doc_extract_query_task(
                     framework=AgentFramework.PYDANTIC_AI,
                     temperature=extract_temperature,
                     similarity_top_k=similarity_top_k,
-                    model=EXTRACT_DEFAULT_MODEL,
+                    model=extract_model,
                     user_id=datacell.creator.id,
                 )
 

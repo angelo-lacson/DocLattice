@@ -1547,11 +1547,10 @@ class TestPydanticAIAgentsCoverage(TransactionTestCase):
 
         structured_call = self._structured_agent_call(mock_pyd_ai_cls)
         self.assertIsNotNone(structured_call)
-        # No temperature override fired ⇒ model_settings has no temperature key
-        # (or an empty model_settings dict because _prepare returned None).
-        ms = structured_call.kwargs.get("model_settings") or {}
-        self.assertNotIn(
-            "temperature",
-            ms,
-            "OpenAI structured runs must not get the Anthropic temperature override",
+        # When neither the caller nor the config pin temperature/max_tokens,
+        # model_settings should be passed through as ``None`` (matching the
+        # pre-issue-#1381 contract with PydanticAIAgent), not as ``{}``.
+        self.assertIsNone(
+            structured_call.kwargs.get("model_settings"),
+            "OpenAI structured runs without pins must pass model_settings=None",
         )

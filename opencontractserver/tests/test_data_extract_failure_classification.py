@@ -18,13 +18,13 @@ from opencontractserver.constants.llm import (
     NONE_RESULT_NO_FINAL,
     NONE_RESULT_TOOL_LOOP,
     NONE_RESULT_UNKNOWN,
-    is_anthropic_model,
 )
 from opencontractserver.tasks.data_extract_tasks import (
     _classify_none_result,
     _failure_message_for_classification,
     _resolve_extract_temperature,
 )
+from opencontractserver.utils.llm import is_anthropic_model
 
 
 def _make_response(*parts: Any) -> Any:
