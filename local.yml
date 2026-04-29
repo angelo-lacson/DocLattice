@@ -127,6 +127,14 @@ services:
     env_file:
       - ./.envs/.local/.django
       - ./.envs/.local/.postgres
+    environment:
+      # Optional VCR.py wrapper for the LLM agent in doc_extract_query_task.
+      # Forwarded from the host so CI / local repro runs can flip on
+      # cassette record / replay without editing the env files. See
+      # opencontractserver/utils/vcr_replay.py.
+      OC_LLM_VCR_MODE: ${OC_LLM_VCR_MODE-}
+      OC_LLM_VCR_CASSETTE: ${OC_LLM_VCR_CASSETTE-}
+      OC_LLM_VCR_DEBUG: ${OC_LLM_VCR_DEBUG-}
     command: /app/compose/local/django/celery/worker/start
 
 

@@ -1,0 +1,141 @@
+name: Frontend E2E Extract Pipeline (VCR)
+
+# Drives the full extract pipeline end-to-end via Playwright:
+#   login → upload two PDFs → ingest+embed → create extract → run → CSV.
+# The LLM call inside `doc_extract_query_task` is wrapped in a VCR.py
+# cassette so no OpenAI traffic is generated. See:
+#   docs/development/e2e_vcr.md
+#
+# *** CURRENTLY MANUAL-TRIGGER ONLY ***
+#
+# This workflow is parked behind `workflow_dispatch` because LlamaParse —
+# the default PDF parser used during ingest — is NOT yet covered by VCR.
+# Until `_LLM_HOSTS` in `opencontractserver/utils/vcr_replay.py` is
+# extended to include `api.cloud.llamaindex.ai` AND the cassette is
+# re-recorded to capture the parse-and-poll calls, this workflow would
+# call LlamaParse for real on every CI run. Triggering it manually is
+# OK for spot-checks (LlamaParse calls cost cents per doc); enabling it
+# on every PR is not.
+#
+# To enable on PRs: replace the `on:` block with the standard
+# pull_request paths filter (see frontend-e2e.yml for the template).
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+defaults:
+  run:
+    working-directory: ./
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-e2e-extract-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-extract:
+    name: Extract pipeline (PDF upload → run → CSV)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Install Yarn
+        run: npm install -g yarn
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: yarn install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: ./frontend
+        run: yarn playwright install --with-deps chromium
+
+      # ────────────────────────────────────────────────────────────────
+      # Bring up the full local stack (postgres, redis, embedder,
+      # docling-parser, django, celeryworker). We use `local.yml` rather
+      # than `test.yml` because the extract pipeline needs a celery
+      # worker, and `local.yml` is the only compose file that ships one.
+      #
+      # The cassette replays every OpenAI call so OPENAI_API_KEY can be
+      # anything. LLAMAPARSE_API_KEY is still required (real calls,
+      # see file-level note above).
+      # ────────────────────────────────────────────────────────────────
+      - name: Build django image
+        run: docker compose -f local.yml build django
+
+      - name: Start backend stack with VCR replay
+        env:
+          OC_LLM_VCR_MODE: replay
+          OC_LLM_VCR_CASSETTE: /app/opencontractserver/tests/fixtures/cassettes/e2e_extract_pdf_workflow/extract.yaml
+          # CI provisions a fake OpenAI key — the cassette intercepts
+          # every request so this is never sent. We pin it to a clearly
+          # bogus value to make accidental real calls fail loudly.
+          OPENAI_API_KEY: sk-FAKE-VCR-CI-NOT-REAL
+          # LlamaParse is NOT yet under VCR; the workflow secret is
+          # required for real PDF parsing. See file-level note.
+          LLAMAPARSE_API_KEY: ${{ secrets.LLAMAPARSE_API_KEY }}
+        run: |
+          docker compose -f local.yml up -d
+          echo "Waiting for django to become healthy…"
+          for i in {1..60}; do
+            state=$(docker inspect -f '{{.State.Health.Status}}' \
+              opencontracts-django-1 2>/dev/null || echo "starting")
+            if [ "$state" = "healthy" ]; then echo "django healthy"; break; fi
+            if [ "$i" = "60" ]; then
+              echo "django did not become healthy in time"
+              docker compose -f local.yml logs django | tail -100
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Run Playwright extract spec
+        working-directory: ./frontend
+        env:
+          CI: "true"
+          E2E_RUN_LLM_TESTS: "true"
+          E2E_TEST_USERNAME: admin
+          # The local stack creates the superuser from
+          # DJANGO_SUPERUSER_PASSWORD in `.envs/.local/.django`. CI must
+          # supply the same value to the playwright fixture.
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_LOCAL_SUPERUSER_PASSWORD }}
+        run: yarn playwright test --grep "Extract PDF workflow" --reporter=list
+
+      - name: Capture backend logs on failure
+        if: failure()
+        run: |
+          mkdir -p artifacts
+          docker compose -f local.yml ps > artifacts/docker-ps.txt || true
+          docker compose -f local.yml logs --no-color > artifacts/docker-compose-logs.txt || true
+
+      - name: Upload backend logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-extract-backend-logs
+          path: artifacts/
+
+      - name: Upload Playwright HTML report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-extract-playwright-report
+          path: frontend/playwright-report-e2e/
+          if-no-files-found: ignore
+
+      - name: Tear down backend stack
+        if: always()
+        run: docker compose -f local.yml down -v

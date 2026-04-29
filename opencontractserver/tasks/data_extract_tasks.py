@@ -408,8 +408,16 @@ async def doc_extract_query_task(
         extract_temperature = _resolve_extract_temperature(extract_model)
 
         try:
-            # Wrap the agent call in the context manager to capture messages
-            with capture_run_messages() as messages:
+            # Wrap the agent call in the context manager to capture messages.
+            # When OC_LLM_VCR_MODE is set in the environment, the call is
+            # additionally wrapped in a vcr.py cassette so CI can replay a
+            # pre-recorded LLM conversation rather than hitting OpenAI /
+            # Anthropic on every run. See opencontractserver.utils.vcr_replay
+            # and docs/development/e2e_vcr.md for details. In production
+            # (env vars unset) the helper is a no-op.
+            from opencontractserver.utils.vcr_replay import maybe_vcr_cassette
+
+            with capture_run_messages() as messages, maybe_vcr_cassette():
                 # Create a temporary agent and extract.  The ``_and_sources``
                 # variant also returns the real Annotation PKs that the
                 # agent's retrieval tools (similarity_search, ...) returned
