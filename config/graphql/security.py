@@ -13,6 +13,7 @@ import logging
 from typing import Any, Callable
 
 from django.conf import settings
+from django.http import HttpRequest, HttpResponse
 from django.middleware.csrf import CsrfViewMiddleware
 from graphql import GraphQLError, ValidationRule
 from graphql.language import ast
@@ -26,7 +27,17 @@ logger = logging.getLogger(__name__)
 # carry a Bearer token (JWT / Auth0) or API-key header are exempt because
 # the credential is not automatically attached by the browser.
 
-_csrf_middleware = CsrfViewMiddleware(lambda req: None)
+
+def _csrf_noop_get_response(request: HttpRequest) -> HttpResponse:
+    # CsrfViewMiddleware only invokes ``get_response`` when we call
+    # ``__call__``; we only use ``process_view``, so this is unreachable.
+    raise NotImplementedError(
+        "_csrf_noop_get_response is unreachable: CsrfViewMiddleware.process_view "
+        "does not call get_response."
+    )
+
+
+_csrf_middleware = CsrfViewMiddleware(_csrf_noop_get_response)
 
 
 def conditional_csrf_exempt(view_func: Callable[..., Any]) -> Callable[..., Any]:
@@ -37,12 +48,14 @@ def conditional_csrf_exempt(view_func: Callable[..., Any]) -> Callable[..., Any]
     """
 
     @functools.wraps(view_func)
-    def wrapped_view(request: Any, *args: Any, **kwargs: Any) -> Any:
+    def wrapped_view(request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
         if auth_header:
             # Token-based auth — browser doesn't attach this automatically,
             # so CSRF is irrelevant.
-            request._dont_enforce_csrf_checks = True
+            # ``_dont_enforce_csrf_checks`` is a Django-private flag read by
+            # CsrfViewMiddleware to bypass CSRF on a per-request basis; not in stubs.
+            setattr(request, "_dont_enforce_csrf_checks", True)
         else:
             # Session auth — enforce CSRF as normal.
             reason = _csrf_middleware.process_view(request, view_func, args, kwargs)
@@ -53,7 +66,8 @@ def conditional_csrf_exempt(view_func: Callable[..., Any]) -> Callable[..., Any]
 
     # Tell Django's CsrfViewMiddleware to skip this view entirely.
     # We handle CSRF enforcement manually above for session-based requests.
-    wrapped_view.csrf_exempt = True
+    # ``setattr`` because the wrapper's type doesn't advertise the attribute.
+    setattr(wrapped_view, "csrf_exempt", True)
     return wrapped_view
 
 
@@ -65,9 +79,9 @@ GRAPHQL_MAX_QUERY_DEPTH = getattr(settings, "GRAPHQL_MAX_QUERY_DEPTH", 15)
 
 
 def _measure_depth(
-    node: Any,
+    node: ast.Node,
     current_depth: int = 0,
-    context: Any | None = None,
+    context: Any = None,
     visited_fragments: set[str] | None = None,
 ) -> int:
     """Recursively measure the maximum depth of selection sets.
@@ -117,7 +131,7 @@ class DepthLimitValidationRule(ValidationRule):
     queries.
     """
 
-    def enter_operation_definition(self, node: Any, *_args: Any) -> None:
+    def enter_operation_definition(self, node: ast.Node, *_args: Any) -> None:
         depth = _measure_depth(node, context=self.context)
         if depth > GRAPHQL_MAX_QUERY_DEPTH:
             self.report_error(
@@ -142,7 +156,7 @@ class DisableIntrospection(ValidationRule):
     in schema.py (only when settings.DEBUG is False).
     """
 
-    def enter_field(self, node: Any, *_args: Any) -> None:
+    def enter_field(self, node: ast.FieldNode, *_args: Any) -> None:
         field_name = node.name.value
         if field_name in ("__schema", "__type"):
             self.report_error(
