@@ -454,6 +454,11 @@ async def doc_extract_query_task(
             # Auto-ground: find extracted text values in the source document
             # and create linked source annotations with PDF/text coordinates.
             try:
+                # Pass ``corpus_id`` (int) rather than the Corpus instance:
+                # only the ID is in scope here (the extract task receives
+                # ``corpus_id`` as input) and grounding's ``_resolve_corpus``
+                # handles the lookup safely if the corpus was deleted between
+                # task scheduling and execution.
                 grounding_annotations = await ground_extraction_to_annotations(
                     datacell=datacell,
                     document=document,
