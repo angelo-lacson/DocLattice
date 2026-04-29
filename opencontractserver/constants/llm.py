@@ -34,3 +34,13 @@ NONE_RESULT_AGENT_COMMITTED = "agent_committed_none"
 NONE_RESULT_NO_FINAL = "no_final_response"
 NONE_RESULT_TOOL_LOOP = "tool_loop_no_output"
 NONE_RESULT_UNKNOWN = "unknown"
+
+# Default model for ``doc_extract_query_task``.  Co-located with
+# ``EXTRACT_DEFAULT_TEMPERATURE`` so the model/temperature relationship is
+# visible in one place: ``EXTRACT_DEFAULT_TEMPERATURE`` is safe ONLY
+# because this model is OpenAI.  Switching to a Claude model here without
+# also dropping the temperature override silently regresses the issue
+# #1381 reliability fix — see ``_is_anthropic_model`` and
+# ``_structured_response_raw`` in ``pydantic_ai_agents.py``.
+EXTRACT_DEFAULT_MODEL = "openai:gpt-4o-mini"
+EXTRACT_DEFAULT_TEMPERATURE = 0.3

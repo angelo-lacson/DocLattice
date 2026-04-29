@@ -10,6 +10,8 @@ from pydantic_ai.messages import ModelResponse, ToolCallPart
 
 from opencontractserver.annotations.compact_json import iter_page_annotations
 from opencontractserver.constants.llm import (
+    EXTRACT_DEFAULT_MODEL,
+    EXTRACT_DEFAULT_TEMPERATURE,
     NONE_RESULT_AGENT_COMMITTED,
     NONE_RESULT_NO_FINAL,
     NONE_RESULT_TOOL_LOOP,
@@ -106,6 +108,9 @@ def _classify_none_result(messages: Optional[list[Any]]) -> str:
         if most_common and most_common[0][1] >= TOOL_LOOP_THRESHOLD:
             return NONE_RESULT_TOOL_LOOP
 
+    # Falls through for both "model never produced a ModelResponse" and
+    # "model spoke but never called a tool" — both are integration
+    # failures from the pipeline's perspective.
     return NONE_RESULT_NO_FINAL
 
 
@@ -317,39 +322,6 @@ async def doc_extract_query_task(
         if not prompt:
             raise ValueError("Column must have either query or match_text!")
 
-        # 4. Build system prompt with constraints
-        # system_prompt_parts = [
-        #     "You are a precise data extraction agent.",
-        #     "Extract ONLY the requested information from the document.",
-        #     "If the information is not present, return None rather than guessing.",
-        # ]
-
-        # Add must_contain_text constraint
-        # if column.must_contain_text:
-        #     system_prompt_parts.append(
-        #         f"\nIMPORTANT: Only extract data from sections that contain the text: '{column.must_contain_text}'"
-        #     )
-        #     logger.info(f"Added must_contain_text constraint: {column.must_contain_text}")
-
-        # Add limit_to_label constraint
-        # if column.limit_to_label:
-        #     system_prompt_parts.append(
-        #         f"\nIMPORTANT: Only extract data from annotations labeled as: '{column.limit_to_label}'"
-        #     )
-        #     logger.info(f"Added limit_to_label constraint: {column.limit_to_label}")
-
-        # system_prompt = "\n".join(system_prompt_parts)
-        # logger.info(f"System prompt: {system_prompt[:200]}...")
-
-        # 5. Build extra context from instructions and match_text
-        # extra_context_parts = []
-
-        # if column.instructions:
-        #     extra_context_parts.append(
-        #         f"Additional instructions: {column.instructions}"
-        #     )
-        #     logger.info(f"Added instructions: {column.instructions[:100]}...")
-
         # Handle special match_text with ||| separator (few-shot examples)
         if column.match_text and "|||" in column.match_text:
             examples = [
@@ -362,14 +334,7 @@ async def doc_extract_query_task(
                 )
                 logger.info(f"Added {len(examples)} few-shot examples from match_text")
 
-        # extra_context = (
-        #     "\n\n".join(extra_context_parts) if extra_context_parts else None
-        # )
-
-        # if extra_context:
-        #     logger.info(f"Extra context: {extra_context[:200]}...")
-
-        # 6. EXTRACT! 🚀
+        # 4. EXTRACT! 🚀
         logger.info(f"Starting extraction for datacell {cell_id}:")
         logger.info(f"  - Document ID: {document.id}")
         logger.info(
@@ -388,27 +353,24 @@ async def doc_extract_query_task(
             # Wrap the agent call in the context manager to capture messages
             with capture_run_messages() as messages:
                 # Create a temporary agent and extract
+                # ``EXTRACT_DEFAULT_TEMPERATURE`` (=0.3) is safe ONLY while
+                # ``EXTRACT_DEFAULT_MODEL`` is OpenAI; passing it to a
+                # Claude model would silently regress the issue #1381
+                # reliability fix (Anthropic structured runs need T=0).
+                # Both constants live next to each other in
+                # ``constants/llm.py`` so this coupling stays visible.
+                # TODO(#1381 follow-up): when the model becomes
+                # column-configurable, gate the temperature on the model
+                # family in the call site rather than the constants file.
                 result = await agents.get_structured_response_from_document(
                     document=document.id,
                     corpus=corpus_id,
                     prompt=prompt,
                     target_type=output_type,
                     framework=AgentFramework.PYDANTIC_AI,
-                    # Low temperature for consistent extraction. Note: this
-                    # function-level pin bypasses the Anthropic temperature=0
-                    # override in `_structured_response_raw` (issue #1381).
-                    # Safe today because the model is also pinned to
-                    # `openai:gpt-4o-mini`.
-                    #
-                    # TODO(#1381 follow-up): if/when the model becomes
-                    # column-configurable, gate this temperature on the
-                    # model family — passing ``temperature=0.3`` to a
-                    # Claude model silently regresses the structured-output
-                    # reliability fix this PR introduced.  Track removal
-                    # of this pin alongside the column-model feature.
-                    temperature=0.3,
+                    temperature=EXTRACT_DEFAULT_TEMPERATURE,
                     similarity_top_k=similarity_top_k,
-                    model="openai:gpt-4o-mini",  # Fast and reliable
+                    model=EXTRACT_DEFAULT_MODEL,
                     user_id=datacell.creator.id,
                 )
 

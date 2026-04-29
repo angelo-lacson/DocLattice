@@ -11,12 +11,14 @@ from typing import Any
 
 from django.test import SimpleTestCase
 
-from opencontractserver.llms.agents.pydantic_ai_agents import _is_anthropic_model
-from opencontractserver.tasks.data_extract_tasks import (
+from opencontractserver.constants.llm import (
     NONE_RESULT_AGENT_COMMITTED,
     NONE_RESULT_NO_FINAL,
     NONE_RESULT_TOOL_LOOP,
     NONE_RESULT_UNKNOWN,
+)
+from opencontractserver.llms.agents.pydantic_ai_agents import _is_anthropic_model
+from opencontractserver.tasks.data_extract_tasks import (
     _classify_none_result,
     _failure_message_for_classification,
 )
