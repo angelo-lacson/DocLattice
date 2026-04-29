@@ -251,7 +251,20 @@ def _create_grounding_annotations(
                 exc_info=True,
             )
 
-    return annotations
+    # Deduplicate by primary key, preserving first-seen order: two
+    # alignment results for the same phrase on the same page produce a
+    # single ``get_or_create`` row, but each iteration appends it.
+    # Returning duplicates makes ``len(annotations)`` diverge from
+    # ``datacell.sources.count()`` and breaks idempotency invariants
+    # for downstream consumers.
+    seen_pks: set[int] = set()
+    deduped: list[Annotation] = []
+    for annot in annotations:
+        if annot.pk in seen_pks:
+            continue
+        seen_pks.add(annot.pk)
+        deduped.append(annot)
+    return deduped
 
 
 def _create_pdf_annotation(
@@ -299,21 +312,28 @@ def _create_pdf_annotation(
         )
 
     # Note: ``json`` (bounding boxes) is in ``defaults``, NOT a lookup key.
-    # For PDFs the (document, label, page, raw_text) tuple already uniquely
-    # identifies the span; PlasmaPDF's bounding-box layout is deterministic
-    # for stable input, so on Celery retry we want to reuse the existing
-    # annotation rather than create a near-duplicate that differs only by
-    # bounding-box reformatting. Span annotations key on ``json`` because
-    # the char offsets ARE the identity for a text/DOCX document.
+    # For PDFs the (document, corpus, label, page, raw_text) tuple already
+    # uniquely identifies the span; PlasmaPDF's bounding-box layout is
+    # deterministic for stable input, so on Celery retry we want to reuse
+    # the existing annotation rather than create a near-duplicate that
+    # differs only by bounding-box reformatting. Span annotations key on
+    # ``json`` because the char offsets ARE the identity for a text/DOCX
+    # document.
+    #
+    # ``corpus`` IS in the lookup so a multi-corpus document doesn't share
+    # a single annotation between unrelated corpora — datacell.sources
+    # must point to an annotation whose ``corpus`` matches the extract's
+    # corpus, otherwise ``MIN(document_permission, corpus_permission)``
+    # falls back to the wrong corpus's permissions.
     annot, _ = Annotation.objects.get_or_create(
         document=document,
+        corpus=corpus,
         annotation_label=label_obj,
         page=page,
         annotation_type=TOKEN_LABEL,
         raw_text=oc_ann["rawText"],
         defaults={
             "json": oc_ann["annotation_json"],
-            "corpus": corpus,
             "creator_id": creator_id,
             "structural": False,
         },
@@ -340,23 +360,27 @@ def _create_span_annotation(
     serves as a placeholder and the actual location is encoded by the
     character offsets in ``json``.
 
-    Identity key uses ``json={"start": ..., "end": ...}``. PostgreSQL
-    JSON equality is order-sensitive, so the key order in this literal
-    must remain stable for ``get_or_create`` to deduplicate on retry.
-    Python 3.7+ guarantees dict-literal insertion order, and this is the
-    only construction site, so the ordering is locally enforced.
+    Identity key uses ``json={"start": ..., "end": ...}``. The ``json``
+    column is a Django ``JSONField``, which maps to PostgreSQL ``jsonb``
+    — equality compares structurally, so key order does not affect
+    ``get_or_create``'s lookup.  We still construct the dict in a stable
+    order to avoid surprises if the column type ever changes.
+
+    ``corpus`` IS in the lookup so a multi-corpus document doesn't share
+    a single annotation between unrelated corpora — see the parallel
+    docstring on ``_create_pdf_annotation`` for the permission rationale.
     """
     from opencontractserver.annotations.models import SPAN_LABEL, Annotation
 
     annot, _ = Annotation.objects.get_or_create(
         document=document,
+        corpus=corpus,
         annotation_label=label_obj,
         annotation_type=SPAN_LABEL,
         raw_text=result.matched_text,
         json={"start": result.char_start, "end": result.char_end},
         defaults={
             "page": 1,
-            "corpus": corpus,
             "creator_id": creator_id,
             "structural": False,
         },

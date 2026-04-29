@@ -616,3 +616,77 @@ class TestGroundingPipelinePDFIntegration(TestCase):
             ).count(),
             0,
         )
+
+    def test_ground_pdf_separate_corpora_create_separate_annotations(self):
+        """A document shared across two corpora must NOT collapse its
+        grounding annotations into a single shared row.
+
+        Regression for issue raised in PR review: ``corpus`` was previously
+        only in ``defaults`` so the second corpus's grounding would silently
+        return the first corpus's annotation, producing a ``datacell.sources``
+        FK whose ``corpus`` mismatched the extract.  Fixing the lookup key
+        to include ``corpus`` means each corpus now owns a distinct row
+        with the correct FK.
+        """
+        from opencontractserver.corpuses.models import Corpus
+        from opencontractserver.extracts.models import (
+            Datacell,
+            Extract,
+        )
+        from opencontractserver.utils.extraction_grounding import (
+            ground_extraction_to_annotations,
+        )
+
+        # Re-add the document to a SECOND corpus so it lives in both.
+        other_corpus = Corpus.objects.create(
+            title="Second PDF Grounding Corpus", creator=self.user
+        )
+        other_corpus.add_document(document=self.document, user=self.user)
+
+        # Build a parallel extract+datacell anchored to the OTHER corpus.
+        other_extract = Extract.objects.create(
+            name="Second PDF Extract",
+            corpus=other_corpus,
+            fieldset=self.fieldset,
+            creator=self.user,
+        )
+        other_datacell = Datacell.objects.create(
+            extract=other_extract,
+            column=self.column,
+            document=self.document,
+            creator=self.user,
+            data={"data": ["Acme Holdings", "Global Acquisitions"]},
+        )
+
+        first_corpus_annotations = async_to_sync(ground_extraction_to_annotations)(
+            datacell=self.datacell,
+            document=self.document,
+            corpus=self.corpus,
+            user_id=self.user.id,
+            enable_fuzzy=False,
+        )
+        second_corpus_annotations = async_to_sync(ground_extraction_to_annotations)(
+            datacell=other_datacell,
+            document=self.document,
+            corpus=other_corpus,
+            user_id=self.user.id,
+            enable_fuzzy=False,
+        )
+
+        self.assertGreater(len(first_corpus_annotations), 0)
+        self.assertGreater(len(second_corpus_annotations), 0)
+
+        # The two corpora's grounding annotations must be DISJOINT.
+        first_ids = {a.id for a in first_corpus_annotations}
+        second_ids = {a.id for a in second_corpus_annotations}
+        self.assertTrue(
+            first_ids.isdisjoint(second_ids),
+            "Annotations leaked between corpora — corpus is missing from "
+            "the get_or_create lookup key.",
+        )
+
+        # Each annotation should point to its own corpus, not the other one.
+        for annot in first_corpus_annotations:
+            self.assertEqual(annot.corpus_id, self.corpus.id)
+        for annot in second_corpus_annotations:
+            self.assertEqual(annot.corpus_id, other_corpus.id)
