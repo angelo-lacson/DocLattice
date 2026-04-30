@@ -565,12 +565,29 @@ export async function openExtractByName(
 
   // Each extract renders as a CollectionCard (role="article") with
   // aria-label="Extract: <name>". Click it to navigate to the detail view.
-  await page
+  //
+  // Toast notifications from earlier steps ("Extract Complete", etc.)
+  // can hover over the card and intercept the click. We close any
+  // visible close-buttons on toast alerts first, then use force-click
+  // as a belt-and-braces fallback against any remaining transient
+  // overlay. The card itself is stable; the surrounding toast layer is
+  // the only flake source.
+  for (const closeBtn of await page
+    .locator('[role="alert"] button[aria-label="close"]')
+    .all()) {
+    if (await closeBtn.isVisible().catch(() => false)) {
+      await closeBtn.click().catch(() => {});
+    }
+  }
+  await page.waitForTimeout(300);
+
+  const card = page
     .locator('[role="article"]', {
       hasText: new RegExp(extractName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
     })
-    .first()
-    .click();
+    .first();
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await card.click({ force: true });
 
   // The detail page loads tabs; Schema tab proves we are on the right page.
   await expect(page.getByRole("tab", { name: /^Schema$/i })).toBeVisible({
