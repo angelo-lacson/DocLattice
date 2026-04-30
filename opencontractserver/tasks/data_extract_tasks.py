@@ -2,21 +2,155 @@
 import json
 import logging
 import os
-from collections.abc import Sequence
-from typing import Any
+from collections import Counter
+from typing import Any, Optional
 
 from asgiref.sync import sync_to_async
+from pydantic_ai.messages import ModelResponse, ToolCallPart
 
 from opencontractserver.annotations.compact_json import iter_page_annotations
 from opencontractserver.constants.extraction import DEFAULT_EXTRACT_MODEL
+from opencontractserver.constants.llm import (
+    EXTRACT_DEFAULT_TEMPERATURE,
+    NONE_RESULT_AGENT_COMMITTED,
+    NONE_RESULT_NO_FINAL,
+    NONE_RESULT_TOOL_LOOP,
+    NONE_RESULT_UNKNOWN,
+    TOOL_LOOP_THRESHOLD,
+)
 from opencontractserver.extracts.models import Datacell
 from opencontractserver.shared.decorators import celery_task_with_async_to_sync
 from opencontractserver.utils.compact_pawls import expand_pawls_pages
 from opencontractserver.utils.extraction_grounding import (
     ground_extraction_to_annotations,
 )
+from opencontractserver.utils.llm import is_anthropic_model
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Failure-mode classification for structured-extraction None results
+# ---------------------------------------------------------------------------
+# When pydantic-ai returns ``None`` from the structured extraction agent, we
+# previously reported a single error message that conflated three very
+# different outcomes:
+#
+# 1. ``agent_committed_none``   — the agent searched, decided the data was
+#                                 absent, and explicitly returned None.
+#                                 Legitimate signal: the document doesn't
+#                                 contain the requested information.
+# 2. ``no_final_response``      — the agent never produced a final structured
+#                                 response. The pydantic-ai loop exhausted
+#                                 without the model calling the result tool.
+#                                 Common with Anthropic models (issue #1381).
+#                                 This is an integration failure, not a
+#                                 statement about the document.
+# 3. ``tool_loop_no_output``    — the agent issued the same tool call multiple
+#                                 times without ever synthesising a final
+#                                 answer. Also an integration failure.
+#
+# Operators want to grep ``failure_mode=`` to separate legitimate "data not
+# present" outcomes from pipeline bugs.
+
+
+def _classify_none_result(messages: Optional[list[Any]]) -> str:
+    """Classify *why* a structured extraction returned ``None``.
+
+    Examines the captured pydantic-ai message history and returns one of the
+    ``NONE_RESULT_*`` constants. Designed to be defensive: any unexpected
+    shape falls back to :data:`NONE_RESULT_UNKNOWN` rather than raising.
+    """
+    if not messages:
+        return NONE_RESULT_UNKNOWN
+
+    # Scan the log for ``ModelResponse`` parts. A "final structured response"
+    # is a ToolCallPart whose tool_name starts with ``final_result`` —
+    # pydantic-ai routes structured outputs through this synthetic tool.
+    saw_final_result = False
+    tool_call_signatures: list[tuple[str, str]] = []
+
+    for msg in messages:
+        if not isinstance(msg, ModelResponse):
+            continue
+        for part in getattr(msg, "parts", []) or []:
+            if isinstance(part, ToolCallPart):
+                tool_name = getattr(part, "tool_name", "") or ""
+                if tool_name.startswith("final_result"):
+                    saw_final_result = True
+                else:
+                    raw_args = getattr(part, "args", None)
+                    # ``ToolCallPart.args`` is typed ``str | dict`` in
+                    # pydantic-ai (``ArgsJson`` vs ``ArgsDict``).  Normalise
+                    # the JSON-string variant so identical calls hash to the
+                    # same Counter key regardless of which variant the model
+                    # returned, otherwise tool-loop detection silently
+                    # under-counts.
+                    if isinstance(raw_args, str):
+                        try:
+                            raw_args = json.loads(raw_args)
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                    try:
+                        args_repr = json.dumps(raw_args, sort_keys=True, default=str)
+                    except (TypeError, ValueError):
+                        args_repr = repr(raw_args)
+                    tool_call_signatures.append((tool_name, args_repr))
+
+    if saw_final_result:
+        # Pydantic-ai received a final_result call but the structured output
+        # was None. That means the agent explicitly committed to the absence
+        # of data — legitimate.
+        return NONE_RESULT_AGENT_COMMITTED
+
+    # No final_result anywhere. Look for tool-call repetition.
+    if tool_call_signatures:
+        most_common = Counter(tool_call_signatures).most_common(1)
+        if most_common and most_common[0][1] >= TOOL_LOOP_THRESHOLD:
+            return NONE_RESULT_TOOL_LOOP
+
+    # Falls through for both "model never produced a ModelResponse" and
+    # "model spoke but never called a tool" — both are integration
+    # failures from the pipeline's perspective.
+    return NONE_RESULT_NO_FINAL
+
+
+def _resolve_extract_temperature(model_name: Optional[str]) -> Optional[float]:
+    """Return ``None`` for Anthropic models (so the structured-response guard
+    can force ``temperature=0``), otherwise :data:`EXTRACT_DEFAULT_TEMPERATURE`.
+    """
+    if is_anthropic_model(model_name):
+        return None
+    return EXTRACT_DEFAULT_TEMPERATURE
+
+
+def _failure_message_for_classification(classification: str) -> str:
+    """Human-readable failure message for a ``NONE_RESULT_*`` classification."""
+    if classification == NONE_RESULT_AGENT_COMMITTED:
+        return (
+            "The extraction agent committed to a None result — the requested "
+            "information was not found in the document."
+        )
+    elif classification == NONE_RESULT_NO_FINAL:
+        return (
+            "The extraction agent never produced a final structured response. "
+            "This is an integration failure — either the model only emitted "
+            "narrative text without ever calling the result tool, or it "
+            "exhausted its tool-use budget without committing — not a "
+            "statement about the document. Check ``llm_call_log`` for the "
+            "raw message history."
+        )
+    elif classification == NONE_RESULT_TOOL_LOOP:
+        return (
+            "The extraction agent looped on the same tool call without "
+            "producing a final structured response. This is an integration "
+            "failure, not a statement about the document. Check "
+            "``llm_call_log`` for the repeated tool call."
+        )
+    return (
+        "The extraction returned None and the cause could not be classified. "
+        "See ``llm_call_log`` for the full message history."
+    )
 
 
 @sync_to_async
@@ -185,8 +319,9 @@ async def doc_extract_query_task(
             return doc_path.corpus_id
         return None
 
-    # Initialize datacell to None to avoid UnboundLocalError
+    # Initialize to None to avoid UnboundLocalError in the outer except block
     datacell = None
+    llm_log: Optional[str] = None
 
     logger.info("=" * 60)
     logger.info(f"doc_extract_query_task STARTED for cell_id: {cell_id}")
@@ -235,39 +370,6 @@ async def doc_extract_query_task(
         if not prompt:
             raise ValueError("Column must have either query or match_text!")
 
-        # 4. Build system prompt with constraints
-        # system_prompt_parts = [
-        #     "You are a precise data extraction agent.",
-        #     "Extract ONLY the requested information from the document.",
-        #     "If the information is not present, return None rather than guessing.",
-        # ]
-
-        # Add must_contain_text constraint
-        # if column.must_contain_text:
-        #     system_prompt_parts.append(
-        #         f"\nIMPORTANT: Only extract data from sections that contain the text: '{column.must_contain_text}'"
-        #     )
-        #     logger.info(f"Added must_contain_text constraint: {column.must_contain_text}")
-
-        # Add limit_to_label constraint
-        # if column.limit_to_label:
-        #     system_prompt_parts.append(
-        #         f"\nIMPORTANT: Only extract data from annotations labeled as: '{column.limit_to_label}'"
-        #     )
-        #     logger.info(f"Added limit_to_label constraint: {column.limit_to_label}")
-
-        # system_prompt = "\n".join(system_prompt_parts)
-        # logger.info(f"System prompt: {system_prompt[:200]}...")
-
-        # 5. Build extra context from instructions and match_text
-        # extra_context_parts = []
-
-        # if column.instructions:
-        #     extra_context_parts.append(
-        #         f"Additional instructions: {column.instructions}"
-        #     )
-        #     logger.info(f"Added instructions: {column.instructions[:100]}...")
-
         # Handle special match_text with ||| separator (few-shot examples)
         if column.match_text and "|||" in column.match_text:
             examples = [
@@ -280,14 +382,7 @@ async def doc_extract_query_task(
                 )
                 logger.info(f"Added {len(examples)} few-shot examples from match_text")
 
-        # extra_context = (
-        #     "\n\n".join(extra_context_parts) if extra_context_parts else None
-        # )
-
-        # if extra_context:
-        #     logger.info(f"Extra context: {extra_context[:200]}...")
-
-        # 6. EXTRACT! 🚀
+        # 4. EXTRACT! 🚀
         logger.info(f"Starting extraction for datacell {cell_id}:")
         logger.info(f"  - Document ID: {document.id}")
         logger.info(
@@ -300,7 +395,17 @@ async def doc_extract_query_task(
         logger.info(f"  - Corpus ID: {corpus_id}")
 
         # Capture LLM messages for debugging
-        llm_log = None
+        messages: Optional[list[Any]] = None
+
+        # Resolve the effective model first so the temperature stays in
+        # lock-step with whichever model family will actually run. The
+        # Anthropic ``temperature=0`` override in
+        # ``_structured_response_raw`` only fires when we pass
+        # ``temperature=None``; ``_resolve_extract_temperature`` returns
+        # ``None`` for Claude models and ``EXTRACT_DEFAULT_TEMPERATURE``
+        # otherwise. (issue #1381)
+        extract_model = model_override or DEFAULT_EXTRACT_MODEL
+        extract_temperature = _resolve_extract_temperature(extract_model)
 
         try:
             # Wrap the agent call in the context manager to capture messages
@@ -319,9 +424,9 @@ async def doc_extract_query_task(
                     prompt=prompt,
                     target_type=output_type,
                     framework=AgentFramework.PYDANTIC_AI,
-                    temperature=0.3,  # Low temperature for consistent extraction
+                    temperature=extract_temperature,
                     similarity_top_k=similarity_top_k,
-                    model=model_override or DEFAULT_EXTRACT_MODEL,
+                    model=extract_model,
                     user_id=datacell.creator.id,
                 )
 
@@ -332,7 +437,7 @@ async def doc_extract_query_task(
 
         except Exception as e:
             # If we have messages, capture them before re-raising
-            if "messages" in locals():
+            if messages:
                 llm_log = ModelMessagesTypeAdapter.dump_json(
                     messages, indent=2
                 ).decode()
@@ -416,43 +521,34 @@ async def doc_extract_query_task(
 
         else:
             # ``result is None`` rolls up at least three distinct failure
-            # modes that we can disambiguate from the captured message log:
+            # modes that we can disambiguate from the captured message log
+            # (issue #1381):
             #
-            #  (a) Agent issued a structured-response part and committed to
-            #      ``None`` after good-faith search → legitimate "not in
-            #      document" outcome.
-            #  (b) Agent's last action was a tool call (no tool-return, no
-            #      final response). pydantic-ai's loop exited early without
-            #      raising — the agent never got a chance to synthesise an
-            #      answer. This is a pipeline / model-config issue, NOT
-            #      evidence about the document.
-            #  (c) Agent looped on tool calls without ever producing a
-            #      final response (multiple responses, none with output) —
-            #      hit some implicit iteration limit.
+            #  (a) ``agent_committed_none`` — agent issued a ``final_result``
+            #      tool call and committed to ``None`` after good-faith
+            #      search → legitimate "not in document" outcome.
+            #  (b) ``no_final_response`` — pydantic-ai's loop exited without
+            #      the agent ever calling ``final_result`` (no tool-return,
+            #      no synthesis). Pipeline / model-config issue, NOT
+            #      evidence about the document. Canonical Anthropic mode.
+            #  (c) ``tool_loop_no_output`` — agent looped on the same tool
+            #      call (≥ ``TOOL_LOOP_THRESHOLD`` repetitions) without
+            #      ever producing a ``final_result``.
             #
-            # Distinguishing them in the failure record makes operations
-            # actionable: (a) is signal, (b)/(c) are bugs to chase.
-            failure_mode, failure_detail = _classify_none_result(messages)
+            # Operators grep ``failure_mode=`` to separate (a) signal from
+            # (b)/(c) pipeline bugs.
+            classification = _classify_none_result(messages)
+            failure_message = _failure_message_for_classification(classification)
             logger.warning(
-                "✗ Extraction returned None for cell %s — failure_mode=%s, %s",
-                cell_id,
-                failure_mode,
-                failure_detail,
+                f"✗ Extraction returned None for cell {cell_id} "
+                f"(failure_mode={classification})"
             )
+            logger.warning(f"  {failure_message}")
             await sync_mark_failed(
                 datacell,
-                f"Failed to extract requested data from document ({failure_mode})",
-                (
-                    f"The extraction returned None.\n"
-                    f"Failure mode: {failure_mode}\n"
-                    f"Detail: {failure_detail}\n"
-                    f"For mode 'agent_committed_none' this is most likely a "
-                    f"legitimate 'data not present' outcome. For "
-                    f"'no_final_response' or 'tool_loop_no_output' the "
-                    f"agent loop exited without producing a structured "
-                    f"answer; check llm_call_log and consider it a "
-                    f"pipeline issue rather than evidence about the document."
-                ),
+                f"Failed to extract requested data from document "
+                f"(failure_mode={classification})",
+                f"failure_mode={classification}\n\n{failure_message}",
                 llm_log,
             )
 
@@ -462,9 +558,7 @@ async def doc_extract_query_task(
         # Only try to mark failed if we have a datacell
         if datacell:
             # Pass llm_log if we have it
-            await sync_mark_failed(
-                datacell, e, tb, llm_log if "llm_log" in locals() else None
-            )
+            await sync_mark_failed(datacell, e, tb, llm_log)
         else:
             logger.error(f"Failed to get datacell for cell_id {cell_id}: {e}\n{tb}")
         raise
@@ -490,66 +584,6 @@ def _link_retrieval_citations(datacell, annotation_ids):
     existing_ids = [aid for aid in valid_ids if aid in existing]
     if existing_ids:
         datacell.sources.add(*existing_ids)
-
-
-def _classify_none_result(messages: Sequence[Any] | None) -> tuple[str, str]:
-    """Categorise a ``result is None`` outcome from ``agent.run()``.
-
-    Reads the captured pydantic-ai message history (a list of
-    ``ModelMessage`` objects, post-``capture_run_messages``) and decides
-    whether the None result represents:
-
-      * ``agent_committed_none`` — the model genuinely produced a final
-        response part (text or output_tool) and that response evaluated
-        to None. Treat as legitimate "not in document".
-      * ``no_final_response`` — the run ended on a tool-call response
-        with no subsequent tool-return / final answer. Indicates the
-        pydantic-ai loop exited before synthesising an answer.
-      * ``tool_loop_no_output`` — multiple model responses, all tool
-        calls, no final synthesis. Hit some implicit iteration ceiling.
-      * ``empty_history`` — pathological case: no model responses at all
-        (rare, suggests an exception was swallowed even earlier).
-
-    The detail string includes message-history length and the kind of
-    each ``response``-message's parts so operators can grep for patterns.
-    """
-    if not messages:
-        return "empty_history", "no messages captured"
-
-    response_msgs = [m for m in messages if getattr(m, "kind", None) == "response"]
-    if not response_msgs:
-        return "empty_history", f"messages={len(messages)} but no response messages"
-
-    last_response = response_msgs[-1]
-    last_parts = getattr(last_response, "parts", []) or []
-    last_part_kinds = [getattr(p, "part_kind", "?") for p in last_parts]
-    n_responses = len(response_msgs)
-    n_tool_calls = sum(
-        1
-        for m in response_msgs
-        for p in (getattr(m, "parts", []) or [])
-        if getattr(p, "part_kind", None) == "tool-call"
-    )
-
-    detail = (
-        f"messages={len(messages)}, response_msgs={n_responses}, "
-        f"tool_calls_total={n_tool_calls}, last_response_parts={last_part_kinds}"
-    )
-
-    # If the last response has any non-tool-call output (text, output_tool,
-    # final-result), the model committed to an answer — even if that
-    # answer was None.
-    has_final = any(
-        kind not in (None, "tool-call", "thinking") for kind in last_part_kinds
-    )
-    if has_final:
-        return "agent_committed_none", detail
-
-    if n_responses == 1:
-        # One response, ending on a tool call, never returned to the loop.
-        return "no_final_response", detail
-
-    return "tool_loop_no_output", detail
 
 
 def text_search(document_id: int, query_str: str) -> str:

@@ -33,6 +33,7 @@ from pydantic_ai.toolsets import FunctionToolset
 from pydantic_graph import End
 
 from opencontractserver.constants.context_guardrails import COMPACTION_SUMMARY_PREFIX
+from opencontractserver.constants.llm import STRUCTURED_OUTPUT_RETRIES
 from opencontractserver.conversations.models import Conversation
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
@@ -90,6 +91,7 @@ from opencontractserver.llms.vector_stores.pydantic_ai_vector_stores import (
     PydanticAIAnnotationVectorStore,
 )
 from opencontractserver.utils.embeddings import aget_embedder
+from opencontractserver.utils.llm import is_anthropic_model
 from opencontractserver.utils.prompt_sanitization import (
     UNTRUSTED_CONTENT_NOTICE,
     fence_user_content,
@@ -536,10 +538,20 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         Subclasses may override this to include document or corpus context.
         The base implementation intentionally avoids any citation or
         conversational guidance to minimize iterations and enforce raw output.
+
+        The wording explicitly tells the agent to commit to the final
+        structured response after gathering information. Some models (notably
+        Anthropic's Claude family) tend to keep narrating or invoking tools
+        instead of producing the structured output unless told to stop. See
+        issue #1381.
         """
         return (
             "You are in data extraction mode.\n"
             "Use available tools to locate the requested information.\n"
+            "After gathering enough information from the tools, you MUST "
+            "produce the final structured response by calling the result "
+            "tool. Do not narrate further; do not keep invoking tools "
+            "indefinitely.\n"
             "Return ONLY the raw value matching the target type. "
             "No explanations, no citations, no extra words.\n\n"
             "SEARCH PROTOCOL:\n"
@@ -1358,12 +1370,39 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
         )
 
         try:
-            # Build model settings with overrides
+            # Build model settings with overrides.
+            # ``_prepare_pydantic_ai_model_settings`` returns ``None`` when
+            # both temperature and max_tokens are unset on ``self.config``
+            # (the helper signals "no settings to pass" rather than
+            # returning an empty dict).  We need a mutable dict here so
+            # the function-level ``temperature`` / ``max_tokens`` overrides
+            # — and the Anthropic temperature-0 nudge below — have
+            # somewhere to land.
             model_settings = _prepare_pydantic_ai_model_settings(self.config)
+            if model_settings is None:
+                model_settings = {}
             if temperature is not None:
                 model_settings["temperature"] = temperature
             if max_tokens is not None:
                 model_settings["max_tokens"] = max_tokens
+
+            # Anthropic models tend to keep narrating / calling tools instead
+            # of committing to the structured output when given any wiggle
+            # room (issue #1381). Force temperature down to 0 unless the
+            # caller explicitly asked for something else (function-level
+            # temperature pin OR an explicit config.temperature).
+            effective_model = model or self.config.model_name
+            if (
+                is_anthropic_model(effective_model)
+                and temperature is None
+                and self.config.temperature is None
+            ):
+                logger.info(
+                    "Forcing temperature=0 for structured extraction with "
+                    "Anthropic model %s (issue #1381).",
+                    effective_model,
+                )
+                model_settings["temperature"] = 0
 
             # Seed tools from the main agent so the structured run has the same capabilities
             seeded_tools_dict = _get_function_tools(self.pydantic_ai_agent)
@@ -1394,13 +1433,20 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
 
             logger.info(f"Structured system prompt: {structured_system_prompt}")
 
+            # Preserve the pre-issue-#1381 behaviour of passing
+            # ``model_settings=None`` to ``PydanticAIAgent`` when nothing
+            # ended up being set, so non-Anthropic structured runs without
+            # caller pins are bit-identical to before.
             structured_agent = PydanticAIAgent(
-                model=model or self.config.model_name,
+                model=effective_model,
                 instructions=structured_system_prompt,
                 output_type=target_type,
                 deps_type=PydanticAIDependencies,
                 tools=final_tools,
-                model_settings=model_settings,
+                model_settings=model_settings or None,
+                # Give pydantic-ai room to retry the structured output when
+                # the model fails to commit on the first pass (issue #1381).
+                output_retries=STRUCTURED_OUTPUT_RETRIES,
             )
 
             # Include prior conversation context if available
@@ -1995,8 +2041,12 @@ class PydanticAIDocumentAgent(PydanticAICoreAgent):
             "search for likely answer phrasings). A single failed search is NOT "
             "sufficient evidence that the information is missing — most legal "
             "documents need multiple targeted queries to surface a relevant span.\n"
-            "4. Return ONLY the raw extracted value matching the target type.\n"
-            "5. No explanations, no citations, no commentary – just the data.\n\n"
+            "4. After gathering enough information from the tools, you MUST "
+            "commit to the final structured response by calling the result "
+            "tool. Do not narrate further; do not keep invoking tools "
+            "indefinitely.\n"
+            "5. Return ONLY the raw extracted value matching the target type.\n"
+            "6. No explanations, no citations, no commentary – just the data.\n\n"
             "Only return null/None after multiple search attempts have all "
             "failed to find relevant content."
         )
@@ -2509,8 +2559,12 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             "search for likely answer phrasings). A single failed search is NOT "
             "sufficient evidence that the information is missing — most legal "
             "documents need multiple targeted queries to surface a relevant span.\n"
-            "4. Return ONLY the raw extracted value matching the target type.\n"
-            "5. No explanations, no citations, no commentary – just the data.\n\n"
+            "4. After gathering enough information from the tools, you MUST "
+            "commit to the final structured response by calling the result "
+            "tool. Do not narrate further; do not keep invoking tools "
+            "indefinitely.\n"
+            "5. Return ONLY the raw extracted value matching the target type.\n"
+            "6. No explanations, no citations, no commentary – just the data.\n\n"
             "Only return null/None after multiple search attempts have all "
             "failed to find relevant content."
         )

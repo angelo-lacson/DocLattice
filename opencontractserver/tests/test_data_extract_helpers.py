@@ -1,6 +1,6 @@
 """Targeted unit tests for the small helpers introduced alongside the
-benchmark harness: retrieval-citation linking and the
-``result is None`` failure-mode classifier.
+benchmark harness: retrieval-citation linking, model-override allowlist
+guard, and the cross-encoder reranker scoring path.
 
 These are pure-Python helpers that don't go through the agent runtime,
 so they can be exercised with mocked message logs and lightweight
@@ -9,7 +9,6 @@ fixtures without spinning up a full extraction.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from django.contrib.auth import get_user_model
@@ -28,7 +27,6 @@ from opencontractserver.extracts.models import (
     Extract,
     Fieldset,
 )
-from opencontractserver.tasks.data_extract_tasks import _classify_none_result
 
 User = get_user_model()
 
@@ -167,78 +165,9 @@ class LinkRetrievalCitationsTests(TestCase):
         self.assertEqual(datacell.sources.count(), 0)
 
 
-def _response_msg(part_kinds):
-    """Build a minimal duck-typed ``response``-kind message.
-
-    The classifier only reads ``msg.kind`` and ``msg.parts[i].part_kind``,
-    so a ``SimpleNamespace`` is enough — no need to drag in pydantic-ai's
-    real ``ModelResponse`` and its strict validation.
-    """
-    parts = [SimpleNamespace(part_kind=kind) for kind in part_kinds]
-    return SimpleNamespace(kind="response", parts=parts)
-
-
-class ClassifyNoneResultTests(TestCase):
-    """Cover the four failure-mode classifications the agent emits."""
-
-    def test_no_messages_is_empty_history(self) -> None:
-        mode, detail = _classify_none_result(None)
-        self.assertEqual(mode, "empty_history")
-        self.assertIn("no messages", detail)
-
-        mode, detail = _classify_none_result([])
-        self.assertEqual(mode, "empty_history")
-
-    def test_no_response_messages_is_empty_history(self) -> None:
-        """Messages exist, but none of them are ``response``-kind."""
-        request_only = [SimpleNamespace(kind="request", parts=[])]
-        mode, detail = _classify_none_result(request_only)
-        self.assertEqual(mode, "empty_history")
-        self.assertIn("no response messages", detail)
-
-    def test_text_only_response_is_committed_none(self) -> None:
-        """Last response carries a text part → model committed."""
-        msg = _response_msg(["text"])
-        mode, _ = _classify_none_result([msg])
-        self.assertEqual(mode, "agent_committed_none")
-
-    def test_output_tool_part_is_committed_none(self) -> None:
-        """``output_tool`` parts (final structured response) → committed."""
-        msg = _response_msg(["output_tool"])
-        mode, _ = _classify_none_result([msg])
-        self.assertEqual(mode, "agent_committed_none")
-
-    def test_single_tool_call_only_is_no_final(self) -> None:
-        """One response that ends on a tool call never reached final."""
-        msg = _response_msg(["tool-call"])
-        mode, _ = _classify_none_result([msg])
-        self.assertEqual(mode, "no_final_response")
-
-    def test_repeated_tool_call_only_is_tool_loop(self) -> None:
-        """Multiple response messages, all tool-call parts, no final."""
-        msgs = [
-            _response_msg(["tool-call"]),
-            _response_msg(["tool-call"]),
-            _response_msg(["tool-call"]),
-        ]
-        mode, _ = _classify_none_result(msgs)
-        self.assertEqual(mode, "tool_loop_no_output")
-
-    def test_thinking_only_is_no_final_response(self) -> None:
-        """``thinking`` parts don't count as final output (they're internal)."""
-        msg = _response_msg(["thinking"])
-        mode, _ = _classify_none_result([msg])
-        self.assertEqual(mode, "no_final_response")
-
-    def test_text_after_tool_loop_is_committed(self) -> None:
-        """If the *last* response has a text part, that's commitment."""
-        msgs = [
-            _response_msg(["tool-call"]),
-            _response_msg(["tool-call"]),
-            _response_msg(["text"]),
-        ]
-        mode, _ = _classify_none_result(msgs)
-        self.assertEqual(mode, "agent_committed_none")
+# Failure-mode classification (`_classify_none_result` and the
+# `NONE_RESULT_*` constants) is covered by
+# ``test_data_extract_failure_classification.py``.
 
 
 class CrossEncoderRerankerTests(TestCase):
@@ -381,7 +310,3 @@ class ModelOverrideAllowlistTests(TestCase):
             "BENCHMARK_ALLOWED_MODEL_OVERRIDES",
             self.cell.stacktrace or "",
         )
-
-
-# Suppress unused-import warning for the SimpleNamespace shim used elsewhere
-_ = SimpleNamespace
