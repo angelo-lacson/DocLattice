@@ -648,12 +648,13 @@ export async function addColumnViaUI(
  * tab's "Add documents" floating button. Opens SelectDocumentsModal,
  * waits for all document cards to load (graphene returns up to 100 in
  * one page, so all documents appear immediately), clicks each target
- * card by its `data-title` attribute, then confirms with "Add Documents".
+ * card by filtering on its visible title text, then confirms with
+ * "Add Documents".
  *
  * NOTE: The modal's search bar performs full-text content search (not
- * title search). We do NOT use it — we rely on `data-title` selectors
- * directly. All cards are in the DOM and Playwright's `click()` scrolls
- * them into view automatically.
+ * title search). We do NOT use it — we filter cards by visible title
+ * text directly. All cards are in the DOM and Playwright's `click()`
+ * scrolls them into view automatically.
  *
  * If a document is already in the extract, `filterDocIds` removes it
  * from the modal, so it won't appear. The step is skipped gracefully
@@ -691,8 +692,8 @@ export async function addDocumentsToExtractViaUI(
 
   // Wait for at least one document card to load. The query fetches up to
   // RELAY_CONNECTION_MAX_LIMIT (100) in one page, so all cards are in the
-  // DOM immediately. Cards use data-testid="document-card" and
-  // data-title={title} (ModernDocumentItem.tsx).
+  // DOM immediately. Cards are tagged with `data-testid="document-card"`
+  // (ModernDocumentItem.tsx); we then filter by the visible title text.
   await expect(
     page.locator("[data-testid='document-card']").first()
   ).toBeVisible({ timeout: 15_000 });
@@ -701,9 +702,9 @@ export async function addDocumentsToExtractViaUI(
   // the extract and filtered out of the modal by filterDocIds).
   const titlesToAdd: string[] = [];
   for (const title of documentTitles) {
-    const card = page.locator(
-      `[data-testid='document-card'][data-title='${title}']`
-    );
+    const card = page
+      .locator("[data-testid='document-card']")
+      .filter({ hasText: title });
     const count = await card.count();
     if (count > 0) {
       titlesToAdd.push(title);
@@ -718,9 +719,10 @@ export async function addDocumentsToExtractViaUI(
   }
 
   for (const title of titlesToAdd) {
-    const card = page.locator(
-      `[data-testid='document-card'][data-title='${title}']`
-    );
+    const card = page
+      .locator("[data-testid='document-card']")
+      .filter({ hasText: title })
+      .first();
     // click() scrolls the element into view automatically.
     await card.click();
     await page.waitForTimeout(200);
@@ -835,29 +837,26 @@ export async function runExtractAndWaitForFinish(
  * grid view live inside an `opacity: 0` hover-overlay and are never
  * reliably testable without triggering hover interactions.
  *
- * The `data-testid="document-card"` + `data-title` attributes are set
- * on all three card wrapper variants in Documents.tsx (GRID, LIST,
- * COMPACT) and on ModernDocumentItem.tsx for corpus-scoped views.
- *
- * Real-world ingestion can take "up to a few minutes" per PDF; the
- * default 8-minute ceiling leaves headroom for cold workers.
+ * Cards are matched by `data-testid="document-card"` (set in both
+ * Documents.tsx and ModernDocumentItem.tsx) and the visible title
+ * text. Real-world ingestion can take "up to a few minutes" per PDF;
+ * the default 8-minute ceiling leaves headroom for cold workers.
  */
 export async function waitForDocumentReady(
   page: Page,
   documentTitle: string,
   timeoutMs: number = 8 * 60 * 1000
 ): Promise<void> {
-  // Use attribute selector to match the exact title (avoids partial-text
-  // collisions when one title is a prefix of another).
-  const cardSelector = `[data-testid="document-card"][data-title="${documentTitle}"]`;
-
   await expect(async () => {
     // Re-navigate on every attempt to force a fresh GraphQL fetch and
     // bypass any in-flight polling gaps.
     await spaNavigate(page, "/documents");
     await expectViewVisible(page, { kind: "text", text: /Your\s+documents/i });
 
-    const card = page.locator(cardSelector);
+    const card = page
+      .locator("[data-testid='document-card']")
+      .filter({ hasText: documentTitle })
+      .first();
     await expect(card).toBeVisible({ timeout: 10_000 });
 
     // `data-processing="true"` while backendLock === true.
