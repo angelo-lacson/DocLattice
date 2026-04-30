@@ -2558,7 +2558,7 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             "different angles (paraphrase the question, search for key terms, "
             "search for likely answer phrasings). A single failed search is NOT "
             "sufficient evidence that the information is missing — most legal "
-            "documents need multiple targeted queries to surface a relevant span.\n"
+            "corpora need multiple targeted queries to surface a relevant span.\n"
             "4. After gathering enough information from the tools, you MUST "
             "commit to the final structured response by calling the result "
             "tool. Do not narrate further; do not keep invoking tools "
