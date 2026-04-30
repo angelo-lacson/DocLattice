@@ -1381,8 +1381,8 @@ export const Documents = () => {
                       role="button"
                       tabIndex={0}
                       data-testid="document-card"
-                      data-title={doc.title || ""}
-                      data-processing={doc.backendLock ? "true" : "false"}
+                      data-title={doc.title ?? ""}
+                      data-processing={String(Boolean(doc.backendLock))}
                       aria-label={`Open document ${doc.title || "Untitled"}`}
                       $selected={selected_document_ids.includes(doc.id)}
                       onClick={() => handleDocumentClick(doc)}
@@ -1506,8 +1506,8 @@ export const Documents = () => {
                       role="row"
                       tabIndex={0}
                       data-testid="document-card"
-                      data-title={doc.title || ""}
-                      data-processing={doc.backendLock ? "true" : "false"}
+                      data-title={doc.title ?? ""}
+                      data-processing={String(Boolean(doc.backendLock))}
                       aria-label={`Open document ${doc.title || "Untitled"}`}
                       $selected={selected_document_ids.includes(doc.id)}
                       onClick={() => handleDocumentClick(doc)}
@@ -1576,8 +1576,8 @@ export const Documents = () => {
                       role="listitem"
                       tabIndex={0}
                       data-testid="document-card"
-                      data-title={doc.title || ""}
-                      data-processing={doc.backendLock ? "true" : "false"}
+                      data-title={doc.title ?? ""}
+                      data-processing={String(Boolean(doc.backendLock))}
                       aria-label={`Open document ${doc.title || "Untitled"}`}
                       $selected={selected_document_ids.includes(doc.id)}
                       onClick={() => handleDocumentClick(doc)}
