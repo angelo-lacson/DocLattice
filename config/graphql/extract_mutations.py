@@ -1099,7 +1099,7 @@ EXTRACT_ITERATION_AXES = ("MODEL", "DOCUMENT_VERSIONS", "FIELDSET")
 def _clone_fieldset_for_iteration(
     source_fieldset: Fieldset,
     user,
-    column_overrides: Optional[dict] = None,  # noqa: F821 (Optional imported below)
+    column_overrides: Optional[dict] = None,
 ) -> Fieldset:
     """Deep-clone a fieldset and its columns for a FIELDSET-axis iteration.
 
