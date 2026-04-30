@@ -1286,6 +1286,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
       <>
         <CardContainer
           ref={setNodeRef}
+          data-testid="document-card"
           className={`${is_selected ? "is-selected" : ""} ${
             isProcessing ? "backend-locked" : ""
           } ${isFailed ? "failed" : ""} ${
@@ -1497,6 +1498,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
     <>
       <ListContainer
         ref={setNodeRef}
+        data-testid="document-card"
         className={`${is_selected ? "is-selected" : ""} ${
           isProcessing ? "backend-locked" : ""
         } ${isFailed ? "failed" : ""} ${isLongPressing ? "long-pressing" : ""}`}
