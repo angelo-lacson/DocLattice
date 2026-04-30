@@ -150,14 +150,17 @@ class ClassifyNoneResultTests(SimpleTestCase):
         Pydantic-AI emits ``ArgsJson`` (str) and ``ArgsDict`` (dict)
         interchangeably across model providers; conflating them in the
         Counter keeps loop detection accurate (issue #1381).
+
+        Alternating dict/str args ``TOOL_LOOP_THRESHOLD`` times must trip
+        the loop detector — without normalisation each variant would only
+        count to half the threshold and the loop would be missed.
         """
         dict_call = _tool_call("similarity_search", {"query": "same"})
         # Same logical args, but as a JSON string.
         str_call = _tool_call("similarity_search", '{"query": "same"}')
         messages = [
-            _make_response(dict_call),
-            _make_response(str_call),
-            _make_response(dict_call),
+            _make_response(dict_call if i % 2 == 0 else str_call)
+            for i in range(TOOL_LOOP_THRESHOLD)
         ]
         self.assertEqual(_classify_none_result(messages), NONE_RESULT_TOOL_LOOP)
 

@@ -165,13 +165,9 @@ class LinkRetrievalCitationsTests(TestCase):
         self.assertEqual(datacell.sources.count(), 0)
 
 
-# NOTE: failure-mode classification is covered by
-# ``test_data_extract_failure_classification.py`` (issue #1381 PR), which
-# exercises the canonical ``_classify_none_result`` returning the
-# ``NONE_RESULT_*`` constants. The earlier draft of this file shipped a
-# parallel duck-typed classifier with a tuple-return shape; that variant
-# was superseded during the merge and its tests were dropped to keep a
-# single source of truth for failure-mode semantics.
+# Failure-mode classification (`_classify_none_result` and the
+# `NONE_RESULT_*` constants) is covered by
+# ``test_data_extract_failure_classification.py``.
 
 
 class CrossEncoderRerankerTests(TestCase):
