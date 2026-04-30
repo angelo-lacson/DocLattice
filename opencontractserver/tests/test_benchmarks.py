@@ -611,6 +611,73 @@ class BenchmarkRunnerIntegrationTestCase(TransactionTestCase):
         shutil.rmtree(path, ignore_errors=True)
 
 
+class ForceCeleryEagerSafetyGuardsTestCase(PyUnitTestCase):
+    """Tests for the safety guards on :func:`force_celery_eager` (issue #1410).
+
+    The context manager mutates the global Celery config; calling it from
+    a live worker or a non-benchmark process would silently route every
+    task dispatched during the benchmark window through the in-process
+    executor.  These tests pin the explicit refusals.
+    """
+
+    def test_refuses_outside_test_mode_without_cli_env(self):
+        """Non-test, non-CLI processes must raise rather than mutate config."""
+        import os
+
+        from opencontractserver.benchmarks.loader import force_celery_eager
+
+        prev_cli = os.environ.pop("OC_BENCHMARK_CLI", None)
+        try:
+            with override_settings(MODE="PROD"):
+                with self.assertRaises(RuntimeError) as ctx:
+                    with force_celery_eager():
+                        pass
+                self.assertIn("benchmark", str(ctx.exception).lower())
+        finally:
+            if prev_cli is not None:
+                os.environ["OC_BENCHMARK_CLI"] = prev_cli
+
+    def test_allows_when_oc_benchmark_cli_env_is_set(self):
+        """An explicit ``OC_BENCHMARK_CLI`` env var unlocks the helper."""
+        import os
+
+        from celery import current_app
+
+        from opencontractserver.benchmarks.loader import force_celery_eager
+
+        prev_cli = os.environ.get("OC_BENCHMARK_CLI")
+        os.environ["OC_BENCHMARK_CLI"] = "1"
+        prev_eager = current_app.conf.task_always_eager
+        try:
+            with override_settings(MODE="PROD"):
+                with force_celery_eager():
+                    self.assertTrue(current_app.conf.task_always_eager)
+            # Restored on exit.
+            self.assertEqual(current_app.conf.task_always_eager, prev_eager)
+        finally:
+            if prev_cli is None:
+                os.environ.pop("OC_BENCHMARK_CLI", None)
+            else:
+                os.environ["OC_BENCHMARK_CLI"] = prev_cli
+
+    def test_refuses_when_already_eager(self):
+        """Concurrent (or stacked) invocations are rejected loudly."""
+        from celery import current_app
+
+        from opencontractserver.benchmarks.loader import force_celery_eager
+
+        conf = current_app.conf
+        prev_eager = conf.task_always_eager
+        conf.task_always_eager = True
+        try:
+            with self.assertRaises(RuntimeError) as ctx:
+                with force_celery_eager():
+                    pass
+            self.assertIn("already", str(ctx.exception).lower())
+        finally:
+            conf.task_always_eager = prev_eager
+
+
 class BenchmarkTaskDataclassTestCase(PyUnitTestCase):
     """Guard against accidental changes to the public BenchmarkTask shape."""
 
