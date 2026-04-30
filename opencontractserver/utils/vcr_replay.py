@@ -30,13 +30,14 @@ prompts contain RUN_ID timestamps from the E2E spec, which make bodies
 differ across runs. We therefore strip volatile fields from the request
 body before matching. See ``_match_llm_body`` below.
 """
+
 from __future__ import annotations
 
 import logging
 import os
 import re
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +61,7 @@ _VOLATILE_PATTERNS = [
     re.compile(rb'"id"\s*:\s*"call_[A-Za-z0-9]+"'),  # OpenAI tool-call IDs
     re.compile(rb'"tool_call_id"\s*:\s*"call_[A-Za-z0-9]+"'),
     # UUIDs that occasionally appear in tool returns (annotation IDs etc.)
-    re.compile(
-        rb"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"
-    ),
+    re.compile(rb"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"),
 ]
 
 
@@ -135,7 +134,7 @@ def _match_llm_body(r1, r2) -> None:
 
 
 @contextmanager
-def maybe_vcr_cassette() -> Iterator[Optional[object]]:
+def maybe_vcr_cassette() -> Iterator[object | None]:
     """
     Yield either an active VCR cassette context (when env says so) or
     None (the no-op path used in production).
@@ -210,9 +209,7 @@ def maybe_vcr_cassette() -> Iterator[Optional[object]]:
     def _ignore_request(request) -> bool:
         return request.host not in _LLM_HOSTS
 
-    my_vcr.before_record_request = (
-        lambda req: req if not _ignore_request(req) else None
-    )
+    my_vcr.before_record_request = lambda req: req if not _ignore_request(req) else None
     # ``record_mode=none`` (replay) plus our ignore filter means: for
     # non-LLM hosts the request passes through to the real network; for
     # LLM hosts a missing cassette entry raises
