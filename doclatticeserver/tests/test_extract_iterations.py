@@ -6,7 +6,13 @@ Covers:
   * The ``compareExtracts`` GraphQL resolver
 """
 
+# Make all annotations PEP-563 strings so referencing ``User`` (the runtime
+# value returned by ``get_user_model()``) as a type doesn't raise mypy's
+# "valid-type" error — same pattern used by other test modules in this suite.
+from __future__ import annotations
+
 import uuid
+from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -57,6 +63,23 @@ def _make_extract(user, name, *, fieldset, parent=None, model_config=None):
 class DiffHelperTestCase(TestCase):
     """Exercises ``diff_extracts`` directly so the algorithm has unit-level
     coverage independent of GraphQL plumbing."""
+
+    # Class-level annotations so mypy can see attributes assigned by
+    # setUpTestData (Django's classmethod fixture pattern); without these
+    # every self.user / self.fieldset / etc. access is flagged attr-defined.
+    # Typed as Any rather than the concrete classes because `User = get_user_model()`
+    # is a runtime variable, not a valid mypy type, and using concrete model
+    # classes here would force the same kind of django-stubs gymnastics the
+    # rest of the test suite avoids by baselining.
+    user: Any
+    fieldset: Any
+    col_a: Any
+    col_b: Any
+    tree: Any
+    doc_v1: Any
+    doc_v2: Any
+    extract_a: Any
+    extract_b: Any
 
     @classmethod
     def setUpTestData(cls):
@@ -186,15 +209,15 @@ class DiffHelperTestCase(TestCase):
             cells_a=Datacell.objects.filter(extract=self.extract_a),
             cells_b=Datacell.objects.filter(extract=self.extract_b),
         )
-        self.assertEqual(
-            sum(1 for d in diffs if d.status == DIFF_ONLY_IN_B), 1
-        )
-        self.assertEqual(
-            sum(1 for d in diffs if d.status == DIFF_ONLY_IN_A), 0
-        )
+        self.assertEqual(sum(1 for d in diffs if d.status == DIFF_ONLY_IN_B), 1)
+        self.assertEqual(sum(1 for d in diffs if d.status == DIFF_ONLY_IN_A), 0)
 
 
 class CreateExtractIterationMutationTestCase(TestCase):
+    # graphene.test.Client lacks type stubs for `.execute`, so annotate as
+    # Any to keep mypy quiet without baselining the whole file.
+    client: Any
+
     def setUp(self):
         self.user = User.objects.create_user(username="forker", password="x")
         self.client = Client(schema, context_value=_Ctx(self.user))
@@ -258,9 +281,7 @@ class CreateExtractIterationMutationTestCase(TestCase):
         self.assertEqual(new.parent_extract_id, self.source.pk)
         # MODEL axis must share the parent's fieldset (no clone)
         self.assertEqual(new.fieldset_id, self.source.fieldset_id)
-        self.assertEqual(
-            new.model_config.get("model"), "anthropic:claude-opus-4-7"
-        )
+        self.assertEqual(new.model_config.get("model"), "anthropic:claude-opus-4-7")
         # Document set is byte-identical to parent
         self.assertEqual(
             list(new.documents.values_list("id", flat=True)),
@@ -301,6 +322,8 @@ class CreateExtractIterationMutationTestCase(TestCase):
 
 
 class CompareExtractsResolverTestCase(TestCase):
+    client: Any
+
     def setUp(self):
         self.user = User.objects.create_user(username="cmp", password="x")
         self.client = Client(schema, context_value=_Ctx(self.user))
