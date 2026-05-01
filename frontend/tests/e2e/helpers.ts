@@ -856,7 +856,15 @@ export async function forkExtractIterationViaUI(
   page: Page,
   iterationName: string,
   axis: "MODEL" | "DOCUMENT_VERSIONS" | "FIELDSET" = "MODEL",
-  autoStart: boolean = false
+  autoStart: boolean = false,
+  /**
+   * Only used when axis === "MODEL". The dialog renders a "Model identifier"
+   * input that NewIterationDialog packs into modelConfig = { model }. Without
+   * a non-empty value the mutation inherits the parent's empty model_config,
+   * which makes the backend's iterationAxis resolver return null (no diff
+   * across model_config). Default to a stub so the axis chip renders.
+   */
+  modelIdentifier: string = "anthropic:claude-opus-4-7"
 ): Promise<string> {
   // Switch to Iterations tab. ExtractDetailContent's Tabs renders this
   // tab as the fourth child, label "Iterations".
@@ -888,6 +896,18 @@ export async function forkExtractIterationViaUI(
   await dialog
     .getByPlaceholder(/Defaults to .*iteration N/i)
     .fill(iterationName);
+
+  // For MODEL-axis runs, fill the "Model identifier" input. The backend
+  // iterationAxis resolver compares (self.model_config or {}) to
+  // (parent.model_config or {}) — without a value here the iteration
+  // inherits parent's empty config and the resolver returns null, so
+  // the axis chip never renders.
+  if (axis === "MODEL" && modelIdentifier) {
+    const modelInput = dialog.getByPlaceholder(/anthropic:claude/i).first();
+    if (await modelInput.isVisible().catch(() => false)) {
+      await modelInput.fill(modelIdentifier);
+    }
+  }
 
   // "Run immediately" toggle. The dialog ships with checked=true; flip
   // it off when autoStart=false so the new iteration is created without
