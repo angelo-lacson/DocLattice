@@ -66,15 +66,56 @@ jobs:
         run: yarn playwright install --with-deps chromium
 
       # ────────────────────────────────────────────────────────────────
-      # Bring up the full local stack (postgres, redis, embedder,
-      # docling-parser, django, celeryworker). We use `local.yml` rather
-      # than `test.yml` because the extract pipeline needs a celery
-      # worker, and `local.yml` is the only compose file that ships one.
+      # Materialize `.envs/.local/*` from the committed `.envs/.test/*`
+      # templates. Real `.envs/.local/*` files are gitignored because
+      # they hold developer-machine credentials; CI must NOT use those.
+      # The `.test` templates ship fake API keys, STORAGE_BACKEND=LOCAL,
+      # USE_AUTH0=false, and matching Postgres credentials, so they're
+      # the safe baseline. We then overlay the bits `local.yml` needs
+      # that the test templates intentionally omit:
       #
-      # The cassette replays every OpenAI call so OPENAI_API_KEY can be
-      # anything. PDF parsing runs against the in-stack Docling
-      # microservice — no LlamaParse key needed.
+      #   * DATABASE_URL — local.yml's django service reads this; the
+      #     test templates leave it unset because test.yml derives it
+      #     from POSTGRES_*.
+      #   * DJANGO_SETTINGS_MODULE — flipped from `config.settings.test`
+      #     to `config.settings.local` so `local.yml`'s `/start`
+      #     entrypoint (which boots the dev server, not the test runner)
+      #     finds its expected settings module.
+      #   * PDF_PARSER=docling — keeps the workflow off LlamaParse.
       # ────────────────────────────────────────────────────────────────
+      - name: Seed local env files (from .envs/.test)
+        run: |
+          mkdir -p .envs/.local
+          cp .envs/.test/.django .envs/.local/.django
+          cp .envs/.test/.postgres .envs/.local/.postgres
+
+          # Source the postgres template into the shell so we can build
+          # the matching DATABASE_URL local.yml expects to consume.
+          set -a
+          # shellcheck disable=SC1091
+          . .envs/.local/.postgres
+          set +a
+          echo "DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}" >> .envs/.local/.django
+
+          # `local.yml` expects local settings; the test templates pin
+          # `config.settings.test`. Replace the module rather than
+          # appending so there's no duplicate setting (env_file uses
+          # last-wins, but explicit is better than implicit).
+          sed -i 's|^DJANGO_SETTINGS_MODULE=.*|DJANGO_SETTINGS_MODULE=config.settings.local|' .envs/.local/.django
+          # The .test template sets TESTING=true; the local stack must
+          # not pick that up (it would route to the test runner code
+          # paths). Strip it.
+          sed -i '/^TESTING=/d' .envs/.local/.django
+
+          # Pin the parser away from LlamaParse — see the file-level
+          # note about Docling.
+          echo "PDF_PARSER=docling" >> .envs/.local/.django
+
+          # Sanity dump (without secrets — there are none in the .test
+          # template, but be explicit).
+          echo "--- .envs/.local/.django (head) ---"
+          grep -E '^(DJANGO_SETTINGS_MODULE|DJANGO_SUPERUSER_USERNAME|STORAGE_BACKEND|USE_AUTH0|PDF_PARSER|DATABASE_URL=postgres://)' .envs/.local/.django || true
+
       - name: Build django image
         run: docker compose -f local.yml build django
 
@@ -128,10 +169,11 @@ jobs:
           CI: "true"
           E2E_RUN_LLM_TESTS: "true"
           E2E_TEST_USERNAME: admin
-          # The local stack creates the superuser from
-          # DJANGO_SUPERUSER_PASSWORD in `.envs/.local/.django`. CI must
-          # supply the same value to the playwright fixture.
-          E2E_TEST_PASSWORD: ${{ secrets.E2E_LOCAL_SUPERUSER_PASSWORD }}
+          # Must match DJANGO_SUPERUSER_PASSWORD in
+          # `.envs/.test/.django` (which the seed step above copies
+          # into `.envs/.local/.django`). The .test template ships a
+          # fixed, public test password — no GitHub Secret involved.
+          E2E_TEST_PASSWORD: Openc0ntracts_def@ult
         run: yarn playwright test --grep "Extract PDF workflow" --reporter=list
 
       - name: Capture backend logs on failure
