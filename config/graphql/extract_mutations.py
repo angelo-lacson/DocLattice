@@ -1136,9 +1136,7 @@ def _clone_fieldset_for_iteration(
             output_type=overrides.get("output_type", column.output_type),
             limit_to_label=overrides.get("limit_to_label", column.limit_to_label),
             instructions=overrides.get("instructions", column.instructions),
-            extract_is_list=overrides.get(
-                "extract_is_list", column.extract_is_list
-            ),
+            extract_is_list=overrides.get("extract_is_list", column.extract_is_list),
             task_name=overrides.get("task_name", column.task_name),
             data_type=column.data_type,
             validation_config=column.validation_config,
@@ -1170,9 +1168,7 @@ def _resolve_iteration_documents(source_extract: Extract, axis: str):
         return parent_docs
     current_by_tree = {
         d.version_tree_id: d
-        for d in Document.objects.filter(
-            version_tree_id__in=tree_ids, is_current=True
-        )
+        for d in Document.objects.filter(version_tree_id__in=tree_ids, is_current=True)
     }
     # Fall back to the original Document if no current row exists for a tree
     # (e.g. soft-deleted) so the iteration set always matches the parent shape.
@@ -1240,9 +1236,7 @@ class CreateExtractIteration(graphene.Mutation):
         if axis not in EXTRACT_ITERATION_AXES:
             return CreateExtractIteration(
                 ok=False,
-                message=(
-                    f"axis must be one of {', '.join(EXTRACT_ITERATION_AXES)}"
-                ),
+                message=(f"axis must be one of {', '.join(EXTRACT_ITERATION_AXES)}"),
             )
 
         try:
@@ -1279,7 +1273,8 @@ class CreateExtractIteration(graphene.Mutation):
         # Inherit parent model_config when caller didn't supply one. We deep-
         # copy via dict() so subsequent edits to the parent don't leak in.
         effective_model_config = (
-            dict(model_config) if model_config is not None
+            dict(model_config)
+            if model_config is not None
             else dict(source.model_config or {})
         )
 

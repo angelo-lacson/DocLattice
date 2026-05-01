@@ -8,12 +8,12 @@ graph.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable, Optional
+from typing import Any
 
 from opencontractserver.documents.models import Document
 from opencontractserver.extracts.models import Column, Datacell, Extract
-
 
 # Status enum mirrored from ExtractDiffStatus in the GraphQL layer. Kept as
 # plain strings so this module has no Graphene dependency.
@@ -27,16 +27,16 @@ DIFF_ONLY_IN_B = "ONLY_IN_B"
 class CellDiff:
     row_key: str
     column_key: str
-    document: Optional[Document]  # representative doc (prefers B)
-    document_a: Optional[Document]
-    document_b: Optional[Document]
-    cell_a: Optional[Datacell]
-    cell_b: Optional[Datacell]
+    document: Document | None  # representative doc (prefers B)
+    document_a: Document | None
+    document_b: Document | None
+    cell_a: Datacell | None
+    cell_b: Datacell | None
     status: str
     column_config_changed: bool
 
 
-def _cell_value(cell: Optional[Datacell]) -> Any:
+def _cell_value(cell: Datacell | None) -> Any:
     """Effective value of a datacell — corrected_data wins, else data."""
     if cell is None:
         return None
@@ -133,7 +133,7 @@ def diff_extracts(
 
         # Pick a representative document — prefer B (the "new" iteration)
         # so the side panel shows the latest version metadata.
-        doc = (cell_b.document if cell_b else (cell_a.document if cell_a else None))
+        doc = cell_b.document if cell_b else (cell_a.document if cell_a else None)
 
         column_changed = (
             column_key in a_col_sig

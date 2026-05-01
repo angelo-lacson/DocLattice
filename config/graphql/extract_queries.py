@@ -17,6 +17,7 @@ from graphene_django.filter import DjangoFilterConnectionField
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
 
+from config.graphql.document_types import DocumentType
 from config.graphql.filters import (
     AnalysisFilter,
     AnalyzerFilter,
@@ -26,7 +27,6 @@ from config.graphql.filters import (
     FieldsetFilter,
     GremlinEngineFilter,
 )
-from config.graphql.document_types import DocumentType
 from config.graphql.graphene_types import (
     AnalysisType,
     AnalyzerType,
@@ -210,9 +210,7 @@ class ExtractQueryMixin:
             extract_b, user, document_id=None
         )
 
-        diffs = diff_extracts(
-            extract_a, extract_b, cells_a=cells_a, cells_b=cells_b
-        )
+        diffs = diff_extracts(extract_a, extract_b, cells_a=cells_a, cells_b=cells_b)
         return ExtractDiffType(
             extract_a=extract_a,
             extract_b=extract_b,
