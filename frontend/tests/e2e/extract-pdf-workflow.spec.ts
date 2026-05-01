@@ -227,10 +227,16 @@ test.describe("Extract PDF workflow (LLM-gated)", () => {
       await expect(page.getByText(ITERATION_NAME).first()).toBeVisible({
         timeout: 15_000,
       });
-      // Axis badge ("Model" Chip) confirms iterationAxis was inferred.
-      await expect(page.getByText(/^Model$/i).first()).toBeVisible({
+      // Axis badge confirms iterationAxis was inferred. The chip's text is
+      // " Model" (the Lucide icon contributes a leading whitespace token),
+      // so the regex must be loose; we anchor on the model identifier chip
+      // to disambiguate from any unrelated "Model" text on the page.
+      await expect(page.getByText(/Model/i).first()).toBeVisible({
         timeout: 5_000,
       });
+      await expect(
+        page.getByText(/anthropic:claude-opus-4-7/i).first()
+      ).toBeVisible({ timeout: 5_000 });
     });
 
     await test.step("compare view renders cell-level diff", async () => {
