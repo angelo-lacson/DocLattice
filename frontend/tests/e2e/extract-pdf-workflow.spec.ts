@@ -248,16 +248,20 @@ test.describe("Extract PDF workflow (LLM-gated)", () => {
       // the chip text rather than parsing the grid because the chip
       // is a stable, semantically meaningful summary even if the grid
       // virtualizes rows in future revisions.
-      await expect(page.getByText(/Only in A:\s*2/i)).toBeVisible({
+      // Each chip's text appears both inside the chip itself AND inside
+      // the SummaryRow wrapper (whose textContent concatenates all chips),
+      // so getByText resolves to two elements per regex; .first() pins
+      // the assertion to the chip element which is what we care about.
+      await expect(page.getByText(/Only in A:\s*2/i).first()).toBeVisible({
         timeout: 30_000,
       });
       // No CHANGED rows expected — iteration B is empty so the diff
       // can never classify a cell as CHANGED.
-      await expect(page.getByText(/Changed:\s*0/i)).toBeVisible({
+      await expect(page.getByText(/Changed:\s*0/i).first()).toBeVisible({
         timeout: 5_000,
       });
       // Total reflects the alignment count: same 2 cells.
-      await expect(page.getByText(/2 cells compared/i)).toBeVisible({
+      await expect(page.getByText(/2 cells compared/i).first()).toBeVisible({
         timeout: 5_000,
       });
 
