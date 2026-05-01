@@ -478,6 +478,14 @@ class TestBatchEmbedTextAnnotations(unittest.TestCase):
         # Always release peers so daemon threads exit cleanly.
         never_release.set()
 
+        # Confirm the first sub-batch actually fired before checking the
+        # timing — otherwise a regression that never schedules sub-batch 0
+        # would silently pass the elapsed-time check.
+        self.assertTrue(
+            call_started.is_set(),
+            msg="first sub-batch never started; timing assertion would be vacuous",
+        )
+
         # The fast-fail path must complete well inside the 10s peer
         # block. A regression that waits on in-flight peers would take
         # ~10s; we give a generous 5s headroom over scheduling jitter.
@@ -488,6 +496,15 @@ class TestBatchEmbedTextAnnotations(unittest.TestCase):
                 f"Fast-fail path took {elapsed:.2f}s; expected < "
                 f"{deadline_seconds}s. Executor likely waited on in-flight peers."
             ),
+        )
+
+        # At least one peer sub-batch entered ``embed_texts_batch`` before
+        # being abandoned — otherwise the executor cancelled every queued
+        # sub-batch and the test no longer exercises the in-flight path.
+        self.assertGreater(
+            peer_call_count[0],
+            0,
+            msg="no peer sub-batches started; in-flight fast-fail path not exercised",
         )
 
     def test_client_error_recorded_as_permanent_failure(self):

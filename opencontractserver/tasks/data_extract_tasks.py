@@ -348,11 +348,12 @@ async def doc_extract_query_task(
                     f"BENCHMARK_ALLOWED_MODEL_OVERRIDES"
                 )
             elif allowed is None:
-                # Unrestricted (operator-only) path — log a single line so
-                # operators can grep production logs to confirm this open
-                # mode is fired only by the benchmark tooling and never by
-                # an unexpected web/GraphQL caller. (issue #1410)
-                logger.info(
+                # Unrestricted (operator-only) path — emit a WARNING so the
+                # line stands out in production alerting. An operator who
+                # forgets to set ``BENCHMARK_ALLOWED_MODEL_OVERRIDES`` is
+                # arguably mis-configured; an unexpected web/GraphQL caller
+                # firing this path is a potential abuse signal. (issue #1410)
+                logger.warning(
                     "BENCHMARK_ALLOWED_MODEL_OVERRIDES unset; accepting "
                     "model_override=%r (operator-only path) for cell_id=%s",
                     model_override,
