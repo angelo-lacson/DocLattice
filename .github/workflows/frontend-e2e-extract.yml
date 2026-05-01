@@ -76,7 +76,7 @@ jobs:
       - name: Build django image
         run: docker compose -f local.yml build django
 
-      - name: Start backend stack with VCR replay
+      - name: Start backend stack with VCR replay (and coverage.py wrapping Django)
         env:
           OC_LLM_VCR_MODE: replay
           OC_LLM_VCR_CASSETTE: /app/opencontractserver/tests/fixtures/cassettes/e2e_extract_pdf_workflow/extract.yaml
@@ -88,7 +88,10 @@ jobs:
           # required for real PDF parsing. See file-level note.
           LLAMAPARSE_API_KEY: ${{ secrets.LLAMAPARSE_API_KEY }}
         run: |
-          docker compose -f local.yml up -d
+          # `local.e2e-coverage.yml` swaps the Django start command for
+          # `/start-with-coverage` (coverage.py wrapping `manage.py runserver
+          # --noreload`). All other services keep their default commands.
+          docker compose -f local.yml -f local.e2e-coverage.yml up -d
           echo "Waiting for django to become healthy…"
           for i in {1..60}; do
             state=$(docker inspect -f '{{.State.Health.Status}}' \
@@ -102,17 +105,60 @@ jobs:
             sleep 2
           done
 
-      - name: Run Playwright extract spec
+      # ────────────────────────────────────────────────────────────────
+      # Run the extract spec under coverage.
+      #
+      # COVERAGE=true causes vite-plugin-istanbul to instrument the
+      # frontend source. The fixture in `tests/e2e/fixtures.ts` extracts
+      # `window.__coverage__` after each test and dumps it under
+      # `coverage/e2e/.nyc_output/`. The yarn script wraps `nyc report`
+      # to merge those JSON files into an lcov report.
+      # ────────────────────────────────────────────────────────────────
+      - name: Run Playwright extract spec with coverage
         working-directory: ./frontend
         env:
           CI: "true"
+          COVERAGE: "true"
           E2E_RUN_LLM_TESTS: "true"
           E2E_TEST_USERNAME: admin
           # The local stack creates the superuser from
           # DJANGO_SUPERUSER_PASSWORD in `.envs/.local/.django`. CI must
           # supply the same value to the playwright fixture.
           E2E_TEST_PASSWORD: ${{ secrets.E2E_LOCAL_SUPERUSER_PASSWORD }}
-        run: yarn playwright test --grep "Extract PDF workflow" --reporter=list
+        # The packaged `yarn test:e2e:coverage` script doesn't take grep
+        # filters cleanly (it's a multi-command shell pipeline), so we
+        # inline the equivalent: COVERAGE=true playwright test → nyc
+        # report. The fixture in `tests/e2e/fixtures.ts` writes per-test
+        # __coverage__ JSON to `coverage/e2e/.nyc_output/`; nyc merges
+        # those into lcov for codecov upload.
+        run: |
+          set +e
+          yarn playwright test --grep "Extract PDF workflow" --reporter=list
+          E2E_EXIT=$?
+          mkdir -p coverage/e2e/.nyc_output
+          yarn nyc report --all \
+            --reporter=lcov --reporter=text \
+            --report-dir=coverage/e2e \
+            --temp-dir=coverage/e2e/.nyc_output \
+            || echo 'No coverage data to report (nyc report failed)'
+          exit $E2E_EXIT
+
+      # ────────────────────────────────────────────────────────────────
+      # Backend coverage: gracefully stopping Django triggers
+      # coverage.py's atexit handler which writes /app/.coverage (visible
+      # on the host via the volume mount). A throwaway exec converts to
+      # XML for codecov.
+      # ────────────────────────────────────────────────────────────────
+      - name: Stop Django gracefully (triggers coverage write)
+        if: success() || failure()
+        run: docker compose -f local.yml stop -t 15 django
+
+      - name: Export backend coverage to XML
+        if: success() || failure()
+        run: |
+          docker compose -f local.yml run --rm --no-deps django \
+            coverage xml -o /app/coverage-backend-e2e-extract.xml || true
+          ls -la coverage-backend-e2e-extract.xml || true
 
       - name: Capture backend logs on failure
         if: failure()
@@ -135,6 +181,36 @@ jobs:
           name: e2e-extract-playwright-report
           path: frontend/playwright-report-e2e/
           if-no-files-found: ignore
+
+      # ────────────────────────────────────────────────────────────────
+      # Codecov uploads — same flag pattern frontend-e2e.yml uses so the
+      # patch-coverage check can attribute the extract spec's coverage
+      # to the right buckets. The extra `extract` flag drilling lets the
+      # codecov UI break this job out from the broader e2e suite.
+      # ────────────────────────────────────────────────────────────────
+      - name: Upload frontend E2E coverage to Codecov
+        if: success() || failure()
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: frontend/coverage/e2e/lcov.info
+          # Same flag pattern as `frontend-e2e.yml`. The `frontend` rollup
+          # rides along so the README badge sees this upload's coverage.
+          flags: frontend-e2e,frontend
+          name: frontend-e2e-extract-coverage
+          fail_ci_if_error: false
+          disable_search: true
+
+      - name: Upload backend E2E coverage to Codecov
+        if: success() || failure()
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-backend-e2e-extract.xml
+          flags: backend-e2e
+          name: backend-e2e-extract-coverage
+          fail_ci_if_error: false
+          disable_search: true
 
       - name: Tear down backend stack
         if: always()
