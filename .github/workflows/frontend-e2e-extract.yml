@@ -6,19 +6,10 @@ name: Frontend E2E Extract Pipeline (VCR)
 # cassette so no OpenAI traffic is generated. See:
 #   docs/development/e2e_vcr.md
 #
-# *** CURRENTLY MANUAL-TRIGGER ONLY ***
-#
-# This workflow is parked behind `workflow_dispatch` because LlamaParse —
-# the default PDF parser used during ingest — is NOT yet covered by VCR.
-# Until `_LLM_HOSTS` in `opencontractserver/utils/vcr_replay.py` is
-# extended to include `api.cloud.llamaindex.ai` AND the cassette is
-# re-recorded to capture the parse-and-poll calls, this workflow would
-# call LlamaParse for real on every CI run. Triggering it manually is
-# OK for spot-checks (LlamaParse calls cost cents per doc); enabling it
-# on every PR is not.
-#
-# To enable on PRs: replace the `on:` block with the standard
-# pull_request paths filter (see frontend-e2e.yml for the template).
+# Parsing runs against the in-stack Docling microservice
+# (`docling-parser` in `local.yml`), so PDF parsing is real but free.
+# The only mocked traffic is the LLM provider (api.openai.com /
+# api.anthropic.com), which is what the cassette covers.
 
 env:
   DOCKER_BUILDKIT: 1
@@ -30,6 +21,17 @@ defaults:
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "opencontractserver/llms/**"
+      - "opencontractserver/tasks/data_extract_tasks.py"
+      - "opencontractserver/tasks/extract_orchestrator_tasks.py"
+      - "opencontractserver/utils/vcr_replay.py"
+      - "opencontractserver/tests/fixtures/cassettes/e2e_extract_pdf_workflow/**"
+      - "frontend/tests/e2e/extract-pdf-workflow.spec.ts"
+      - "frontend/tests/e2e/helpers.ts"
+      - "frontend/tests/e2e/fixtures.ts"
+      - ".github/workflows/frontend-e2e-extract.yml"
 
 concurrency:
   group: frontend-e2e-extract-${{ github.head_ref || github.run_id }}
@@ -70,8 +72,8 @@ jobs:
       # worker, and `local.yml` is the only compose file that ships one.
       #
       # The cassette replays every OpenAI call so OPENAI_API_KEY can be
-      # anything. LLAMAPARSE_API_KEY is still required (real calls,
-      # see file-level note above).
+      # anything. PDF parsing runs against the in-stack Docling
+      # microservice — no LlamaParse key needed.
       # ────────────────────────────────────────────────────────────────
       - name: Build django image
         run: docker compose -f local.yml build django
@@ -84,9 +86,10 @@ jobs:
           # every request so this is never sent. We pin it to a clearly
           # bogus value to make accidental real calls fail loudly.
           OPENAI_API_KEY: sk-FAKE-VCR-CI-NOT-REAL
-          # LlamaParse is NOT yet under VCR; the workflow secret is
-          # required for real PDF parsing. See file-level note.
-          LLAMAPARSE_API_KEY: ${{ secrets.LLAMAPARSE_API_KEY }}
+          # Force the in-stack Docling microservice for PDF parsing so
+          # the workflow does not depend on LlamaParse credentials and
+          # produces no external traffic for parsing.
+          PDF_PARSER: docling
         run: |
           docker compose -f local.yml up -d
           echo "Waiting for django to become healthy…"
@@ -101,6 +104,23 @@ jobs:
             fi
             sleep 2
           done
+
+          # PipelineSettings is a DB-backed singleton; the PDF_PARSER
+          # env var only affects how the singleton is *seeded*. Force
+          # the preferred parser to Docling explicitly so a pre-existing
+          # singleton (test-DB volume reuse, etc.) does not silently
+          # route this workflow through LlamaParse.
+          docker compose -f local.yml exec -T django python manage.py shell -c "
+          from opencontractserver.documents.models import PipelineSettings
+          ps = PipelineSettings.get_instance(use_cache=False)
+          docling = 'opencontractserver.pipeline.parsers.docling_parser_rest.DoclingParser'
+          for mt in ('application/pdf',
+                     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                     'application/vnd.openxmlformats-officedocument.presentationml.presentation'):
+              ps.preferred_parsers[mt] = docling
+          ps.save()
+          print('preferred PDF parser:', ps.get_preferred_parser('application/pdf'))
+          "
 
       - name: Run Playwright extract spec
         working-directory: ./frontend
