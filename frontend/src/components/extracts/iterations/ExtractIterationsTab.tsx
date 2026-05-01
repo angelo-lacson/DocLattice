@@ -246,6 +246,8 @@ export const ExtractIterationsTab: React.FC<ExtractIterationsTabProps> = ({
               key={it.id}
               $selected={isSelected}
               onClick={() => toggleSelect(it.id)}
+              data-testid="iteration-row"
+              data-iteration-id={it.id}
             >
               <Bullet $color={statusColor(it)} />
               <RowMain>

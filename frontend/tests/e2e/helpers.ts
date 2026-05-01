@@ -955,26 +955,16 @@ export async function selectIterationsForCompare(
   // can disambiguate it from any iteration that happens to share its
   // base name.
   const currentRow = page
-    .locator("div", {
-      hasText: new RegExp(
-        `${parentExtractName.replace(
-          /[.*+?^${}()|[\]\\]/g,
-          "\\$&"
-        )}.*\\(current\\)`,
-        "i"
-      ),
-    })
+    .locator("[data-testid='iteration-row']")
+    .filter({ hasText: parentExtractName })
+    .filter({ hasText: /\(current\)/i })
     .first();
   await expect(currentRow).toBeVisible({ timeout: 10_000 });
   await currentRow.click();
 
   const iterationRow = page
-    .locator("div", {
-      hasText: new RegExp(
-        iterationName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-        "i"
-      ),
-    })
+    .locator("[data-testid='iteration-row']")
+    .filter({ hasText: iterationName })
     .first();
   await expect(iterationRow).toBeVisible({ timeout: 10_000 });
   await iterationRow.click();
