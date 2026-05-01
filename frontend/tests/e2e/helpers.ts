@@ -690,13 +690,26 @@ export async function addDocumentsToExtractViaUI(
     timeout: 10_000,
   });
 
-  // Wait for at least one document card to load. The query fetches up to
-  // RELAY_CONNECTION_MAX_LIMIT (100) in one page, so all cards are in the
-  // DOM immediately. Cards are tagged with `data-testid="document-card"`
-  // (ModernDocumentItem.tsx); we then filter by the visible title text.
-  await expect(
-    page.locator("[data-testid='document-card']").first()
-  ).toBeVisible({ timeout: 15_000 });
+  // Wait briefly for at least one document card to load. The query fetches
+  // up to RELAY_CONNECTION_MAX_LIMIT (100) in one page, so all cards are
+  // in the DOM immediately. Cards are tagged with
+  // `data-testid="document-card"` (ModernDocumentItem.tsx); we then filter
+  // by the visible title text.
+  //
+  // The modal can legitimately render zero cards when every requested
+  // document is already attached to the extract (the corpus
+  // auto-populates extract rows on creation). In that case the modal
+  // shows an empty state, not a card list. Probe with a short timeout so
+  // we don't hang on the all-already-attached path; the no-op bailout
+  // below handles it.
+  const firstCard = page.locator("[data-testid='document-card']").first();
+  const haveAnyCards = await firstCard
+    .isVisible({ timeout: 5_000 })
+    .catch(() => false);
+  if (!haveAnyCards) {
+    await page.getByRole("button", { name: /^Cancel$/i }).click();
+    return;
+  }
 
   // Collect which titles we actually need to click (some may already be in
   // the extract and filtered out of the modal by filterDocIds).
