@@ -946,7 +946,11 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
   // with many documents.
   const [
     fetchDocRelationships,
-    { data: relationshipsData, loading: relationshipsLoading },
+    {
+      data: relationshipsData,
+      loading: relationshipsLoading,
+      error: relationshipsError,
+    },
   ] = useLazyQuery<
     GetDocRelationshipsForDocOutputs,
     GetDocRelationshipsForDocInputs
@@ -961,7 +965,16 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
   const currentOpenedCorpus = useReactiveVar(openedCorpus);
   const corpusIdForRelationships = currentOpenedCorpus?.id ?? null;
   const handleRelationshipHover = useCallback(() => {
-    if (!docRelationshipCount || relationshipsData || relationshipsLoading) {
+    // Bail when count is zero, when the data has already loaded, when a
+    // fetch is in-flight, OR when the previous attempt errored out — without
+    // the error guard the popup falls through to the "Loading..." fallback
+    // forever AND every subsequent hover retriggers the failing fetch.
+    if (
+      !docRelationshipCount ||
+      relationshipsData ||
+      relationshipsLoading ||
+      relationshipsError
+    ) {
       return;
     }
     fetchDocRelationships({
@@ -971,6 +984,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
     docRelationshipCount,
     relationshipsData,
     relationshipsLoading,
+    relationshipsError,
     fetchDocRelationships,
     id,
     corpusIdForRelationships,
@@ -1450,6 +1464,15 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
                           </RelationshipItem>
                         );
                       })
+                    ) : relationshipsError ? (
+                      <div
+                        style={{
+                          color: OS_LEGAL_COLORS.textMuted,
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        Couldn't load relationships.
+                      </div>
                     ) : (
                       <div
                         style={{
@@ -1697,6 +1720,15 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
                           </RelationshipItem>
                         );
                       })
+                    ) : relationshipsError ? (
+                      <div
+                        style={{
+                          color: OS_LEGAL_COLORS.textMuted,
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        Couldn't load relationships.
+                      </div>
                     ) : (
                       <div
                         style={{

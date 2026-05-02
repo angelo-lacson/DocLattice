@@ -910,13 +910,13 @@ test.describe("ModernDocumentItem — context menu", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Lazy relationship fetching (PR #1440)
+// Lazy relationship fetching
 //
 // The relationship badge fetches its detail data lazily on hover/click/focus
 // via useLazyQuery. These tests pin every branch of `handleRelationshipHover`
-// (count==0 / data already loaded / loading already in-flight / fetch fires)
-// and exercise both the onMouseEnter and onClick triggers so coverage captures
-// the touch-device fallback path too.
+// (count==0 / data already loaded / loading already in-flight / errored /
+// fetch fires) and exercise the onMouseEnter, onClick, and onFocus triggers
+// so coverage captures keyboard navigation and the touch-device fallback.
 // ---------------------------------------------------------------------------
 
 /** Walk up from a known descendant to find the React `onMouseEnter` ancestor. */
@@ -939,6 +939,30 @@ async function fireRelationshipHover(page: import("@playwright/test").Page) {
       node = node.parentElement;
     }
     throw new Error("Could not find onMouseEnter handler on badge ancestor");
+  });
+}
+
+/** Same walk-up, but invoke the React `onFocus` (keyboard navigation). */
+async function fireRelationshipFocus(page: import("@playwright/test").Page) {
+  await page.evaluate(() => {
+    const span = Array.from(document.querySelectorAll("span")).find((s) =>
+      /^\d+ Linked Document/.test(s.textContent ?? "")
+    );
+    let node: HTMLElement | null = span?.closest("div") ?? null;
+    while (node) {
+      const propsKey = Object.keys(node).find((k) =>
+        k.startsWith("__reactProps$")
+      );
+      const props = propsKey ? (node as any)[propsKey] : null;
+      if (typeof props?.onFocus === "function" && props.onMouseEnter) {
+        // Match the wrapper that has BOTH onFocus and onMouseEnter — that's
+        // RelationshipBadgeContainer, not the outer card focus handler.
+        props.onFocus({});
+        return;
+      }
+      node = node.parentElement;
+    }
+    throw new Error("Could not find onFocus handler on badge wrapper");
   });
 }
 
@@ -1024,18 +1048,17 @@ test.describe("ModernDocumentItem — lazy relationship fetching", () => {
   }) => {
     const doc = makeDocument({ docRelationshipCount: 0 });
 
-    // The badge is not rendered when count is 0, so we have to invoke the
-    // hover handler against the lazy query through a controlled stand-in: we
-    // rely on the early-return guard. Mount with no mocks — if the fetch
-    // fires, the test would fail with an unhandled-mock warning.
+    // The badge is gated at render time by `!!docRelationshipCount &&
+    // docRelationshipCount > 0`, so the hover handler is never reachable from
+    // the DOM. Mount with no mocks — if any fetch fires, MockedProvider
+    // surfaces an unhandled-mock warning and fails the test.
     await renderWithProviders(
       <ModernDocumentItem item={doc} viewMode="card" />,
       mount,
       []
     );
 
-    // Badge is NOT in DOM when count is 0 — the `!!docRelationshipCount &&
-    // docRelationshipCount > 0` gate hides it.
+    // Badge is NOT in DOM when count is 0.
     await expect(page.getByText("Linked Document")).toHaveCount(0);
   });
 
@@ -1075,6 +1098,79 @@ test.describe("ModernDocumentItem — lazy relationship fetching", () => {
     await fireRelationshipClick(page);
 
     await expect(page.getByText("Tap Linked Doc").first()).toBeAttached();
+  });
+
+  test("focus trigger fires fetch (keyboard navigation)", async ({
+    mount,
+    page,
+  }) => {
+    const rels = [
+      {
+        id: "rel-focus",
+        relationshipType: "RELATIONSHIP",
+        sourceDocument: { id: "RG9jdW1lbnRUeXBlOjE=", title: "Test" },
+        targetDocument: { id: "linked-focus", title: "Focus Linked Doc" },
+        annotationLabel: null,
+      },
+    ];
+    const doc = makeDocument({ docRelationshipCount: 1 });
+
+    const mocks: MockedResponse[] = [
+      {
+        request: {
+          query: GET_DOC_RELATIONSHIPS_FOR_DOC,
+          variables: { documentId: doc.id, corpusId: null },
+        },
+        result: { data: { bulkDocRelationships: rels } },
+      },
+    ];
+
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="card" />,
+      mount,
+      mocks
+    );
+
+    await expect(page.getByText("1").first()).toBeVisible();
+
+    await fireRelationshipFocus(page);
+
+    await expect(page.getByText("Focus Linked Doc").first()).toBeAttached();
+  });
+
+  test("network error short-circuits subsequent hovers", async ({
+    mount,
+    page,
+  }) => {
+    const doc = makeDocument({ docRelationshipCount: 1 });
+
+    // Single mock that returns a network error; without the `error` guard the
+    // second hover would consume a second mock (which we deliberately don't
+    // provide), and MockedProvider would surface "No more mocked responses".
+    const mocks: MockedResponse[] = [
+      {
+        request: {
+          query: GET_DOC_RELATIONSHIPS_FOR_DOC,
+          variables: { documentId: doc.id, corpusId: null },
+        },
+        error: new Error("network down"),
+      },
+    ];
+
+    await renderWithProviders(
+      <ModernDocumentItem item={doc} viewMode="card" />,
+      mount,
+      mocks
+    );
+
+    await fireRelationshipHover(page);
+
+    // Error fallback replaces the misleading "Loading..." text.
+    await expect(page.getByText("Couldn't load relationships.")).toBeAttached();
+
+    // Second hover must NOT retrigger the failing fetch.
+    await fireRelationshipHover(page);
+    await expect(page.getByText("Couldn't load relationships.")).toBeAttached();
   });
 
   test("repeat hovers do not refetch once data is loaded", async ({
