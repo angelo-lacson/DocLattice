@@ -583,7 +583,7 @@ class UpdateRelationship(graphene.Mutation):
             # Filter annotations through visible_to_user so unauthorized IDs are dropped
             # at the DB layer instead of after a per-row permission check
             def _load_visible_annotations(global_ids):
-                pks = [from_global_id(g)[1] for g in global_ids]
+                pks = {from_global_id(g)[1] for g in global_ids}
                 return (
                     list(Annotation.objects.visible_to_user(user).filter(id__in=pks)),
                     pks,
@@ -591,12 +591,14 @@ class UpdateRelationship(graphene.Mutation):
 
             # Add source annotations. ``visible_to_user`` already enforces
             # READ — every returned annotation is by definition readable, so
-            # no per-row permission re-check is needed.
+            # no per-row permission re-check is needed. Compare resolved PKs
+            # against requested PKs as sets so the equivalence is unambiguous
+            # under duplicate input IDs.
             if add_source_ids:
                 source_annotations, source_pks = _load_visible_annotations(
                     add_source_ids
                 )
-                if len(source_annotations) != len(set(source_pks)):
+                if {str(a.pk) for a in source_annotations} != source_pks:
                     return UpdateRelationship(
                         ok=False,
                         relationship=None,
@@ -609,7 +611,7 @@ class UpdateRelationship(graphene.Mutation):
                 target_annotations, target_pks = _load_visible_annotations(
                     add_target_ids
                 )
-                if len(target_annotations) != len(set(target_pks)):
+                if {str(a.pk) for a in target_annotations} != target_pks:
                     return UpdateRelationship(
                         ok=False,
                         relationship=None,

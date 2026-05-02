@@ -212,6 +212,10 @@ class UploadDocument(graphene.Mutation):
                         document=None,
                     )
 
+                # ``visible_to_user`` only enforces READ; we still need an EDIT
+                # check to gate writes. A user with READ-but-not-EDIT collapses
+                # into the same unified message as no-access at all (intentional
+                # IDOR posture).
                 if not user_has_permission_for_obj(user, corpus, PermissionTypes.EDIT):
                     return UploadDocument(
                         message=corpus_not_found_msg,
@@ -924,11 +928,10 @@ class ImportZipToCorpus(graphene.Mutation):
             import_zip_with_folder_structure,
         )
 
+        user = info.context.user
+
         # Check if usage-capped users can import
-        if (
-            info.context.user.is_usage_capped
-            and not settings.USAGE_CAPPED_USER_CAN_IMPORT_CORPUS
-        ):
+        if user.is_usage_capped and not settings.USAGE_CAPPED_USER_CAN_IMPORT_CORPUS:
             raise PermissionError(
                 "By default, usage-capped users cannot bulk import documents. "
                 "Please contact the admin to authorize your account."
@@ -944,7 +947,7 @@ class ImportZipToCorpus(graphene.Mutation):
                 "documents to it"
             )
             try:
-                corpus = Corpus.objects.visible_to_user(info.context.user).get(
+                corpus = Corpus.objects.visible_to_user(user).get(
                     id=from_global_id(corpus_id)[1]
                 )
             except Corpus.DoesNotExist:
@@ -955,9 +958,7 @@ class ImportZipToCorpus(graphene.Mutation):
                 )
 
             # Check permission on corpus
-            if not user_has_permission_for_obj(
-                info.context.user, corpus, PermissionTypes.EDIT
-            ):
+            if not user_has_permission_for_obj(user, corpus, PermissionTypes.EDIT):
                 return ImportZipToCorpus(
                     ok=False,
                     message=corpus_not_found_msg,
@@ -1010,7 +1011,7 @@ class ImportZipToCorpus(graphene.Mutation):
                 chain(
                     import_zip_with_folder_structure.s(
                         temporary_file.id,
-                        info.context.user.id,
+                        user.id,
                         job_id,
                         corpus.id,
                         target_folder_pk,

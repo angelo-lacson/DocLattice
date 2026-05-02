@@ -307,10 +307,6 @@ class UpdateCorpusDescription(graphene.Mutation):
                 version=revision.version,
             )
 
-        except Corpus.DoesNotExist:
-            return UpdateCorpusDescription(
-                ok=False, message=not_found_msg, obj=None, version=None
-            )
         except Exception as e:
             logger.error(f"Error updating corpus description: {e}")
             return UpdateCorpusDescription(
