@@ -546,12 +546,10 @@ class UploadDocumentsZip(graphene.Mutation):
         custom_meta=None,
         add_to_corpus_id=None,
     ) -> "UploadDocumentsZip":
+        user = info.context.user
         # Was going to user a user_passes_test decorator, but I wanted a custom error message
         # that could be easily reflected to user in the GUI.
-        if (
-            info.context.user.is_usage_capped
-            and not settings.USAGE_CAPPED_USER_CAN_IMPORT_CORPUS
-        ):
+        if user.is_usage_capped and not settings.USAGE_CAPPED_USER_CAN_IMPORT_CORPUS:
             raise PermissionError(
                 "By default, usage-capped users cannot bulk upload documents. "
                 "Please contact the admin to authorize your account."
@@ -584,12 +582,12 @@ class UploadDocumentsZip(graphene.Mutation):
                         "add documents to it"
                     )
                     try:
-                        corpus = Corpus.objects.visible_to_user(
-                            info.context.user
-                        ).get(id=from_global_id(add_to_corpus_id)[1])
+                        corpus = Corpus.objects.visible_to_user(user).get(
+                            id=from_global_id(add_to_corpus_id)[1]
+                        )
                         # Check if user has permission on this corpus
                         if not user_has_permission_for_obj(
-                            info.context.user, corpus, PermissionTypes.EDIT
+                            user, corpus, PermissionTypes.EDIT
                         ):
                             raise PermissionError(corpus_not_found_msg)
                         corpus_id = corpus.id
@@ -618,7 +616,7 @@ class UploadDocumentsZip(graphene.Mutation):
                 chain(
                     process_documents_zip.s(
                         temporary_file.id,
-                        info.context.user.id,
+                        user.id,
                         job_id,
                         title_prefix,
                         description,
@@ -1694,13 +1692,6 @@ class RestoreDocumentToVersion(graphene.Mutation):
                 new_version_number=new_path.version_number,
             )
 
-        except (Document.DoesNotExist, Corpus.DoesNotExist):
-            return RestoreDocumentToVersion(
-                ok=False,
-                message=not_found_msg,
-                document=None,
-                new_version_number=None,
-            )
         except Exception as e:
             logger.error(f"Failed to restore document to version: {str(e)}")
             return RestoreDocumentToVersion(

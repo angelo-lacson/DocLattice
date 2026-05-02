@@ -584,11 +584,14 @@ class UpdateRelationship(graphene.Mutation):
             # at the DB layer instead of after a per-row permission check
             def _load_visible_annotations(global_ids):
                 pks = [from_global_id(g)[1] for g in global_ids]
-                return list(
-                    Annotation.objects.visible_to_user(user).filter(id__in=pks)
-                ), pks
+                return (
+                    list(Annotation.objects.visible_to_user(user).filter(id__in=pks)),
+                    pks,
+                )
 
-            # Add source annotations
+            # Add source annotations. ``visible_to_user`` already enforces
+            # READ — every returned annotation is by definition readable, so
+            # no per-row permission re-check is needed.
             if add_source_ids:
                 source_annotations, source_pks = _load_visible_annotations(
                     add_source_ids
@@ -599,21 +602,9 @@ class UpdateRelationship(graphene.Mutation):
                         relationship=None,
                         message=not_found_msg,
                     )
-                for annotation in source_annotations:
-                    if not user_has_permission_for_obj(
-                        user,
-                        annotation,
-                        PermissionTypes.READ,
-                        include_group_permissions=True,
-                    ):
-                        return UpdateRelationship(
-                            ok=False,
-                            relationship=None,
-                            message=not_found_msg,
-                        )
                 relationship.source_annotations.add(*source_annotations)
 
-            # Add target annotations
+            # Add target annotations (same READ-via-visibility guarantee).
             if add_target_ids:
                 target_annotations, target_pks = _load_visible_annotations(
                     add_target_ids
@@ -624,18 +615,6 @@ class UpdateRelationship(graphene.Mutation):
                         relationship=None,
                         message=not_found_msg,
                     )
-                for annotation in target_annotations:
-                    if not user_has_permission_for_obj(
-                        user,
-                        annotation,
-                        PermissionTypes.READ,
-                        include_group_permissions=True,
-                    ):
-                        return UpdateRelationship(
-                            ok=False,
-                            relationship=None,
-                            message=not_found_msg,
-                        )
                 relationship.target_annotations.add(*target_annotations)
 
             # Removal is gated by UPDATE on the relationship itself (already
@@ -698,6 +677,10 @@ class UpdateRelations(graphene.Mutation):
     @login_required
     def mutate(root, info, relationships) -> "UpdateRelations":
         user = info.context.user
+        # Unified error message prevents IDOR enumeration of relationship IDs
+        not_found_msg = (
+            "Relationship not found or you do not have permission to access it"
+        )
         for relationship in relationships:
             pk = from_global_id(relationship["id"])[1]
             source_pks = list(
@@ -718,10 +701,6 @@ class UpdateRelations(graphene.Mutation):
             corpus_pk = from_global_id(relationship["corpus_id"])[1]
             document_pk = from_global_id(relationship["document_id"])[1]
 
-            # Unified error message prevents IDOR enumeration of relationship IDs
-            not_found_msg = (
-                "Relationship not found or you do not have permission to access it"
-            )
             try:
                 relationship = Relationship.objects.visible_to_user(user).get(id=pk)
             except Relationship.DoesNotExist:
@@ -820,10 +799,6 @@ class UpdateNote(graphene.Mutation):
                 version=revision.version,
             )
 
-        except Note.DoesNotExist:
-            return UpdateNote(
-                ok=False, message=not_found_msg, obj=None, version=None
-            )
         except Exception as e:
             logger.error(f"Error updating note: {e}")
             return UpdateNote(
