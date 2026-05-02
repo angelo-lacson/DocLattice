@@ -1574,6 +1574,25 @@ export const REQUEST_GET_EXTRACT = gql`
       started
       finished
       error
+      modelConfig
+      iterationAxis
+      parentExtract {
+        id
+        name
+      }
+      fullIterationList {
+        id
+        name
+        started
+        finished
+        error
+        modelConfig
+        iterationAxis
+        creator {
+          id
+          username
+        }
+      }
       fullDocumentList {
         id
         title
@@ -2031,6 +2050,116 @@ export const GET_EXTRACT_GRID_EMBED = gql`
           id
           page
         }
+      }
+    }
+  }
+`;
+
+// ----- Extract iteration comparison ---------------------------------------
+
+export type ExtractDiffStatus =
+  | "UNCHANGED"
+  | "CHANGED"
+  | "ONLY_IN_A"
+  | "ONLY_IN_B";
+
+export interface ExtractCellDiff {
+  rowKey: string;
+  columnKey: string;
+  document: { id: string; title: string } | null;
+  documentA: { id: string; title: string } | null;
+  documentB: { id: string; title: string } | null;
+  cellA: {
+    id: string;
+    data: any;
+    correctedData: any;
+    completed: string | null;
+    failed: string | null;
+  } | null;
+  cellB: {
+    id: string;
+    data: any;
+    correctedData: any;
+    completed: string | null;
+    failed: string | null;
+  } | null;
+  status: ExtractDiffStatus;
+  columnConfigChanged: boolean;
+}
+
+export interface ExtractDiffSummary {
+  unchanged: number;
+  changed: number;
+  onlyInA: number;
+  onlyInB: number;
+  total: number;
+}
+
+export interface CompareExtractsInput {
+  extractAId: string;
+  extractBId: string;
+}
+
+export interface CompareExtractsOutput {
+  compareExtracts: {
+    extractA: { id: string; name: string; modelConfig: any };
+    extractB: { id: string; name: string; modelConfig: any };
+    cells: ExtractCellDiff[];
+    summary: ExtractDiffSummary;
+  } | null;
+}
+
+export const COMPARE_EXTRACTS = gql`
+  query CompareExtracts($extractAId: ID!, $extractBId: ID!) {
+    compareExtracts(extractAId: $extractAId, extractBId: $extractBId) {
+      extractA {
+        id
+        name
+        modelConfig
+      }
+      extractB {
+        id
+        name
+        modelConfig
+      }
+      cells {
+        rowKey
+        columnKey
+        document {
+          id
+          title
+        }
+        documentA {
+          id
+          title
+        }
+        documentB {
+          id
+          title
+        }
+        cellA {
+          id
+          data
+          correctedData
+          completed
+          failed
+        }
+        cellB {
+          id
+          data
+          correctedData
+          completed
+          failed
+        }
+        status
+        columnConfigChanged
+      }
+      summary {
+        unchanged
+        changed
+        onlyInA
+        onlyInB
+        total
       }
     }
   }
