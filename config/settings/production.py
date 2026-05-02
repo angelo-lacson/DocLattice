@@ -133,7 +133,16 @@ INSTALLED_APPS = ["collectfasta"] + INSTALLED_APPS  # noqa F405
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "filters": {"require_debug_false": {"()": "django.utils.log.RequireDebugFalse"}},
+    "filters": {
+        "require_debug_false": {"()": "django.utils.log.RequireDebugFalse"},
+        # Issue #1432: silence the routine 'CSRF token missing.' WARNING
+        # that fires every time a Bearer-only SPA cold-starts. Other CSRF
+        # rejection reasons keep their WARNING level so origin/referer
+        # anomalies still surface.
+        "csrf_reject_filter": {
+            "()": "config.graphql.security.CsrfRejectLogFilter",
+        },
+    },
     "formatters": {
         "verbose": {
             "format": "%(levelname)s %(asctime)s %(module)s "
@@ -163,6 +172,12 @@ LOGGING = {
             "level": "ERROR",
             "handlers": ["console", "mail_admins"],
             "propagate": True,
+        },
+        "django.security.csrf": {
+            "handlers": ["console"],
+            "filters": ["csrf_reject_filter"],
+            "level": "INFO",
+            "propagate": False,
         },
     },
 }
