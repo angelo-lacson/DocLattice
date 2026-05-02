@@ -1,0 +1,16 @@
+{
+  "total": 449,
+  "byArea": {
+    "components_other": 119,
+    "annotator": 90,
+    "utils": 81,
+    "knowledge_base": 33,
+    "types": 27,
+    "other": 24,
+    "hooks": 23,
+    "graphql": 20,
+    "widgets_other": 18,
+    "routing": 12,
+    "widgets_chat": 2
+  }
+}
