@@ -954,12 +954,15 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
 
   const allDocRelationships = relationshipsData?.bulkDocRelationships;
 
+  // openedCorpus() reads the current Apollo reactive var at call time;
+  // hoist into a value so exhaustive-deps tracks it correctly.
+  const corpusIdForRelationships = openedCorpus()?.id ?? null;
   const handleRelationshipHover = useCallback(() => {
     if (!docRelationshipCount || relationshipsData || relationshipsLoading) {
       return;
     }
     fetchDocRelationships({
-      variables: { documentId: id, corpusId: openedCorpus()?.id ?? null },
+      variables: { documentId: id, corpusId: corpusIdForRelationships },
     });
   }, [
     docRelationshipCount,
@@ -967,6 +970,7 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
     relationshipsLoading,
     fetchDocRelationships,
     id,
+    corpusIdForRelationships,
   ]);
 
   const isFailed = processingStatus === DocumentProcessingStatus.FAILED;
