@@ -8,10 +8,7 @@ from opencontractserver.pipeline.base.file_types import (
     FileTypeEnum as BackendFileTypeEnum,
 )
 
-# Derive the GraphQL enum directly from the backend enum so the two can never
-# drift. Adding a new member to BackendFileTypeEnum (e.g. MD) automatically
-# exposes it through the schema; previously the GraphQL enum was hand-maintained
-# and silently broke any query that returned the missing value.
+# Derived from BackendFileTypeEnum to prevent schema drift.
 FileTypeEnum = graphene.Enum.from_enum(BackendFileTypeEnum)
 
 
