@@ -567,7 +567,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
                               <strong>{entry.user.username}</strong>
                               {entry.isRisingStar && (
                                 <RisingStarTag>
-                                  <TrendingUp size={11} />
+                                  <TrendingUp size={12} />
                                   Rising Star
                                 </RisingStarTag>
                               )}

@@ -417,4 +417,389 @@ test.describe("Leaderboard", () => {
 
     await component.unmount();
   });
+
+  test("renders rank-3 medal styling and rank > 3 numeric fallback", async ({
+    mount,
+    page,
+  }) => {
+    // Exercises the rank === 3 branch in RankBadge's three styled-component
+    // ternaries (bg / color / border) and the `entry.rank > 3 → <span>{rank}</span>`
+    // fallback in the Rank cell. Existing default mock only has ranks 1 + 2.
+    const fourEntryMock = {
+      request: {
+        query: GET_LEADERBOARD,
+        variables: {
+          metric: "BADGES",
+          scope: "ALL_TIME",
+          corpusId: undefined,
+          limit: 25,
+        },
+      },
+      result: {
+        data: {
+          leaderboard: {
+            metric: "BADGES",
+            scope: "ALL_TIME",
+            corpusId: null,
+            totalUsers: 4,
+            currentUserRank: 4,
+            entries: [1, 2, 3, 4].map((rank) => ({
+              rank,
+              score: 100 - rank * 10,
+              badgeCount: 100 - rank * 10,
+              messageCount: 50,
+              threadCount: 5,
+              annotationCount: 20,
+              reputation: 500,
+              isRisingStar: false,
+              user: {
+                id: `user-${rank}`,
+                username: `user_${rank}`,
+                email: `u${rank}@example.com`,
+                slug: `user-${rank}`,
+                isProfilePublic: true,
+              },
+            })),
+          },
+        },
+      },
+    };
+    const statsMock = {
+      request: {
+        query: GET_COMMUNITY_STATS,
+        variables: { corpusId: undefined },
+      },
+      result: defaultCommunityStatsMock.result,
+    };
+
+    const component = await mount(
+      <LeaderboardTestWrapper
+        mocks={[
+          fourEntryMock,
+          { ...fourEntryMock },
+          { ...fourEntryMock },
+          statsMock,
+          { ...statsMock },
+          { ...statsMock },
+        ]}
+      />
+    );
+
+    // All four user rows should render
+    await expect(page.getByText("user_1")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("user_2")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("user_3")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("user_4")).toBeVisible({ timeout: 10000 });
+
+    // Rank 4 renders the numeric fallback (the `<span>{entry.rank}</span>`
+    // branch of `entry.rank <= 3 ? <Medal/> : <span>...</span>`). Scope to a
+    // table cell so we don't match score/details that may also contain "4".
+    await expect(
+      page.locator("td span", { hasText: /^4$/ }).first()
+    ).toBeVisible({ timeout: 10000 });
+
+    await component.unmount();
+  });
+
+  test("changing metric dropdown to non-BADGES refetches and renders new icon/label", async ({
+    mount,
+    page,
+  }) => {
+    // Exercises:
+    // - FilterBar metric Dropdown's onChange callback (line 490) — covered
+    //   when the user picks a new option.
+    // - getMetricIcon / getScoreLabel non-BADGES branches (MESSAGES path).
+    const badgesMock = {
+      request: {
+        query: GET_LEADERBOARD,
+        variables: {
+          metric: "BADGES",
+          scope: "ALL_TIME",
+          corpusId: undefined,
+          limit: 25,
+        },
+      },
+      result: defaultLeaderboardMock.result,
+    };
+    const messagesMock = {
+      request: {
+        query: GET_LEADERBOARD,
+        variables: {
+          metric: "MESSAGES",
+          scope: "ALL_TIME",
+          corpusId: undefined,
+          limit: 25,
+        },
+      },
+      result: {
+        data: {
+          leaderboard: {
+            metric: "MESSAGES",
+            scope: "ALL_TIME",
+            corpusId: null,
+            totalUsers: 1,
+            currentUserRank: null,
+            entries: [
+              {
+                rank: 1,
+                score: 250,
+                badgeCount: 5,
+                messageCount: 250,
+                threadCount: 10,
+                annotationCount: 30,
+                reputation: 800,
+                isRisingStar: false,
+                user: {
+                  id: "user-msg",
+                  username: "chatty_user",
+                  email: "chat@example.com",
+                  slug: "chatty-user",
+                  isProfilePublic: true,
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+    const statsMock = {
+      request: {
+        query: GET_COMMUNITY_STATS,
+        variables: { corpusId: undefined },
+      },
+      result: defaultCommunityStatsMock.result,
+    };
+
+    const component = await mount(
+      <LeaderboardTestWrapper
+        mocks={[
+          badgesMock,
+          { ...badgesMock },
+          { ...badgesMock },
+          messagesMock,
+          { ...messagesMock },
+          { ...messagesMock },
+          statsMock,
+          { ...statsMock },
+          { ...statsMock },
+        ]}
+      />
+    );
+
+    // Wait for initial badges render
+    await expect(page.getByText("top_user")).toBeVisible({ timeout: 10000 });
+
+    // Open metric dropdown and pick "Most Active Contributors" (MESSAGES)
+    const triggers = page.locator(".oc-dropdown__trigger");
+    await triggers.first().click();
+    await page
+      .locator(".oc-dropdown__option", { hasText: "Most Active Contributors" })
+      .click();
+
+    // After refetch, the new entry should render with the messages-formatted
+    // score label produced by getScoreLabel(MESSAGES, 250).
+    await expect(page.getByText("chatty_user")).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(
+      page.getByText("250 messages", { exact: true }).first()
+    ).toBeVisible({ timeout: 10000 });
+
+    await component.unmount();
+  });
+
+  test("changing scope dropdown refetches with new scope variable", async ({
+    mount,
+    page,
+  }) => {
+    // Exercises the scope Dropdown's onChange callback (line 499 — second
+    // anonymous function in the FilterBar block).
+    const allTimeMock = {
+      request: {
+        query: GET_LEADERBOARD,
+        variables: {
+          metric: "BADGES",
+          scope: "ALL_TIME",
+          corpusId: undefined,
+          limit: 25,
+        },
+      },
+      result: defaultLeaderboardMock.result,
+    };
+    const weeklyMock = {
+      request: {
+        query: GET_LEADERBOARD,
+        variables: {
+          metric: "BADGES",
+          scope: "WEEKLY",
+          corpusId: undefined,
+          limit: 25,
+        },
+      },
+      result: {
+        data: {
+          leaderboard: {
+            metric: "BADGES",
+            scope: "WEEKLY",
+            corpusId: null,
+            totalUsers: 1,
+            currentUserRank: null,
+            entries: [
+              {
+                rank: 1,
+                score: 7,
+                badgeCount: 7,
+                messageCount: 12,
+                threadCount: 2,
+                annotationCount: 8,
+                reputation: 90,
+                isRisingStar: false,
+                user: {
+                  id: "user-week",
+                  username: "weekly_winner",
+                  email: "week@example.com",
+                  slug: "weekly-winner",
+                  isProfilePublic: true,
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+    const statsMock = {
+      request: {
+        query: GET_COMMUNITY_STATS,
+        variables: { corpusId: undefined },
+      },
+      result: defaultCommunityStatsMock.result,
+    };
+
+    const component = await mount(
+      <LeaderboardTestWrapper
+        mocks={[
+          allTimeMock,
+          { ...allTimeMock },
+          { ...allTimeMock },
+          weeklyMock,
+          { ...weeklyMock },
+          { ...weeklyMock },
+          statsMock,
+          { ...statsMock },
+          { ...statsMock },
+        ]}
+      />
+    );
+
+    await expect(page.getByText("top_user")).toBeVisible({ timeout: 10000 });
+
+    const triggers = page.locator(".oc-dropdown__trigger");
+    await triggers.nth(1).click();
+    await page
+      .locator(".oc-dropdown__option", { hasText: "This Week" })
+      .click();
+
+    await expect(page.getByText("weekly_winner")).toBeVisible({
+      timeout: 10000,
+    });
+
+    await component.unmount();
+  });
+
+  test("changing limit dropdown refetches with new limit variable", async ({
+    mount,
+    page,
+  }) => {
+    // Exercises the limit Dropdown's onChange callback (line 507 — third
+    // anonymous function in the FilterBar block).
+    const top25Mock = {
+      request: {
+        query: GET_LEADERBOARD,
+        variables: {
+          metric: "BADGES",
+          scope: "ALL_TIME",
+          corpusId: undefined,
+          limit: 25,
+        },
+      },
+      result: defaultLeaderboardMock.result,
+    };
+    const top10Mock = {
+      request: {
+        query: GET_LEADERBOARD,
+        variables: {
+          metric: "BADGES",
+          scope: "ALL_TIME",
+          corpusId: undefined,
+          limit: 10,
+        },
+      },
+      result: {
+        data: {
+          leaderboard: {
+            metric: "BADGES",
+            scope: "ALL_TIME",
+            corpusId: null,
+            totalUsers: 1,
+            currentUserRank: null,
+            entries: [
+              {
+                rank: 1,
+                score: 99,
+                badgeCount: 99,
+                messageCount: 50,
+                threadCount: 5,
+                annotationCount: 20,
+                reputation: 200,
+                isRisingStar: false,
+                user: {
+                  id: "user-10",
+                  username: "top_ten_only",
+                  email: "ten@example.com",
+                  slug: "top-ten-only",
+                  isProfilePublic: true,
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+    const statsMock = {
+      request: {
+        query: GET_COMMUNITY_STATS,
+        variables: { corpusId: undefined },
+      },
+      result: defaultCommunityStatsMock.result,
+    };
+
+    const component = await mount(
+      <LeaderboardTestWrapper
+        mocks={[
+          top25Mock,
+          { ...top25Mock },
+          { ...top25Mock },
+          top10Mock,
+          { ...top10Mock },
+          { ...top10Mock },
+          statsMock,
+          { ...statsMock },
+          { ...statsMock },
+        ]}
+      />
+    );
+
+    await expect(page.getByText("top_user")).toBeVisible({ timeout: 10000 });
+
+    const triggers = page.locator(".oc-dropdown__trigger");
+    await triggers.nth(2).click();
+    // Use exact match — "Top 10" would also match "Top 100".
+    await page.getByRole("option", { name: "Top 10", exact: true }).click();
+
+    await expect(page.getByText("top_ten_only")).toBeVisible({
+      timeout: 10000,
+    });
+
+    await component.unmount();
+  });
 });
