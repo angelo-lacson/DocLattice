@@ -210,6 +210,48 @@ class ApproveAnnotation(graphene.Mutation):
         )
 
 
+_ANNOTATION_PARENT_NOT_FOUND_MSG = (
+    "Document or corpus not found, or you do not have " "permission to annotate it."
+)
+
+
+def _resolve_annotation_parents(
+    user, corpus_pk: int, document_pk: int
+) -> tuple["Document", "Corpus"] | None:
+    """Resolve and validate the (document, corpus) parents for a new annotation.
+
+    Returns the (document, corpus) tuple when:
+        - both rows are visible to the user,
+        - the user has CREATE permission on the corpus,
+        - the document is a current member of the corpus (via DocumentPath).
+
+    Returns None on any failure so callers can surface a single uniform
+    "not found" error and avoid leaking existence/permission state. The
+    DocumentPath check closes a cross-corpus IDOR (user has visibility to
+    doc D in corpus A and CREATE on corpus B → would otherwise be allowed
+    to write `Annotation(document=D, corpus=B)`).
+    """
+    from opencontractserver.documents.models import DocumentPath
+
+    try:
+        document = Document.objects.visible_to_user(user).get(pk=document_pk)
+        corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
+    except (Document.DoesNotExist, Corpus.DoesNotExist):
+        return None
+
+    if not user_has_permission_for_obj(
+        user, corpus, PermissionTypes.CREATE, include_group_permissions=True
+    ):
+        return None
+
+    if not DocumentPath.objects.filter(
+        document=document, corpus=corpus, is_current=True, is_deleted=False
+    ).exists():
+        return None
+
+    return document, corpus
+
+
 class AddAnnotation(graphene.Mutation):
     class Arguments:
         json = GenericScalar(
@@ -263,27 +305,14 @@ class AddAnnotation(graphene.Mutation):
 
         user = info.context.user
 
-        # IDOR protection: load both parents through visible_to_user and gate
-        # CREATE permission on the corpus. Use a uniform "not found" message
-        # whether the row is missing or the user lacks visibility.
-        not_found = AddAnnotation(
-            ok=False,
-            annotation=None,
-            message=(
-                "Document or corpus not found, or you do not have "
-                "permission to annotate it."
-            ),
-        )
-        try:
-            document = Document.objects.visible_to_user(user).get(pk=document_pk)
-            corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
-        except (Document.DoesNotExist, Corpus.DoesNotExist):
-            return not_found
-
-        if not user_has_permission_for_obj(
-            user, corpus, PermissionTypes.CREATE, include_group_permissions=True
-        ):
-            return not_found
+        parents = _resolve_annotation_parents(user, corpus_pk, document_pk)
+        if parents is None:
+            return AddAnnotation(
+                ok=False,
+                annotation=None,
+                message=_ANNOTATION_PARENT_NOT_FOUND_MSG,
+            )
+        document, corpus = parents
 
         annotation = Annotation(
             page=page,
@@ -331,26 +360,14 @@ class AddDocTypeAnnotation(graphene.Mutation):
 
         user = info.context.user
 
-        # IDOR protection: load both parents through visible_to_user and gate
-        # CREATE permission on the corpus. Uniform error masks existence.
-        not_found = AddDocTypeAnnotation(
-            ok=False,
-            annotation=None,
-            message=(
-                "Document or corpus not found, or you do not have "
-                "permission to annotate it."
-            ),
-        )
-        try:
-            document = Document.objects.visible_to_user(user).get(pk=document_pk)
-            corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
-        except (Document.DoesNotExist, Corpus.DoesNotExist):
-            return not_found
-
-        if not user_has_permission_for_obj(
-            user, corpus, PermissionTypes.CREATE, include_group_permissions=True
-        ):
-            return not_found
+        parents = _resolve_annotation_parents(user, corpus_pk, document_pk)
+        if parents is None:
+            return AddDocTypeAnnotation(
+                ok=False,
+                annotation=None,
+                message=_ANNOTATION_PARENT_NOT_FOUND_MSG,
+            )
+        document, corpus = parents
 
         annotation = Annotation.objects.create(
             corpus_id=corpus.pk,

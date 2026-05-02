@@ -92,7 +92,7 @@ class AddAnnotationIDORTests(TestCase):
         self.victim = User.objects.create_user(username="victim", password="x")
         self.attacker = User.objects.create_user(username="attacker", password="x")
 
-        self.victim_doc = Document.objects.create(
+        original_doc = Document.objects.create(
             title="Victim Doc",
             creator=self.victim,
             is_public=False,
@@ -101,7 +101,12 @@ class AddAnnotationIDORTests(TestCase):
         self.victim_corpus = Corpus.objects.create(
             title="Victim Corpus", creator=self.victim, is_public=False
         )
-        self.victim_corpus.add_document(document=self.victim_doc, user=self.victim)
+        # Corpus.add_document returns the corpus-isolated copy that the
+        # frontend annotates against; the original is the source-of-truth
+        # row that lives outside any corpus.
+        self.victim_doc, _, _ = self.victim_corpus.add_document(
+            document=original_doc, user=self.victim
+        )
 
         # Owner permissions on victim's resources
         set_permissions_for_obj_to_user(
@@ -201,3 +206,48 @@ class AddAnnotationIDORTests(TestCase):
         self.assertEqual(
             Annotation.objects.filter(document=self.victim_doc).count(), before
         )
+
+    def test_cannot_annotate_doc_into_unrelated_corpus(self):
+        """Cross-corpus IDOR: user has visibility to doc D and CREATE on
+        corpus B, but D does not live in B. The corpus-membership check
+        must reject this even though both visibility checks pass."""
+        # Attacker owns their own corpus with full CRUD, but the victim's
+        # doc has never been added to it. We additionally grant the
+        # attacker READ on the victim's doc so the visibility check
+        # passes — this isolates the corpus-membership-vs-visibility gap.
+        attacker_corpus = Corpus.objects.create(
+            title="Attacker Corpus", creator=self.attacker, is_public=False
+        )
+        set_permissions_for_obj_to_user(
+            self.attacker, attacker_corpus, [PermissionTypes.CRUD]
+        )
+        set_permissions_for_obj_to_user(
+            self.attacker, self.victim_doc, [PermissionTypes.READ]
+        )
+
+        before = Annotation.objects.count()
+        result = self.client.execute(
+            ADD_ANNOTATION_MUTATION,
+            variables={
+                # Attacker's own corpus + victim's doc — should be rejected.
+                "corpusId": to_global_id("CorpusType", attacker_corpus.pk),
+                "documentId": to_global_id("DocumentType", self.victim_doc.pk),
+                "annotationLabelId": to_global_id("AnnotationLabelType", self.label.pk),
+                "page": 0,
+                "rawText": "cross-corpus payload",
+                "json": {
+                    "0": {
+                        "bounds": {},
+                        "rawText": "cross-corpus payload",
+                        "tokensJsons": [],
+                    }
+                },
+                "annotationType": "TOKEN_LABEL",
+            },
+            context_value=_MutationContext(self.attacker),
+        )
+        payload = result["data"]["addAnnotation"]
+        self.assertFalse(payload["ok"])
+        self.assertIsNone(payload["annotation"])
+        # No annotation written anywhere.
+        self.assertEqual(Annotation.objects.count(), before)

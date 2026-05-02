@@ -581,34 +581,37 @@ class Corpus(TreeNode):
             if not publicize_ids:
                 return
 
-            # Snapshot the docs that will actually transition private→public,
-            # so we only notify creators whose docs actually changed.
-            transitioning = list(
-                Document.objects.filter(id__in=publicize_ids, is_public=False).values(
-                    "id", "creator_id", "title"
+            # Wrap the snapshot + update + notification fan-out in a single
+            # transaction so a concurrent publicize cannot slip in between
+            # the snapshot and the update and cause a stale notification
+            # for a document that didn't actually transition in this call.
+            with transaction.atomic():
+                transitioning = list(
+                    Document.objects.select_for_update()
+                    .filter(id__in=publicize_ids, is_public=False)
+                    .values("id", "creator_id", "title")
                 )
-            )
-            Document.objects.filter(id__in=publicize_ids, is_public=False).update(
-                is_public=True
-            )
+                Document.objects.filter(id__in=publicize_ids, is_public=False).update(
+                    is_public=True
+                )
 
-            notifications = [
-                Notification(
-                    recipient_id=row["creator_id"],
-                    notification_type=NotificationTypeChoices.DOCUMENT_PUBLICIZED,
-                    actor=self.creator,
-                    data={
-                        "document_id": row["id"],
-                        "document_title": row["title"],
-                        "corpus_id": self.pk,
-                        "corpus_title": self.title,
-                    },
-                )
-                for row in transitioning
-                if row["creator_id"] and row["creator_id"] != self.creator_id
-            ]
-            if notifications:
-                Notification.objects.bulk_create(notifications)
+                notifications = [
+                    Notification(
+                        recipient_id=row["creator_id"],
+                        notification_type=(NotificationTypeChoices.DOCUMENT_PUBLICIZED),
+                        actor=self.creator,
+                        data={
+                            "document_id": row["id"],
+                            "document_title": row["title"],
+                            "corpus_id": self.pk,
+                            "corpus_title": self.title,
+                        },
+                    )
+                    for row in transitioning
+                    if row["creator_id"] and row["creator_id"] != self.creator_id
+                ]
+                if notifications:
+                    Notification.objects.bulk_create(notifications)
         else:
             # Corpus became private → revoke public only for documents
             # NOT in any other public corpus
