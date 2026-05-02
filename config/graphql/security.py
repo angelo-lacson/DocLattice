@@ -43,21 +43,36 @@ _csrf_middleware = CsrfViewMiddleware(_csrf_noop_get_response)
 def conditional_csrf_exempt(view_func: Callable[..., Any]) -> Callable[..., Any]:
     """
     Decorator that exempts a view from CSRF checks **only** when the request
-    carries an explicit ``Authorization`` header (Bearer token or API key).
-    Session-cookie-only requests still go through normal CSRF validation.
+    carries no browser-attached credential that an attacker could ride on.
+
+    CSRF is enforced when, and only when, the request presents a session
+    cookie that the browser auto-attaches.  Two cases bypass CSRF:
+
+    * ``Authorization`` header is present (Bearer token / API key).  Browsers
+      do not automatically attach this, so CSRF is irrelevant.
+    * No session cookie at all.  Without a cookie there is nothing for an
+      attacker on another origin to ride; the request is fully anonymous
+      and CSRF would only block legitimate Bearer-only API clients that
+      momentarily have no token (startup race, refresh in flight).
+
+    Whitespace-only or missing ``Authorization`` headers are treated
+    identically to a missing header — empty values are not credentials.
     """
 
     @functools.wraps(view_func)
     def wrapped_view(request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
-        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
-        if auth_header:
-            # Token-based auth — browser doesn't attach this automatically,
-            # so CSRF is irrelevant.
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "").strip()
+        session_cookie_name = getattr(settings, "SESSION_COOKIE_NAME", "sessionid")
+        has_session_cookie = bool(request.COOKIES.get(session_cookie_name))
+
+        if auth_header or not has_session_cookie:
+            # Token-based auth, or fully anonymous request with no cookie an
+            # attacker could ride — CSRF check would have no security value.
             # ``_dont_enforce_csrf_checks`` is a Django-private flag read by
             # CsrfViewMiddleware to bypass CSRF on a per-request basis; not in stubs.
             setattr(request, "_dont_enforce_csrf_checks", True)
         else:
-            # Session auth — enforce CSRF as normal.
+            # Session cookie present without a token — enforce CSRF as normal.
             reason = _csrf_middleware.process_view(request, view_func, args, kwargs)
             if reason is not None:
                 return reason
