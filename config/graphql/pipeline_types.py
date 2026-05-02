@@ -14,6 +14,7 @@ class FileTypeEnum(graphene.Enum):
 
     PDF = BackendFileTypeEnum.PDF.value
     TXT = BackendFileTypeEnum.TXT.value
+    MD = BackendFileTypeEnum.MD.value
     DOCX = BackendFileTypeEnum.DOCX.value
     # HTML has been removed as we don't support it
 
