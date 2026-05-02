@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **E2E spec for threads/discussions** (`frontend/tests/e2e/threads-discussions.spec.ts`):
+  - Anonymous pass renders `/discussions` (filter pills, search box, "Corpus Discussions" section header) and `/threads` (search route) without authentication.
+  - Authenticated pass logs in, creates a per-run corpus (suffixed with `Date.now()` to avoid collisions across retries), opens its inline discussions view via `?view=discussions`, fills the `CreateThreadForm` modal (title, optional description, ProseMirror initial message), posts a top-level reply through the `ReplyForm` composer, navigates back to the thread list, and confirms the new thread surfaces in the global `/discussions` "Corpus Discussions" section before clicking through to the detail.
+  - Picked up automatically by the existing `frontend-e2e.yml` workflow — no CI changes required.
+- **Three reusable E2E helpers** in `frontend/tests/e2e/helpers.ts`:
+  - `openCorpusDiscussionsViaUI` — SPA-navigates to a corpus and opens its inline discussions view; waits on the "All" filter pill as the readiness signal.
+  - `createThreadViaUI` — clicks the `aria-label="Create new discussion"` CTA, fills the modal (scoped via the `#thread-title` anchor), submits the composer, and waits for the thread-detail header.
+  - `postThreadReplyViaUI` — types into the bottom `ReplyForm` ProseMirror editor and clicks Send, returning once the new message text is visible.
+
 ### Fixed
 
 - **Document annotator right sidebar: crowded tabs and unresponsive Chat panel**:
