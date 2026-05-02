@@ -548,7 +548,8 @@ def _batch_embed_text_annotations(
                 # ValueError indicates a caller contract violation (e.g., batch size
                 # exceeds embedder maximum). Re-raise rather than silently recording
                 # as an annotation failure so the programming error surfaces loudly.
-                executor.shutdown(wait=False, cancel_futures=True)
+                # The `finally` block below shuts down the executor with
+                # cancel_futures=True; no need to repeat it here.
                 raise
             except (
                 requests.exceptions.Timeout,

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
@@ -182,8 +183,6 @@ class Command(BaseCommand):
         # ``force_celery_eager`` will accept the global Celery-config
         # mutation. Without this opt-in env var the helper refuses to
         # run in non-test mode (issue #1410).
-        import os
-
         os.environ.setdefault("OC_BENCHMARK_CLI", "1")
 
         username = options["user"]
