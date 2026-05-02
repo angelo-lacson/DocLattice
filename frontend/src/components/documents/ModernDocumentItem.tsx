@@ -20,7 +20,7 @@ import {
   Tag,
   GitBranch,
 } from "lucide-react";
-import { useMutation, useLazyQuery } from "@apollo/client";
+import { useMutation, useLazyQuery, useReactiveVar } from "@apollo/client";
 import { toast } from "react-toastify";
 import { navigateToDocument } from "../../utils/navigationUtils";
 import { LoadingOverlay } from "../common/LoadingOverlay";
@@ -954,9 +954,12 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
 
   const allDocRelationships = relationshipsData?.bulkDocRelationships;
 
-  // openedCorpus() reads the current Apollo reactive var at call time;
-  // hoist into a value so exhaustive-deps tracks it correctly.
-  const corpusIdForRelationships = openedCorpus()?.id ?? null;
+  // Subscribe to the reactive var so this component re-renders when the
+  // corpus changes — calling ``openedCorpus()`` directly would only sample
+  // the value at render time and leave a stale ``corpusId`` baked into the
+  // useCallback below until something else triggered a re-render.
+  const currentOpenedCorpus = useReactiveVar(openedCorpus);
+  const corpusIdForRelationships = currentOpenedCorpus?.id ?? null;
   const handleRelationshipHover = useCallback(() => {
     if (!docRelationshipCount || relationshipsData || relationshipsLoading) {
       return;

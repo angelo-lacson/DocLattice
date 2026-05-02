@@ -390,6 +390,11 @@ class DocumentRelationshipQueryOptimizer:
         else:
             visible_doc_ids = cls._get_visible_document_ids(user, context=context)
             visible_corpus_ids = cls._get_visible_corpus_ids(user, context=context)
+            # Visibility requires BOTH endpoints to be readable (matches
+            # ``get_visible_relationships``). This intentionally hides a
+            # relationship from the count when the *other* document is
+            # invisible to the user — surfacing the count would otherwise leak
+            # the existence of a hidden document via the badge number.
             qs = DocumentRelationship.objects.filter(
                 source_document_id__in=visible_doc_ids,
                 target_document_id__in=visible_doc_ids,
@@ -398,7 +403,7 @@ class DocumentRelationshipQueryOptimizer:
         if corpus_id:
             qs = qs.filter(corpus_id=corpus_id)
 
-        counts: dict = defaultdict(int)
+        counts: defaultdict[int, int] = defaultdict(int)
         for row in qs.values("source_document_id").annotate(c=Count("id")):
             counts[row["source_document_id"]] += row["c"]
         # Exclude self-referential rows from the target-side aggregation so a

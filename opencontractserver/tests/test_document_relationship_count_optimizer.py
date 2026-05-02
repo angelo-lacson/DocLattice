@@ -183,6 +183,30 @@ class GetRelationshipCountsByDocumentTestCase(TestCase):
         self.assertEqual(counts.get(self.doc_b.pk, 0), 0)
         self.assertEqual(counts.get(self.doc_c.pk, 0), 0)
 
+    def test_one_sided_visibility_excludes_relationship(self):
+        """
+        A relationship counts toward a document only when BOTH endpoints are
+        visible. If the user can see one side but not the other, the badge
+        must be 0 — otherwise the count would leak the existence of the
+        hidden document.
+        """
+        partial_user = User.objects.create_user(username="partial", password="x")
+        # Grant permission on doc_a (and the corpus) but explicitly NOT on
+        # doc_b. A↔B is the only relationship that touches doc_a, so its
+        # count must collapse to 0 under the AND visibility rule.
+        set_permissions_for_obj_to_user(
+            partial_user, self.doc_a, [PermissionTypes.READ]
+        )
+        set_permissions_for_obj_to_user(
+            partial_user, self.corpus, [PermissionTypes.READ]
+        )
+
+        counts = DocumentRelationshipQueryOptimizer.get_relationship_counts_by_document(
+            user=partial_user,
+        )
+        self.assertEqual(counts.get(self.doc_a.pk, 0), 0)
+        self.assertEqual(counts.get(self.doc_b.pk, 0), 0)
+
     def test_request_level_cache_returns_same_result(self):
         """A second call with the same context should return the cached dict."""
         context = SimpleNamespace()
