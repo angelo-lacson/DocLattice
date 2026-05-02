@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Consistent MCP discoverability across corpus tiles and detail pages** (`frontend/src/components/common/MCPShareButton.tsx`, `frontend/src/components/corpuses/CorpusListView.tsx`, `frontend/src/components/corpuses/CorpusHome/CorpusLandingView.tsx`, `frontend/src/components/corpuses/CorpusHome/CorpusDetailsView.tsx`): the MCP share button is now rendered for every corpus that has a slug rather than only public corpora, and the tile overlay is always visible instead of fading in on hover. `MCPShareButton` accepts a new `isPublic` prop; for private corpora the popover shows a `Lock` icon and explains that the corpus must be made public before an MCP endpoint is exposed (the backend MCP server only serves public corpora — `opencontractserver/mcp/server.py`). The redundant "MCP Endpoint" entry in the corpus tile context menu was removed since the always-visible overlay button is now the single canonical entry point.
+
 ### Fixed
 
 - **GraphQL POST 403 storm when Auth0 token is empty** (Issue #1431): production logs were filling with `Forbidden (CSRF token missing.): /graphql/` because the React frontend always sent `Authorization: ""` whenever the Auth0 access token was momentarily missing (startup race, silent-refresh failure, post-expiry re-mount), and `conditional_csrf_exempt` only bypassed CSRF when the header was *truthy*. An empty header fell through to Django's session/CSRF path even though the frontend never carries a CSRF token. Two-sided fix:
