@@ -361,7 +361,7 @@ Key consumers read through `expand_pawls_pages()`. Run `grep -r expand_pawls_pag
 
 | Consumer | File |
 |----------|------|
-| LLM agent tools | `doclatticeserver/llms/tools/core_tools.py` |
+| LLM agent tools | `doclatticeserver/llms/tools/core_tools/` |
 | Image tools | `doclatticeserver/llms/tools/image_tools.py` |
 | PDF token extraction | `doclatticeserver/utils/pdf_token_extraction.py` |
 | Frontend REST fetch | `frontend/src/components/annotator/api/rest.ts` |
