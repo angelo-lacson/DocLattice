@@ -360,8 +360,10 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Resolve DocumentRelationship objects for this document.
 
         Uses DocumentRelationshipQueryOptimizer for proper permission filtering.
-        DocumentRelationship has its own guardian permissions (unlike annotation
-        Relationships which inherit from document/corpus).
+        DocumentRelationship inherits visibility from source_document,
+        target_document, and corpus — its own guardian tables were dropped in
+        migration ``documents/0029``. The optimizer enforces the AND-of-all-three
+        rule (see ``DocumentRelationshipQueryOptimizer.get_visible_relationships``).
 
         Performance: Passes info.context to the query optimizer for request-level
         caching of visible document/corpus IDs.
