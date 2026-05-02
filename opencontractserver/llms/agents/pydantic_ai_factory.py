@@ -75,4 +75,7 @@ def make_pydantic_ai_agent(
     # consumers (e.g. memory tasks) that may not need it yet.
     from opencontractserver.llms.agents import pydantic_ai_agents as _pa_module
 
-    return _pa_module.PydanticAIAgent(model, **kwargs)
+    # Forward ``model`` as a keyword so call sites and tests that asserted
+    # against ``kwargs["model"]`` (the canonical form pydantic-ai
+    # documents) keep working.
+    return _pa_module.PydanticAIAgent(model=model, **kwargs)
