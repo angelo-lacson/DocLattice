@@ -1,7 +1,7 @@
 """GraphQL type definitions for document-related types."""
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 import graphene
 from django.contrib.auth import get_user_model
@@ -84,7 +84,7 @@ class IngestionSourceType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         )
 
     @classmethod
-    def get_queryset(cls, queryset, info):
+    def get_queryset(cls, queryset, info) -> Any:
         """Only show sources owned by the current user, shared, or public."""
         return IngestionSource.objects.visible_to_user(info.context.user)
 
@@ -100,7 +100,7 @@ class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         description="Arbitrary source-specific metadata (URL, crawl job ID, etc.)"
     )
 
-    def resolve_action(self, info):
+    def resolve_action(self, info) -> Any:
         """Infer action type from path state."""
         if self.is_deleted:
             return "DELETED"
@@ -123,7 +123,7 @@ class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     _VISIBLE_CORPUS_IDS_CACHE_KEY = "_docpath_visible_corpus_ids"
 
     @classmethod
-    def _get_visible_corpus_ids(cls, info):
+    def _get_visible_corpus_ids(cls, info) -> Any:
         """Get visible corpus IDs with request-level caching to prevent N+1 queries."""
         from opencontractserver.corpuses.models import Corpus
 
@@ -141,7 +141,7 @@ class DocumentPathType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         return visible_ids
 
     @classmethod
-    def get_queryset(cls, queryset, info):
+    def get_queryset(cls, queryset, info) -> Any:
         """Filter paths to current, non-deleted paths in visible corpuses."""
         visible_corpus_ids = cls._get_visible_corpus_ids(info)
 
@@ -172,7 +172,7 @@ class DocumentRelationshipType(AnnotatePermissionsForReadMixin, DjangoObjectType
         connection_class = CountableConnection
 
     @classmethod
-    def get_queryset(cls, queryset, info):
+    def get_queryset(cls, queryset, info) -> Any:
         # Check if permissions were already handled by the query optimizer.
         # The optimizer adds _can_read, _can_create, etc. annotations.
         if hasattr(queryset, "query") and queryset.query.annotations:
@@ -216,7 +216,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         annotation_ids=graphene.List(graphene.NonNull(graphene.ID)),
     )
 
-    def resolve_all_structural_annotations(self, info, annotation_ids=None):
+    def resolve_all_structural_annotations(self, info, annotation_ids=None) -> Any:
         from opencontractserver.annotations.query_optimizer import (
             AnnotationQueryOptimizer,
         )
@@ -242,7 +242,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     def resolve_all_annotations(
         self, info, corpus_id=None, analysis_id=None, is_structural=None
-    ):
+    ) -> Any:
         from opencontractserver.annotations.query_optimizer import (
             AnnotationQueryOptimizer,
         )
@@ -270,7 +270,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         analysis_id=graphene.ID(),
     )
 
-    def resolve_all_relationships(self, info, corpus_id=None, analysis_id=None):
+    def resolve_all_relationships(self, info, corpus_id=None, analysis_id=None) -> Any:
         """Resolve all relationships using the optimizer."""
         from opencontractserver.annotations.query_optimizer import (
             RelationshipQueryOptimizer,
@@ -316,16 +316,21 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         description="Count of document relationships for this document in the given corpus",
     )
 
-    def resolve_doc_relationship_count(self, info, corpus_id=None):
+    def resolve_doc_relationship_count(self, info, corpus_id=None) -> Any:
         """
         Return the count of document relationships for this document.
 
-        Uses DocumentRelationshipQueryOptimizer for proper permission filtering.
-        DocumentRelationship has its own guardian permissions.
+        Performance: uses ``get_relationship_counts_by_document`` so the first
+        call computes counts for every document the user can see (optionally
+        scoped to ``corpus_id``) in two aggregated SQL queries, caching the
+        result on ``info.context``. Subsequent resolvers in the same GraphQL
+        request resolve in O(1) — eliminating the N+1 ``.count()`` storm that
+        occurred when this field was requested for hundreds of documents.
 
-        Performance: Passes info.context to the query optimizer for request-level
-        caching of visible document/corpus IDs. This prevents N+1 queries when
-        this field is requested for multiple documents in a single GraphQL query.
+        Note: the document was already filtered through ``visible_to_user`` by
+        the parent resolver, so per-document permission re-checks aren't
+        required here — visibility is enforced at the relationship level by
+        the optimizer's source/target/corpus filters.
         """
         from opencontractserver.documents.query_optimizer import (
             DocumentRelationshipQueryOptimizer,
@@ -333,16 +338,16 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         try:
             user = info.context.user
-            corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
+            corpus_pk = int(from_global_id(corpus_id)[1]) if corpus_id else None
 
-            # Use the query optimizer for proper permission filtering
-            # Pass info.context for request-level caching to prevent N+1 queries
-            return DocumentRelationshipQueryOptimizer.get_relationships_for_document(
-                user=user,
-                document_id=self.id,
-                corpus_id=int(corpus_pk) if corpus_pk else None,
-                context=info.context,
-            ).count()
+            counts = (
+                DocumentRelationshipQueryOptimizer.get_relationship_counts_by_document(
+                    user=user,
+                    corpus_id=corpus_pk,
+                    context=info.context,
+                )
+            )
+            return counts.get(self.id, 0)
         except Exception as e:
             logger.warning(
                 f"Failed resolving doc_relationship_count for document {self.id}. "
@@ -350,13 +355,15 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             )
             return 0
 
-    def resolve_all_doc_relationships(self, info, corpus_id=None):
+    def resolve_all_doc_relationships(self, info, corpus_id=None) -> Any:
         """
         Resolve DocumentRelationship objects for this document.
 
         Uses DocumentRelationshipQueryOptimizer for proper permission filtering.
-        DocumentRelationship has its own guardian permissions (unlike annotation
-        Relationships which inherit from document/corpus).
+        DocumentRelationship inherits visibility from source_document,
+        target_document, and corpus — its own guardian tables were dropped in
+        migration ``documents/0029``. The optimizer enforces the AND-of-all-three
+        rule (see ``DocumentRelationshipQueryOptimizer.get_visible_relationships``).
 
         Performance: Passes info.context to the query optimizer for request-level
         caching of visible document/corpus IDs.
@@ -390,7 +397,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         corpus_id=graphene.ID(),
     )
 
-    def resolve_all_notes(self, info, corpus_id: Optional[str] = None):
+    def resolve_all_notes(self, info, corpus_id: Optional[str] = None) -> Any:
         """
         Return the set of Note objects related to this Document instance that the user can see,
         filtered by corpus_id.
@@ -428,7 +435,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         description="Current summary content for a specific corpus",
     )
 
-    def resolve_summary_revisions(self, info, corpus_id):
+    def resolve_summary_revisions(self, info, corpus_id) -> Any:
         """Returns all revisions for this document's summary in a specific corpus, ordered by version."""
         from opencontractserver.corpuses.models import Corpus
         from opencontractserver.documents.models import DocumentSummaryRevision
@@ -445,7 +452,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             document_id=self.pk, corpus_id=corpus_pk
         ).order_by("version")
 
-    def resolve_current_summary_version(self, info, corpus_id):
+    def resolve_current_summary_version(self, info, corpus_id) -> Any:
         """Returns the current summary version number for a specific corpus."""
         from opencontractserver.corpuses.models import Corpus
         from opencontractserver.documents.models import DocumentSummaryRevision
@@ -468,7 +475,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         return latest_revision.version if latest_revision else 0
 
-    def resolve_summary_content(self, info, corpus_id):
+    def resolve_summary_content(self, info, corpus_id) -> Any:
         """Returns the current summary content for a specific corpus."""
         from opencontractserver.corpuses.models import Corpus
 
@@ -531,7 +538,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         description="Whether user can view version history (requires READ permission)"
     )
 
-    def resolve_version_number(self, info, corpus_id):
+    def resolve_version_number(self, info, corpus_id) -> Any:
         """Get version number from DocumentPath for this corpus."""
         _, corpus_pk = from_global_id(corpus_id)
         try:
@@ -542,20 +549,20 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         except Exception:
             return 1
 
-    def resolve_has_version_history(self, info):
+    def resolve_has_version_history(self, info) -> Any:
         """Check if document has parent (i.e., multiple versions exist)."""
         return self.parent is not None
 
-    def resolve_version_count(self, info):
+    def resolve_version_count(self, info) -> Any:
         """Count total versions in this document's version tree."""
         # Count all documents with same version_tree_id
         return Document.objects.filter(version_tree_id=self.version_tree_id).count()
 
-    def resolve_is_latest_version(self, info):
+    def resolve_is_latest_version(self, info) -> Any:
         """Check if this is the current version."""
         return self.is_current
 
-    def resolve_last_modified(self, info, corpus_id):
+    def resolve_last_modified(self, info, corpus_id) -> Any:
         """Get last modification time from DocumentPath."""
         _, corpus_pk = from_global_id(corpus_id)
         try:
@@ -566,7 +573,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         except Exception:
             return self.modified
 
-    def resolve_version_history(self, info):
+    def resolve_version_history(self, info) -> Any:
         """
         Lazy-load complete version history.
         Returns all versions in the document's version tree.
@@ -615,7 +622,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             "version_tree": None,  # Could build tree structure if needed
         }
 
-    def resolve_path_history(self, info, corpus_id):
+    def resolve_path_history(self, info, corpus_id) -> Any:
         """
         Lazy-load path history for this document in a corpus.
         Returns all lifecycle events (import, move, delete, restore).
@@ -677,7 +684,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             "move_count": move_count,
         }
 
-    def resolve_corpus_versions(self, info, corpus_id):
+    def resolve_corpus_versions(self, info, corpus_id) -> Any:
         """Return all versions of this document in a specific corpus.
 
         Uses DocumentPath records to find all versions, ordered by version_number.
@@ -765,7 +772,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         cache[cache_key] = results
         return results
 
-    def resolve_can_restore(self, info, corpus_id):
+    def resolve_can_restore(self, info, corpus_id) -> Any:
         """Check if user has UPDATE permission for restore operations."""
         from django.contrib.auth.models import AnonymousUser
 
@@ -795,7 +802,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         except Corpus.DoesNotExist:
             return False
 
-    def resolve_can_view_history(self, info):
+    def resolve_can_view_history(self, info) -> Any:
         """Check if user has READ permission for viewing history."""
         from django.contrib.auth.models import AnonymousUser
 
@@ -827,7 +834,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         description="Whether the user can retry processing for this document (True if FAILED and user has permission)",
     )
 
-    def resolve_processing_status(self, info):
+    def resolve_processing_status(self, info) -> Any:
         """Resolve the processing status enum value."""
         status_value = self.processing_status
         if status_value:
@@ -837,13 +844,13 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
                 return None
         return None
 
-    def resolve_processing_error(self, info):
+    def resolve_processing_error(self, info) -> Any:
         """Resolve processing error message (truncated for display)."""
         if self.processing_error:
             return self.processing_error[:MAX_PROCESSING_ERROR_DISPLAY_LENGTH]
         return None
 
-    def resolve_can_retry(self, info):
+    def resolve_can_retry(self, info) -> Any:
         """
         Check if user can retry processing for this document.
 
@@ -903,7 +910,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         structural=None,
         analysis_id=None,
         extract_id=None,
-    ):
+    ) -> Any:
         """Resolve annotations for specific page(s) using optimized queries."""
         from django.contrib.auth.models import AnonymousUser
         from graphql import GraphQLError
@@ -973,7 +980,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         analysis_id=None,
         extract_id=None,
         strict_extract_mode=False,
-    ):
+    ) -> Any:
         """Resolve relationships for specific page(s) using the optimizer."""
         from django.contrib.auth.models import AnonymousUser
         from graphql import GraphQLError
@@ -1038,7 +1045,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         description="Get summary of annotations used in specific extract.",
     )
 
-    def resolve_relationship_summary(self, info, corpus_id):
+    def resolve_relationship_summary(self, info, corpus_id) -> Any:
         from django.contrib.auth.models import AnonymousUser
         from graphql import GraphQLError
 
@@ -1071,7 +1078,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         )
         return summary
 
-    def resolve_extract_annotation_summary(self, info, extract_id):
+    def resolve_extract_annotation_summary(self, info, extract_id) -> Any:
         """Get summary of annotations in extract."""
         from django.contrib.auth.models import AnonymousUser
         from graphql import GraphQLError
@@ -1111,7 +1118,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         description="Get the folder this document is in within a specific corpus (null = root)",
     )
 
-    def resolve_folder_in_corpus(self, info, corpus_id):
+    def resolve_folder_in_corpus(self, info, corpus_id) -> Any:
         """
         Get folder assignment for this document in a specific corpus.
 
@@ -1139,7 +1146,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         connection_class = CountableConnection
 
     @classmethod
-    def get_queryset(cls, queryset, info):
+    def get_queryset(cls, queryset, info) -> Any:
         if issubclass(type(queryset), QuerySet):
             return queryset.visible_to_user(info.context.user)
         elif "RelatedManager" in str(type(queryset)):
@@ -1179,19 +1186,19 @@ class DocumentSummaryRevisionType(AnnotatePermissionsForReadMixin, DjangoObjectT
         connection_class = CountableConnection
 
 
-def _get_corpus_folder_type():
+def _get_corpus_folder_type() -> Any:
     from config.graphql.corpus_types import CorpusFolderType
 
     return CorpusFolderType
 
 
-def _get_corpus_action_type():
+def _get_corpus_action_type() -> Any:
     from config.graphql.agent_types import CorpusActionType
 
     return CorpusActionType
 
 
-def _get_extract_type():
+def _get_extract_type() -> Any:
     from config.graphql.extract_types import ExtractType
 
     return ExtractType
