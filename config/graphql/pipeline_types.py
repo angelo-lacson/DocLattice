@@ -8,15 +8,11 @@ from opencontractserver.pipeline.base.file_types import (
     FileTypeEnum as BackendFileTypeEnum,
 )
 
-
-class FileTypeEnum(graphene.Enum):
-    """Graphene enum for FileTypeEnum."""
-
-    PDF = BackendFileTypeEnum.PDF.value
-    TXT = BackendFileTypeEnum.TXT.value
-    MD = BackendFileTypeEnum.MD.value
-    DOCX = BackendFileTypeEnum.DOCX.value
-    # HTML has been removed as we don't support it
+# Derive the GraphQL enum directly from the backend enum so the two can never
+# drift. Adding a new member to BackendFileTypeEnum (e.g. MD) automatically
+# exposes it through the schema; previously the GraphQL enum was hand-maintained
+# and silently broke any query that returned the missing value.
+FileTypeEnum = graphene.Enum.from_enum(BackendFileTypeEnum)
 
 
 class ComponentSettingSchemaType(graphene.ObjectType):
