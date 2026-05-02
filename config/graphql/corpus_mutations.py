@@ -262,13 +262,24 @@ class UpdateCorpusDescription(graphene.Mutation):
             user = info.context.user
             corpus_pk = from_global_id(corpus_id)[1]
 
-            # Get the corpus and check ownership
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            # Unified message prevents IDOR enumeration of corpora the caller cannot edit
+            not_found_msg = (
+                "Corpus not found or you do not have permission to update it."
+            )
+
+            # Filter through visible_to_user so unauthorized IDs collapse to the
+            # same branch as truly-missing IDs
+            try:
+                corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
+            except Corpus.DoesNotExist:
+                return UpdateCorpusDescription(
+                    ok=False, message=not_found_msg, obj=None, version=None
+                )
 
             if corpus.creator != user:
                 return UpdateCorpusDescription(
                     ok=False,
-                    message="You can only update descriptions for corpuses that you created.",
+                    message=not_found_msg,
                     obj=None,
                     version=None,
                 )
@@ -297,7 +308,7 @@ class UpdateCorpusDescription(graphene.Mutation):
 
         except Corpus.DoesNotExist:
             return UpdateCorpusDescription(
-                ok=False, message="Corpus not found.", obj=None, version=None
+                ok=False, message=not_found_msg, obj=None, version=None
             )
         except Exception as e:
             logger.error(f"Error updating corpus description: {e}")
@@ -359,10 +370,16 @@ class AddDocumentsToCorpus(graphene.Mutation):
     def mutate(root, info, corpus_id, document_ids) -> "AddDocumentsToCorpus":
         from opencontractserver.corpuses.folder_service import DocumentFolderService
 
+        # Unified message prevents enumeration of corpora the caller cannot see/edit
+        not_found_msg = (
+            "Corpus not found or you do not have permission to add documents to it"
+        )
         try:
             user = info.context.user
             doc_pks = [int(from_global_id(doc_id)[1]) for doc_id in document_ids]
-            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
+            corpus = Corpus.objects.visible_to_user(user).get(
+                pk=from_global_id(corpus_id)[1]
+            )
 
             # Delegate to service - handles permission checks, validation, dual-system update
             added_count, added_ids, error = (
@@ -383,7 +400,7 @@ class AddDocumentsToCorpus(graphene.Mutation):
             )
 
         except Corpus.DoesNotExist:
-            return AddDocumentsToCorpus(message="Corpus not found", ok=False)
+            return AddDocumentsToCorpus(message=not_found_msg, ok=False)
         except Exception as e:
             return AddDocumentsToCorpus(message=f"Error on upload: {e}", ok=False)
 
@@ -416,12 +433,18 @@ class RemoveDocumentsFromCorpus(graphene.Mutation):
     ) -> "RemoveDocumentsFromCorpus":
         from opencontractserver.corpuses.folder_service import DocumentFolderService
 
+        # Unified message prevents enumeration of corpora the caller cannot see/edit
+        not_found_msg = (
+            "Corpus not found or you do not have permission to remove documents from it"
+        )
         try:
             user = info.context.user
             doc_pks = [
                 int(from_global_id(doc_id)[1]) for doc_id in document_ids_to_remove
             ]
-            corpus = Corpus.objects.get(pk=from_global_id(corpus_id)[1])
+            corpus = Corpus.objects.visible_to_user(user).get(
+                pk=from_global_id(corpus_id)[1]
+            )
 
             # Delegate to service - handles permission checks, soft-delete, audit trail
             removed_count, error = DocumentFolderService.remove_documents_from_corpus(
@@ -439,7 +462,7 @@ class RemoveDocumentsFromCorpus(graphene.Mutation):
             )
 
         except Corpus.DoesNotExist:
-            return RemoveDocumentsFromCorpus(message="Corpus not found", ok=False)
+            return RemoveDocumentsFromCorpus(message=not_found_msg, ok=False)
         except Exception as e:
             return RemoveDocumentsFromCorpus(message=f"Error on removal: {e}", ok=False)
 
@@ -1256,6 +1279,11 @@ class RunCorpusAction(graphene.Mutation):
         # Decode Relay global IDs to database PKs
         _, action_pk = from_global_id(corpus_action_id)
         _, doc_pk = from_global_id(document_id)
+
+        # Superuser-only: the @user_passes_test decorator above guarantees only
+        # superusers reach this point, so raw .objects.get() is intentional and
+        # bypasses visible_to_user() filtering by design.
+        assert user.is_superuser, "RunCorpusAction is gated by @user_passes_test"
 
         # Validate action exists
         try:

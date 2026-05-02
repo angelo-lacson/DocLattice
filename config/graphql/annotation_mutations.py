@@ -483,20 +483,24 @@ class RemoveRelationships(graphene.Mutation):
     @login_required
     def mutate(root, info, relationship_ids) -> "RemoveRelationships":
         user = info.context.user
+        # Unified error message prevents IDOR enumeration of relationship IDs
+        not_found_msg = (
+            "Relationship not found or you do not have permission to access it"
+        )
         for graphene_id in relationship_ids:
             pk = from_global_id(graphene_id)[1]
             try:
-                relationship = Relationship.objects.get(pk=pk)
-                if not user_has_permission_for_obj(
-                    user,
-                    relationship,
-                    PermissionTypes.DELETE,
-                    include_group_permissions=True,
-                ):
-                    return RemoveRelationships(ok=False, message="Permission denied")
-                relationship.delete()
+                relationship = Relationship.objects.visible_to_user(user).get(pk=pk)
             except Relationship.DoesNotExist:
-                return RemoveRelationships(ok=False, message="Relationship not found")
+                return RemoveRelationships(ok=False, message=not_found_msg)
+            if not user_has_permission_for_obj(
+                user,
+                relationship,
+                PermissionTypes.DELETE,
+                include_group_permissions=True,
+            ):
+                return RemoveRelationships(ok=False, message=not_found_msg)
+            relationship.delete()
         return RemoveRelationships(ok=True, message="Success")
 
 
@@ -545,13 +549,27 @@ class UpdateRelationship(graphene.Mutation):
         remove_source_ids=None,
         remove_target_ids=None,
     ) -> "UpdateRelationship":
+        user = info.context.user
+        # Unified error message prevents IDOR enumeration of relationship/annotation IDs
+        not_found_msg = (
+            "Relationship not found or you do not have permission to access it"
+        )
         try:
             relationship_pk = from_global_id(relationship_id)[1]
-            relationship = Relationship.objects.get(pk=relationship_pk)
+            try:
+                relationship = Relationship.objects.visible_to_user(user).get(
+                    pk=relationship_pk
+                )
+            except Relationship.DoesNotExist:
+                return UpdateRelationship(
+                    ok=False,
+                    relationship=None,
+                    message=not_found_msg,
+                )
 
             # Check UPDATE permission on the relationship
             if not user_has_permission_for_obj(
-                info.context.user,
+                user,
                 relationship,
                 PermissionTypes.UPDATE,
                 include_group_permissions=True,
@@ -559,18 +577,31 @@ class UpdateRelationship(graphene.Mutation):
                 return UpdateRelationship(
                     ok=False,
                     relationship=None,
-                    message="You don't have permission to update this relationship",
+                    message=not_found_msg,
                 )
+
+            # Filter annotations through visible_to_user so unauthorized IDs are dropped
+            # at the DB layer instead of after a per-row permission check
+            def _load_visible_annotations(global_ids):
+                pks = [from_global_id(g)[1] for g in global_ids]
+                return list(
+                    Annotation.objects.visible_to_user(user).filter(id__in=pks)
+                ), pks
 
             # Add source annotations
             if add_source_ids:
-                source_pks = [from_global_id(sid)[1] for sid in add_source_ids]
-                source_annotations = Annotation.objects.filter(id__in=source_pks)
-
-                # Verify user can read all annotations
+                source_annotations, source_pks = _load_visible_annotations(
+                    add_source_ids
+                )
+                if len(source_annotations) != len(set(source_pks)):
+                    return UpdateRelationship(
+                        ok=False,
+                        relationship=None,
+                        message=not_found_msg,
+                    )
                 for annotation in source_annotations:
                     if not user_has_permission_for_obj(
-                        info.context.user,
+                        user,
                         annotation,
                         PermissionTypes.READ,
                         include_group_permissions=True,
@@ -578,20 +609,24 @@ class UpdateRelationship(graphene.Mutation):
                         return UpdateRelationship(
                             ok=False,
                             relationship=None,
-                            message=f"You don't have permission to see annotation {annotation.id}",
+                            message=not_found_msg,
                         )
-
                 relationship.source_annotations.add(*source_annotations)
 
             # Add target annotations
             if add_target_ids:
-                target_pks = [from_global_id(tid)[1] for tid in add_target_ids]
-                target_annotations = Annotation.objects.filter(id__in=target_pks)
-
-                # Verify user can read all annotations
+                target_annotations, target_pks = _load_visible_annotations(
+                    add_target_ids
+                )
+                if len(target_annotations) != len(set(target_pks)):
+                    return UpdateRelationship(
+                        ok=False,
+                        relationship=None,
+                        message=not_found_msg,
+                    )
                 for annotation in target_annotations:
                     if not user_has_permission_for_obj(
-                        info.context.user,
+                        user,
                         annotation,
                         PermissionTypes.READ,
                         include_group_permissions=True,
@@ -599,22 +634,25 @@ class UpdateRelationship(graphene.Mutation):
                         return UpdateRelationship(
                             ok=False,
                             relationship=None,
-                            message=f"You don't have permission to see annotation {annotation.id}",
+                            message=not_found_msg,
                         )
-
                 relationship.target_annotations.add(*target_annotations)
 
-            # Remove source annotations
+            # Removal is gated by UPDATE on the relationship itself (already
+            # checked above). Restrict removal to annotations actually attached
+            # to this relationship to avoid leaking the existence of unrelated
+            # annotation IDs the caller may not be able to see.
             if remove_source_ids:
                 source_pks = [from_global_id(sid)[1] for sid in remove_source_ids]
-                source_annotations = Annotation.objects.filter(id__in=source_pks)
-                relationship.source_annotations.remove(*source_annotations)
+                relationship.source_annotations.remove(
+                    *relationship.source_annotations.filter(id__in=source_pks)
+                )
 
-            # Remove target annotations
             if remove_target_ids:
                 target_pks = [from_global_id(tid)[1] for tid in remove_target_ids]
-                target_annotations = Annotation.objects.filter(id__in=target_pks)
-                relationship.target_annotations.remove(*target_annotations)
+                relationship.target_annotations.remove(
+                    *relationship.target_annotations.filter(id__in=target_pks)
+                )
 
             relationship.save()
 
@@ -624,12 +662,6 @@ class UpdateRelationship(graphene.Mutation):
                 message="Relationship updated successfully",
             )
 
-        except Relationship.DoesNotExist:
-            return UpdateRelationship(
-                ok=False,
-                relationship=None,
-                message="Relationship not found",
-            )
         except Exception as e:
             logger.error(f"Error updating relationship: {e}")
             return UpdateRelationship(
@@ -686,17 +718,21 @@ class UpdateRelations(graphene.Mutation):
             corpus_pk = from_global_id(relationship["corpus_id"])[1]
             document_pk = from_global_id(relationship["document_id"])[1]
 
+            # Unified error message prevents IDOR enumeration of relationship IDs
+            not_found_msg = (
+                "Relationship not found or you do not have permission to access it"
+            )
             try:
-                relationship = Relationship.objects.get(id=pk)
-                if not user_has_permission_for_obj(
-                    user,
-                    relationship,
-                    PermissionTypes.UPDATE,
-                    include_group_permissions=True,
-                ):
-                    return UpdateRelations(ok=False, message="Permission denied")
+                relationship = Relationship.objects.visible_to_user(user).get(id=pk)
             except Relationship.DoesNotExist:
-                return UpdateRelations(ok=False, message="Relationship not found")
+                return UpdateRelations(ok=False, message=not_found_msg)
+            if not user_has_permission_for_obj(
+                user,
+                relationship,
+                PermissionTypes.UPDATE,
+                include_group_permissions=True,
+            ):
+                return UpdateRelations(ok=False, message=not_found_msg)
 
             relationship.relationship_label_id = relationship_label_pk
             relationship.document_id = document_pk
@@ -737,13 +773,23 @@ class UpdateNote(graphene.Mutation):
             user = info.context.user
             note_pk = from_global_id(note_id)[1]
 
-            # Get the note and check ownership
-            note = Note.objects.get(pk=note_pk)
+            # Unified "not found" message avoids leaking note existence to non-creators
+            not_found_msg = "Note not found or you do not have permission to update it."
 
+            # Filter through visible_to_user first so unauthorized IDs hit the same
+            # branch as truly-missing IDs
+            try:
+                note = Note.objects.visible_to_user(user).get(pk=note_pk)
+            except Note.DoesNotExist:
+                return UpdateNote(
+                    ok=False, message=not_found_msg, obj=None, version=None
+                )
+
+            # Only the creator may edit a note (visibility != edit rights)
             if note.creator != user:
                 return UpdateNote(
                     ok=False,
-                    message="You can only update notes that you created.",
+                    message=not_found_msg,
                     obj=None,
                     version=None,
                 )
@@ -776,7 +822,7 @@ class UpdateNote(graphene.Mutation):
 
         except Note.DoesNotExist:
             return UpdateNote(
-                ok=False, message="Note not found.", obj=None, version=None
+                ok=False, message=not_found_msg, obj=None, version=None
             )
         except Exception as e:
             logger.error(f"Error updating note: {e}")
