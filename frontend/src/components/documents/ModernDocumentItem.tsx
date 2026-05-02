@@ -1385,7 +1385,11 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
             )}
             {!!docRelationshipCount && docRelationshipCount > 0 && (
               <RelationshipBadgeContainer
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Cover touch devices: onMouseEnter doesn't fire on tap.
+                  handleRelationshipHover();
+                }}
                 onMouseEnter={handleRelationshipHover}
                 onFocus={handleRelationshipHover}
               >
@@ -1630,7 +1634,11 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
             )}
             {!!docRelationshipCount && docRelationshipCount > 0 && (
               <ListRelationshipBadge
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Cover touch devices: onMouseEnter doesn't fire on tap.
+                  handleRelationshipHover();
+                }}
                 onMouseEnter={handleRelationshipHover}
                 onFocus={handleRelationshipHover}
               >

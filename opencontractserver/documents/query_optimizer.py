@@ -365,7 +365,7 @@ class DocumentRelationshipQueryOptimizer:
         """
         from collections import defaultdict
 
-        from django.db.models import Count, Q
+        from django.db.models import Count, F, Q
 
         from opencontractserver.documents.models import DocumentRelationship
 
@@ -393,7 +393,15 @@ class DocumentRelationshipQueryOptimizer:
         counts: dict = defaultdict(int)
         for row in qs.values("source_document_id").annotate(c=Count("id")):
             counts[row["source_document_id"]] += row["c"]
-        for row in qs.values("target_document_id").annotate(c=Count("id")):
+        # Exclude self-referential rows from the target-side aggregation so a
+        # relationship where source == target only contributes once. Without
+        # this guard, such a row would be counted both as a source and as a
+        # target for the same document.
+        for row in (
+            qs.exclude(source_document_id=F("target_document_id"))
+            .values("target_document_id")
+            .annotate(c=Count("id"))
+        ):
             counts[row["target_document_id"]] += row["c"]
 
         # Materialise to a plain dict so callers can ``.get(key, 0)`` without
