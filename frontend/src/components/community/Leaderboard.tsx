@@ -60,7 +60,7 @@ const PageContainer = styled.div`
   overflow-x: hidden;
 `;
 
-const ContentContainer = styled.main`
+const ContentContainer = styled.div`
   max-width: 900px;
   margin: 0 auto;
   padding: 48px 24px 80px;
@@ -103,15 +103,17 @@ const StatsContainer = styled.div`
   margin-bottom: 48px;
   padding: 32px 0;
 
-  [data-testid="stat-value"] {
-    font-size: 36px !important;
-  }
-
+  /*
+   * StatBlock's default value font-size is already 36px on the md breakpoint
+   * (see .oc-stat-block__value in @os-legal/ui), and drops to 28px only at
+   * <= 480px. We tighten the breakpoint so it shrinks at <= 768px instead,
+   * targeting the documented BEM class so we're not coupled to a test ID.
+   */
   @media (max-width: 768px) {
     padding: 24px 0;
 
-    [data-testid="stat-value"] {
-      font-size: 28px !important;
+    .oc-stat-block__value {
+      font-size: 28px;
     }
   }
 `;
@@ -382,8 +384,8 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
     { value: 100, label: "Top 100" },
   ];
 
-  const getMetricIcon = (m: LeaderboardMetric) => {
-    switch (m) {
+  const getMetricIcon = (metric: LeaderboardMetric) => {
+    switch (metric) {
       case LeaderboardMetric.BADGES:
         return <Trophy size={16} />;
       case LeaderboardMetric.MESSAGES:
@@ -397,8 +399,8 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
     }
   };
 
-  const getScoreLabel = (m: LeaderboardMetric, score: number) => {
-    switch (m) {
+  const getScoreLabel = (metric: LeaderboardMetric, score: number) => {
+    switch (metric) {
       case LeaderboardMetric.BADGES:
         return `${score} ${score === 1 ? "badge" : "badges"}`;
       case LeaderboardMetric.MESSAGES:
