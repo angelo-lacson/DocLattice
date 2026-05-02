@@ -53,7 +53,8 @@ class GetRelationshipCountsByDocumentTestCase(TestCase):
             is_public=False,
         )
 
-        pdf_bytes = SAMPLE_PDF_FILE_TWO_PATH.open("rb").read()
+        with SAMPLE_PDF_FILE_TWO_PATH.open("rb") as f:
+            pdf_bytes = f.read()
 
         def _make_doc(title: str) -> Document:
             return Document.objects.create(
