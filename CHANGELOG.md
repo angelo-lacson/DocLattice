@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `createThreadViaUI` — clicks the `aria-label="Create new discussion"` CTA, fills the modal (scoped via the `#thread-title` anchor), submits the composer, and waits for the thread-detail header.
   - `postThreadReplyViaUI` — types into the bottom `ReplyForm` ProseMirror editor and clicks Send, returning once the new message text is visible.
 
+### Removed
+
+- **Stray planning artifacts at repo root** (Issue #1453): deleted `plan.md` (CorpusHome query-performance optimization plan) and `plans/routing-audit-report.md` (frontend routing audit). Both described work that has already shipped — `CountableConnection.resolve_total_count()` already calls `.count()` directly (`config/graphql/base.py:88`) and `browseRoutes` already includes `"discussions"` (`frontend/src/utils/navigationUtils.ts:177`). The `plans/` directory is now gone; future planning docs belong under `docs/plans/` or `docs/architecture/` per existing conventions.
+
 ### Changed
 
 - **Consistent MCP discoverability across corpus tiles and detail pages** (`frontend/src/components/common/MCPShareButton.tsx`, `frontend/src/components/corpuses/CorpusListView.tsx`, `frontend/src/components/corpuses/CorpusHome/CorpusLandingView.tsx`, `frontend/src/components/corpuses/CorpusHome/CorpusDetailsView.tsx`):
