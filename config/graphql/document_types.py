@@ -9,6 +9,7 @@ from django.db.models import QuerySet
 from graphene import relay
 from graphene.types.generic import GenericScalar
 from graphene_django import DjangoObjectType
+from graphql import GraphQLError
 from graphql_relay import from_global_id
 
 from config.graphql.annotation_types import (
@@ -210,6 +211,33 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     resolve_md_summary_file = resolve_md_summary_file_optimized
     resolve_pawls_parse_file = resolve_pawls_parse_file_optimized
     resolve_doc_annotations = resolve_doc_annotations_optimized
+
+    def _assert_user_can_read(self, info):
+        """
+        Raise ``GraphQLError`` if the requesting user cannot READ this document.
+        Returns the resolved user for caller convenience (so callers don't have
+        to re-extract it from ``info.context``).
+
+        Uses the canonical ``Document.objects.visible_to_user(user)`` manager
+        method so corpus-inherited and group permissions are honoured (per the
+        warning in ``user_has_permission_for_obj``'s docstring). Public
+        documents short-circuit with no DB hit so high-traffic public reads are
+        not penalised.
+        """
+        user = info.context.user if hasattr(info.context, "user") else None
+        if self.is_public:
+            return user
+        # Short-circuit anonymous callers before hitting the DB. For
+        # ``AnonymousUser`` the manager collapses to ``is_public=True``, so the
+        # ``.exists()`` lookup below would always be False here — skip it to
+        # preserve the old ordering and avoid an unnecessary round-trip.
+        if not user or not getattr(user, "is_authenticated", False):
+            raise GraphQLError(
+                "Permission denied: Authentication required to access private documents"
+            )
+        if Document.objects.visible_to_user(user).filter(id=self.id).exists():
+            return user
+        raise GraphQLError("Permission denied: You do not have access to this document")
 
     all_structural_annotations = graphene.List(
         AnnotationType,
@@ -912,9 +940,6 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         extract_id=None,
     ) -> Any:
         """Resolve annotations for specific page(s) using optimized queries."""
-        from django.contrib.auth.models import AnonymousUser
-        from graphql import GraphQLError
-
         from opencontractserver.annotations.query_optimizer import (
             AnnotationQueryOptimizer,
         )
@@ -927,26 +952,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         if extract_id:
             _, extract_pk = from_global_id(extract_id)
 
-        # Get user from the GraphQL context
-        user = info.context.user if hasattr(info.context, "user") else None
-
-        # Check if user has permission to access this document
-        if not self.is_public:
-            if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
-                raise GraphQLError(
-                    "Permission denied: Authentication required to access private documents"
-                )
-            elif user != self.creator and not user.is_superuser:
-                # Check if user has explicit permission
-                from opencontractserver.types.enums import PermissionTypes
-                from opencontractserver.utils.permissioning import (
-                    user_has_permission_for_obj,
-                )
-
-                if not user_has_permission_for_obj(user, self, PermissionTypes.READ):
-                    raise GraphQLError(
-                        "Permission denied: You do not have access to this document"
-                    )
+        user = self._assert_user_can_read(info)
 
         # Handle both single page and multiple pages
         # Priority: if 'pages' is provided, use it; otherwise fall back to 'page'
@@ -982,9 +988,6 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         strict_extract_mode=False,
     ) -> Any:
         """Resolve relationships for specific page(s) using the optimizer."""
-        from django.contrib.auth.models import AnonymousUser
-        from graphql import GraphQLError
-
         from opencontractserver.annotations.query_optimizer import (
             RelationshipQueryOptimizer,
         )
@@ -1000,25 +1003,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         if extract_id:
             _, extract_pk = from_global_id(extract_id)
 
-        # Get user from the GraphQL context
-        user = info.context.user if hasattr(info.context, "user") else None
-
-        # Permission checks mirroring annotation resolvers
-        if not self.is_public:
-            if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
-                raise GraphQLError(
-                    "Permission denied: Authentication required to access private documents"
-                )
-            elif user != self.creator and not user.is_superuser:
-                from opencontractserver.types.enums import PermissionTypes
-                from opencontractserver.utils.permissioning import (
-                    user_has_permission_for_obj,
-                )
-
-                if not user_has_permission_for_obj(user, self, PermissionTypes.READ):
-                    raise GraphQLError(
-                        "Permission denied: You do not have access to this document"
-                    )
+        user = self._assert_user_can_read(info)
 
         return RelationshipQueryOptimizer.get_document_relationships(
             document_id=self.id,
@@ -1046,31 +1031,11 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     )
 
     def resolve_relationship_summary(self, info, corpus_id) -> Any:
-        from django.contrib.auth.models import AnonymousUser
-        from graphql import GraphQLError
-
         from opencontractserver.annotations.query_optimizer import (
             RelationshipQueryOptimizer,
         )
 
-        # Permissions mirroring annotation summary style
-        user = info.context.user if hasattr(info.context, "user") else None
-
-        if not self.is_public:
-            if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
-                raise GraphQLError(
-                    "Permission denied: Authentication required to access private documents"
-                )
-            elif user != self.creator and not user.is_superuser:
-                from opencontractserver.types.enums import PermissionTypes
-                from opencontractserver.utils.permissioning import (
-                    user_has_permission_for_obj,
-                )
-
-                if not user_has_permission_for_obj(user, self, PermissionTypes.READ):
-                    raise GraphQLError(
-                        "Permission denied: You do not have access to this document"
-                    )
+        user = self._assert_user_can_read(info)
 
         _, corpus_pk = from_global_id(corpus_id)
         summary = RelationshipQueryOptimizer.get_relationship_summary(
@@ -1080,32 +1045,12 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
     def resolve_extract_annotation_summary(self, info, extract_id) -> Any:
         """Get summary of annotations in extract."""
-        from django.contrib.auth.models import AnonymousUser
-        from graphql import GraphQLError
-
         from opencontractserver.annotations.query_optimizer import (
             AnnotationQueryOptimizer,
         )
 
-        user = info.context.user if hasattr(info.context, "user") else None
+        user = self._assert_user_can_read(info)
         _, extract_pk = from_global_id(extract_id)
-
-        # Check if user has permission to access this document
-        if not self.is_public:
-            if isinstance(user, AnonymousUser) or not user or not user.is_authenticated:
-                raise GraphQLError(
-                    "Permission denied: Authentication required to access private documents"
-                )
-            elif user != self.creator and not user.is_superuser:
-                from opencontractserver.types.enums import PermissionTypes
-                from opencontractserver.utils.permissioning import (
-                    user_has_permission_for_obj,
-                )
-
-                if not user_has_permission_for_obj(user, self, PermissionTypes.READ):
-                    raise GraphQLError(
-                        "Permission denied: You do not have access to this document"
-                    )
 
         return AnnotationQueryOptimizer.get_extract_annotation_summary(
             document_id=self.id, extract_id=extract_pk, user=user, use_cache=True
