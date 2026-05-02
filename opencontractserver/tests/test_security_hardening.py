@@ -1136,7 +1136,8 @@ class TestConditionalCsrfExempt(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_session_auth_without_csrf_rejected(self):
-        """Session-only requests without CSRF token should be rejected."""
+        """Session-cookie requests without CSRF token should be rejected."""
+        from django.conf import settings
         from django.test import RequestFactory
 
         from config.graphql.security import conditional_csrf_exempt
@@ -1149,15 +1150,114 @@ class TestConditionalCsrfExempt(TestCase):
 
             return HttpResponse("ok")
 
-        # Session request without CSRF token — should be rejected
+        # Request carries a session cookie (so CSRF is meaningful) but no
+        # CSRF token / Authorization header — should be rejected.
+        session_cookie = getattr(settings, "SESSION_COOKIE_NAME", "sessionid")
         request = factory.post(
             "/graphql/",
             data="{}",
             content_type="application/json",
         )
-        # Ensure Django treats this as having a session (no auth header)
+        request.COOKIES[session_cookie] = "fake-session-id"
         response = dummy_view(request)
         # CsrfViewMiddleware returns 403 for missing CSRF token
+        self.assertEqual(response.status_code, 403)
+
+    def test_anonymous_no_session_bypasses_csrf(self):
+        """A POST with neither Authorization nor session cookie should pass.
+
+        Bearer-only API clients (e.g. the React frontend) momentarily have
+        no token during startup / refresh and must not be 403'd by CSRF
+        when they carry no cookie an attacker could ride.
+        """
+        from django.test import RequestFactory
+
+        from config.graphql.security import conditional_csrf_exempt
+
+        factory = RequestFactory()
+
+        @conditional_csrf_exempt
+        def dummy_view(request):
+            from django.http import HttpResponse
+
+            return HttpResponse("ok")
+
+        request = factory.post(
+            "/graphql/",
+            data="{}",
+            content_type="application/json",
+        )
+        # No Authorization header, no session cookie.
+        response = dummy_view(request)
+        self.assertEqual(response.status_code, 200)
+
+    def test_empty_authorization_header_treated_as_missing(self):
+        # Regression for the production 403 storm where the frontend sent
+        # ``Authorization: ""`` whenever the Auth0 token was momentarily
+        # empty.  A non-credential is not a credential: we must not let an
+        # empty header switch us to the token-auth bypass *or* leave a
+        # legitimate cookie-less request blocked.
+        from django.test import RequestFactory
+
+        from config.graphql.security import conditional_csrf_exempt
+
+        factory = RequestFactory()
+
+        @conditional_csrf_exempt
+        def dummy_view(request):
+            from django.http import HttpResponse
+
+            return HttpResponse("ok")
+
+        # Empty header, no session cookie → anonymous bypass.
+        request = factory.post(
+            "/graphql/",
+            data="{}",
+            content_type="application/json",
+            HTTP_AUTHORIZATION="",
+        )
+        response = dummy_view(request)
+        self.assertEqual(response.status_code, 200)
+
+        # Whitespace-only header is also not a credential.
+        request = factory.post(
+            "/graphql/",
+            data="{}",
+            content_type="application/json",
+            HTTP_AUTHORIZATION="   ",
+        )
+        response = dummy_view(request)
+        self.assertEqual(response.status_code, 200)
+
+    def test_empty_authorization_with_session_still_enforces_csrf(self):
+        """Empty Authorization + session cookie must NOT bypass CSRF.
+
+        Defense-in-depth: an empty ``Authorization`` header must not trick
+        the decorator into treating the request as token-authenticated.
+        With a session cookie present we still need CSRF.
+        """
+        from django.conf import settings
+        from django.test import RequestFactory
+
+        from config.graphql.security import conditional_csrf_exempt
+
+        factory = RequestFactory()
+
+        @conditional_csrf_exempt
+        def dummy_view(request):
+            from django.http import HttpResponse
+
+            return HttpResponse("ok")
+
+        session_cookie = getattr(settings, "SESSION_COOKIE_NAME", "sessionid")
+        request = factory.post(
+            "/graphql/",
+            data="{}",
+            content_type="application/json",
+            HTTP_AUTHORIZATION="",
+        )
+        request.COOKIES[session_cookie] = "fake-session-id"
+        response = dummy_view(request)
         self.assertEqual(response.status_code, 403)
 
     def test_csrf_exempt_attribute_set(self):
