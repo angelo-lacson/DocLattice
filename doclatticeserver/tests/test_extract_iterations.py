@@ -248,9 +248,7 @@ class CreateExtractIterationMutationTestCase(TestCase):
         # `user_has_permission_for_obj` (called by CreateExtractIteration) ignores
         # creator status — it requires explicit guardian grants. Grant CRUD here so
         # the mutation's READ check passes.
-        set_permissions_for_obj_to_user(
-            self.user, self.source, [PermissionTypes.CRUD]
-        )
+        set_permissions_for_obj_to_user(self.user, self.source, [PermissionTypes.CRUD])
         self.source.documents.add(self.doc_v1)
 
     def _mutate(self, *, axis, **extra):
