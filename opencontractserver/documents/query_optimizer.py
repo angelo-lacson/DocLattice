@@ -5,9 +5,19 @@ Provides optimized queries for document-related actions (extracts, analysis rows
 Follows the least-privilege permission model.
 """
 
+from collections import defaultdict
 from typing import TYPE_CHECKING, Optional
 
-from django.db.models import BooleanField, Case, QuerySet, Value, When
+from django.db.models import (
+    BooleanField,
+    Case,
+    Count,
+    F,
+    Q,
+    QuerySet,
+    Value,
+    When,
+)
 
 if TYPE_CHECKING:
     from opencontractserver.documents.models import DocumentRelationship
@@ -344,7 +354,7 @@ class DocumentRelationshipQueryOptimizer:
         user,
         corpus_id: Optional[int] = None,
         context=None,
-    ) -> dict:
+    ) -> dict[int, int]:
         """
         Return a mapping ``{document_id: count}`` of visible relationships per
         document, computed in a single pair of aggregated SQL queries.
@@ -363,10 +373,8 @@ class DocumentRelationshipQueryOptimizer:
                 provided, the result is cached on the context keyed by
                 (user, corpus_id) so repeated resolvers share the work.
         """
-        from collections import defaultdict
-
-        from django.db.models import Count, F, Q
-
+        # DocumentRelationship is imported lazily to avoid circular imports
+        # between this module and ``opencontractserver.documents.models``.
         from opencontractserver.documents.models import DocumentRelationship
 
         cache_obj_key = (
