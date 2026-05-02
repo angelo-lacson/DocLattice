@@ -7,6 +7,7 @@ from typing import Any
 
 import graphene
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
 from django.db import DatabaseError, IntegrityError, transaction
 from django.utils import timezone
 from graphql import GraphQLError
@@ -1282,8 +1283,11 @@ class RunCorpusAction(graphene.Mutation):
 
         # Superuser-only: the @user_passes_test decorator above guarantees only
         # superusers reach this point, so raw .objects.get() is intentional and
-        # bypasses visible_to_user() filtering by design.
-        assert user.is_superuser, "RunCorpusAction is gated by @user_passes_test"
+        # bypasses visible_to_user() filtering by design. Defence-in-depth check
+        # uses an explicit raise (not ``assert``) so it survives ``python -O``
+        # which strips assertions.
+        if not user.is_superuser:
+            raise PermissionDenied("RunCorpusAction requires superuser privileges.")
 
         # Validate action exists
         try:
