@@ -1,11 +1,6 @@
 import React, { useState } from "react";
 import { useQuery } from "@apollo/client";
-import {
-  Dropdown,
-  StatBlock,
-  StatGrid,
-  Table,
-} from "@os-legal/ui";
+import { Dropdown, StatBlock, StatGrid, Table } from "@os-legal/ui";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import {
@@ -32,6 +27,26 @@ import {
 } from "../../types/leaderboard";
 import { Badge } from "../badges/Badge";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+
+// File-local rank palette. Centralised here so the three RankBadge ternaries
+// stay readable and the values are easy to update in one place. These are
+// intentionally not in OS_LEGAL_COLORS because they are leaderboard-specific.
+const RANK_COLORS = {
+  gold: { bg: "#fef3c7", border: "#fde68a", text: "#b45309" },
+  silver: {
+    bg: OS_LEGAL_COLORS.surfaceLight,
+    border: OS_LEGAL_COLORS.border,
+    text: OS_LEGAL_COLORS.textTertiary,
+  },
+  bronze: { bg: "#fed7aa", border: "#fdba74", text: "#9a3412" },
+} as const;
+
+// File-local "rising star" tag palette (orange/amber tints).
+const RISING_STAR_COLORS = {
+  bg: "#fff7ed",
+  border: "#fed7aa",
+  text: "#c2410c",
+} as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS - Aligned with CorpusListView / OS Legal design system
@@ -189,22 +204,22 @@ const RankBadge = styled.div<{ $rank: number }>`
   font-weight: 600;
   font-size: 14px;
   background: ${(props) => {
-    if (props.$rank === 1) return "#fef3c7";
-    if (props.$rank === 2) return "#f1f5f9";
-    if (props.$rank === 3) return "#fed7aa";
+    if (props.$rank === 1) return RANK_COLORS.gold.bg;
+    if (props.$rank === 2) return RANK_COLORS.silver.bg;
+    if (props.$rank === 3) return RANK_COLORS.bronze.bg;
     return OS_LEGAL_COLORS.surfaceLight;
   }};
   color: ${(props) => {
-    if (props.$rank === 1) return "#b45309";
-    if (props.$rank === 2) return "#475569";
-    if (props.$rank === 3) return "#9a3412";
+    if (props.$rank === 1) return RANK_COLORS.gold.text;
+    if (props.$rank === 2) return RANK_COLORS.silver.text;
+    if (props.$rank === 3) return RANK_COLORS.bronze.text;
     return OS_LEGAL_COLORS.textSecondary;
   }};
   border: 1px solid
     ${(props) => {
-      if (props.$rank === 1) return "#fde68a";
-      if (props.$rank === 2) return "#e2e8f0";
-      if (props.$rank === 3) return "#fdba74";
+      if (props.$rank === 1) return RANK_COLORS.gold.border;
+      if (props.$rank === 2) return RANK_COLORS.silver.border;
+      if (props.$rank === 3) return RANK_COLORS.bronze.border;
       return OS_LEGAL_COLORS.border;
     }};
 `;
@@ -237,12 +252,12 @@ const RisingStarTag = styled.span`
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
+  background: ${RISING_STAR_COLORS.bg};
+  border: 1px solid ${RISING_STAR_COLORS.border};
   border-radius: 999px;
-  color: #c2410c;
+  color: ${RISING_STAR_COLORS.text};
   letter-spacing: 0.02em;
 `;
 
@@ -292,17 +307,17 @@ const BadgeCard = styled.div`
 const BadgeMeta = styled.div`
   flex: 1;
   min-width: 0;
+`;
 
-  .badge-name {
-    font-weight: 600;
-    color: ${OS_LEGAL_COLORS.textPrimary};
-    margin-bottom: 4px;
-  }
+const BadgeName = styled.div`
+  font-weight: 600;
+  color: ${OS_LEGAL_COLORS.textPrimary};
+  margin-bottom: 4px;
+`;
 
-  .badge-stats {
-    font-size: 13px;
-    color: ${OS_LEGAL_COLORS.textSecondary};
-  }
+const BadgeStats = styled.div`
+  font-size: 13px;
+  color: ${OS_LEGAL_COLORS.textSecondary};
 `;
 
 const EmptyStateBox = styled.div`
@@ -505,9 +520,8 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
                   <RankInfoBanner>
                     <User size={16} />
                     <span>
-                      Your rank:{" "}
-                      <strong>#{leaderboard.currentUserRank}</strong> out of{" "}
-                      {leaderboard.totalUsers} users
+                      Your rank: <strong>#{leaderboard.currentUserRank}</strong>{" "}
+                      out of {leaderboard.totalUsers} users
                     </span>
                   </RankInfoBanner>
                 )}
@@ -608,11 +622,11 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
                   <BadgeCard key={dist.badge.id}>
                     <Badge badge={dist.badge} size="medium" />
                     <BadgeMeta>
-                      <div className="badge-name">{dist.badge.name}</div>
-                      <div className="badge-stats">
+                      <BadgeName>{dist.badge.name}</BadgeName>
+                      <BadgeStats>
                         Awarded {dist.awardCount} times to{" "}
                         {dist.uniqueRecipients} users
-                      </div>
+                      </BadgeStats>
                     </BadgeMeta>
                   </BadgeCard>
                 ))}
