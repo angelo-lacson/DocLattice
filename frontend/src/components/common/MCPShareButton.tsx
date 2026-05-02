@@ -339,7 +339,7 @@ export const MCPShareButton: React.FC<MCPShareButtonProps> = ({
             </>
           ) : (
             <SetupHint>
-              <Info />
+              <Info size={16} />
               <span>
                 Once public, the endpoint will appear here for AI assistants to
                 connect.{" "}
