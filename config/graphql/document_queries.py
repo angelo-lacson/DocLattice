@@ -231,7 +231,14 @@ class DocumentQueryMixin:
             completed=False,
             errors=["Bulk upload job not found."],
         )
-        if owner_id is None or owner_id != info.context.user.id:
+        # Coerce to int defensively: some Django cache backends (e.g. Redis
+        # with a custom serializer) deserialize integers as strings, which
+        # would silently break the legitimate-owner equality check.
+        try:
+            owner_id_int = int(owner_id) if owner_id is not None else None
+        except (TypeError, ValueError):
+            owner_id_int = None
+        if owner_id_int is None or owner_id_int != info.context.user.id:
             return not_found_response
 
         try:
