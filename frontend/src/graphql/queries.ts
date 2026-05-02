@@ -2720,6 +2720,83 @@ export interface SearchAnnotationsForMentionOutput {
   };
 }
 
+/**
+ * Search notes for cross-content discovery.
+ * Backend filters results to notes the user can read (Note.objects.visible_to_user).
+ */
+export interface SearchNotesForMentionInput {
+  textSearch: string;
+  corpusId?: string;
+  documentId?: string;
+  first?: number;
+}
+
+export interface SearchNotesForMentionOutput {
+  searchNotesForMention: {
+    edges: Array<{
+      node: {
+        id: string;
+        title: string;
+        content: string;
+        modified: string;
+        creator: {
+          id: string;
+          username: string;
+          slug: string;
+        };
+        document: {
+          id: string;
+          title: string;
+          slug: string;
+          creator: {
+            id: string;
+            slug: string;
+          };
+        };
+      };
+    }>;
+  };
+}
+
+export const SEARCH_NOTES_FOR_MENTION = gql`
+  query SearchNotesForMention(
+    $textSearch: String!
+    $corpusId: ID
+    $documentId: ID
+    $first: Int
+  ) {
+    searchNotesForMention(
+      textSearch: $textSearch
+      corpusId: $corpusId
+      documentId: $documentId
+      first: $first
+    ) {
+      edges {
+        node {
+          id
+          title
+          content
+          modified
+          creator {
+            id
+            username
+            slug
+          }
+          document {
+            id
+            title
+            slug
+            creator {
+              id
+              slug
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
 export const SEARCH_ANNOTATIONS_FOR_MENTION = gql`
   query SearchAnnotationsForMention($textSearch: String!, $corpusId: ID) {
     searchAnnotationsForMention(
