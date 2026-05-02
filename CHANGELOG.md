@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **E2E spec for threads/discussions** (`frontend/tests/e2e/threads-discussions.spec.ts`):
+  - Anonymous pass renders `/discussions` (filter pills, search box, "Corpus Discussions" section header) and `/threads` (search route) without authentication.
+  - Authenticated pass logs in, creates a per-run corpus (suffixed with `Date.now()` to avoid collisions across retries), opens its inline discussions view via `?view=discussions`, fills the `CreateThreadForm` modal (title, optional description, ProseMirror initial message), posts a top-level reply through the `ReplyForm` composer, navigates back to the thread list, and confirms the new thread surfaces in the global `/discussions` "Corpus Discussions" section before clicking through to the detail.
+  - Picked up automatically by the existing `frontend-e2e.yml` workflow — no CI changes required.
+- **Three reusable E2E helpers** in `frontend/tests/e2e/helpers.ts`:
+  - `openCorpusDiscussionsViaUI` — SPA-navigates to a corpus and opens its inline discussions view; waits on the "All" filter pill as the readiness signal.
+  - `createThreadViaUI` — clicks the `aria-label="Create new discussion"` CTA, fills the modal (scoped via the `#thread-title` anchor), submits the composer, and waits for the thread-detail header.
+  - `postThreadReplyViaUI` — types into the bottom `ReplyForm` ProseMirror editor and clicks Send, returning once the new message text is visible.
+
 ### Fixed
 
 - **Backend hardening for GraphQL CSRF / `Authorization` semantics** (Issue #1432, follow-up to #1431): the original fix already normalised empty / whitespace-only `Authorization` headers, but any *non-empty* value still bypassed CSRF. That left a defense-in-depth gap (a malformed scheme such as `Authorization: Basic …` was treated as evidence of token auth) and the production logs were still drowning in benign `Forbidden (CSRF token missing.)` warnings. Two-part hardening:
@@ -15,7 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Test matrix expansion** (`opencontractserver/tests/test_security_hardening.py`): added the missing legs called out in #1432. New `TestConditionalCsrfExempt` cases — `test_unrecognized_scheme_with_session_enforces_csrf`, `test_unrecognized_scheme_without_session_bypasses_csrf`, `test_bearer_without_credential_with_session_enforces_csrf` (covers `"Bearer"`, `"Bearer "`, `"Bearer    "`), `test_bearer_with_credential_bypasses_csrf`, `test_bearer_scheme_is_case_insensitive`, `test_api_key_scheme_bypasses_csrf` (with `API_TOKEN_PREFIX` overridden so the test is independent of `ALLOW_API_KEYS`), and `test_session_with_csrf_token_passes` — close the positive session+CSRF path that the suite previously lacked. New `TestCsrfRejectLogVolume` covers the filter contract directly: `test_filter_demotes_csrf_token_missing_warning_to_info`, `test_filter_does_not_demote_other_csrf_reasons` (origin mismatch, bad referer, `CSRF token incorrect.`), and `test_filter_passes_unrelated_records_unchanged`.
   - **Out of scope** (per the issue): no SPA auth-model changes, no CSRF-token plumbing on the frontend.
 
-- **GraphQL POST 403 storm when Auth0 token is empty** (Issue #1431): production logs were filling with `Forbidden (CSRF token missing.): /graphql/` because the React frontend always sent `Authorization: ""` whenever the Auth0 access token was momentarily missing (startup race, silent-refresh failure, post-expiry re-mount), and `conditional_csrf_exempt` only bypassed CSRF when the header was *truthy*. An empty header fell through to Django's session/CSRF path even though the frontend never carries a CSRF token. Two-sided fix:
+- **Document annotator right sidebar: crowded tabs and unresponsive Chat panel**:
+  - **Tabs visually merge when panel is open** (`frontend/src/components/knowledge_base/document/styled/SidebarTabs.tsx:78-93`): `SidebarTabsContainer` set `gap: 0` whenever the panel was open, so the four vertical tabs (Index, Chat, Feed, Discussions) butted up against each other along the panel's left edge with no separation. Replaced the conditional gap with a constant `gap: 6px`, restoring per-tab visual identity in both open and closed states.
+  - **`NewChatFloatingButton` ignored panel bounds** (`frontend/src/components/knowledge_base/document/ChatContainers.tsx:587-606`): the FAB used `position: fixed; bottom: 2rem; right: 2rem`, anchoring it to the viewport instead of the chat panel — at 50% panel width the "+" button rendered over the document, not the chat tray, and didn't follow panel resizes. Switched to `position: absolute` so it tracks the `SlidingPanel`, with a softer offset (`1.5rem`) and a more visible shadow.
+  - **Empty conversation list collapsed to a thin strip** (`frontend/src/components/knowledge_base/document/right_tray/ConversationListView.tsx:87-104`, `frontend/src/components/knowledge_base/document/ChatContainers.tsx:389-399`): the list view's outer wrapper had no `flex: 1`/height, and `ConversationGrid` likewise didn't grow, so when no conversations existed the panel showed only the filter row over a sea of empty white. Made both flex-grow within their parent and added `grid-auto-rows: max-content` plus bottom padding so cards stack from the top and don't collide with the FAB.
+  - **No empty-state messaging for Chat** (`frontend/src/components/knowledge_base/document/right_tray/ConversationListView.tsx:185-231`): added a centered empty state with a chat icon, "No conversations yet" heading, and a hint that nudges users toward the new-chat FAB. Gated on `conversations.length === 0` so it disappears as soon as data lands.
+
+- **GraphQL POST 403 storm when Auth0 token is empty** (Issue #1431): production logs were filling with `Forbidden (CSRF token missing.): /graphql/` because the React frontend always sent `Authorization: ""` whenever the Auth0 access token was momentarily missing (startup race, silent-refresh failure, post-expiry re-mount), and `conditional_csrf_exempt` only bypassed CSRF when the header was _truthy_. An empty header fell through to Django's session/CSRF path even though the frontend never carries a CSRF token. Two-sided fix:
   - **Frontend** (`frontend/src/index.tsx:36-50`): conditional-spread `Authorization` so the header is omitted entirely when the token is empty rather than sent as the empty string.
   - **Backend** (`config/graphql/security.py:43-86`): refactored `conditional_csrf_exempt` to skip CSRF when **either** an `Authorization` header is present (Bearer / API-key — browsers don't auto-attach it) **or** no session cookie is present (the request is fully anonymous; without a cookie there is nothing for a cross-origin attacker to ride). Whitespace-only `Authorization` headers are now treated as missing. Session-cookie requests without a Bearer token still go through the existing CSRF check, so authenticated session traffic remains protected.
   - **Backend** (`config/graphql_auth0_auth/settings.py:73-79`): `Auth0JWTSettings.__getattr__` now raises `AttributeError` quietly for any name beginning with `_`, eliminating the `ERROR settings  Auth0JWTSettings.__getattr__() - Invalid setting requested: _user_settings` log noise emitted whenever Python internals (deepcopy / pickle / `hasattr`) probed dunder/private attributes. Unknown public settings still log an error.
@@ -97,7 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **`opencontractserver/tests/test_pydantic_ai_agents.py`** — New `_structured_response_raw` tests pinning the Anthropic temperature override (forces 0 when caller passes `temperature=None`, respects function-level pin, respects `config.temperature` pin, leaves OpenAI runs untouched), and three smoke tests for the strengthened `_build_structured_system_prompt` overrides covering the document, corpus, and core base agents.
 - **Extraction grounding follow-up** (Issue #1246, follow-up to original #1245 grounding pipeline):
   - **Bug — silent `page=1` fallback corrupted multi-page PDF grounding** (`opencontractserver/utils/extraction_grounding.py`, `_create_pdf_annotation`): when PlasmaPDF could not determine a page for a span, the previous code logged a warning and saved the annotation on page 1 anyway. For multi-page PDFs this produced a structurally incorrect annotation pinned to the wrong page (and therefore the wrong bounding box context), so users clicking through to the source landed on a different page than the one containing the extracted text. Fixed: `_create_pdf_annotation` now raises `ValueError` inside its `transaction.atomic()` savepoint, the savepoint rolls back, and the outer per-result `try/except` in `_create_grounding_annotations` logs it as a failed grounding attempt. Best-effort grounding is preserved (other annotations in the batch are unaffected) but no annotation is ever saved with a wrong page.
-  - **Bug — label-set lookup outside the per-annotation guard caused all-or-nothing failure** (`opencontractserver/utils/extraction_grounding.py`, `_create_grounding_annotations`): `corpus.ensure_label_and_labelset(...)` was invoked once before the per-annotation `try/with transaction.atomic()` loop. A failure to materialise the label-set (e.g. a transient DB error or a pre-existing constraint conflict) propagated out, was caught by the outer `try/except` in `data_extract_tasks.py`, and silently dropped *all* groundings for the datacell. Moved the call inside the savepoint so a label-lookup failure only skips the affected annotation.
+  - **Bug — label-set lookup outside the per-annotation guard caused all-or-nothing failure** (`opencontractserver/utils/extraction_grounding.py`, `_create_grounding_annotations`): `corpus.ensure_label_and_labelset(...)` was invoked once before the per-annotation `try/with transaction.atomic()` loop. A failure to materialise the label-set (e.g. a transient DB error or a pre-existing constraint conflict) propagated out, was caught by the outer `try/except` in `data_extract_tasks.py`, and silently dropped _all_ groundings for the datacell. Moved the call inside the savepoint so a label-lookup failure only skips the affected annotation.
   - **Bug — duplicate `OC_EXTRACT_SOURCE` annotations on Celery retry** (`opencontractserver/utils/extraction_grounding.py`, `_create_pdf_annotation` & `_create_span_annotation`): nothing prevented the grounding pipeline from creating fresh annotations and re-linking them via `datacell.sources.add(*annotations)` if `ground_extraction_to_annotations` ran twice on the same datacell (Celery retry after partial failure was the realistic trigger). Replaced the construct-then-`save()` flow with `Annotation.objects.get_or_create()` keyed on `(document, annotation_label, annotation_type, raw_text, …)` so retries reuse existing rows. `datacell.sources` is a `ManyToManyField`, so re-linking the same row is already a no-op once the row is shared.
   - **Constant — extracted `DOCX_MIME_TYPE`** (`opencontractserver/constants/document_processing.py`): the long `application/vnd.openxmlformats-officedocument.wordprocessingml.document` literal previously lived inline in `_load_document_text_and_layer`. Per the project's no-magic-strings rule it now sits next to `MARKDOWN_MIME_TYPE` and is imported from one place.
   - **Type annotations** (`opencontractserver/utils/extraction_grounding.py`): `Document`, `Corpus`, `Datacell`, `Annotation`, and `AnnotationLabel` parameters and return types added via a `TYPE_CHECKING` block on every public and helper function. No runtime change.
@@ -126,7 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cross-corpus structural-annotation leak in `CoreAnnotationVectorStore`** (`opencontractserver/llms/vector_stores/core_vector_stores.py:296-326,371-413`): The corpus-wide retrieval path (`corpus_id` set, `document_id=None`) returned every structural annotation in the database regardless of corpus. Two collaborating defects caused the leak:
   1. `Q(structural=True)` in the corpus-only branch had **no corpus constraint** — parser-produced structural annotations have `Annotation.document_id = corpus_id = NULL`, so corpus membership is only knowable through `structural_set → Document.structural_annotation_set (reverse FK) → DocumentPath.corpus_id`, a join the previous code did not perform.
   2. The `check_corpus_deletion` block (default `True`) added `Q(document_id__in=active_doc_ids)`, and `__in` lookups never match `NULL`, so structural annotations were silently dropped on the production-default path. Bypassing this filter with `check_corpus_deletion=False` exposed defect #1 directly.
-  - **Impact**: Multi-tenant deployments leaked structural annotations across tenant corpora — a real security boundary violation since the upfront IDOR check only validated the *requested* `corpus_id`, not the *returned* rows. Single-tenant deployments saw it as a corpus-scoping / search-quality bug (e.g. corpus-wide benchmark runs returned chunks from abandoned corpora). The standard `Annotation.objects.visible_to_user()` permission filter was bypassed entirely because the vector store builds its own filter chain rather than going through that manager method.
+  - **Impact**: Multi-tenant deployments leaked structural annotations across tenant corpora — a real security boundary violation since the upfront IDOR check only validated the _requested_ `corpus_id`, not the _returned_ rows. Single-tenant deployments saw it as a corpus-scoping / search-quality bug (e.g. corpus-wide benchmark runs returned chunks from abandoned corpora). The standard `Annotation.objects.visible_to_user()` permission filter was bypassed entirely because the vector store builds its own filter chain rather than going through that manager method.
   - **Fix** (corpus boundary + per-document visibility for the structural class): the corpus-only branch now requires `structural_set_id__in=<sets reachable from a document in this corpus that is visible to the user>`, joining through `Document.objects.visible_to_user(user).filter(path_records__corpus_id=...)`. The deletion-aware filter accepts both `document_id__in=active` AND structural rows whose set links to one of those active documents, so parser-produced structural annotations remain reachable on the default path. `CoreAnnotationVectorStore.global_search()` was already correct (it explicitly joins via `structural_set__documents__in=accessible_doc_ids`) and is unchanged.
   - Regression coverage: `opencontractserver/tests/test_corpus_isolation_vector_store.py` — six tests covering cross-corpus leak, deletion-aware drop, orphan-set leak, document-scoped retrieval still returns structural rows, viewer-without-doc-permission excluded, creator still sees own row.
 - **Test-only**: `opencontractserver/tests/test_pydantic_ai_agents.py`, `opencontractserver/tests/test_structural_annotation_portability.py` — `Document.objects.create(...)` calls in `TransactionTestCase` setUp now pass `processing_started=timezone.now()` to short-circuit `process_doc_on_create_atomic`, which would otherwise eagerly chain a Celery PDF-ingest task that fails on the (file-less) test document and aborts the whole test class. Pre-existing failure, exposed cleanly when the regression suite was added.
@@ -137,7 +154,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Pluggable text chunking strategies for `TxtParser`** (Issue #1348, alongside PR #1239): Introduced `opencontractserver/pipeline/parsers/text_chunkers.py` — a small registry-backed abstraction (`BaseTextChunker` + `TextChunk` + `get_chunker`) with three built-in strategies: `SentenceChunker` (spaCy `doc.sents`, preserves pre-#1348 behaviour and emits the existing `SENTENCE` label), `ParagraphChunker` (blank-line split with optional `min_chars` filter and `max_chars` oversize-paragraph fallback, emits `PARAGRAPH`), and `SlidingWindowChunker` (fixed-character window with configurable `overlap` and optional `respect_word_boundaries` snap, emits `WINDOW`). `TxtParser` now declares a `Settings` dataclass with a `chunkers: list[ChunkerSpec]` field (default `[{"name": "sentence"}]`) that can be overridden via `PipelineSettings` *or* per-call via a `chunkers=[...]` kwarg on `parse_document`; the parser iterates the configured strategies and emits one structural SPAN_LABEL annotation per chunk under each strategy's label, so stacked configurations (e.g. sentence + paragraph) index multiple retrieval granularities simultaneously. Motivates the benchmark work in #1239: the LegalBench-RAG `probe_recall_at_10` gap on `privacy_qa` (0.22 observed vs 0.5–0.8 paper floor) is the thesis for needing paragraph-granularity retrieval units, but this PR is strategy-neutral — which chunker wins for which subset is a follow-up optimisation to be driven by the benchmark harness itself. Regression coverage in `opencontractserver/tests/test_text_chunkers.py` (pure-Python, no Django DB) exercises offset/whitespace invariants, overlap arithmetic, word-boundary snapping, argument validation and registry lookup; `test_txt_ingestor_pipeline.py` gains two integration tests that parse the live fixture with a paragraph-only and a stacked paragraph+sliding_window recipe. Existing sentence-only ingestion path is unchanged.
+- **Pluggable text chunking strategies for `TxtParser`** (Issue #1348, alongside PR #1239): Introduced `opencontractserver/pipeline/parsers/text_chunkers.py` — a small registry-backed abstraction (`BaseTextChunker` + `TextChunk` + `get_chunker`) with three built-in strategies: `SentenceChunker` (spaCy `doc.sents`, preserves pre-#1348 behaviour and emits the existing `SENTENCE` label), `ParagraphChunker` (blank-line split with optional `min_chars` filter and `max_chars` oversize-paragraph fallback, emits `PARAGRAPH`), and `SlidingWindowChunker` (fixed-character window with configurable `overlap` and optional `respect_word_boundaries` snap, emits `WINDOW`). `TxtParser` now declares a `Settings` dataclass with a `chunkers: list[ChunkerSpec]` field (default `[{"name": "sentence"}]`) that can be overridden via `PipelineSettings` _or_ per-call via a `chunkers=[...]` kwarg on `parse_document`; the parser iterates the configured strategies and emits one structural SPAN_LABEL annotation per chunk under each strategy's label, so stacked configurations (e.g. sentence + paragraph) index multiple retrieval granularities simultaneously. Motivates the benchmark work in #1239: the LegalBench-RAG `probe_recall_at_10` gap on `privacy_qa` (0.22 observed vs 0.5–0.8 paper floor) is the thesis for needing paragraph-granularity retrieval units, but this PR is strategy-neutral — which chunker wins for which subset is a follow-up optimisation to be driven by the benchmark harness itself. Regression coverage in `opencontractserver/tests/test_text_chunkers.py` (pure-Python, no Django DB) exercises offset/whitespace invariants, overlap arithmetic, word-boundary snapping, argument validation and registry lookup; `test_txt_ingestor_pipeline.py` gains two integration tests that parse the live fixture with a paragraph-only and a stacked paragraph+sliding_window recipe. Existing sentence-only ingestion path is unchanged.
 - **Global post-retrieval reranker for vector search** (Issue #1349): Adds an optional cross-encoder reranking stage that runs after first-stage vector / hybrid retrieval, so OpenContracts can close the gap between vanilla HNSW recall and the accuracy achievable with a cross-encoder scoring pass.
   - New abstract base class `opencontractserver.pipeline.base.reranker.BaseReranker` wired into the existing `PipelineComponentBase` settings machinery: concrete subclasses declare a `Settings` dataclass (loaded from `PipelineSettings` at runtime) and implement `_rerank_impl(query, passages, **kwargs)`. A default `_arerank_impl` wraps the sync implementation via `sync_to_async` so every backend has a working async path without duplicating logic.
   - Fault-tolerant helpers `safe_rerank` / `safe_arerank` swallow reranker failures and return `None` so retrieval degrades gracefully to the first-stage ordering — critical because a misconfigured reranker must never take down semantic search.
@@ -298,7 +315,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`ChatMessage` source indicator no longer renders "1 sources"** (`frontend/src/components/widgets/chat/ChatMessage.tsx:1993`): the source indicator always used the plural noun regardless of count, while every other pluralized label in the component ("1 Source", "1 step", "1 tool") switched correctly. Updated to `"1 source" / "N sources"` to match.
 - **`DocumentRelationshipModal` "Create label" button never appeared** (Issue #1280, `frontend/src/components/documents/DocumentRelationshipModal.tsx`): `@os-legal/ui`'s Dropdown only fires `onSearchChange` in `searchable="async"` mode — with `searchable="local"` the parent's `labelSearchTerm` state never updated, so the `labelSearchTerm`-gated "Create label: ..." empty-state button was permanently hidden. Switched the Dropdown to `async`, moved option filtering into a `useMemo(filteredRelationshipLabels, [relationLabels, hasCorpus, labelSearchTerm])`, and added the missing dep. Now typing a novel label name surfaces the Create button as designed.
 - **`RelationGroup.updateForAnnotationDeletion` pre-filter length check** (Issue #1288): `frontend/src/components/annotator/types/annotations.ts:49-50` computed `nowSourceEmpty` / `nowTargetEmpty` from the pre-filter `this.sourceIds` / `this.targetIds`, so the "now empty" conditions were identical to the "before" conditions and the pruning branches that return `undefined` were dead code. Deleting the sole source or sole target of a relation left the relation orphaned, pointing at a deleted annotation id. Fixed by reading from the post-filter `newSourceIds` / `newTargetIds`. Called from `PdfAnnotations.undoAnnotation()`, so undo now properly drops any relation whose last source or target was the popped annotation. New regression tests under `RelationGroup > .updateForAnnotationDeletion()` cover all four pruning branches plus the survive-with-updated-ids and unchanged cases, and the existing `undoAnnotation` test that pinned the wrong behaviour was corrected.
-
   - Additionally fixed a surviving-relation identity drop in the same method: the post-prune return previously constructed `new RelationGroup(newSourceIds, newTargetIds, this.label)` without forwarding `this.id` / `this.structural`, so relations that merely lost a member were silently reassigned a fresh uuid and had their `structural` flag cleared. Both fields are now preserved, and the survival tests assert `updated!.id === rel.id` (plus `structural === true` where applicable) to pin the behaviour.
 
 - **`useAgentChat` WebSocket reconnects on every approval-gate transition** (Issue #1296): `frontend/src/hooks/useAgentChat.ts` had `pendingApproval` in the main WebSocket `useEffect` dependency array, so every `ASYNC_APPROVAL_NEEDED` / `ASYNC_APPROVAL_RESULT` / `ASYNC_CONTENT` / `ASYNC_FINISH` message that set or cleared approval state tore the socket down and recreated it mid-conversation. Impacts: approval decisions could race the reconnect and silently fail (`isConnected` flipped to `false` before the fresh socket opened), in-flight streaming tokens were dropped whenever an approval gate opened/closed, and the server saw a brand-new consumer attaching mid-run. Fix: mirror `pendingApproval` in a `pendingApprovalRef` updated by a separate effect (`useAgentChat.ts:291-299`), read `pendingApprovalRef.current` from the `ASYNC_CONTENT` / `ASYNC_APPROVAL_RESULT` / `ASYNC_FINISH` branches of `onmessage` (`useAgentChat.ts:651-752`), and drop `pendingApproval` from the socket effect's dependency array (`useAgentChat.ts:802-818`). Tests in `frontend/src/hooks/__tests__/useAgentChat.test.tsx`: removed the previous `_open()` workarounds around approval events, replaced the old "reconnects on approval state change" regression test with a new `does not reconnect the socket when approval state changes (issue #1296)` guard that asserts `wsInstances.length` is unchanged, `originalSocket.close` was not called, and the approval decision is dispatched through the original socket. All 23 tests still pass.
@@ -332,7 +348,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `frontend/tests/utils/ReactiveVarObserver.tsx` — New helper that exposes Apollo reactive-var state via DOM data attributes so Playwright assertions can observe cross-process (browser-side) state without reaching into the Node fixture.
   - Added workarounds for DndContext pointer-event interception (`clickViaReact` / `openContextMenu` using React 18 `__reactProps$` fiber access) with explicit upgrade-risk comments.
 - **Route component and ExtractDetail view test coverage** (Issue #1285): Closed coverage gaps for zero-coverage route wrappers and the 7%-covered `ExtractDetail.tsx` orchestrator.
-
   - `frontend/src/components/routes/__tests__/ExtractDetailRoute.test.tsx` — 6 vitest specs covering missing-ID, reactive-var reuse, loading, error, not-found, and success paths for the slug-resolving extract route.
   - `frontend/src/components/routes/__tests__/ExtractLandingRoute.test.tsx` — 4 specs for the legacy `/e/:user/:extract` route, including the redirect to `/extracts/:id` when the reactive var is populated.
   - `frontend/src/components/routes/__tests__/LabelSetLandingRoute.test.tsx` — 5 specs for loading/error/success state and `onClose` cleanup.
@@ -365,13 +380,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Extracts DataGrid & Detail component test coverage** (Issue #1282): Expanded Playwright component tests for the two biggest uncovered files in `frontend/src/components/extracts/`. Previously at 32.5% and 23.0% line coverage respectively (~990 uncovered lines combined); the new tests exercise the high-signal branches listed in the issue.
-
   - `frontend/tests/DataGrid.ct.tsx`: grew from 4 to 19 tests. New coverage: loading overlay (idle vs running copy), Document/column sort toggles, row-selection bulk-delete bar + callback, add-column modal, per-column edit modal, per-column delete confirmation (including the `fieldset.inUse` warning copy), add-documents FAB, a 4-type cell-rendering matrix (text/number/boolean/JSON object), corrected-data precedence, and `exportToCsv` via the imperative handle.
   - `frontend/tests/ExtractDetailContent.ct.tsx` + `frontend/tests/ExtractDetailContentTestWrapper.tsx` (both new): 16 tests covering the loading overlay, not-found state, stats panel, Data/Documents/Schema tabs, running-state spinner, failed-state Retry button + `startExtract` mutation, schema tab empty-vs-populated + Add Column + Delete Column confirmation, Documents tab empty state, and both imperative-handle methods (`exportToCsv`, `startExtract`) plus the `onExtractLoaded` callback.
   - `frontend/tests/DataGridTestWrapper.tsx`: added optional callback-spy props (`onAddDocIds`, `onRemoveDocIds`, `onRemoveColumnId`, `onAddColumn`) and a `withExportButton` flag that renders a test-only button bound to the grid's imperative `exportToCsv` handle, so tests can verify the handle without reaching into internal refs.
 
 - **Frontend coverage tests for useAgentChat / LabelSetDetailPage / ModerationDashboard** (Issue #1286): Added 47 new tests lifting the three high-ROI files from ~11–28% line coverage toward the ≥60% target.
-
   - `frontend/src/hooks/__tests__/useAgentChat.test.tsx` — 23 new Vitest unit tests wiring a mock `WebSocket` through `renderHook`. Cover connection lifecycle (open, error, close), every streaming message type (`ASYNC_START`, `ASYNC_CONTENT`, `ASYNC_FINISH`, `ASYNC_THOUGHT`, `ASYNC_SOURCES`, `ASYNC_APPROVAL_NEEDED`, `ASYNC_APPROVAL_RESULT`, `ASYNC_RESUME`, `ASYNC_ERROR`, `SYNC_CONTENT`), malformed JSON handling, approval flow including `sendApprovalDecision`, `sendMessage` guards (empty, disconnected, while-processing, send-throws), `clearError`, and `setSelectedMessageId`. Local coverage now 82.9% lines for `useAgentChat.ts`.
   - `frontend/tests/LabelSetDetailPage.coverage.ct.tsx` — 15 new Playwright CT tests covering previously-uncovered mutation success paths: `UPDATE_ANNOTATION_LABEL` inline edit save, `CREATE_ANNOTATION_LABEL_FOR_LABELSET` submission, `DELETE_MULTIPLE_ANNOTATION_LABELS` delete flow, `DELETE_LABELSET` confirm modal → Yes → mutation, `handleExportJSON` blob download handler, Overview tab Delete button (visible/hidden per permission), Edit Details footer button visibility, Relationships / Doc Labels / Sharing tabs, error state when the query fails, and the empty-state "Add First Label" branch.
   - `frontend/tests/ModerationDashboard.coverage.ct.tsx` — 9 new Playwright CT tests: `ROLLBACK_MODERATION_ACTION` mutation with reason, action-type filter refetch, automated-only toggle refetch, time-range dropdown change refetch, `Load More` cursor pagination via `fetchMore`, actions-query error state, metrics-query error state, rollback-modal cancel, and the System / "No reason provided" rendering branches.
@@ -393,7 +406,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - **Frontend dead Jotai atoms and Apollo reactive vars** (Issue #1243): Removed unused state management exports after triple-verifying each against both `frontend/src/` and `frontend/tests/` — atoms consumed only by test wrappers (e.g. `hideLabelsAtom`, `rawPermissionsAtom`, the deprecated `showAnnotation*Atom` set) were left in place per the issue's scope-correction note.
-
   - **`frontend/src/atoms/folderAtoms.ts`**: Removed 8 unused exports — `currentFolderAtom` (only read by the two dead permission atoms below), `canUpdateCurrentFolderAtom`, `canDeleteCurrentFolderAtom`, `draggingDocumentIdAtom`, `enableDragDropAtom`, `collapseAllFoldersAtom`, `expandAllFoldersAtom`, `openMoveFolderModalAtom`.
   - **`frontend/src/atoms/threadAtoms.ts`**: Removed 5 unused atoms — `selectedCorpusIdAtom`, `currentThreadIdAtom`, `expandedMessageIdsAtom`, `showCreateThreadModalAtom`, `editingMessageIdAtom` — plus the unused `ConversationType` / `ChatMessageType` imports. Unexported the `ThreadFilterOptions` type since it is only used internally by `threadFiltersAtom`.
   - **`frontend/src/components/annotator/context/DocumentAtom.tsx`**: Removed 7 unused atoms and 7 unused hooks: `fileTypeAtom` + `useFileType`, `isLoadingAtom` + `useIsLoading`, `canUpdateDocumentAtom` + `useCanUpdateDocument`, `canDeleteDocumentAtom` + `useCanDeleteDocument`, `hasDocumentPermissionAtom` + `useHasDocumentPermission`, `pageSelectionAtom`, `pageSelectionQueueAtom` + `usePageSelectionQueue`, plus the dead `useViewState` and `usePermissions` hooks (the underlying `viewStateAtom` and `permissionsAtom` are kept because they remain live via `useSetViewStateError` / `useDocumentPermissions` respectively). Dropped the now-unused `BoundingBox` import.
@@ -402,7 +414,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Verification: `tsc --noEmit` passes, `vitest run` passes (935/935 unit tests).
 
 - **Frontend dead styled components in `knowledge_base/document/styled/`** (Issue #1241): Removed unused styled-components from the `frontend/src/components/knowledge_base/document/styled/` folder. None of the deleted exports are referenced by any production code, test wrapper, or `.ct.tsx` test:
-
   - **`Relationships.tsx` deleted entirely** — all 3 exports (`RelationshipPanel`, `RelationshipCard`, `RelationshipType`) were unused. Note: a GraphQL type with the same name `RelationshipType` lives in `types/graphql-api.ts` and is unaffected.
   - **`LoadingStates.tsx`**: removed `DocumentLoadingContainer` (truly dead — no internal or external use). The other exports (`PlaceholderBase`, `PlaceholderItem`, `SummaryPlaceholder`, `NotePlaceholder`, `RelationshipPlaceholder`) are kept because they are used internally by `LoadingPlaceholders` in the same file.
   - **`RightPanel.tsx`**: removed 5 unused exports (`ControlButtonGroupLeft`, `ControlButtonWrapper`, `ControlButton`, `ChatIndicator`, `ControlButtonGroup`). Kept the only consumed exports: `ConnectionStatus` and `SlidingPanel`.
@@ -430,14 +441,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Test coverage: `opencontractserver/tests/test_benchmarks.py` (metric unit tests, adapter unit tests, loader materialization test, runner end-to-end test with mocked structured-response agent)
 - **`model_override` kwarg on `doc_extract_query_task`** (`opencontractserver/tasks/data_extract_tasks.py`): Optional, backward-compatible kwarg that lets callers override the hardcoded `openai:gpt-4o-mini` default for a single invocation. Consumed by the benchmark runner to sweep models without affecting production defaults; still defaults to `openai:gpt-4o-mini` when not supplied.
 - **Frontend unit tests for utils and hooks** (Issue #1267): Added 14 new `*.test.ts(x)` files covering previously-untested utilities and hooks to raise `frontend-unit` coverage on high-ROI pure functions:
-
   - **Utils**: `formatters.test.ts`, `arrayUtils.test.ts`, `colorUtils.test.ts`, `parseOutputType.test.ts`, `annotationGuards.test.ts`, `env.test.ts`, `extractUtils.test.ts`, `layout.test.ts`, `persistentVar.test.ts`, `routingLogger.test.ts`, `navigationCircuitBreaker.test.ts`, `performance.test.ts`, `jobNotificationCacheUpdates.test.ts`, `compactAnnotationJson.test.ts`.
   - **Hooks**: `useAuthReady.test.tsx`, `useFeatureAvailability.test.ts`, `useMessageBadges.test.tsx`, `useBadgeCelebration.test.tsx` (render-hook based with vi.useFakeTimers/MockedProvider).
   - Adds ~210 new assertions across file-size/date/initial formatting, hex→RGB(A) conversions, Pydantic output-type parsing, per-annotation runtime guards, runtime env coercion, extract status, viewport clamping, session-storage-backed reactive vars, debug logger toggling, navigation circuit breaker tripping/reset/window pruning, performance monitor metric lifecycle, Apollo cache field-level mutation dispatch for job notifications, and v1↔v2 compact annotation JSON round-tripping.
   - Verification: full unit suite passes (1118/1118) and `tsc --noEmit` is clean.
 
 - **Unit tests for Jotai atoms and Apollo reactive vars** (Issue #1268): Added vitest coverage for the global state layer per the ROI audit in PR #1266.
-
   - **`frontend/src/atoms/__tests__/folderAtoms.test.ts`**: 46 tests covering every primitive atom (initial value + write), every derived atom (`folderTreeAtom`, `folderBreadcrumbAtom`, `folderMapAtom`, `canCreateFoldersAtom`) across multiple dependency states, every write-only action atom (toggle/expand/open/close helpers), and `atomWithStorage` persistence paths (Set ↔ JSON round-trip, malformed-JSON fallback, SSR-safe `sidebarCollapsedAtom` default for mobile vs desktop viewports).
   - **`frontend/src/atoms/__tests__/threadAtoms.test.ts`**: 9 tests covering all five atoms plus a localStorage round-trip and re-hydration path for `threadContextSidebarExpandedAtom`.
   - **`frontend/src/graphql/__tests__/cache.test.ts`**: 24 tests covering initial values of every reactive var exported from `cache.ts` (routing, modals, entity refs, search terms, collections), round-trip writes for representative vars, `mergeArrayByIdFieldPolicy` id-based merge + default-empty branches, `InMemoryCache` presence, and `showKnowledgeBaseModal` (`persistentVar`) first-write persistence, re-hydration from sessionStorage, and malformed-JSON fallback.
@@ -445,7 +454,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Verification: all 79 new tests green; full unit suite (1014/1014) still passes; `tsc --noEmit` clean.
 
 - **Frontend permission-gating tests** (Issue #1269): Added branch-exhaustive coverage for the permission predicates that gate annotation write UI.
-
   - New utility `frontend/src/utils/annotationPermissions.ts` centralizes three pure predicates (`canEditAnnotationsInCorpus`, `canDeleteAnnotation`, `canUpdateAnnotation`) that were previously inlined in `DocumentKnowledgeBase.tsx:471` and `HighlightItem.tsx:242`. Both consumers now delegate to the helper, eliminating duplicated logic.
   - New unit tests `frontend/src/utils/__tests__/annotationPermissions.test.ts` cover every branch of the predicates, including the full 2×2 truth table for the corpus/document effective-edit check and the full 2³ truth table for the structural × read-only × `CAN_REMOVE` delete gate (30 assertions).
   - New Playwright CT tests `frontend/tests/HighlightItemPermissions.ct.tsx` (+ harness `HighlightItemPermissionsTestWrapper.tsx`) verify that the sidebar delete affordance renders only on the intersection of the required conditions, and that structural annotations are delete-locked even with `CAN_REMOVE` (6 scenarios).
@@ -481,11 +489,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   2. Batch-deactivate every superseded `DocumentPath` row with one `.filter(pk__in=…).update(is_current=False)` call.
   3. Batch-insert every successor row with one `.bulk_create()` call, then manually dispatch `post_save` (`created=True`) via the new `_dispatch_document_path_created_signals` helper so the document-text embedding side effect wired up in `documents/signals.py::process_doc_on_document_path_create` still fires (bulk_create normally bypasses per-row signals).
   4. Use `select_related("document")` + `select_for_update(of=("self",))` on the affected-path query so `current.document` accesses inside the build loop no longer N+1, and the row lock stays scoped to the `DocumentPath` table. Net result: a 100-document bulk move now executes roughly 4 DB round-trips instead of ~300, and the old batched `.update()` performance is restored without sacrificing the Path Tree history nodes introduced in PR #1195.
-- **TOCTOU race on `DocumentPath` uniqueness** (Issue #1200): `DocumentFolderService.move_document_to_folder()`, `move_documents_to_folder()`, and `delete_folder()` previously caught `IntegrityError` from the `unique_active_path_per_corpus` partial unique constraint and either bubbled it up to the caller as a "Path conflict, please retry" error (single move) or rolled back the entire batch (bulk move / folder delete). Under concurrent moves of different documents to the same target folder, two transactions could both observe a candidate path as free in `_disambiguate_path()` and race to insert it; the loser hit the partial unique index and the operation failed. New helper `DocumentFolderService._create_successor_path_with_retry()` (`opencontractserver/corpuses/folder_service.py`) wraps the deactivate-then-create pair in a savepoint and retries with a freshly disambiguated path on `IntegrityError`, treating each losing path as occupied. Up to `MAX_PATH_CREATE_RETRIES + 1` attempts (`opencontractserver/constants/document_processing.py`) run before propagating the conflict. The partial unique index added in migration `0023_documentpath_documentpathgroupobjectpermission_and_more` remains the authoritative correctness guarantee. Test class `TestMoveDocumentIntegrityRecovery` covers single-document transient-failure recovery, disambiguated retry path selection, and exhausted-retry rollback.  Bulk operations (`move_documents_to_folder`, `delete_folder`) now use the batch approach from Issue #1199 instead of per-row retry, so their former test classes (`TestBulkMoveIntegrityRecovery`, `TestDeleteFolderIntegrityRecovery`) have been replaced by `TestCoverageGapBulkMoveIntegrityErrorRollback` and `TestCoverageGapDeleteFolderIntegrityErrorRollback` which verify full-batch rollback on `IntegrityError` (`opencontractserver/tests/test_document_folder_service.py`).
+- **TOCTOU race on `DocumentPath` uniqueness** (Issue #1200): `DocumentFolderService.move_document_to_folder()`, `move_documents_to_folder()`, and `delete_folder()` previously caught `IntegrityError` from the `unique_active_path_per_corpus` partial unique constraint and either bubbled it up to the caller as a "Path conflict, please retry" error (single move) or rolled back the entire batch (bulk move / folder delete). Under concurrent moves of different documents to the same target folder, two transactions could both observe a candidate path as free in `_disambiguate_path()` and race to insert it; the loser hit the partial unique index and the operation failed. New helper `DocumentFolderService._create_successor_path_with_retry()` (`opencontractserver/corpuses/folder_service.py`) wraps the deactivate-then-create pair in a savepoint and retries with a freshly disambiguated path on `IntegrityError`, treating each losing path as occupied. Up to `MAX_PATH_CREATE_RETRIES + 1` attempts (`opencontractserver/constants/document_processing.py`) run before propagating the conflict. The partial unique index added in migration `0023_documentpath_documentpathgroupobjectpermission_and_more` remains the authoritative correctness guarantee. Test class `TestMoveDocumentIntegrityRecovery` covers single-document transient-failure recovery, disambiguated retry path selection, and exhausted-retry rollback. Bulk operations (`move_documents_to_folder`, `delete_folder`) now use the batch approach from Issue #1199 instead of per-row retry, so their former test classes (`TestBulkMoveIntegrityRecovery`, `TestDeleteFolderIntegrityRecovery`) have been replaced by `TestCoverageGapBulkMoveIntegrityErrorRollback` and `TestCoverageGapDeleteFolderIntegrityErrorRollback` which verify full-batch rollback on `IntegrityError` (`opencontractserver/tests/test_document_folder_service.py`).
 - **Bulk move loop recomputed target folder path per document** (Issue #1202): `DocumentFolderService.move_documents_to_folder()` (`opencontractserver/corpuses/folder_service.py`) called `_compute_moved_path()` once per document, and each call invoked `target_folder.get_path()` — which walks ancestors via a recursive CTE query. For an N-document bulk move to the same folder, this issued N redundant CTE queries for an O(1) value. The target folder path is now resolved once before the loop and threaded through `_compute_moved_path()` via a new optional `target_folder_path` parameter.
 - **Backend coverage disappearing from Codecov dashboard** (`.codecov.yml`): Added a `backend` flag with `carryforward: true` (paths: `opencontractserver/`, `config/`), mirroring the pattern already in place for `frontend-unit` / `frontend-component`. Without carryforward, any commit whose backend `pytest` job fails or times out (e.g. the merge commit `f166a59`, where the push-to-main `pytest` check failed after PR #1213 merged) causes Codecov to record backend files at 0% for that commit, which then replaces the healthy ~90% backend coverage on the dashboard — making it look as if only frontend coverage (~39%) is being collected. With carryforward, a flaky/failing backend run inherits the parent commit's backend coverage so the dashboard continues to reflect both suites.
 - **IngestionSource follow-up hardening** (Issue #1228):
-
   - Added `@graphql_ratelimit` to `CreateIngestionSourceMutation`, `UpdateIngestionSourceMutation`, and `DeleteIngestionSourceMutation` (`config/graphql/ingestion_source_mutations.py`). Previously these mutations only carried `@login_required`, allowing an authenticated user to create thousands of rows (plus Guardian permission entries) in a tight loop. Creates/updates use `WRITE_MEDIUM`, deletes use `WRITE_LIGHT`, matching other CRUD mutations in the codebase.
   - Guarded the fallback `.get()` inside the `except IntegrityError` handler in `_import_ingestion_sources` (`opencontractserver/tasks/import_tasks_v2.py` ~line 463). In the rare scenario where a concurrent request created-then-deleted the row between the `IntegrityError` and the fallback, the unguarded `.get()` would raise `IngestionSource.DoesNotExist` and abort the entire corpus import. Now logs a warning and continues.
   - Added an explicit `fields` allowlist to `IngestionSourceType.Meta` (`config/graphql/document_types.py`) to prevent `user_lock`, `backend_lock`, and `is_public` from leaking through the GraphQL API. `user_lock` in particular would leak the username of whoever currently holds the lock — an information-disclosure issue.
@@ -506,7 +513,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Conversation pagination cache collisions** (PR #1206): Added `keyArgs` configuration for the `conversations` relay pagination cache entry in `frontend/src/graphql/cache.ts`. Previously `conversations` used `relayStylePagination()` with no key arguments, causing all conversation queries (across different corpora, documents, and conversation types) to share a single cache entry. This led to paginated results from one context bleeding into another. Now uses `["documentId", "corpusId", "conversationType", "hasCorpus", "hasDocument"]` to isolate cache entries by filter dimensions.
 
 - **GraphQL security hardening cleanup** (Issue #1198):
-
   - Corrected misleading `DisableIntrospection` docstring that claimed the class checks DEBUG, when it unconditionally blocks introspection (`config/graphql/security.py`)
   - Rewrote `test_introspection_allowed_in_debug` to use graphql-core's `validate()` directly, as graphene's test Client does not apply validation rules (`opencontractserver/tests/test_security_hardening.py`)
   - Added backslash-prefix check to `_get_safe_redirect_url()` to prevent open-redirect bypass via browser backslash-to-slash normalization (`config/admin_auth/views.py`)
@@ -658,7 +664,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Warning icon displayed for partially-supported file types (e.g., DOCX which lacks a thumbnailer)
   - `FileTypeEnum` gains `.mimetype` and `.label` properties and supports legacy MIME aliases in `from_mimetype()`
 - **Compact PAWLs v2 format for ~67% storage reduction** (PR #1112): New v2 compact format for PAWLs files (per-page token bounding boxes) that reduces storage from ~500+ KB to ~180 KB for a typical 9-page PDF. Changes include:
-
   - Core encode/decode in `opencontractserver/utils/compact_pawls.py` (Python) and `frontend/src/utils/compactPawls.ts` (TypeScript)
   - Array-based tokens `[x, y, w, h, "text"]` instead of verbose dicts, shortened page keys, implicit page index, coordinate precision normalization
   - Write paths (parser, import, worker upload) auto-compact on save; read paths transparently expand v2 → v1
@@ -728,7 +733,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Enforced async-only tool registry for LLM agent tools**: Audited and converted the entire tool registry to reject sync functions. Previously `ToolRegistryEntry` carried both `sync_func` and `async_func` fields, `FUNCTION_MAP` registered both versions, and `PydanticAIToolWrapper` had a sync wrapper path that called sync functions without a thread pool (risking `SynchronousOnlyOperation`). Changes include:
-
   - Removed `sync_func` field from `ToolRegistryEntry` — only `async_func` remains (`opencontractserver/llms/tools/tool_registry.py`)
   - Simplified `FUNCTION_MAP` from 3-tuples `(sync, async, aliases)` to 2-tuples `(async, aliases)`, removing all sync imports from `_populate()`
   - Replaced sync wrapper path in `PydanticAIToolWrapper` with a `TypeError` guard that rejects sync functions at construction time (`opencontractserver/llms/tools/pydantic_ai_tools.py`)
@@ -1595,7 +1599,6 @@ If rollback is required after deployment, you must write a custom migration to h
   - Backward compatible: password authentication always available
   - Files: `config/admin_auth/views.py`, `config/admin_auth/backends.py`
 - **Admin claims synchronization**: Admin privileges can be set via Auth0 token claims
-
   - Supports `{namespace}is_staff` and `{namespace}is_superuser` claims
   - Claims synced on API requests with 5-minute cache TTL (configurable via `ADMIN_CLAIMS_CACHE_TTL` constant)
   - Immediate sync during admin login ensures fresh permissions for admin access
@@ -1613,13 +1616,13 @@ If rollback is required after deployment, you must write a custom migration to h
       if (appMetadata.is_staff !== undefined) {
         api.accessToken.setCustomClaim(
           `${namespace}is_staff`,
-          appMetadata.is_staff
+          appMetadata.is_staff,
         );
       }
       if (appMetadata.is_superuser !== undefined) {
         api.accessToken.setCustomClaim(
           `${namespace}is_superuser`,
-          appMetadata.is_superuser
+          appMetadata.is_superuser,
         );
       }
     };
@@ -3325,7 +3328,6 @@ If rollback is required after deployment, you must write a custom migration to h
 #### v3.0.0.b3 Migration Tools (Issue #654)
 
 - **New management command: `validate_v3_migration`**
-
   - Pre-flight and post-migration validation for dual-tree versioning and structural annotations
   - Checks: version_tree_id, is_current, DocumentPath records, XOR constraints, structural set uniqueness
   - Reports structural migration candidates
@@ -3333,7 +3335,6 @@ If rollback is required after deployment, you must write a custom migration to h
   - Location: `opencontractserver/documents/management/commands/validate_v3_migration.py`
 
 - **New management command: `migrate_structural_annotations`**
-
   - Optional command to migrate structural annotations to shared StructuralAnnotationSet objects
   - Creates StructuralAnnotationSet by content hash (pdf_file_hash) for storage efficiency
   - Moves structural annotations/relationships from document FK to structural_set FK
@@ -3342,7 +3343,6 @@ If rollback is required after deployment, you must write a custom migration to h
   - Location: `opencontractserver/annotations/management/commands/migrate_structural_annotations.py`
 
 - **Comprehensive migration test suite** (`opencontractserver/tests/test_v3_migration.py`)
-
   - DocumentVersioningMigrationTests: version_tree_id, is_current, DocumentPath creation
   - XORConstraintTests: Annotation/Relationship XOR constraint validation
   - StructuralMigrationCommandTests: Management command functionality, idempotency
@@ -3360,14 +3360,12 @@ If rollback is required after deployment, you must write a custom migration to h
 #### Discovery Landing Page (New)
 
 - **Beautiful, modern landing page** as the main entry point for the application
-
   - Replaces direct redirect to /corpuses with a unified discovery experience
   - Different content for anonymous vs authenticated users
   - Responsive design with mobile-first approach
   - Location: `frontend/src/views/DiscoveryLanding.tsx`
 
 - **New landing page components** (`frontend/src/components/landing/`)
-
   - `HeroSection.tsx`: Animated hero with gradient backgrounds, floating icons, and global search
   - `StatsBar.tsx`: Community metrics display with animated counters (users, collections, documents, threads, annotations, weekly active)
   - `TrendingCorpuses.tsx`: Card grid of popular document collections with engagement metrics
@@ -3377,7 +3375,6 @@ If rollback is required after deployment, you must write a custom migration to h
   - All components feature modern UI/UX: glass morphism, smooth Framer Motion animations, skeleton loaders
 
 - **GraphQL queries for discovery data** (`frontend/src/graphql/landing-queries.ts`)
-
   - `GET_DISCOVERY_DATA`: Unified query fetching corpuses, conversations, community stats, and leaderboard
   - `GET_TRENDING_CORPUSES`: Public corpuses with engagement metrics
   - `GET_RECENT_DISCUSSIONS`: Recent threads with pagination
@@ -3385,7 +3382,6 @@ If rollback is required after deployment, you must write a custom migration to h
   - `GET_GLOBAL_LEADERBOARD`: Top contributors with badges
 
 - **Route integration**
-
   - Root path (`/`) now displays DiscoveryLanding instead of redirecting to /corpuses
   - Location: `frontend/src/App.tsx:377-382`
 
@@ -3401,7 +3397,6 @@ If rollback is required after deployment, you must write a custom migration to h
 #### Permission Audit Remediation - Query Optimizers
 
 - **New `UserQueryOptimizer`** for centralized user profile visibility logic
-
   - Respects `is_profile_public` privacy setting
   - Private profiles visible via corpus membership with > READ permission
   - Inactive users filtered out (except for superusers)
@@ -3409,7 +3404,6 @@ If rollback is required after deployment, you must write a custom migration to h
   - Location: `opencontractserver/users/query_optimizer.py`
 
 - **New `BadgeQueryOptimizer`** for centralized badge visibility logic
-
   - Badge visibility follows recipient's profile privacy rules
   - Corpus-specific badges visible only to corpus members
   - Own badges always visible regardless of privacy
@@ -3417,14 +3411,12 @@ If rollback is required after deployment, you must write a custom migration to h
   - Location: `opencontractserver/badges/query_optimizer.py`
 
 - **New `DocumentActionsQueryOptimizer`** for document-related actions
-
   - Centralized permission logic for corpus actions, extracts, and analysis rows
   - Follows least-privilege model: `Effective Permission = MIN(document_permission, corpus_permission)`
   - Integrates with ExtractQueryOptimizer and AnalysisQueryOptimizer
   - Location: `opencontractserver/documents/query_optimizer.py`
 
 - **Comprehensive permission test suites** (40 tests total)
-
   - `opencontractserver/tests/permissioning/test_user_visibility.py` - 16 tests for user profile visibility
   - `opencontractserver/tests/permissioning/test_badge_visibility.py` - 13 tests for badge visibility
   - `opencontractserver/tests/permissioning/test_document_actions_permissions.py` - 11 tests for document actions
@@ -3439,7 +3431,6 @@ If rollback is required after deployment, you must write a custom migration to h
 #### Corpus Engagement Analytics Dashboard (Issue #579)
 
 - **New CorpusEngagementDashboard component** displaying comprehensive engagement metrics
-
   - Thread metrics: total threads, active threads, average messages per thread
   - Message activity: total messages, 7-day and 30-day message counts with bar chart visualization
   - Community engagement: unique contributors, active contributors (30d), total upvotes
@@ -3448,13 +3439,11 @@ If rollback is required after deployment, you must write a custom migration to h
   - Location: `frontend/src/components/analytics/CorpusEngagementDashboard.tsx`
 
 - **GraphQL integration for engagement metrics**
-
   - New query: `GET_CORPUS_ENGAGEMENT_METRICS` with TypeScript interfaces
   - Leverages existing backend `CorpusEngagementMetrics` model (already tested)
   - Location: `frontend/src/graphql/queries.ts:3873-3979`
 
 - **Analytics tab in Corpus view**
-
   - New tab with BarChart3 icon next to Discussions tab
   - Conditionally rendered based on corpus ID availability
   - Location: `frontend/src/views/Corpuses.tsx:2209-2216`
@@ -3466,14 +3455,12 @@ If rollback is required after deployment, you must write a custom migration to h
 #### Thread Search UI (Issue #580)
 
 - **Backend pagination support for conversation search**
-
   - Updated `searchConversations` resolver to use `relay.ConnectionField` with cursor-based pagination
   - Supports `first`, `after`, `last`, `before` parameters for efficient result pagination
   - Returns paginated structure with `edges`, `pageInfo`, and `totalCount`
   - Location: `config/graphql/queries.py:1659-1748`
 
 - **GraphQL queries and TypeScript types with pagination**
-
   - Updated `SEARCH_CONVERSATIONS` query to support paginated results
   - Added pagination parameters: `first`, `after`, `last`, `before`
   - Enhanced TypeScript interfaces with connection structure (edges, nodes, cursors, pageInfo)
@@ -3481,7 +3468,6 @@ If rollback is required after deployment, you must write a custom migration to h
   - Location: `frontend/src/graphql/queries.ts:3923-4059`
 
 - **New search components** (`frontend/src/components/search/`)
-
   - `SearchBar.tsx`: Search input with clear button and Enter key support
   - `SearchFilters.tsx`: Filter by conversation type with clear filters button
   - `SearchResults.tsx`: Results display with pagination, reuses ThreadListItem component
@@ -3489,25 +3475,21 @@ If rollback is required after deployment, you must write a custom migration to h
   - All components follow existing design patterns and are mobile-responsive
 
 - **Embedded search in Corpus Discussions view**
-
   - Added tab navigation to switch between "All Threads" and "Search"
   - Search scoped to current corpus when embedded
   - Location: `frontend/src/components/discussions/CorpusDiscussionsView.tsx`
 
 - **Standalone /threads route**
-
   - New dedicated search page accessible at `/threads`
   - Global search across all accessible discussions
   - Location: `frontend/src/views/ThreadSearchRoute.tsx`, `frontend/src/App.tsx:421`
 
 - **Backend tests for paginated search**
-
   - Tests verify pagination structure (edges, pageInfo, totalCount)
   - Tests verify cursor-based pagination with multiple pages
   - Location: `opencontractserver/tests/test_conversation_search.py:609-743`
 
 - **Frontend component tests** (18 tests, 100% passing)
-
   - SearchBar component tests (5 tests): input rendering, search icon, clear button, Enter key submission
   - SearchFilters component tests (5 tests): filter rendering, option counting, selected state, clear filters button
   - SearchResults component tests (4 tests): loading state, empty state, no results state, results rendering
@@ -3528,32 +3510,27 @@ If rollback is required after deployment, you must write a custom migration to h
 #### Structural Annotation Sets (Phase 2.5)
 
 - **New `StructuralAnnotationSet` model** for shared, immutable structural annotations
-
   - Content-hash based uniqueness (`content_hash` field)
   - Stores parser metadata (`parser_name`, `parser_version`, `page_count`, `token_count`)
   - Stores shared parsing artifacts (`pawls_parse_file`, `txt_extract_file`)
   - Location: `opencontractserver/annotations/models.py`
 
 - **Document → StructuralAnnotationSet FK** with PROTECT on delete
-
   - Multiple corpus-isolated documents can share the same structural annotation set
   - Eliminates duplication of structural annotations across corpus copies
   - Location: `opencontractserver/documents/models.py:119-127`
 
 - **Annotation.structural_set FK** with XOR constraint
-
   - Annotations now belong to EITHER a document OR a structural_set (not both, not neither)
   - Database constraint: `annotation_has_single_parent`
   - Location: `opencontractserver/annotations/models.py`
 
 - **Relationship.structural_set FK** with XOR constraint
-
   - Same pattern as Annotation for relationships
   - Database constraint: `relationship_has_single_parent`
   - Location: `opencontractserver/annotations/models.py`
 
 - **Database migrations**
-
   - `opencontractserver/annotations/migrations/0048_add_structural_annotation_set.py`
   - `opencontractserver/documents/migrations/0026_add_structural_annotation_set.py`
 
@@ -3566,28 +3543,24 @@ If rollback is required after deployment, you must write a custom migration to h
 #### Permission Audit Remediation - GraphQL Resolver Fixes
 
 1. **User profile visibility not respecting privacy settings**
-
    - **File**: `config/graphql/queries.py` - `resolve_user_by_slug`, `resolve_search_users_for_mention`
    - **Issue**: Resolvers returned users without checking `is_profile_public` or corpus membership
    - **Fixed**: Now uses `UserQueryOptimizer` for proper privacy filtering
    - **Impact**: Private user profiles no longer visible to unauthorized users
 
 2. **Badge visibility not respecting recipient privacy**
-
    - **File**: `config/graphql/queries.py` - `resolve_user_badges`, `resolve_user_badge`
    - **Issue**: Badge awards were visible regardless of recipient's profile privacy
    - **Fixed**: Now uses `BadgeQueryOptimizer` which filters by recipient visibility
    - **Impact**: Badges of private users no longer leaked to unauthorized viewers
 
 3. **Document actions missing permission checks**
-
    - **File**: `config/graphql/queries.py` - `resolve_document_corpus_actions`
    - **Issue**: Inline permission checks were inconsistent with least-privilege model
    - **Fixed**: Now uses `DocumentActionsQueryOptimizer` for centralized permission logic
    - **Impact**: Document-related data properly filtered by document AND corpus permissions
 
 4. **Assignment resolver using incorrect visible_to_user signature**
-
    - **File**: `config/graphql/queries.py` - `resolve_assignments`, `resolve_assignment`
    - **Issue**: Called `Assignment.objects.visible_to_user(info.context.user)` but manager expected different signature
    - **Fixed**: Updated to use correct manager method call pattern
@@ -3610,49 +3583,42 @@ If rollback is required after deployment, you must write a custom migration to h
 #### Critical Production Code Fixes
 
 2. **Missing parsing artifacts in corpus copies**
-
    - **Files**: `opencontractserver/corpuses/models.py:445-451`, `opencontractserver/documents/versioning.py:238-244`
    - **Issue**: When creating corpus-isolated document copies, essential parsing artifacts were not being copied
    - **Fixed**: Added copying of `pawls_parse_file`, `txt_extract_file`, `icon`, `md_summary_file`, `page_count`
    - **Impact**: Corpus copies now have all parsing data needed for annotation, search, and display
 
 3. **Missing `is_public` inheritance in corpus copies**
-
    - **Files**: `opencontractserver/corpuses/models.py:451`, `opencontractserver/documents/versioning.py:244`
    - **Issue**: Public documents became private when added to a corpus (copy didn't inherit `is_public`)
    - **Fixed**: Added `is_public=document.is_public` to corpus copy creation
    - **Impact**: Document visibility is now correctly preserved across corpus isolation
 
 4. **NULL hash deduplication bug**
-
    - **File**: `opencontractserver/corpuses/models.py:414-425`
    - **Issue**: All documents without PDF content hashes were incorrectly treated as duplicates
    - **Fixed**: Added null check: `if document.pdf_file_hash is not None:` before hash-based deduplication
    - **Impact**: Documents without hashes are now correctly treated as distinct documents
 
 5. **Structural annotation portability**
-
    - **Files**: `opencontractserver/corpuses/models.py:456`, `opencontractserver/documents/versioning.py:248`
    - **Issue**: Structural annotations were not traveling with documents when added to multiple corpuses
    - **Fixed**: Corpus copies now inherit `structural_annotation_set` from source document
    - **Impact**: Structural annotations are shared (not duplicated) across corpus-isolated copies
 
 6. **GraphQL corpus.documents field missing**
-
    - **Files**: `config/graphql/graphene_types.py:1179-1184`, `config/graphql/graphene_types.py:1297-1302`
    - **Issue**: After corpus isolation migration (removing M2M documents field), GraphQL queries for `corpus.documents` returned empty because no explicit field declaration existed
    - **Fixed**: Added explicit `DocumentTypeConnection` class and `documents = relay.ConnectionField()` declaration to CorpusType
    - **Impact**: GraphQL queries now correctly resolve documents via DocumentPath-based relationships
 
 7. **Parser `save_parsed_data()` using old M2M relationship**
-
    - **File**: `opencontractserver/pipeline/base/parser.py:126-133`
    - **Issue**: `save_parsed_data()` used deprecated `corpus.documents.add()` M2M method which no longer exists
    - **Fixed**: Updated to use `corpus.add_document(document=document, user=user)` for corpus isolation
    - **Impact**: Parsers can now correctly associate documents with corpuses during processing
 
 8. **Document mention resolver using old M2M relationship**
-
    - **File**: `config/graphql/queries.py:976-1015`
    - **Issue**: `resolve_search_documents_for_mention()` queried via `corpus__in` M2M relationship which no longer exists
    - **Fixed**: Updated to query via `DocumentPath` with `is_current=True, is_deleted=False` filters
@@ -3669,7 +3635,6 @@ If rollback is required after deployment, you must write a custom migration to h
 #### Test Suite Updates for Corpus Isolation Architecture
 
 - **Removed deprecated legacy manager tests**
-
   - **File**: `opencontractserver/tests/test_document_path_migration.py`
   - **Removed**: Test classes for deprecated `DocumentCorpusRelationshipManager` (20+ tests)
   - **Reason**: The backward compatibility M2M manager was removed in Issue #654 Phase 2
@@ -3677,19 +3642,16 @@ If rollback is required after deployment, you must write a custom migration to h
   - **Impact**: Improved test clarity by removing tests for code that never executes
 
 - **Permission assignment order** in test setups
-
   - Moved permission assignment AFTER `add_document()` calls
   - Ensures permissions are assigned to corpus copies, not originals
   - Files: `test_visibility_managers.py`, `test_resolvers.py`, `test_permissioning.py`, `test_version_aware_query_optimizer.py`
 
 - **Document count expectations**
-
   - Updated tests to account for both originals and corpus copies existing
   - Example: Owner sees 6 documents (3 originals + 3 corpus copies) instead of 3
   - Files: `test_visibility_managers.py`, `test_resolvers.py`
 
 - **Document-to-corpus linking**
-
   - Changed from M2M `corpus.documents.add()` to `corpus.add_document()`
   - File: `test_custom_permission_filters.py:211-213`
 
