@@ -1093,8 +1093,11 @@ export async function openCorpusDiscussionsViaUI(
 }
 
 /**
- * Click the "+New Discussion" button (or "+New" when the corpus header is
- * hidden), fill the create-thread modal, and submit.
+ * Click the "+New Discussion" CTA, fill the create-thread modal, and
+ * submit. The visible label flips between "New Discussion" (full header)
+ * and "New" (embedded mode), but both share the stable
+ * `aria-label="Create new discussion"` accessibility name — that is the
+ * selector we anchor on.
  *
  * On success, CorpusDiscussionsView's onSuccess handler closes the modal
  * AND navigates to the new thread (sets ?thread=<id>), so this helper
@@ -1105,13 +1108,14 @@ export async function openCorpusDiscussionsViaUI(
 export async function createThreadViaUI(
   page: Page,
   title: string,
-  description: string,
+  description: string | undefined,
   initialMessage: string
 ): Promise<void> {
-  // The header CTA is "+New Discussion"; in embedded mode it shrinks to "+New".
-  // Both share the same gradient style and are the only buttons that match.
+  // The CreateButton renders aria-label="Create new discussion" in both
+  // header and embedded modes (CorpusDiscussionsView.tsx:525, :540), so
+  // accessible-name matching is stable across viewports.
   await page
-    .getByRole("button", { name: /^(New Discussion|New)$/i })
+    .getByRole("button", { name: /Create new discussion/i })
     .first()
     .click();
 
@@ -1120,22 +1124,29 @@ export async function createThreadViaUI(
     timeout: 10_000,
   });
 
-  await page.fill("#thread-title", title);
+  // Scope all subsequent modal interactions to the form container that
+  // owns #thread-title. This keeps the locators robust if a future preview
+  // pane adds another ProseMirror to the page tree.
+  const modal = page
+    .locator("div")
+    .filter({ has: page.locator("#thread-title") })
+    .first();
+
+  await modal.locator("#thread-title").fill(title);
   if (description) {
-    await page.fill("#thread-description", description);
+    await modal.locator("#thread-description").fill(description);
   }
 
   // The MessageComposer is built on TipTap (ProseMirror). Fill the
-  // contenteditable .ProseMirror element via keyboard.type — `.fill()`
-  // does not reliably trigger TipTap's onUpdate hook in all browsers.
-  const editor = page.locator(".ProseMirror").first();
+  // contenteditable .ProseMirror via keyboard.type — `.fill()` does not
+  // reliably trigger TipTap's onUpdate hook in all browsers.
+  const editor = modal.locator(".ProseMirror").first();
   await expect(editor).toBeVisible({ timeout: 10_000 });
   await editor.click();
   await page.keyboard.type(initialMessage);
 
-  // Submit — the only button labeled exactly "Send" is the composer's
-  // SendButton at the bottom of the modal.
-  await page
+  // Submit — the modal hosts exactly one composer SendButton.
+  await modal
     .getByRole("button", { name: /^Send$/i })
     .first()
     .click();
@@ -1162,16 +1173,18 @@ export async function postThreadReplyViaUI(
   page: Page,
   replyContent: string
 ): Promise<void> {
-  // ThreadDetail renders ONE composer at the bottom (ReplyForm). When in
-  // the modal phase there can be a separate composer; once we are on the
-  // thread detail view, .ProseMirror.last() targets the reply form.
+  // ThreadDetail renders the ReplyForm composer at the bottom of the
+  // page. There is no second ProseMirror at this stage — the create
+  // modal is gone — so `.last()` deterministically picks the reply
+  // composer regardless of any deep-link reply context that might
+  // render an additional ReplyContext header above it.
   const replyEditor = page.locator(".ProseMirror").last();
   await expect(replyEditor).toBeVisible({ timeout: 10_000 });
   await replyEditor.click();
   await page.keyboard.type(replyContent);
 
-  // The reply composer's Send button is the only one in the bottom region.
-  // After click, the message list refetches and the new message renders.
+  // The reply composer's Send button is the only one on the page in
+  // thread-detail mode. After click, the message list refetches.
   await page
     .getByRole("button", { name: /^Send$/i })
     .last()

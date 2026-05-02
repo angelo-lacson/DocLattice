@@ -32,16 +32,18 @@ import {
   postThreadReplyViaUI,
 } from "./helpers";
 
-const CORPUS_TITLE = "E2E Discussions Corpus";
+// Per-run suffix prevents collisions when the same Postgres database is
+// reused across CI retries or local re-runs. Mirrors the pattern used in
+// `extract-pdf-workflow.spec.ts`.
+const RUN_ID = Date.now();
+const CORPUS_TITLE = `E2E Discussions Corpus ${RUN_ID}`;
 const CORPUS_DESCRIPTION = "Corpus created by the threads/discussions spec.";
 
-const THREAD_TITLE = "Question about contract clauses";
+const THREAD_TITLE = `Question about contract clauses ${RUN_ID}`;
 const THREAD_DESCRIPTION =
   "Looking for guidance on how this clause is typically interpreted.";
-const THREAD_INITIAL_MESSAGE =
-  "What does the indemnification clause typically cover in vendor contracts?";
-const THREAD_REPLY_MESSAGE =
-  "In my experience, indemnification covers third-party IP claims and data breach liabilities.";
+const THREAD_INITIAL_MESSAGE = `What does the indemnification clause typically cover in vendor contracts? (${RUN_ID})`;
+const THREAD_REPLY_MESSAGE = `In my experience, indemnification covers third-party IP claims and data breach liabilities. (${RUN_ID})`;
 
 test.describe("Threads and discussions", () => {
   /* ─────────────────────────────────────────────────────────────────────
@@ -145,9 +147,14 @@ test.describe("Threads and discussions", () => {
       await test.step("post a reply to the thread", async () => {
         await postThreadReplyViaUI(page, THREAD_REPLY_MESSAGE);
 
-        // After the reply, the thread should now show two messages.
-        // The header summary text reads "N messages" (or "1 message").
-        await expect(page.getByText(/\b2\s+messages\b/i)).toBeVisible({
+        // Both the original initial message and the reply must be
+        // individually visible after the GraphQL refetch — that's a
+        // direct check on the thread state rather than coupling to the
+        // exact "N messages" header phrasing.
+        await expect(
+          page.getByText(THREAD_INITIAL_MESSAGE).first()
+        ).toBeVisible({ timeout: 15_000 });
+        await expect(page.getByText(THREAD_REPLY_MESSAGE).first()).toBeVisible({
           timeout: 15_000,
         });
       });
