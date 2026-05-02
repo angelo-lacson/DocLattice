@@ -5,7 +5,8 @@ The helper consolidates four previously inline ``creator == user or
 user.is_superuser`` checks in ``config/graphql/document_types.py`` and
 delegates the visibility decision to ``Document.objects.visible_to_user``.
 These tests ensure the consolidated helper preserves behaviour for the
-public/anonymous/owner/superuser/shared/no-access matrix.
+public/anonymous/owner/superuser/shared/no-access matrix and exercise the
+public-corpus propagation path that the manager-based check unlocks.
 """
 
 from django.contrib.auth import get_user_model
@@ -38,9 +39,6 @@ class DocumentTypeReadPermissionTests(TestCase):
             username="root", password="pw", email="root@example.com"
         )
 
-        self.corpus = Corpus.objects.create(
-            title="Corpus", creator=self.owner, is_public=False
-        )
         self.private_doc = Document.objects.create(
             title="Private", creator=self.owner, is_public=False
         )
@@ -109,3 +107,44 @@ class DocumentTypeReadPermissionTests(TestCase):
                 self.public_doc, _info_for(AnonymousUser())
             )
             visible.assert_not_called()
+
+    def test_anonymous_private_doc_short_circuits_without_db_query(self) -> None:
+        """
+        Anonymous access to a private document must reject before hitting the
+        DB. ``visible_to_user(AnonymousUser())`` collapses to ``is_public=True``
+        so the lookup is guaranteed to return False — skipping it preserves the
+        old hot-path ordering and avoids an unnecessary round-trip.
+        """
+        from unittest.mock import patch
+
+        with patch.object(Document.objects, "visible_to_user") as visible:
+            with self.assertRaises(GraphQLError):
+                DocumentType._assert_user_can_read(
+                    self.private_doc, _info_for(AnonymousUser())
+                )
+            visible.assert_not_called()
+
+    def test_doc_in_public_corpus_visible_to_anonymous(self) -> None:
+        """
+        A document added to a public corpus gets ``is_public=True`` propagated
+        onto its corpus-isolated copy (see ``Corpus.add_document`` — public
+        corpus → public doc). The helper, going through
+        ``Document.objects.visible_to_user``, must then grant read access to
+        anonymous users on that copy. This pins the corpus-scoped visibility
+        path that motivated moving off ``user_has_permission_for_obj``.
+        """
+        public_corpus = Corpus.objects.create(
+            title="Public Corpus", creator=self.owner, is_public=True
+        )
+        corpus_copy, _, _ = public_corpus.add_document(
+            document=self.private_doc, user=self.owner
+        )
+        self.assertTrue(
+            corpus_copy.is_public,
+            "Adding a private doc to a public corpus should propagate "
+            "is_public=True onto the corpus-isolated copy",
+        )
+
+        anon = AnonymousUser()
+        result = DocumentType._assert_user_can_read(corpus_copy, _info_for(anon))
+        self.assertIs(result, anon)

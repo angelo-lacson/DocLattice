@@ -227,12 +227,16 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         user = info.context.user if hasattr(info.context, "user") else None
         if self.is_public:
             return user
-        if Document.objects.visible_to_user(user).filter(id=self.id).exists():
-            return user
+        # Short-circuit anonymous callers before hitting the DB. For
+        # ``AnonymousUser`` the manager collapses to ``is_public=True``, so the
+        # ``.exists()`` lookup below would always be False here — skip it to
+        # preserve the old ordering and avoid an unnecessary round-trip.
         if not user or not getattr(user, "is_authenticated", False):
             raise GraphQLError(
                 "Permission denied: Authentication required to access private documents"
             )
+        if Document.objects.visible_to_user(user).filter(id=self.id).exists():
+            return user
         raise GraphQLError("Permission denied: You do not have access to this document")
 
     all_structural_annotations = graphene.List(
