@@ -339,12 +339,17 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         """
         Return the count of document relationships for this document.
 
-        Uses DocumentRelationshipQueryOptimizer for proper permission filtering.
-        DocumentRelationship has its own guardian permissions.
+        Performance: uses ``get_relationship_counts_by_document`` so the first
+        call computes counts for every document the user can see (optionally
+        scoped to ``corpus_id``) in two aggregated SQL queries, caching the
+        result on ``info.context``. Subsequent resolvers in the same GraphQL
+        request resolve in O(1) — eliminating the N+1 ``.count()`` storm that
+        occurred when this field was requested for hundreds of documents.
 
-        Performance: Passes info.context to the query optimizer for request-level
-        caching of visible document/corpus IDs. This prevents N+1 queries when
-        this field is requested for multiple documents in a single GraphQL query.
+        Note: the document was already filtered through ``visible_to_user`` by
+        the parent resolver, so per-document permission re-checks aren't
+        required here — visibility is enforced at the relationship level by
+        the optimizer's source/target/corpus filters.
         """
         from opencontractserver.documents.query_optimizer import (
             DocumentRelationshipQueryOptimizer,
@@ -352,16 +357,16 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
 
         try:
             user = info.context.user
-            corpus_pk = from_global_id(corpus_id)[1] if corpus_id else None
+            corpus_pk = int(from_global_id(corpus_id)[1]) if corpus_id else None
 
-            # Use the query optimizer for proper permission filtering
-            # Pass info.context for request-level caching to prevent N+1 queries
-            return DocumentRelationshipQueryOptimizer.get_relationships_for_document(
-                user=user,
-                document_id=self.id,
-                corpus_id=int(corpus_pk) if corpus_pk else None,
-                context=info.context,
-            ).count()
+            counts = (
+                DocumentRelationshipQueryOptimizer.get_relationship_counts_by_document(
+                    user=user,
+                    corpus_id=corpus_pk,
+                    context=info.context,
+                )
+            )
+            return counts.get(self.id, 0)
         except Exception as e:
             logger.warning(
                 f"Failed resolving doc_relationship_count for document {self.id}. "
@@ -374,8 +379,10 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         Resolve DocumentRelationship objects for this document.
 
         Uses DocumentRelationshipQueryOptimizer for proper permission filtering.
-        DocumentRelationship has its own guardian permissions (unlike annotation
-        Relationships which inherit from document/corpus).
+        DocumentRelationship inherits visibility from source_document,
+        target_document, and corpus — its own guardian tables were dropped in
+        migration ``documents/0029``. The optimizer enforces the AND-of-all-three
+        rule (see ``DocumentRelationshipQueryOptimizer.get_visible_relationships``).
 
         Performance: Passes info.context to the query optimizer for request-level
         caching of visible document/corpus IDs.
