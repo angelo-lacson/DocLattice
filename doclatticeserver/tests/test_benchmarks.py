@@ -654,9 +654,7 @@ class ForceCeleryEagerSafetyGuardsTestCase(PyUnitTestCase):
         prev_cli = os.environ.get("OC_BENCHMARK_CLI")
         os.environ["OC_BENCHMARK_CLI"] = "1"
         try:
-            with override_settings(
-                MODE="PROD", CELERY_TASK_ALWAYS_EAGER=False
-            ):
+            with override_settings(MODE="PROD", CELERY_TASK_ALWAYS_EAGER=False):
                 # Helper enters the non-eager CLI path and yields without
                 # raising. No assertion on the conf — see docstring.
                 with force_celery_eager():
@@ -676,9 +674,7 @@ class ForceCeleryEagerSafetyGuardsTestCase(PyUnitTestCase):
         prev_cli = os.environ.get("OC_BENCHMARK_CLI")
         os.environ["OC_BENCHMARK_CLI"] = "1"
         try:
-            with override_settings(
-                MODE="PROD", CELERY_TASK_ALWAYS_EAGER=True
-            ):
+            with override_settings(MODE="PROD", CELERY_TASK_ALWAYS_EAGER=True):
                 with self.assertRaises(RuntimeError) as ctx:
                     with force_celery_eager():
                         pass
