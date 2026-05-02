@@ -479,7 +479,10 @@ class DocumentFilter(django_filters.FilterSet):
             root_doc_ids = DocumentPath.objects.filter(
                 folder__isnull=True, is_current=True, is_deleted=False
             ).values("document_id")
-            return queryset.filter(id__in=root_doc_ids)
+            # ``.distinct()`` mirrors the non-root branch and guards against
+            # any pathological case where the same ``document_id`` appears in
+            # multiple matching ``DocumentPath`` rows.
+            return queryset.filter(id__in=root_doc_ids).distinct()
 
         # ``from_global_id`` returns a ``str`` PK; coerce to int so the
         # ``folder_id`` lookup matches the FK type.
