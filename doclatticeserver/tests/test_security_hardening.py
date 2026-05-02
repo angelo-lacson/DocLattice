@@ -1388,15 +1388,10 @@ class TestConditionalCsrfExempt(TestCase):
         suite covered the *reject* leg of session+CSRF but never the
         *accept* leg.
         """
-        from django.middleware.csrf import (
-            _get_new_csrf_string,
-            _mask_cipher_secret,
-        )
+        from django.middleware.csrf import get_token
         from django.test import RequestFactory, override_settings
 
         view = self._decorate_dummy()
-        secret = _get_new_csrf_string()
-        token = _mask_cipher_secret(secret)
 
         with override_settings(CSRF_USE_SESSIONS=False):
             factory = RequestFactory()
@@ -1404,15 +1399,15 @@ class TestConditionalCsrfExempt(TestCase):
                 "/graphql/",
                 data="{}",
                 content_type="application/json",
-                HTTP_X_CSRFTOKEN=token,
             )
+            # `get_token` is the public API: it stashes the unmasked secret in
+            # META["CSRF_COOKIE"] (where the middleware reads it under
+            # CSRF_USE_SESSIONS=False) and returns the masked token to send
+            # in the cookie / X-CSRFToken header.
+            token = get_token(request)
+            request.META["HTTP_X_CSRFTOKEN"] = token
             request.COOKIES["csrftoken"] = token
             request.COOKIES["sessionid"] = "fake-session"
-            # With CSRF_USE_SESSIONS=False the middleware reads the secret
-            # from META["CSRF_COOKIE"]; Django's own CsrfViewMiddleware
-            # would have populated that from the cookie, so do it by hand
-            # for the standalone decorator test.
-            request.META["CSRF_COOKIE"] = secret
             response = view(request)
 
         self.assertEqual(response.status_code, 200)

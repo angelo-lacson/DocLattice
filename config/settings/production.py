@@ -174,7 +174,14 @@ LOGGING = {
             "propagate": True,
         },
         "django.security.csrf": {
-            "handlers": ["console"],
+            # `mail_admins` is wired here (rather than relying on propagation
+            # to `django.security` parent) because we set propagate=False so
+            # the filtered records don't get re-logged at the root handler.
+            # `mail_admins` defaults to WARNING+, and the filter demotes the
+            # benign "CSRF token missing" / "CSRF cookie not set" reasons to
+            # INFO, so only genuine CSRF anomalies (origin mismatch, bad
+            # referer, mismatched token) trigger an admin email.
+            "handlers": ["console", "mail_admins"],
             "filters": ["csrf_reject_filter"],
             "level": "INFO",
             "propagate": False,
