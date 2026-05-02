@@ -110,11 +110,12 @@ class TestRemoveRelationshipsSecurity(TestCase):
 
         result = client.execute(mutation, variables=variables)
 
-        # Mutation should fail
+        # Mutation should fail with the unified IDOR-safe message (issue #1449)
         self.assertIsNone(result.get("errors"))
         self.assertFalse(result["data"]["removeRelationships"]["ok"])
         self.assertIn(
-            "Permission denied", result["data"]["removeRelationships"]["message"]
+            "do not have permission",
+            result["data"]["removeRelationships"]["message"],
         )
 
         # Relationship should still exist
@@ -172,11 +173,13 @@ class TestRemoveRelationshipsSecurity(TestCase):
 
         result = client.execute(mutation, variables=variables)
 
-        # Should get same "not found" error
+        # Should get the same unified IDOR-safe message as the unauthorized
+        # case above (issue #1449)
         self.assertIsNone(result.get("errors"))
         self.assertFalse(result["data"]["removeRelationships"]["ok"])
         self.assertEqual(
-            result["data"]["removeRelationships"]["message"], "Relationship not found"
+            result["data"]["removeRelationships"]["message"],
+            "Relationship not found or you do not have permission to access it",
         )
 
 
@@ -256,11 +259,12 @@ class TestUpdateRelationsSecurity(TestCase):
 
         result = client.execute(mutation, variables=variables)
 
-        # Mutation should fail
+        # Mutation should fail with the unified IDOR-safe message (issue #1449)
         self.assertIsNone(result.get("errors"))
         self.assertFalse(result["data"]["updateRelationships"]["ok"])
         self.assertIn(
-            "Permission denied", result["data"]["updateRelationships"]["message"]
+            "do not have permission",
+            result["data"]["updateRelationships"]["message"],
         )
 
 

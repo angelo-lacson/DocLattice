@@ -196,18 +196,25 @@ class UploadDocument(graphene.Mutation):
 
             # Determine target corpus and folder
             if add_to_corpus_id is not None:
+                # Unified message prevents enumeration of corpus IDs the caller cannot see
+                corpus_not_found_msg = (
+                    "Corpus not found or you do not have permission to add "
+                    "documents to it"
+                )
                 try:
-                    corpus = Corpus.objects.get(id=from_global_id(add_to_corpus_id)[1])
+                    corpus = Corpus.objects.visible_to_user(user).get(
+                        id=from_global_id(add_to_corpus_id)[1]
+                    )
                 except Corpus.DoesNotExist:
                     return UploadDocument(
-                        message="Corpus not found",
+                        message=corpus_not_found_msg,
                         ok=False,
                         document=None,
                     )
 
                 if not user_has_permission_for_obj(user, corpus, PermissionTypes.EDIT):
                     return UploadDocument(
-                        message="You don't have permission to add documents to this corpus",
+                        message=corpus_not_found_msg,
                         ok=False,
                         document=None,
                     )
@@ -571,18 +578,33 @@ class UploadDocumentsZip(graphene.Mutation):
                 # Check if we need to link to a corpus
                 corpus_id = None
                 if add_to_corpus_id is not None:
+                    # Unified error message prevents enumeration of inaccessible corpora
+                    corpus_not_found_msg = (
+                        "Corpus not found or you do not have permission to "
+                        "add documents to it"
+                    )
                     try:
-                        corpus = Corpus.objects.get(
-                            id=from_global_id(add_to_corpus_id)[1]
-                        )
+                        corpus = Corpus.objects.visible_to_user(
+                            info.context.user
+                        ).get(id=from_global_id(add_to_corpus_id)[1])
                         # Check if user has permission on this corpus
                         if not user_has_permission_for_obj(
                             info.context.user, corpus, PermissionTypes.EDIT
                         ):
-                            raise PermissionError(
-                                "You don't have permission to add documents to this corpus"
-                            )
+                            raise PermissionError(corpus_not_found_msg)
                         corpus_id = corpus.id
+                    except Corpus.DoesNotExist:
+                        return UploadDocumentsZip(
+                            message=corpus_not_found_msg,
+                            ok=False,
+                            job_id=job_id,
+                        )
+                    except PermissionError:
+                        return UploadDocumentsZip(
+                            message=corpus_not_found_msg,
+                            ok=False,
+                            job_id=job_id,
+                        )
                     except Exception as e:
                         logger.error(f"Error validating corpus: {e}")
                         return UploadDocumentsZip(
@@ -918,12 +940,19 @@ class ImportZipToCorpus(graphene.Mutation):
             logger.info("ImportZipToCorpus.mutate() - Received zip import request...")
 
             # Validate and get corpus
+            # Unified error message prevents enumeration of inaccessible corpora
+            corpus_not_found_msg = (
+                "Corpus not found or you do not have permission to add "
+                "documents to it"
+            )
             try:
-                corpus = Corpus.objects.get(id=from_global_id(corpus_id)[1])
+                corpus = Corpus.objects.visible_to_user(info.context.user).get(
+                    id=from_global_id(corpus_id)[1]
+                )
             except Corpus.DoesNotExist:
                 return ImportZipToCorpus(
                     ok=False,
-                    message="Corpus not found",
+                    message=corpus_not_found_msg,
                     job_id=None,
                 )
 
@@ -933,7 +962,7 @@ class ImportZipToCorpus(graphene.Mutation):
             ):
                 return ImportZipToCorpus(
                     ok=False,
-                    message="You don't have permission to add documents to this corpus",
+                    message=corpus_not_found_msg,
                     job_id=None,
                 )
 
@@ -1467,7 +1496,9 @@ class EmptyTrash(graphene.Mutation):
 
         try:
             corpus_pk = from_global_id(corpus_id)[1]
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            # visible_to_user guarantees the corpus exists AND is visible to the
+            # caller; service layer enforces write/DELETE permission afterwards
+            corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
 
             deleted_count, error = DocumentFolderService.empty_trash(
                 user=user,
@@ -1526,8 +1557,22 @@ class RestoreDocumentToVersion(graphene.Mutation):
             doc_pk = from_global_id(document_id)[1]
             corpus_pk = from_global_id(corpus_id)[1]
 
-            old_version = Document.objects.get(pk=doc_pk)
-            corpus = Corpus.objects.get(pk=corpus_pk)
+            # Unified error message prevents IDOR enumeration of document/corpus IDs
+            not_found_msg = (
+                "Document or corpus not found, or you do not have permission "
+                "to access them"
+            )
+
+            try:
+                old_version = Document.objects.visible_to_user(user).get(pk=doc_pk)
+                corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
+            except (Document.DoesNotExist, Corpus.DoesNotExist):
+                return RestoreDocumentToVersion(
+                    ok=False,
+                    message=not_found_msg,
+                    document=None,
+                    new_version_number=None,
+                )
 
             # Check UPDATE permission on both document and corpus
             if not user_has_permission_for_obj(
@@ -1538,7 +1583,7 @@ class RestoreDocumentToVersion(graphene.Mutation):
             ):
                 return RestoreDocumentToVersion(
                     ok=False,
-                    message="You don't have permission to restore this document",
+                    message=not_found_msg,
                     document=None,
                     new_version_number=None,
                 )
@@ -1548,7 +1593,7 @@ class RestoreDocumentToVersion(graphene.Mutation):
             ):
                 return RestoreDocumentToVersion(
                     ok=False,
-                    message="You don't have permission to modify this corpus",
+                    message=not_found_msg,
                     document=None,
                     new_version_number=None,
                 )
@@ -1649,17 +1694,10 @@ class RestoreDocumentToVersion(graphene.Mutation):
                 new_version_number=new_path.version_number,
             )
 
-        except Document.DoesNotExist:
+        except (Document.DoesNotExist, Corpus.DoesNotExist):
             return RestoreDocumentToVersion(
                 ok=False,
-                message="Document version not found",
-                document=None,
-                new_version_number=None,
-            )
-        except Corpus.DoesNotExist:
-            return RestoreDocumentToVersion(
-                ok=False,
-                message="Corpus not found",
+                message=not_found_msg,
                 document=None,
                 new_version_number=None,
             )
