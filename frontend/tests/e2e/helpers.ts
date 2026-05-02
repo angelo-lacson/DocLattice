@@ -855,6 +855,147 @@ export async function runExtractAndWaitForFinish(
 }
 
 /**
+ * Open the Iterations tab on the currently-open extract detail page,
+ * click "New iteration", choose an axis, optionally rename, leave
+ * "Run immediately" UNCHECKED, and submit.
+ *
+ * Caller must already be on the extract detail page (any tab).
+ *
+ * INTENTIONAL CHOICE: we default to autoStart=false because a second
+ * extract run would require a second LLM round-trip — and the VCR
+ * cassette for the e2e workflow only covers the parent extract's calls.
+ * Iteration B with no cells still produces a meaningful diff (every
+ * parent cell becomes ONLY_IN_A), which is enough to prove the
+ * iteration creation + diff query end-to-end.
+ *
+ * Returns the name the iteration was created with so callers can locate
+ * the row in the iterations list afterwards.
+ */
+export async function forkExtractIterationViaUI(
+  page: Page,
+  iterationName: string,
+  axis: "MODEL" | "DOCUMENT_VERSIONS" | "FIELDSET" = "MODEL",
+  autoStart: boolean = false,
+  /**
+   * Only used when axis === "MODEL". The dialog renders a "Model identifier"
+   * input that NewIterationDialog packs into modelConfig = { model }. Without
+   * a non-empty value the mutation inherits the parent's empty model_config,
+   * which makes the backend's iterationAxis resolver return null (no diff
+   * across model_config). Default to a stub so the axis chip renders.
+   */
+  modelIdentifier: string = "anthropic:claude-opus-4-7"
+): Promise<string> {
+  // Switch to Iterations tab. ExtractDetailContent's Tabs renders this
+  // tab as the fourth child, label "Iterations".
+  await page.getByRole("tab", { name: /^Iterations$/i }).click();
+  await page.waitForTimeout(300);
+
+  // The toolbar's primary CTA reads "New iteration" (NewIterationDialog
+  // trigger in ExtractIterationsTab.tsx).
+  await page
+    .getByRole("button", { name: /^New iteration$/i })
+    .first()
+    .click();
+
+  // Modal has aria-label="New iteration".
+  const dialog = page.getByRole("dialog", { name: /^New iteration$/i });
+  await expect(dialog).toBeVisible({ timeout: 10_000 });
+
+  // Axis cards are <button> elements inside the dialog. The default
+  // selection is MODEL; only re-click when the caller wants a different
+  // axis. Each card's label includes a Lucide icon plus the axis name.
+  if (axis !== "MODEL") {
+    const label =
+      axis === "DOCUMENT_VERSIONS" ? /Document versions/i : /^Schema$/i;
+    await dialog.getByRole("button", { name: label }).first().click();
+  }
+
+  // Name field is the only text input that takes the placeholder
+  // "Defaults to <source name> (iteration N)".
+  await dialog
+    .getByPlaceholder(/Defaults to .*iteration N/i)
+    .fill(iterationName);
+
+  // For MODEL-axis runs, fill the "Model identifier" input. The backend
+  // iterationAxis resolver compares (self.model_config or {}) to
+  // (parent.model_config or {}) — without a value here the iteration
+  // inherits parent's empty config and the resolver returns null, so
+  // the axis chip never renders.
+  if (axis === "MODEL" && modelIdentifier) {
+    const modelInput = dialog.getByPlaceholder(/anthropic:claude/i).first();
+    if (await modelInput.isVisible().catch(() => false)) {
+      await modelInput.fill(modelIdentifier);
+    }
+  }
+
+  // "Run immediately" toggle. The dialog ships with checked=true; flip
+  // it off when autoStart=false so the new iteration is created without
+  // queueing run_extract (no extra LLM traffic needed for this assertion
+  // — see the comment on this helper).
+  const runNow = dialog.locator('input[type="checkbox"]').first();
+  const checked = await runNow.isChecked();
+  if (checked !== autoStart) {
+    await runNow.click();
+  }
+
+  // Submit — the dialog footer's primary button reads "Create iteration".
+  await dialog
+    .getByRole("button", { name: /^Create iteration$/i })
+    .first()
+    .click();
+
+  // Toast confirms creation. ExtractIterationsTab fires
+  // `toast.success("Iteration queued.")` on the mutation onCompleted hook.
+  await expect(page.getByText(/Iteration queued\./i)).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // Dialog closes after the mutation completes.
+  await expect(dialog).not.toBeVisible({ timeout: 10_000 });
+
+  return iterationName;
+}
+
+/**
+ * Click the parent (current) extract row and the named iteration row
+ * in the Iterations tab so the compare view loads. Returns once the
+ * "Comparing 2 iterations" chip is visible (proving both selections
+ * were registered and the panel is about to render the diff).
+ *
+ * Caller must already be on the Iterations tab with the iteration row
+ * visible.
+ */
+export async function selectIterationsForCompare(
+  page: Page,
+  parentExtractName: string,
+  iterationName: string
+): Promise<void> {
+  // The current extract row carries an inline "(current)" label so we
+  // can disambiguate it from any iteration that happens to share its
+  // base name.
+  const currentRow = page
+    .locator("[data-testid='iteration-row']")
+    .filter({ hasText: parentExtractName })
+    .filter({ hasText: /\(current\)/i })
+    .first();
+  await expect(currentRow).toBeVisible({ timeout: 10_000 });
+  await currentRow.click();
+
+  const iterationRow = page
+    .locator("[data-testid='iteration-row']")
+    .filter({ hasText: iterationName })
+    .first();
+  await expect(iterationRow).toBeVisible({ timeout: 10_000 });
+  await iterationRow.click();
+
+  // The "Comparing 2 iterations" chip appears in the toolbar only when
+  // the cap-of-2 selection set has reached size 2.
+  await expect(page.getByText(/Comparing 2 iterations/i)).toBeVisible({
+    timeout: 10_000,
+  });
+}
+
+/**
  * Wait until a document with the given title finishes parsing +
  * embedding.
  *
