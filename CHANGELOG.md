@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Leaderboard page redesigned to match the OS Legal design system** (`frontend/src/components/community/Leaderboard.tsx`):
+  - Replaced custom gradient/inline-style sections with a hero header, `StatGrid`-based community stats, and named styled components for every compound element (`UsernameCell`, `ScoreCell`, `DetailsCell`, `RisingStarTag`, `BadgeCard`, `BadgeMeta`, `BadgeName`, `BadgeStats`).
+  - `RankBadge` palette tokenised into a file-local `RANK_COLORS` map and `RisingStarTag` colours into `RISING_STAR_COLORS`; rank-2 surface/border/text now reuse `OS_LEGAL_COLORS` tokens directly.
+  - Bumped `RisingStarTag` font-size from 11px to 12px (WCAG 2.1 small-text floor).
+  - Removed unused `GradientSegment` import and `statsLoading` variable.
+
 - **Consistent MCP discoverability across corpus tiles and detail pages** (`frontend/src/components/common/MCPShareButton.tsx`, `frontend/src/components/corpuses/CorpusListView.tsx`, `frontend/src/components/corpuses/CorpusHome/CorpusLandingView.tsx`, `frontend/src/components/corpuses/CorpusHome/CorpusDetailsView.tsx`):
   - The MCP share button now renders for every corpus that has a slug, not just public ones, and the tile overlay is always visible (no longer fades in on hover).
   - `MCPShareButton` accepts a new `isPublic` prop. For private corpora the popover shows a `Lock` icon and explains that the corpus must be made public before an MCP endpoint is exposed (the backend MCP server only serves public corpora — `opencontractserver/mcp/server.py`).
