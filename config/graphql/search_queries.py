@@ -17,11 +17,12 @@ from config.graphql.graphene_types import (
     AnnotationType,
     CorpusType,
     DocumentType,
+    NoteType,
     SemanticSearchResultType,
     UserType,
 )
 from config.graphql.ratelimits import get_user_tier_rate, graphql_ratelimit_dynamic
-from opencontractserver.annotations.models import Annotation
+from opencontractserver.annotations.models import Annotation, Note
 from opencontractserver.constants.annotations import SEMANTIC_SEARCH_MAX_RESULTS
 from opencontractserver.constants.search import FTS_CONFIG
 from opencontractserver.corpuses.models import Corpus
@@ -72,6 +73,19 @@ class SearchQueryMixin:
         ),
         corpus_id=graphene.ID(
             description="Corpus ID to scope agent search (includes global + corpus agents)"
+        ),
+    )
+
+    search_notes_for_mention = DjangoConnectionField(
+        NoteType,
+        text_search=graphene.String(
+            description="Search query to find notes by title or content"
+        ),
+        corpus_id=graphene.ID(
+            description="Optional corpus ID to scope search to notes in specific corpus"
+        ),
+        document_id=graphene.ID(
+            description="Optional document ID to scope search to notes on a specific document"
         ),
     )
 
@@ -417,6 +431,39 @@ class SearchQueryMixin:
 
         # Order: Global first, then corpus-specific, then alphabetically by name
         return qs.select_related("creator", "corpus").order_by("scope", "name")
+
+    @graphql_ratelimit_dynamic(get_rate=get_user_tier_rate("READ_LIGHT"))
+    def resolve_search_notes_for_mention(
+        self, info, text_search=None, corpus_id=None, document_id=None, **kwargs
+    ) -> Any:
+        """
+        Search notes by title or content.
+
+        SECURITY: Notes inherit visibility from document + corpus via
+        `Note.objects.visible_to_user()`. Anonymous users only see notes whose
+        document, corpus (if any), and the note itself are public.
+        """
+        user = info.context.user
+
+        qs = Note.objects.visible_to_user(user)
+
+        if corpus_id:
+            _, corpus_pk = from_global_id(corpus_id)
+            qs = qs.filter(corpus_id=int(corpus_pk))
+
+        if document_id:
+            _, document_pk = from_global_id(document_id)
+            qs = qs.filter(document_id=int(document_pk))
+
+        if text_search:
+            qs = qs.filter(
+                Q(title__icontains=text_search) | Q(content__icontains=text_search)
+            )
+
+        # Eager-load the relations the result row needs for deep-linking.
+        qs = qs.select_related("document", "document__creator", "corpus", "creator")
+
+        return qs.order_by("-modified")
 
     # SEMANTIC SEARCH QUERIES #############################################
     semantic_search = graphene.List(

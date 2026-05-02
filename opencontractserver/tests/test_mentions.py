@@ -526,3 +526,85 @@ class MentionSearchTestCase(TestCase):
         self.assertEqual(len(edges), 2)
         slugs = [edge["node"]["slug"] for edge in edges]
         self.assertIn("legal-contracts", slugs)
+
+    def test_search_notes_for_mention(self):
+        """Notes search filters by visibility, title, and content."""
+        from opencontractserver.annotations.models import Note
+
+        # user1 owns a note on their own document.
+        note_visible = Note.objects.create(
+            title="Indemnity drafting tips",
+            content="Always cap indemnification obligations.",
+            document=self.doc1,
+            corpus=self.corpus1,
+            creator=self.user1,
+        )
+
+        # user2 owns a private note that user1 must not see.
+        note_hidden = Note.objects.create(
+            title="Private indemnity musings",
+            content="user1 should never see this.",
+            document=self.doc2,
+            corpus=self.corpus2,
+            creator=self.user2,
+        )
+
+        query = """
+            query SearchNotes($textSearch: String!) {
+                searchNotesForMention(textSearch: $textSearch) {
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                    }
+                }
+            }
+        """
+
+        result = self.client.execute(
+            query,
+            variables={"textSearch": "indemnity"},
+            context_value=type("Request", (), {"user": self.user1})(),
+        )
+        self.assertIsNone(result.get("errors"))
+        edges = result["data"]["searchNotesForMention"]["edges"]
+        titles = [edge["node"]["title"] for edge in edges]
+        self.assertIn(note_visible.title, titles)
+        self.assertNotIn(note_hidden.title, titles)
+
+        # Content match also works.
+        result = self.client.execute(
+            query,
+            variables={"textSearch": "cap indemnification"},
+            context_value=type("Request", (), {"user": self.user1})(),
+        )
+        self.assertIsNone(result.get("errors"))
+        edges = result["data"]["searchNotesForMention"]["edges"]
+        self.assertEqual(len(edges), 1)
+        self.assertEqual(edges[0]["node"]["title"], note_visible.title)
+
+        # Corpus scoping returns empty when scoped to a corpus the note isn't in.
+        scoped_query = """
+            query SearchNotes($textSearch: String!, $corpusId: ID!) {
+                searchNotesForMention(textSearch: $textSearch, corpusId: $corpusId) {
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                    }
+                }
+            }
+        """
+        result = self.client.execute(
+            scoped_query,
+            variables={
+                "textSearch": "indemnity",
+                "corpusId": to_global_id("CorpusType", self.corpus2.id),
+            },
+            context_value=type("Request", (), {"user": self.user1})(),
+        )
+        self.assertIsNone(result.get("errors"))
+        edges = result["data"]["searchNotesForMention"]["edges"]
+        self.assertEqual(len(edges), 0)

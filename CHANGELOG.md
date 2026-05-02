@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Cross-content Discover search** at `/discover/search`. The Discover hero
+  search box now lands on a unified results page that fans out across
+  discussions, annotations, collections (corpuses), and notes in parallel,
+  rather than redirecting to discussion-only search.
+  - Backend: new `searchNotesForMention` resolver in
+    `config/graphql/search_queries.py` (visibility via
+    `Note.objects.visible_to_user`, optional `corpusId` / `documentId`
+    scoping, eager-loads `document`, `corpus`, and creators).
+    `NoteType` is exported through the same `DjangoConnectionField` shape
+    used by the other mention searches and goes through `NoteType.get_queryset`
+    for a second visibility pass.
+  - Frontend view: `frontend/src/views/DiscoverSearchResults.tsx` reuses
+    `ThreadListItem` for discussions and a single shared `ResultRow` for
+    annotations / collections / notes. Tabbed UI: All (preview of 5 each),
+    Discussions, Annotations, Collections, Notes.
+  - Routing: `?q=` and `?type=` are URL-driven (replace, no history spam).
+    Result rows deep-link via `getCorpusUrl` / `getDocumentUrl`; annotation
+    rows preserve `?ann=`, note rows pass `?note=` to the document URL.
+  - New `?note=<id>` deep-link param wired through `selectedNoteId`
+    (`frontend/src/graphql/cache.ts`), `QueryParams.noteId`
+    (`frontend/src/utils/navigationUtils.ts`), and the central manager
+    Phase 2/4 sync (`frontend/src/routing/CentralRouteManager.tsx`).
+  - Hero wiring: `NewHeroSection.handleSearchSubmit` now navigates to
+    `/discover/search?q=...`. The legacy `/discussions?search=...` route is
+    preserved for callers that want a discussion-only listing.
+  - Test: `MentionSearchTestCase.test_search_notes_for_mention`
+    (`opencontractserver/tests/test_mentions.py`) covers visibility
+    filtering, content-substring matching, and corpus scoping.
 - **E2E spec for threads/discussions** (`frontend/tests/e2e/threads-discussions.spec.ts`):
   - Anonymous pass renders `/discussions` (filter pills, search box, "Corpus Discussions" section header) and `/threads` (search route) without authentication.
   - Authenticated pass logs in, creates a per-run corpus (suffixed with `Date.now()` to avoid collisions across retries), opens its inline discussions view via `?view=discussions`, fills the `CreateThreadForm` modal (title, optional description, ProseMirror initial message), posts a top-level reply through the `ReplyForm` composer, navigates back to the thread list, and confirms the new thread surfaces in the global `/discussions` "Corpus Discussions" section before clicking through to the detail.
