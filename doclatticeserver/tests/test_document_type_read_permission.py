@@ -5,7 +5,8 @@ The helper consolidates four previously inline ``creator == user or
 user.is_superuser`` checks in ``config/graphql/document_types.py`` and
 delegates the visibility decision to ``Document.objects.visible_to_user``.
 These tests ensure the consolidated helper preserves behaviour for the
-public/anonymous/owner/superuser/shared/no-access matrix.
+public/anonymous/owner/superuser/shared/no-access matrix and exercise the
+public-corpus propagation path that the manager-based check unlocks.
 """
 
 from django.contrib.auth import get_user_model
@@ -38,9 +39,6 @@ class DocumentTypeReadPermissionTests(TestCase):
             username="root", password="pw", email="root@example.com"
         )
 
-        self.corpus = Corpus.objects.create(
-            title="Corpus", creator=self.owner, is_public=False
-        )
         self.private_doc = Document.objects.create(
             title="Private", creator=self.owner, is_public=False
         )
@@ -61,16 +59,27 @@ class DocumentTypeReadPermissionTests(TestCase):
         self.assertIn("Authentication required", str(cm.exception))
 
     def test_anonymous_allowed_for_public_doc(self) -> None:
-        DocumentType._assert_user_can_read(self.public_doc, _info_for(AnonymousUser()))
+        anon = AnonymousUser()
+        result = DocumentType._assert_user_can_read(self.public_doc, _info_for(anon))
+        self.assertIs(result, anon)
 
     def test_creator_allowed(self) -> None:
-        DocumentType._assert_user_can_read(self.private_doc, _info_for(self.owner))
+        result = DocumentType._assert_user_can_read(
+            self.private_doc, _info_for(self.owner)
+        )
+        self.assertEqual(result, self.owner)
 
     def test_superuser_allowed(self) -> None:
-        DocumentType._assert_user_can_read(self.private_doc, _info_for(self.superuser))
+        result = DocumentType._assert_user_can_read(
+            self.private_doc, _info_for(self.superuser)
+        )
+        self.assertEqual(result, self.superuser)
 
     def test_user_with_explicit_read_allowed(self) -> None:
-        DocumentType._assert_user_can_read(self.private_doc, _info_for(self.shared))
+        result = DocumentType._assert_user_can_read(
+            self.private_doc, _info_for(self.shared)
+        )
+        self.assertEqual(result, self.shared)
 
     def test_authenticated_user_without_access_blocked(self) -> None:
         with self.assertRaises(GraphQLError) as cm:
@@ -78,4 +87,64 @@ class DocumentTypeReadPermissionTests(TestCase):
         self.assertIn("do not have access", str(cm.exception))
 
     def test_public_doc_visible_to_unrelated_user(self) -> None:
-        DocumentType._assert_user_can_read(self.public_doc, _info_for(self.other))
+        result = DocumentType._assert_user_can_read(
+            self.public_doc, _info_for(self.other)
+        )
+        self.assertEqual(result, self.other)
+
+    def test_public_doc_short_circuits_without_db_query(self) -> None:
+        """
+        Public documents must short-circuit before hitting
+        ``visible_to_user(user).filter(...).exists()`` so high-traffic public
+        reads aren't penalised. Asserts the helper returns immediately when
+        ``self.is_public`` is ``True`` regardless of whether the user could be
+        resolved through the manager.
+        """
+        from unittest.mock import patch
+
+        with patch.object(Document.objects, "visible_to_user") as visible:
+            DocumentType._assert_user_can_read(
+                self.public_doc, _info_for(AnonymousUser())
+            )
+            visible.assert_not_called()
+
+    def test_anonymous_private_doc_short_circuits_without_db_query(self) -> None:
+        """
+        Anonymous access to a private document must reject before hitting the
+        DB. ``visible_to_user(AnonymousUser())`` collapses to ``is_public=True``
+        so the lookup is guaranteed to return False — skipping it preserves the
+        old hot-path ordering and avoids an unnecessary round-trip.
+        """
+        from unittest.mock import patch
+
+        with patch.object(Document.objects, "visible_to_user") as visible:
+            with self.assertRaises(GraphQLError):
+                DocumentType._assert_user_can_read(
+                    self.private_doc, _info_for(AnonymousUser())
+                )
+            visible.assert_not_called()
+
+    def test_doc_in_public_corpus_visible_to_anonymous(self) -> None:
+        """
+        A document added to a public corpus gets ``is_public=True`` propagated
+        onto its corpus-isolated copy (see ``Corpus.add_document`` — public
+        corpus → public doc). The helper, going through
+        ``Document.objects.visible_to_user``, must then grant read access to
+        anonymous users on that copy. This pins the corpus-scoped visibility
+        path that motivated moving off ``user_has_permission_for_obj``.
+        """
+        public_corpus = Corpus.objects.create(
+            title="Public Corpus", creator=self.owner, is_public=True
+        )
+        corpus_copy, _, _ = public_corpus.add_document(
+            document=self.private_doc, user=self.owner
+        )
+        self.assertTrue(
+            corpus_copy.is_public,
+            "Adding a private doc to a public corpus should propagate "
+            "is_public=True onto the corpus-isolated copy",
+        )
+
+        anon = AnonymousUser()
+        result = DocumentType._assert_user_can_read(corpus_copy, _info_for(anon))
+        self.assertIs(result, anon)
