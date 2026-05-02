@@ -45,7 +45,12 @@ import {
   mediaQuery,
 } from "../components/threads/styles/discussionStyles";
 import { getCorpusUrl, getDocumentUrl } from "../utils/navigationUtils";
-import { FILTER_TAB_ICON_SIZE } from "../assets/configurations/constants";
+import {
+  DISCOVER_SEARCH_ALL_TAB_PREVIEW,
+  DISCOVER_SEARCH_DEBOUNCE_MS,
+  DISCOVER_SEARCH_ENTITY_TAB_LIMIT,
+  FILTER_TAB_ICON_SIZE,
+} from "../assets/configurations/constants";
 import { ConversationType } from "../types/graphql-api";
 
 // ---------------------------------------------------------------------------
@@ -248,7 +253,18 @@ const ResultRow: React.FC<ResultRowBaseProps> = ({
   onClick,
   leadingDot,
 }) => (
-  <ResultCard onClick={onClick} role="button" tabIndex={0}>
+  <ResultCard
+    onClick={onClick}
+    role="button"
+    tabIndex={0}
+    onKeyDown={(e) => {
+      // Activation parity with native <button>: Enter and Space fire onClick.
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onClick();
+      }
+    }}
+  >
     <ResultTitle>
       {leadingDot ? (
         <LabelDot
@@ -314,9 +330,6 @@ const TAB_ITEMS: FilterTabItem[] = [
   },
 ];
 
-const ALL_TAB_PREVIEW = 5;
-const ENTITY_TAB_LIMIT = 25;
-
 // ---------------------------------------------------------------------------
 // Sections
 // ---------------------------------------------------------------------------
@@ -363,7 +376,7 @@ const Section: React.FC<SectionWrapperProps> = ({
 const DISCUSSION_GRADIENT = `linear-gradient(135deg, ${CORPUS_COLORS.teal[600]} 0%, ${CORPUS_COLORS.teal[800]} 100%)`;
 const ANNOTATION_GRADIENT = `linear-gradient(135deg, ${OS_LEGAL_COLORS.primaryBlue} 0%, ${OS_LEGAL_COLORS.primaryBlueHover} 100%)`;
 const CORPUS_GRADIENT = `linear-gradient(135deg, ${CORPUS_COLORS.slate[600]} 0%, ${CORPUS_COLORS.slate[800]} 100%)`;
-const NOTE_GRADIENT = `linear-gradient(135deg, ${OS_LEGAL_COLORS.folderIcon} 0%, #b45309 100%)`;
+const NOTE_GRADIENT = `linear-gradient(135deg, ${OS_LEGAL_COLORS.folderIcon} 0%, ${OS_LEGAL_COLORS.folderIconDark} 100%)`;
 
 // --- Discussions ----------------------------------------------------------
 
@@ -420,15 +433,19 @@ const DiscussionsSection: React.FC<DiscussionsSectionProps> = ({
 
 interface AnnotationsSectionProps {
   query: string;
+  limit: number;
 }
 
-const AnnotationsSection: React.FC<AnnotationsSectionProps> = ({ query }) => {
+const AnnotationsSection: React.FC<AnnotationsSectionProps> = ({
+  query,
+  limit,
+}) => {
   const navigate = useNavigate();
   const { data, loading } = useQuery<
     SearchAnnotationsForMentionOutput,
     SearchAnnotationsForMentionInput
   >(SEARCH_ANNOTATIONS_FOR_MENTION, {
-    variables: { textSearch: query },
+    variables: { textSearch: query, first: limit },
     fetchPolicy: "cache-first",
     nextFetchPolicy: "cache-and-network",
     skip: !query,
@@ -576,7 +593,11 @@ const NotesSection: React.FC<NotesSectionProps> = ({ query, limit }) => {
       emptyMessage="No matching notes"
     >
       {rows.map(({ node }) => {
-        const url = getDocumentUrl(node.document, null, { noteId: node.id });
+        // Deep-link with corpus context when available — getDocumentUrl needs
+        // the corpus slug to build a /d/<user>/<corpus>/<doc> URL.
+        const url = getDocumentUrl(node.document, node.corpus, {
+          noteId: node.id,
+        });
         const snippet = node.content
           ? node.content.replace(/\s+/g, " ").trim().slice(0, 220)
           : undefined;
@@ -588,6 +609,7 @@ const NotesSection: React.FC<NotesSectionProps> = ({ query, limit }) => {
             meta={
               <>
                 <span>{node.document.title}</span>
+                {node.corpus ? <span>· {node.corpus.title}</span> : null}
                 {node.creator?.username ? (
                   <span>· by {node.creator.username}</span>
                 ) : null}
@@ -616,20 +638,27 @@ export const DiscoverSearchResults: React.FC = () => {
   const [activeTab, setActiveTab] = useState<EntityTab>(
     VALID_TABS.has(initialTab) ? initialTab : "all"
   );
-  const debouncedQuery = useDebouncedValue(searchInput.trim(), 250);
+  const debouncedQuery = useDebouncedValue(
+    searchInput.trim(),
+    DISCOVER_SEARCH_DEBOUNCE_MS
+  );
 
   // URL sync: keep ?q= and ?type= in step with local state (replace, not push).
+  // The functional setSearchParams form lets us read the latest params without
+  // adding `searchParams` to the deps array (which would cause an infinite loop).
   useEffect(() => {
-    const next = new URLSearchParams(searchParams);
-    if (debouncedQuery) next.set("q", debouncedQuery);
-    else next.delete("q");
-    if (activeTab !== "all") next.set("type", activeTab);
-    else next.delete("type");
-    if (next.toString() !== searchParams.toString()) {
-      setSearchParams(next, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery, activeTab]);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (debouncedQuery) next.set("q", debouncedQuery);
+        else next.delete("q");
+        if (activeTab !== "all") next.set("type", activeTab);
+        else next.delete("type");
+        return next;
+      },
+      { replace: true }
+    );
+  }, [debouncedQuery, activeTab, setSearchParams]);
 
   const showAll = activeTab === "all";
   const trimmed = debouncedQuery;
@@ -670,22 +699,41 @@ export const DiscoverSearchResults: React.FC = () => {
           {(showAll || activeTab === "discussions") && (
             <DiscussionsSection
               query={trimmed}
-              limit={showAll ? ALL_TAB_PREVIEW : ENTITY_TAB_LIMIT}
+              limit={
+                showAll
+                  ? DISCOVER_SEARCH_ALL_TAB_PREVIEW
+                  : DISCOVER_SEARCH_ENTITY_TAB_LIMIT
+              }
             />
           )}
           {(showAll || activeTab === "annotations") && (
-            <AnnotationsSection query={trimmed} />
+            <AnnotationsSection
+              query={trimmed}
+              limit={
+                showAll
+                  ? DISCOVER_SEARCH_ALL_TAB_PREVIEW
+                  : DISCOVER_SEARCH_ENTITY_TAB_LIMIT
+              }
+            />
           )}
           {(showAll || activeTab === "corpuses") && (
             <CorpusesSection
               query={trimmed}
-              limit={showAll ? ALL_TAB_PREVIEW : ENTITY_TAB_LIMIT}
+              limit={
+                showAll
+                  ? DISCOVER_SEARCH_ALL_TAB_PREVIEW
+                  : DISCOVER_SEARCH_ENTITY_TAB_LIMIT
+              }
             />
           )}
           {(showAll || activeTab === "notes") && (
             <NotesSection
               query={trimmed}
-              limit={showAll ? ALL_TAB_PREVIEW : ENTITY_TAB_LIMIT}
+              limit={
+                showAll
+                  ? DISCOVER_SEARCH_ALL_TAB_PREVIEW
+                  : DISCOVER_SEARCH_ENTITY_TAB_LIMIT
+              }
             />
           )}
         </>

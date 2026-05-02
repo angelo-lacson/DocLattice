@@ -447,12 +447,24 @@ class SearchQueryMixin:
 
         qs = Note.objects.visible_to_user(user)
 
+        # Reject malformed or wrong-type global IDs by returning an empty
+        # queryset rather than silently filtering on a non-existent FK.
         if corpus_id:
-            _, corpus_pk = from_global_id(corpus_id)
+            try:
+                type_name, corpus_pk = from_global_id(corpus_id)
+            except (ValueError, UnicodeDecodeError):
+                return Note.objects.none()
+            if type_name != "CorpusType":
+                return Note.objects.none()
             qs = qs.filter(corpus_id=int(corpus_pk))
 
         if document_id:
-            _, document_pk = from_global_id(document_id)
+            try:
+                type_name, document_pk = from_global_id(document_id)
+            except (ValueError, UnicodeDecodeError):
+                return Note.objects.none()
+            if type_name != "DocumentType":
+                return Note.objects.none()
             qs = qs.filter(document_id=int(document_pk))
 
         if text_search:

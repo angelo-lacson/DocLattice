@@ -2683,6 +2683,7 @@ export const SEARCH_DOCUMENTS_FOR_MENTION = gql`
 export interface SearchAnnotationsForMentionInput {
   textSearch: string;
   corpusId?: string;
+  first?: number;
 }
 
 export interface SearchAnnotationsForMentionOutput {
@@ -2753,6 +2754,15 @@ export interface SearchNotesForMentionOutput {
             slug: string;
           };
         };
+        corpus: {
+          id: string;
+          title: string;
+          slug: string;
+          creator: {
+            id: string;
+            slug: string;
+          };
+        } | null;
       };
     }>;
   };
@@ -2791,6 +2801,15 @@ export const SEARCH_NOTES_FOR_MENTION = gql`
               slug
             }
           }
+          corpus {
+            id
+            title
+            slug
+            creator {
+              id
+              slug
+            }
+          }
         }
       }
     }
@@ -2798,11 +2817,15 @@ export const SEARCH_NOTES_FOR_MENTION = gql`
 `;
 
 export const SEARCH_ANNOTATIONS_FOR_MENTION = gql`
-  query SearchAnnotationsForMention($textSearch: String!, $corpusId: ID) {
+  query SearchAnnotationsForMention(
+    $textSearch: String!
+    $corpusId: ID
+    $first: Int = 10
+  ) {
     searchAnnotationsForMention(
       textSearch: $textSearch
       corpusId: $corpusId
-      first: 10
+      first: $first
     ) {
       edges {
         node {

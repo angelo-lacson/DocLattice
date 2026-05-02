@@ -608,3 +608,130 @@ class MentionSearchTestCase(TestCase):
         self.assertIsNone(result.get("errors"))
         edges = result["data"]["searchNotesForMention"]["edges"]
         self.assertEqual(len(edges), 0)
+
+    def test_search_notes_for_mention_document_scoping(self):
+        """`document_id` filter restricts results to a single document."""
+        from opencontractserver.annotations.models import Note
+
+        Note.objects.create(
+            title="Doc1 indemnity note",
+            content="On doc1.",
+            document=self.doc1,
+            corpus=self.corpus1,
+            creator=self.user1,
+        )
+
+        # Add a second note on a *different* document so we can prove the
+        # document filter excludes it.
+        from django.core.files.base import ContentFile
+
+        from opencontractserver.documents.models import Document
+
+        other_doc = Document.objects.create(
+            title="Other Doc",
+            description="another doc owned by user1",
+            file_type="text/plain",
+            creator=self.user1,
+            slug="other-doc",
+        )
+        other_doc.txt_extract_file.save("other.txt", ContentFile(b"x"))
+        Note.objects.create(
+            title="OtherDoc indemnity note",
+            content="On other doc.",
+            document=other_doc,
+            corpus=self.corpus1,
+            creator=self.user1,
+        )
+
+        query = """
+            query SearchNotes($textSearch: String!, $documentId: ID!) {
+                searchNotesForMention(
+                    textSearch: $textSearch
+                    documentId: $documentId
+                ) {
+                    edges { node { id title } }
+                }
+            }
+        """
+        result = self.client.execute(
+            query,
+            variables={
+                "textSearch": "indemnity",
+                "documentId": to_global_id("DocumentType", self.doc1.id),
+            },
+            context_value=type("Request", (), {"user": self.user1})(),
+        )
+        self.assertIsNone(result.get("errors"))
+        titles = [
+            e["node"]["title"]
+            for e in result["data"]["searchNotesForMention"]["edges"]
+        ]
+        self.assertIn("Doc1 indemnity note", titles)
+        self.assertNotIn("OtherDoc indemnity note", titles)
+
+    def test_search_notes_for_mention_anonymous_visibility(self):
+        """Anonymous users only see notes whose document/corpus/note are public."""
+        from django.contrib.auth.models import AnonymousUser
+
+        from opencontractserver.annotations.models import Note
+
+        # A private note (default) — should NOT surface for anonymous users.
+        Note.objects.create(
+            title="Anonymous-blocked indemnity note",
+            content="private content",
+            document=self.doc1,
+            corpus=self.corpus1,
+            creator=self.user1,
+        )
+
+        query = """
+            query SearchNotes($textSearch: String!) {
+                searchNotesForMention(textSearch: $textSearch) {
+                    edges { node { id title } }
+                }
+            }
+        """
+        result = self.client.execute(
+            query,
+            variables={"textSearch": "indemnity"},
+            context_value=type("Request", (), {"user": AnonymousUser()})(),
+        )
+        self.assertIsNone(result.get("errors"))
+        titles = [
+            e["node"]["title"]
+            for e in result["data"]["searchNotesForMention"]["edges"]
+        ]
+        self.assertNotIn("Anonymous-blocked indemnity note", titles)
+
+    def test_search_notes_for_mention_rejects_wrong_type_global_id(self):
+        """Passing a Document global ID as `corpusId` returns an empty queryset
+        rather than silently filtering on a non-existent FK."""
+        from opencontractserver.annotations.models import Note
+
+        Note.objects.create(
+            title="Visible indemnity note",
+            content="should not surface when corpusId is wrong type",
+            document=self.doc1,
+            corpus=self.corpus1,
+            creator=self.user1,
+        )
+
+        query = """
+            query SearchNotes($textSearch: String!, $corpusId: ID!) {
+                searchNotesForMention(textSearch: $textSearch, corpusId: $corpusId) {
+                    edges { node { id title } }
+                }
+            }
+        """
+        # Pass a DocumentType ID where a CorpusType ID is expected.
+        result = self.client.execute(
+            query,
+            variables={
+                "textSearch": "indemnity",
+                "corpusId": to_global_id("DocumentType", self.doc1.id),
+            },
+            context_value=type("Request", (), {"user": self.user1})(),
+        )
+        self.assertIsNone(result.get("errors"))
+        edges = result["data"]["searchNotesForMention"]["edges"]
+        self.assertEqual(len(edges), 0)
