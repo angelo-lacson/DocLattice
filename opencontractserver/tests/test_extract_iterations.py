@@ -30,6 +30,8 @@ from opencontractserver.extracts.diff import (
     summarise,
 )
 from opencontractserver.extracts.models import Column, Datacell, Extract, Fieldset
+from opencontractserver.types.enums import PermissionTypes
+from opencontractserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()
 
@@ -243,6 +245,12 @@ class CreateExtractIterationMutationTestCase(TestCase):
         self.source = Extract.objects.create(
             name="Source", fieldset=self.fieldset, creator=self.user
         )
+        # `user_has_permission_for_obj` (called by CreateExtractIteration) ignores
+        # creator status — it requires explicit guardian grants. Grant CRUD here so
+        # the mutation's READ check passes.
+        set_permissions_for_obj_to_user(
+            self.user, self.source, [PermissionTypes.CRUD]
+        )
         self.source.documents.add(self.doc_v1)
 
     def _mutate(self, *, axis, **extra):
@@ -339,6 +347,10 @@ class CompareExtractsResolverTestCase(TestCase):
             creator=self.user,
         )
         self.doc = _make_doc(self.user)
+        # ExtractQueryOptimizer.get_extract_datacells filters cells by document
+        # READ permission, which `user_has_permission_for_obj` checks via guardian
+        # only — creator status alone is insufficient.
+        set_permissions_for_obj_to_user(self.user, self.doc, [PermissionTypes.CRUD])
         self.a = Extract.objects.create(
             name="A", fieldset=self.fieldset, creator=self.user
         )
@@ -348,6 +360,10 @@ class CompareExtractsResolverTestCase(TestCase):
             creator=self.user,
             parent_extract=self.a,
         )
+        # compareExtracts checks READ on both extracts via the same path as
+        # CreateExtractIteration; grant explicit guardian perms.
+        set_permissions_for_obj_to_user(self.user, self.a, [PermissionTypes.CRUD])
+        set_permissions_for_obj_to_user(self.user, self.b, [PermissionTypes.CRUD])
         self.a.documents.add(self.doc)
         self.b.documents.add(self.doc)
 
