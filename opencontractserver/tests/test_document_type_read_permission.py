@@ -61,16 +61,27 @@ class DocumentTypeReadPermissionTests(TestCase):
         self.assertIn("Authentication required", str(cm.exception))
 
     def test_anonymous_allowed_for_public_doc(self) -> None:
-        DocumentType._assert_user_can_read(self.public_doc, _info_for(AnonymousUser()))
+        anon = AnonymousUser()
+        result = DocumentType._assert_user_can_read(self.public_doc, _info_for(anon))
+        self.assertIs(result, anon)
 
     def test_creator_allowed(self) -> None:
-        DocumentType._assert_user_can_read(self.private_doc, _info_for(self.owner))
+        result = DocumentType._assert_user_can_read(
+            self.private_doc, _info_for(self.owner)
+        )
+        self.assertEqual(result, self.owner)
 
     def test_superuser_allowed(self) -> None:
-        DocumentType._assert_user_can_read(self.private_doc, _info_for(self.superuser))
+        result = DocumentType._assert_user_can_read(
+            self.private_doc, _info_for(self.superuser)
+        )
+        self.assertEqual(result, self.superuser)
 
     def test_user_with_explicit_read_allowed(self) -> None:
-        DocumentType._assert_user_can_read(self.private_doc, _info_for(self.shared))
+        result = DocumentType._assert_user_can_read(
+            self.private_doc, _info_for(self.shared)
+        )
+        self.assertEqual(result, self.shared)
 
     def test_authenticated_user_without_access_blocked(self) -> None:
         with self.assertRaises(GraphQLError) as cm:
@@ -78,4 +89,23 @@ class DocumentTypeReadPermissionTests(TestCase):
         self.assertIn("do not have access", str(cm.exception))
 
     def test_public_doc_visible_to_unrelated_user(self) -> None:
-        DocumentType._assert_user_can_read(self.public_doc, _info_for(self.other))
+        result = DocumentType._assert_user_can_read(
+            self.public_doc, _info_for(self.other)
+        )
+        self.assertEqual(result, self.other)
+
+    def test_public_doc_short_circuits_without_db_query(self) -> None:
+        """
+        Public documents must short-circuit before hitting
+        ``visible_to_user(user).filter(...).exists()`` so high-traffic public
+        reads aren't penalised. Asserts the helper returns immediately when
+        ``self.is_public`` is ``True`` regardless of whether the user could be
+        resolved through the manager.
+        """
+        from unittest.mock import patch
+
+        with patch.object(Document.objects, "visible_to_user") as visible:
+            DocumentType._assert_user_can_read(
+                self.public_doc, _info_for(AnonymousUser())
+            )
+            visible.assert_not_called()

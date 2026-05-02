@@ -9,6 +9,7 @@ from django.db.models import QuerySet
 from graphene import relay
 from graphene.types.generic import GenericScalar
 from graphene_django import DjangoObjectType
+from graphql import GraphQLError
 from graphql_relay import from_global_id
 
 from config.graphql.annotation_types import (
@@ -211,19 +212,23 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     resolve_pawls_parse_file = resolve_pawls_parse_file_optimized
     resolve_doc_annotations = resolve_doc_annotations_optimized
 
-    def _assert_user_can_read(self, info) -> None:
+    def _assert_user_can_read(self, info):
         """
         Raise ``GraphQLError`` if the requesting user cannot READ this document.
+        Returns the resolved user for caller convenience (so callers don't have
+        to re-extract it from ``info.context``).
 
         Uses the canonical ``Document.objects.visible_to_user(user)`` manager
         method so corpus-inherited and group permissions are honoured (per the
-        warning in ``user_has_permission_for_obj``'s docstring).
+        warning in ``user_has_permission_for_obj``'s docstring). Public
+        documents short-circuit with no DB hit so high-traffic public reads are
+        not penalised.
         """
-        from graphql import GraphQLError
-
         user = info.context.user if hasattr(info.context, "user") else None
+        if self.is_public:
+            return user
         if Document.objects.visible_to_user(user).filter(id=self.id).exists():
-            return
+            return user
         if not user or not getattr(user, "is_authenticated", False):
             raise GraphQLError(
                 "Permission denied: Authentication required to access private documents"
@@ -943,8 +948,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         if extract_id:
             _, extract_pk = from_global_id(extract_id)
 
-        self._assert_user_can_read(info)
-        user = info.context.user if hasattr(info.context, "user") else None
+        user = self._assert_user_can_read(info)
 
         # Handle both single page and multiple pages
         # Priority: if 'pages' is provided, use it; otherwise fall back to 'page'
@@ -995,8 +999,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
         if extract_id:
             _, extract_pk = from_global_id(extract_id)
 
-        self._assert_user_can_read(info)
-        user = info.context.user if hasattr(info.context, "user") else None
+        user = self._assert_user_can_read(info)
 
         return RelationshipQueryOptimizer.get_document_relationships(
             document_id=self.id,
@@ -1028,8 +1031,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             RelationshipQueryOptimizer,
         )
 
-        self._assert_user_can_read(info)
-        user = info.context.user if hasattr(info.context, "user") else None
+        user = self._assert_user_can_read(info)
 
         _, corpus_pk = from_global_id(corpus_id)
         summary = RelationshipQueryOptimizer.get_relationship_summary(
@@ -1043,8 +1045,7 @@ class DocumentType(AnnotatePermissionsForReadMixin, DjangoObjectType):
             AnnotationQueryOptimizer,
         )
 
-        self._assert_user_can_read(info)
-        user = info.context.user if hasattr(info.context, "user") else None
+        user = self._assert_user_can_read(info)
         _, extract_pk = from_global_id(extract_id)
 
         return AnnotationQueryOptimizer.get_extract_annotation_summary(
