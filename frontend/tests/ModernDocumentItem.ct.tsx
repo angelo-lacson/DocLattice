@@ -1,15 +1,15 @@
 import React from "react";
 import { test, expect } from "./utils/coverage";
-import { MockedProvider } from "@apollo/client/testing";
+import { MockedProvider, MockedResponse } from "@apollo/client/testing";
 import { MemoryRouter } from "react-router-dom";
 import { DndContext } from "@dnd-kit/core";
 import { ModernDocumentItem } from "../src/components/documents/ModernDocumentItem";
 import {
   DocumentType,
   DocumentProcessingStatus,
-  DocumentRelationshipType,
 } from "../src/types/graphql-api";
 import { openedCorpus } from "../src/graphql/cache";
+import { GET_DOC_RELATIONSHIPS_FOR_DOC } from "../src/graphql/queries";
 import { ReactiveVarObserver } from "./utils/ReactiveVarObserver";
 
 /** Minimal document fixture with overridable fields. */
@@ -38,10 +38,11 @@ function makeDocument(overrides: Partial<DocumentType> = {}): DocumentType {
 // `mount` fixture destructured from each test's context.
 function renderWithProviders(
   ui: React.ReactElement,
-  mount: (el: React.ReactElement) => Promise<unknown>
+  mount: (el: React.ReactElement) => Promise<unknown>,
+  mocks: MockedResponse[] = []
 ) {
   return mount(
-    <MockedProvider mocks={[]} addTypename={false}>
+    <MockedProvider mocks={mocks} addTypename={false}>
       <MemoryRouter>
         <DndContext>{ui}</DndContext>
       </MemoryRouter>
@@ -178,57 +179,88 @@ test.describe("ModernDocumentItem — card view rendering", () => {
     mount,
     page,
   }) => {
-    const rels: DocumentRelationshipType[] = [
+    const rels = [
       {
         id: "rel-1",
         relationshipType: "RELATIONSHIP",
         sourceDocument: {
           id: "RG9jdW1lbnRUeXBlOjE=",
           title: "Test Document.pdf",
-        } as any,
+        },
         targetDocument: {
           id: "other-doc",
           title: "Other Document",
-        } as any,
+        },
         annotationLabel: {
           id: "label-1",
           text: "references",
           color: "#14b8a6",
-        } as any,
-      } as any,
+        },
+      },
       {
         id: "rel-2",
         relationshipType: "NOTES",
         sourceDocument: {
           id: "other-doc-2",
           title: "Inbound Linker",
-        } as any,
+        },
         targetDocument: {
           id: "RG9jdW1lbnRUeXBlOjE=",
           title: "Test Document.pdf",
-        } as any,
+        },
         annotationLabel: null,
-      } as any,
+      },
     ];
 
     const doc = makeDocument({
       docRelationshipCount: 2,
-      allDocRelationships: rels,
     });
+
+    // Relationships are now fetched lazily on hover — provide a mock for the
+    // GET_DOC_RELATIONSHIPS_FOR_DOC query that the badge triggers.
+    const mocks: MockedResponse[] = [
+      {
+        request: {
+          query: GET_DOC_RELATIONSHIPS_FOR_DOC,
+          variables: { documentId: doc.id, corpusId: null },
+        },
+        result: { data: { bulkDocRelationships: rels } },
+      },
+    ];
 
     await renderWithProviders(
       <ModernDocumentItem item={doc} viewMode="card" />,
-      mount
+      mount,
+      mocks
     );
 
-    // Number is rendered in the badge
+    // Number is rendered in the badge immediately (from docRelationshipCount).
     await expect(page.getByText("2").first()).toBeVisible();
-    // NOTE: toBeAttached() verifies DOM presence only — the relationship
-    // popup uses `visibility: hidden` by default and reveals on hover, so
-    // the nodes are always in the tree. If the popup ever switches to
-    // conditional rendering (mount-on-hover), these assertions would still
-    // pass while the feature breaks; revisit and use toBeVisible() after a
-    // hover step in that case.
+
+    // Trigger the hover handler directly via React props: the popup is
+    // hidden by CSS so a hover() call would time out waiting for visibility.
+    // Walk up from the popup header span to the badge wrapper that owns
+    // the onMouseEnter handler. See `clickViaReact` above for precedent.
+    await page.evaluate(() => {
+      const span = Array.from(document.querySelectorAll("span")).find(
+        (s) => s.textContent === "2 Linked Documents"
+      );
+      let node: HTMLElement | null = span?.closest("div") ?? null;
+      while (node) {
+        const propsKey = Object.keys(node).find((k) =>
+          k.startsWith("__reactProps$")
+        );
+        const props = propsKey ? (node as any)[propsKey] : null;
+        if (typeof props?.onMouseEnter === "function") {
+          props.onMouseEnter({});
+          return;
+        }
+        node = node.parentElement;
+      }
+      throw new Error("Could not find onMouseEnter handler on badge ancestor");
+    });
+
+    // After the lazy query resolves, the popup contents should be in the DOM.
     await expect(
       page.locator('text="2 Linked Documents"').first()
     ).toBeAttached();
@@ -307,42 +339,69 @@ test.describe("ModernDocumentItem — list view rendering", () => {
     mount,
     page,
   }) => {
-    const rels: DocumentRelationshipType[] = [
+    const rels = [
       {
         id: "rel-1",
         relationshipType: "RELATIONSHIP",
         sourceDocument: {
           id: "RG9jdW1lbnRUeXBlOjE=",
           title: "Test Document.pdf",
-        } as any,
+        },
         targetDocument: {
           id: "o1",
           title: "Linked Doc One",
-        } as any,
+        },
         annotationLabel: {
           id: "lbl",
           text: "cites",
           color: "#3b82f6",
-        } as any,
-      } as any,
+        },
+      },
     ];
     const doc = makeDocument({
       docRelationshipCount: 1,
-      allDocRelationships: rels,
     });
+
+    const mocks: MockedResponse[] = [
+      {
+        request: {
+          query: GET_DOC_RELATIONSHIPS_FOR_DOC,
+          variables: { documentId: doc.id, corpusId: null },
+        },
+        result: { data: { bulkDocRelationships: rels } },
+      },
+    ];
 
     await renderWithProviders(
       <ModernDocumentItem item={doc} viewMode="list" />,
-      mount
+      mount,
+      mocks
     );
 
-    // "1 Linked Document" (singular) should be in the popup DOM.
-    // NOTE: toBeAttached() verifies DOM presence only — see the card-view
-    // relationship popup test above for the rationale behind not using
-    // toBeVisible() here.
-    await expect(
-      page.locator('text="1 Linked Document"').first()
-    ).toBeAttached();
+    // The hover popup is hidden via CSS visibility, but React's onMouseEnter
+    // is on the badge wrapper (an ancestor). Walk up from the popup header
+    // span to find the element with the React onMouseEnter handler attached
+    // and invoke it directly. See `clickViaReact` above for the precedent.
+    await page.evaluate(() => {
+      const span = Array.from(document.querySelectorAll("span")).find(
+        (s) => s.textContent === "1 Linked Document"
+      );
+      let node: HTMLElement | null = span?.closest("div") ?? null;
+      while (node) {
+        const propsKey = Object.keys(node).find((k) =>
+          k.startsWith("__reactProps$")
+        );
+        const props = propsKey ? (node as any)[propsKey] : null;
+        if (typeof props?.onMouseEnter === "function") {
+          props.onMouseEnter({});
+          return;
+        }
+        node = node.parentElement;
+      }
+      throw new Error("Could not find onMouseEnter handler on badge ancestor");
+    });
+
+    // After the fetch resolves, the linked-doc title should be in the popup DOM.
     await expect(page.getByText("Linked Doc One").first()).toBeAttached();
   });
 });
