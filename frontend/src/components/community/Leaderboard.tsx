@@ -55,7 +55,11 @@ const RISING_STAR_COLORS = {
 const PageContainer = styled.div`
   height: 100%;
   background: ${OS_LEGAL_COLORS.background};
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
   overflow-y: auto;
   overflow-x: hidden;
 `;
@@ -292,13 +296,17 @@ const BadgeGrid = styled.div`
 
 const BadgeCard = styled.div`
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
   padding: 16px;
+  min-width: 0;
   background: ${OS_LEGAL_COLORS.surface};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 
   &:hover {
     border-color: ${OS_LEGAL_COLORS.borderHover};
@@ -307,7 +315,7 @@ const BadgeCard = styled.div`
 `;
 
 const BadgeMeta = styled.div`
-  flex: 1;
+  width: 100%;
   min-width: 0;
 `;
 
@@ -315,6 +323,7 @@ const BadgeName = styled.div`
   font-weight: 600;
   color: ${OS_LEGAL_COLORS.textPrimary};
   margin-bottom: 4px;
+  overflow-wrap: anywhere;
 `;
 
 const BadgeStats = styled.div`
@@ -335,10 +344,10 @@ interface LeaderboardProps {
 export const Leaderboard: React.FC<LeaderboardProps> = ({ corpusId }) => {
   const navigate = useNavigate();
   const [metric, setMetric] = useState<LeaderboardMetric>(
-    LeaderboardMetric.BADGES
+    LeaderboardMetric.BADGES,
   );
   const [scope, setScope] = useState<LeaderboardScope>(
-    LeaderboardScope.ALL_TIME
+    LeaderboardScope.ALL_TIME,
   );
   const [limit, setLimit] = useState(25);
 
