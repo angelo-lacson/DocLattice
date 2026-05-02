@@ -25,4 +25,4 @@ For complex queries, the agent may chain multiple tools together. The popover li
 ![Multi-Tool Popover](../assets/images/screenshots/auto/chat--tool-popover--multi-tool.png)
 
 The full set of tools available to agents is defined in
-[`doclatticeserver/llms/tools/core_tools.py`](https://github.com/angelo-lacson/DocLattice/blob/main/doclatticeserver/llms/tools/core_tools.py).
+[`doclatticeserver/llms/tools/core_tools/`](https://github.com/angelo-lacson/DocLattice/tree/main/doclatticeserver/llms/tools/core_tools).
