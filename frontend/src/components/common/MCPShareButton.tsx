@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import styled from "styled-components";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
-import { Cable, Copy, Check, ExternalLink, Lock } from "lucide-react";
+import { Cable, Copy, Check, ExternalLink, Info, Lock } from "lucide-react";
 import { toast } from "react-toastify";
 import { Button, Input } from "@os-legal/ui";
 
@@ -313,7 +313,7 @@ export const MCPShareButton: React.FC<MCPShareButtonProps> = ({
                 />
                 <CopyButtonWrapper>
                   <Button
-                    variant={copied ? "primary" : "primary"}
+                    variant="primary"
                     onClick={handleCopy}
                     aria-label={copied ? "Copied" : "Copy URL"}
                     data-testid={`${testId}-copy-button`}
@@ -339,10 +339,10 @@ export const MCPShareButton: React.FC<MCPShareButtonProps> = ({
             </>
           ) : (
             <SetupHint>
-              <ExternalLink />
+              <Info />
               <span>
-                Once public, the endpoint will appear here for AI assistants
-                to connect.{" "}
+                Once public, the endpoint will appear here for AI assistants to
+                connect.{" "}
                 <SetupLink
                   href="https://modelcontextprotocol.io/docs"
                   target="_blank"
