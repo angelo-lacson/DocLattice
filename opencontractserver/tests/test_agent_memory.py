@@ -1451,7 +1451,7 @@ class TestCurateCorpusMemoryTask(TransactionTestCase):
         )
 
         with patch(
-            "opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent"
+            "opencontractserver.llms.agents.pydantic_ai_factory.PydanticAIAgent"
         ) as MockAgent:
             # First call = summarise agent, second = curation agent
             agent1 = AsyncMock()
@@ -1475,7 +1475,7 @@ class TestCurateCorpusMemoryTask(TransactionTestCase):
         conv = self._create_conversation_with_messages(6)
 
         with patch(
-            "opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent"
+            "opencontractserver.llms.agents.pydantic_ai_factory.PydanticAIAgent"
         ) as MockAgent:
             agent1 = AsyncMock()
             agent1.run = AsyncMock(side_effect=RuntimeError("LLM down"))
@@ -1500,7 +1500,7 @@ class TestCurateCorpusMemoryTask(TransactionTestCase):
         mock_summary.return_value.output = "Summary"
 
         with patch(
-            "opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent"
+            "opencontractserver.llms.agents.pydantic_ai_factory.PydanticAIAgent"
         ) as MockAgent:
             agent1 = AsyncMock()
             agent1.run = mock_summary
@@ -1529,7 +1529,7 @@ class TestCurateCorpusMemoryTask(TransactionTestCase):
         mock_curation.return_value.output = "This is not JSON"
 
         with patch(
-            "opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent"
+            "opencontractserver.llms.agents.pydantic_ai_factory.PydanticAIAgent"
         ) as MockAgent:
             agent1 = AsyncMock()
             agent1.run = mock_summary
@@ -1634,7 +1634,7 @@ class TestCurateCorpusMemoryTask(TransactionTestCase):
 
         with (
             patch(
-                "opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent"
+                "opencontractserver.llms.agents.pydantic_ai_factory.PydanticAIAgent"
             ) as MockAgent,
             patch(
                 "opencontractserver.llms.context_guardrails.estimate_token_count",
@@ -1678,7 +1678,7 @@ class TestCurateCorpusMemoryTask(TransactionTestCase):
 
         with (
             patch(
-                "opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent"
+                "opencontractserver.llms.agents.pydantic_ai_factory.PydanticAIAgent"
             ) as MockAgent,
             patch(
                 "opencontractserver.agents.memory.update_memory_content",
@@ -2399,7 +2399,7 @@ class TestCurateCorpusMemoryMsgTypeFallback(TransactionTestCase):
         )
 
         with patch(
-            "opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent"
+            "opencontractserver.llms.agents.pydantic_ai_factory.PydanticAIAgent"
         ) as MockAgent:
             agent1 = AsyncMock()
             agent1.run = mock_summary

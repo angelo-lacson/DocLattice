@@ -20,7 +20,10 @@ This factory is the single chokepoint for ``Agent`` construction in this
 codebase. It refuses ``system_prompt=`` outright (raising ``TypeError``)
 so the regression cannot reappear silently. Use ``instructions=`` instead.
 
-See ``opencontractserver/tests/test_pydantic_ai_factory.py`` for the
+Tests that need to intercept agent construction should patch
+``opencontractserver.llms.agents.pydantic_ai_factory.PydanticAIAgent`` —
+the symbol the factory uses to build the agent. See
+``opencontractserver/tests/test_pydantic_ai_factory.py`` for the
 regression test that pins the precedence behaviour against the currently
 pinned pydantic-ai version.
 """
@@ -28,10 +31,9 @@ pinned pydantic-ai version.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from pydantic_ai import Agent
+from pydantic_ai.agent import Agent as PydanticAIAgent
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,7 @@ def make_pydantic_ai_agent(
     *,
     system_prompt: Any = _SYSTEM_PROMPT_FORBIDDEN,
     **kwargs: Any,
-) -> Agent[Any]:
+) -> PydanticAIAgent[Any]:
     """Construct a ``pydantic_ai.Agent`` with the ``system_prompt`` foot-gun blocked.
 
     ``model`` is required and keyword-only-after-positional, matching every
@@ -67,15 +69,7 @@ def make_pydantic_ai_agent(
             "See issue #1451 and CLAUDE.md pitfall #14."
         )
 
-    # Resolve the agent class via the ``pydantic_ai_agents`` module so that
-    # the substantial body of existing tests which patch
-    # ``opencontractserver.llms.agents.pydantic_ai_agents.PydanticAIAgent``
-    # continue to intercept construction. Imported lazily to avoid loading
-    # the heavy agents module when the factory is imported by lighter
-    # consumers (e.g. memory tasks) that may not need it yet.
-    from opencontractserver.llms.agents import pydantic_ai_agents as _pa_module
-
     # Forward ``model`` as a keyword so call sites and tests that asserted
     # against ``kwargs["model"]`` (the canonical form pydantic-ai
     # documents) keep working.
-    return _pa_module.PydanticAIAgent(model=model, **kwargs)
+    return PydanticAIAgent(model=model, **kwargs)
