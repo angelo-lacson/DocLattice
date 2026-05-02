@@ -1389,7 +1389,6 @@ class TestConditionalCsrfExempt(TestCase):
         *accept* leg.
         """
         from django.middleware.csrf import (
-            CSRF_SESSION_KEY,
             _get_new_csrf_string,
             _mask_cipher_secret,
         )
@@ -1409,11 +1408,11 @@ class TestConditionalCsrfExempt(TestCase):
             )
             request.COOKIES["csrftoken"] = token
             request.COOKIES["sessionid"] = "fake-session"
-            # The middleware reads META["CSRF_COOKIE"] which Django's own
-            # CsrfViewMiddleware would have populated from the cookie; do it
-            # by hand for the standalone decorator test.
+            # With CSRF_USE_SESSIONS=False the middleware reads the secret
+            # from META["CSRF_COOKIE"]; Django's own CsrfViewMiddleware
+            # would have populated that from the cookie, so do it by hand
+            # for the standalone decorator test.
             request.META["CSRF_COOKIE"] = secret
-            request.META[CSRF_SESSION_KEY] = secret
             response = view(request)
 
         self.assertEqual(response.status_code, 200)

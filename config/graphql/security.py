@@ -16,7 +16,11 @@ from typing import Any, Callable
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
-from django.middleware.csrf import CsrfViewMiddleware
+from django.middleware.csrf import (
+    REASON_CSRF_TOKEN_MISSING,
+    REASON_NO_CSRF_COOKIE,
+    CsrfViewMiddleware,
+)
 from graphql import GraphQLError, ValidationRule
 from graphql.language import ast
 
@@ -92,14 +96,11 @@ def _is_recognised_token_credential(auth_header: str) -> bool:
     if len(parts) != 2:
         # Either nothing, scheme-only, or scheme + credential containing
         # internal whitespace (which neither Bearer nor API-key emit).
+        # ``str.split()`` strips and collapses whitespace, so neither side
+        # of the unpacking below can be the empty string.
         return False
 
-    scheme, credential = parts
-    if not credential:
-        # ``"Bearer "`` collapses to ``["Bearer"]`` after split(), but a
-        # credential of literal whitespace would arrive as ``""`` here.
-        return False
-
+    scheme, _credential = parts
     scheme_lower = scheme.lower()
     return any(scheme_lower == s.lower() for s in _recognised_token_schemes())
 
@@ -163,13 +164,14 @@ def conditional_csrf_exempt(view_func: Callable[..., Any]) -> Callable[..., Any]
 # every cold start, drowning out genuine anomalies like origin-mismatch or
 # bad-referer rejects that warrant attention.
 
-# Standard CsrfViewMiddleware reasons (see Django ``REASON_*`` constants).
-# We only demote the predictable "missing" case; everything else stays
-# at WARNING so it remains visible in production log shipping.
+# Standard CsrfViewMiddleware reasons. We only demote the predictable
+# "missing" cases; everything else stays at WARNING so it remains visible
+# in production log shipping. Sourced from Django (see imports above) so a
+# future patch that tweaks the phrasing flows through automatically.
 _BENIGN_CSRF_REASONS: frozenset[str] = frozenset(
     {
-        "CSRF token missing.",
-        "CSRF cookie not set.",
+        REASON_CSRF_TOKEN_MISSING,
+        REASON_NO_CSRF_COOKIE,
     }
 )
 
