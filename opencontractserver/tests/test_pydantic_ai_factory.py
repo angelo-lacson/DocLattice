@@ -18,8 +18,11 @@ is caught before silently shipping.
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from pydantic_ai.messages import (
+    ModelMessage,
     ModelRequest,
     ModelResponse,
     SystemPromptPart,
@@ -68,8 +71,7 @@ def test_factory_returns_real_agent_with_instructions() -> None:
     assert isinstance(agent, PydanticAIAgent)
 
 
-@pytest.mark.asyncio
-async def test_instructions_survive_non_empty_message_history() -> None:
+def test_instructions_survive_non_empty_message_history() -> None:
     """Pin pydantic-ai precedence: ``instructions=`` reaches the model even
     when ``message_history`` is non-empty.
 
@@ -82,6 +84,10 @@ async def test_instructions_survive_non_empty_message_history() -> None:
 
     A future pydantic-ai version that changes precedence will cause this
     test to fail, surfacing the regression before it ships silently.
+
+    The test wraps the async ``Agent.run()`` call with ``asyncio.run`` so
+    it executes under pytest's default sync runner — pytest-asyncio is
+    not configured in this repo (see ``pytest.ini``).
     """
     test_model = TestModel(custom_output_text="ok")
     agent = make_pydantic_ai_agent(
@@ -93,14 +99,16 @@ async def test_instructions_survive_non_empty_message_history() -> None:
     # plus the assistant's response. With this present, the agent's
     # internal "first run" branch — the only branch that materialises
     # ``system_prompt=`` into the model request — is bypassed.
-    preexisting_history: list = [
+    preexisting_history: list[ModelMessage] = [
         ModelRequest(parts=[UserPromptPart(content="prior user message")]),
         ModelResponse(parts=[TextPart(content="prior assistant reply")]),
     ]
 
-    result = await agent.run(
-        "next user prompt",
-        message_history=preexisting_history,
+    result = asyncio.run(
+        agent.run(
+            "next user prompt",
+            message_history=preexisting_history,
+        )
     )
 
     all_msgs = result.all_messages()

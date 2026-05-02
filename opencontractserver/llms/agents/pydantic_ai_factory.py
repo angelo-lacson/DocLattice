@@ -28,7 +28,10 @@ pinned pydantic-ai version.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pydantic_ai import Agent
 
 logger = logging.getLogger(__name__)
 
@@ -38,16 +41,18 @@ _SYSTEM_PROMPT_FORBIDDEN = object()
 
 
 def make_pydantic_ai_agent(
-    *args: Any,
+    model: Any,
+    *,
     system_prompt: Any = _SYSTEM_PROMPT_FORBIDDEN,
     **kwargs: Any,
-):
+) -> Agent[Any]:
     """Construct a ``pydantic_ai.Agent`` with the ``system_prompt`` foot-gun blocked.
 
-    All arguments other than ``system_prompt`` are forwarded verbatim to
-    ``pydantic_ai.Agent(...)``. Pass the system instruction via
-    ``instructions=`` — this is the only form that survives the
-    ``message_history``-non-empty path used by OpenContracts' chat flow.
+    ``model`` is required and keyword-only-after-positional, matching every
+    existing call site. ``system_prompt`` is forbidden — pass the system
+    instruction via ``instructions=`` instead, which is the only form that
+    survives the ``message_history``-non-empty path used by OpenContracts'
+    chat flow. Other kwargs are forwarded verbatim to ``pydantic_ai.Agent``.
 
     Raises:
         TypeError: If ``system_prompt`` is supplied at all (even ``None``).
@@ -70,4 +75,4 @@ def make_pydantic_ai_agent(
     # consumers (e.g. memory tasks) that may not need it yet.
     from opencontractserver.llms.agents import pydantic_ai_agents as _pa_module
 
-    return _pa_module.PydanticAIAgent(*args, **kwargs)
+    return _pa_module.PydanticAIAgent(model, **kwargs)
