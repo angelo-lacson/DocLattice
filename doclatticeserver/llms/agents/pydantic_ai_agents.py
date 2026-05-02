@@ -2610,7 +2610,7 @@ class PydanticAICorpusAgent(PydanticAICoreAgent):
             "different angles (paraphrase the question, search for key "
             "terms, search for likely answer phrasings). A single failed "
             "search is NOT sufficient evidence that the information is "
-            "missing — most legal documents need multiple targeted "
+            "missing — most legal corpora need multiple targeted "
             "queries to surface a relevant span. This rule applies only "
             "to giving up; once you have a confident answer, rule #3 "
             "takes precedence and you commit immediately.\n"
