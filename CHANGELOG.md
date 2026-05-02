@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Decomposed `opencontractserver/llms/tools/core_tools.py` into a package** (Issue #1445): The 2,981-line monolith has been split into the `opencontractserver/llms/tools/core_tools/` package with one submodule per tool category — `md_summaries`, `notes`, `text_extracts`, `descriptions`, `document_summaries`, `annotations`, `document_indexing`, `search`, `page_images`, `links`, `documents`, `memory`, plus a private `_helpers` for shared utilities (`_token_count`, `_db_sync_to_async`, `_apply_ndiff_patch`). The package's `__init__.py` re-exports every previously top-level name (functions, classes, `_DOC_TXT_CACHE`, and the `Document`/`Note`/`Corpus`/`CorpusDescriptionRevision`/`NoteRevision` model references that tests patch directly), so no consumer import paths change. Behavior-preserving — each function body is identical to the original; this is purely a structural refactor to make individual tool families reviewable in isolation. Documentation references in `docs/architecture/pawls-format.md`, `docs/architecture/document_annotation_index.md`, `docs/architecture/llms/README.md`, `docs/walkthrough/step-7-query-corpus.md`, and the `opencontractserver/corpuses/template_seeds.py` comment were updated to point at the new package paths.
+
 ### Security
 
 - **Cross-corpus structural-annotation leak in `CoreAnnotationVectorStore`** (`opencontractserver/llms/vector_stores/core_vector_stores.py:296-326,371-413`): The corpus-wide retrieval path (`corpus_id` set, `document_id=None`) returned every structural annotation in the database regardless of corpus. Two collaborating defects caused the leak:
