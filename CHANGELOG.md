@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **Auth0 admin-claim namespace mismatch** (`docs/configuration/authentication.md`): documented a silent failure mode where the Post-Login Action's `namespace` constant doesn't match `AUTH0_ADMIN_CLAIM_NAMESPACE` (e.g. `https://opencontracts.opensource.legal/` vs the default `https://contracts.opensource.legal/`). When the namespaces don't match byte-for-byte, the backend's fail-closed sync (`config/graphql_auth0_auth/utils.py:sync_admin_claims_from_payload`) treats the claims as missing and overwrites `is_staff` / `is_superuser` to `False` on every authenticated request, so the frontend admin link in the user dropdown never appears even though `app_metadata.is_superuser = true` is set in Auth0. Added a `!!! danger` callout to the Post-Login Action setup section and expanded the "Admin claim missing, defaulting to False" troubleshooting entry with the namespace-mismatch case and a `!!! info` note explaining why missing claims revoke admin instead of being ignored.
+
 ### Fixed
 
 - **GraphQL POST 403 storm when Auth0 token is empty** (Issue #1431): production logs were filling with `Forbidden (CSRF token missing.): /graphql/` because the React frontend always sent `Authorization: ""` whenever the Auth0 access token was momentarily missing (startup race, silent-refresh failure, post-expiry re-mount), and `conditional_csrf_exempt` only bypassed CSRF when the header was *truthy*. An empty header fell through to Django's session/CSRF path even though the frontend never carries a CSRF token. Two-sided fix:
