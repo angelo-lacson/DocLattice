@@ -93,23 +93,6 @@ export const GET_DOCUMENTS = gql`
           isLatestVersion
           canViewHistory
           docRelationshipCount(corpusId: $inCorpusWithId)
-          allDocRelationships(corpusId: $inCorpusWithId) {
-            id
-            relationshipType
-            sourceDocument {
-              id
-              title
-            }
-            targetDocument {
-              id
-              title
-            }
-            annotationLabel {
-              id
-              text
-              color
-            }
-          }
           doc_label_annotations: docAnnotations(
             annotationLabel_LabelType: DOC_TYPE_LABEL
           ) @include(if: $annotateDocLabels) {
@@ -135,6 +118,46 @@ export const GET_DOCUMENTS = gql`
         hasPreviousPage
         startCursor
         endCursor
+      }
+    }
+  }
+`;
+
+// Lazy fetch of a single document's relationships (used by hover popups in the
+// document list). Kept separate from GET_DOCUMENTS so the list view can
+// resolve hundreds of documents without paying the per-doc relationship cost.
+export interface GetDocRelationshipsForDocInputs {
+  documentId: string;
+  corpusId?: string | null;
+}
+
+export interface GetDocRelationshipsForDocOutputs {
+  bulkDocRelationships: Array<{
+    id: string;
+    relationshipType: string;
+    sourceDocument?: { id: string; title?: string };
+    targetDocument?: { id: string; title?: string };
+    annotationLabel?: { id: string; text?: string; color?: string };
+  }>;
+}
+
+export const GET_DOC_RELATIONSHIPS_FOR_DOC = gql`
+  query GetDocRelationshipsForDoc($documentId: ID!, $corpusId: ID) {
+    bulkDocRelationships(documentId: $documentId, corpusId: $corpusId) {
+      id
+      relationshipType
+      sourceDocument {
+        id
+        title
+      }
+      targetDocument {
+        id
+        title
+      }
+      annotationLabel {
+        id
+        text
+        color
       }
     }
   }

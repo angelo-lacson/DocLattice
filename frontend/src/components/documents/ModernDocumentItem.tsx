@@ -20,7 +20,7 @@ import {
   Tag,
   GitBranch,
 } from "lucide-react";
-import { useMutation } from "@apollo/client";
+import { useMutation, useLazyQuery } from "@apollo/client";
 import { toast } from "react-toastify";
 import { navigateToDocument } from "../../utils/navigationUtils";
 import { LoadingOverlay } from "../common/LoadingOverlay";
@@ -43,6 +43,11 @@ import {
   RetryDocumentProcessingOutputType,
   RetryDocumentProcessingInputType,
 } from "../../graphql/mutations";
+import {
+  GET_DOC_RELATIONSHIPS_FOR_DOC,
+  GetDocRelationshipsForDocInputs,
+  GetDocRelationshipsForDocOutputs,
+} from "../../graphql/queries";
 import { downloadFile } from "../../utils/files";
 import fallback_doc_icon from "../../assets/images/defaults/default_doc_icon.jpg";
 import { getPermissions } from "../../utils/transform";
@@ -934,8 +939,35 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
     canViewHistory,
     // Relationship data
     docRelationshipCount,
-    allDocRelationships,
   } = item;
+
+  // Relationships are fetched lazily the first time the user hovers the
+  // relationship badge. This keeps the document-list query cheap on corpora
+  // with many documents.
+  const [
+    fetchDocRelationships,
+    { data: relationshipsData, loading: relationshipsLoading },
+  ] = useLazyQuery<
+    GetDocRelationshipsForDocOutputs,
+    GetDocRelationshipsForDocInputs
+  >(GET_DOC_RELATIONSHIPS_FOR_DOC, { fetchPolicy: "cache-first" });
+
+  const allDocRelationships = relationshipsData?.bulkDocRelationships;
+
+  const handleRelationshipHover = useCallback(() => {
+    if (!docRelationshipCount || relationshipsData || relationshipsLoading) {
+      return;
+    }
+    fetchDocRelationships({
+      variables: { documentId: id, corpusId: openedCorpus()?.id ?? null },
+    });
+  }, [
+    docRelationshipCount,
+    relationshipsData,
+    relationshipsLoading,
+    fetchDocRelationships,
+    id,
+  ]);
 
   const isFailed = processingStatus === DocumentProcessingStatus.FAILED;
   const isProcessing =
@@ -1352,7 +1384,11 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
               </VersionBadgeWrapper>
             )}
             {!!docRelationshipCount && docRelationshipCount > 0 && (
-              <RelationshipBadgeContainer onClick={(e) => e.stopPropagation()}>
+              <RelationshipBadgeContainer
+                onClick={(e) => e.stopPropagation()}
+                onMouseEnter={handleRelationshipHover}
+                onFocus={handleRelationshipHover}
+              >
                 <RelationshipBadge>
                   <Link2 />
                   {docRelationshipCount}
@@ -1593,7 +1629,11 @@ export const ModernDocumentItem: React.FC<ModernDocumentItemProps> = ({
               </div>
             )}
             {!!docRelationshipCount && docRelationshipCount > 0 && (
-              <ListRelationshipBadge onClick={(e) => e.stopPropagation()}>
+              <ListRelationshipBadge
+                onClick={(e) => e.stopPropagation()}
+                onMouseEnter={handleRelationshipHover}
+                onFocus={handleRelationshipHover}
+              >
                 <Link2 />
                 {docRelationshipCount}
                 <ListRelationshipPopup>
