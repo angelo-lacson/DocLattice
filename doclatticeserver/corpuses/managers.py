@@ -132,17 +132,23 @@ class CorpusActionExecutionManager(BaseVisibilityManager):
     def recent(self, hours: int = 24) -> CorpusActionExecutionQuerySet:
         return self.get_queryset().recent(hours)
 
-    def visible_to_user(  # type: ignore[override]
-        self, user: AbstractBaseUser | None = None
+    def visible_to_user(
+        self,
+        user: AbstractBaseUser | None = None,
+        lightweight: bool = False,
     ) -> CorpusActionExecutionQuerySet:
         """
         Override to return our custom QuerySet type while preserving permission
         logic.
 
         This allows chaining: .visible_to_user(user).for_corpus(id).pending()
+
+        ``lightweight`` is forwarded to ``BaseVisibilityManager`` for
+        signature parity but has no effect on this model (no heavy
+        prefetches involved).
         """
         # Get the base filtered queryset from parent
-        base_qs = super().visible_to_user(user)
+        base_qs = super().visible_to_user(user, lightweight=lightweight)
         # If base_qs is already our custom QuerySet type, return it directly
         # to avoid creating a subquery with pk__in
         if isinstance(base_qs, CorpusActionExecutionQuerySet):
