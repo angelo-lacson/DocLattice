@@ -2741,7 +2741,7 @@ export interface SearchNotesForMentionOutput {
       node: {
         id: string;
         title: string;
-        content: string;
+        contentPreview: string | null;
         modified: string;
         creator: {
           id: string;
@@ -2788,7 +2788,7 @@ export const SEARCH_NOTES_FOR_MENTION = gql`
         node {
           id
           title
-          content
+          contentPreview
           modified
           creator {
             id
