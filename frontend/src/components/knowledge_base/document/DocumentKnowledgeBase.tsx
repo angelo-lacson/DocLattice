@@ -148,6 +148,7 @@ import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import workerSrc from "pdfjs-dist/build/pdf.worker.mjs?url";
 import {
   selectedAnnotationIds,
+  selectedNoteId,
   selectedThreadId,
   showStructuralAnnotations,
 } from "../../../graphql/cache";
@@ -1621,6 +1622,25 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
       });
     }
   }, [threadId, combinedData?.document]);
+
+  // Auto-open the note detail modal when ?note= deep-link is present.
+  // The Discover search results page builds /d/<user>/<corpus>/<doc>?note=<id>
+  // links — this effect resolves <id> against the loaded notes and opens
+  // the same detail modal users get when clicking a note in-app.
+  const deepLinkedNoteId = useReactiveVar(selectedNoteId);
+  useEffect(() => {
+    if (!deepLinkedNoteId || !combinedData?.document || notes.length === 0)
+      return;
+    const target = notes.find((n) => n.id === deepLinkedNoteId);
+    if (!target) return;
+    unstable_batchedUpdates(() => {
+      setSelectedNote(target);
+      // Clear the reactive var so closing the modal doesn't reopen it on
+      // the next render. CentralRouteManager mirrors this back to the URL,
+      // which is the desired one-shot deep-link behaviour.
+      selectedNoteId(null);
+    });
+  }, [deepLinkedNoteId, combinedData?.document, notes]);
 
   // The main viewer content:
   let viewerContent: JSX.Element = <></>;
