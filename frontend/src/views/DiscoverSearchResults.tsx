@@ -45,6 +45,7 @@ import {
   mediaQuery,
 } from "../components/threads/styles/discussionStyles";
 import { getCorpusUrl, getDocumentUrl } from "../utils/navigationUtils";
+import { stripMarkdown } from "../utils/formatters";
 import {
   DISCOVER_SEARCH_ALL_TAB_PREVIEW,
   DISCOVER_SEARCH_DEBOUNCE_MS,
@@ -507,15 +508,15 @@ interface CorpusesSectionProps {
 
 const CorpusesSection: React.FC<CorpusesSectionProps> = ({ query, limit }) => {
   const navigate = useNavigate();
-  const { data, loading } = useQuery<
-    GetCorpusesOutputs,
-    GetCorpusesInputs & { limit?: number }
-  >(GET_CORPUSES, {
-    variables: { textSearch: query, limit },
-    fetchPolicy: "cache-first",
-    nextFetchPolicy: "cache-and-network",
-    skip: !query,
-  });
+  const { data, loading } = useQuery<GetCorpusesOutputs, GetCorpusesInputs>(
+    GET_CORPUSES,
+    {
+      variables: { textSearch: query, limit },
+      fetchPolicy: "cache-first",
+      nextFetchPolicy: "cache-and-network",
+      skip: !query,
+    }
+  );
 
   const rows = (data?.corpuses.edges ?? [])
     .map((e) => e.node)
@@ -598,9 +599,10 @@ const NotesSection: React.FC<NotesSectionProps> = ({ query, limit }) => {
         const url = getDocumentUrl(node.document, node.corpus, {
           noteId: node.id,
         });
-        const snippet = node.content
-          ? node.content.replace(/\s+/g, " ").trim().slice(0, 220)
-          : undefined;
+        // Note content is stored as Markdown — strip the syntax before
+        // truncating so the snippet doesn't render as raw `**bold**` etc.
+        const cleaned = stripMarkdown(node.content);
+        const snippet = cleaned ? cleaned.slice(0, 220) : undefined;
         return (
           <ResultRow
             key={node.id}

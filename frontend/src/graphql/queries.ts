@@ -593,6 +593,9 @@ export const GET_CORPUS_LABELSET_AND_LABELS = gql`
 
 export interface GetCorpusesInputs {
   textSearch?: string;
+  usesLabelsetId?: string;
+  cursor?: string;
+  limit?: number;
 }
 
 export interface GetCorpusesOutputs {

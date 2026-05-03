@@ -17,13 +17,12 @@ const buildEmptyMocks = (textSearch: string): MockedResponse[] => [
     request: {
       query: GET_CONVERSATIONS,
       variables: {
-        textSearch,
-        type: "THREAD",
-        chatWithCorpusVisible: true,
+        conversationType: "THREAD",
+        title_Contains: textSearch,
         limit: 5,
       },
     },
-    result: { data: { conversations: { edges: [] } } },
+    result: { data: { conversations: { edges: [], totalCount: 0 } } },
   },
   {
     request: {

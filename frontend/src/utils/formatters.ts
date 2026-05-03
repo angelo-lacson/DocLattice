@@ -145,6 +145,34 @@ export function truncateAtCodePoint(s: string, maxLen: number): string {
  * @returns Formatted string representation with em-dash for null/undefined,
  *          "Yes"/"No" for booleans, and truncated JSON for large objects
  */
+/**
+ * Strip Markdown / HTML markup from a string for plaintext preview rendering.
+ *
+ * Targets the syntax that actually appears in OpenContracts notes (headers,
+ * emphasis, inline code, links, lists, blockquotes, fenced code, raw HTML
+ * tags, HTML entities). Not a full Markdown parser — never feed the result
+ * back through one. Whitespace is collapsed to a single space at the end.
+ */
+export function stripMarkdown(input?: string | null): string {
+  if (!input) return "";
+  return input
+    .replace(/```[\s\S]*?```/g, " ") // fenced code blocks
+    .replace(/`([^`]*)`/g, "$1") // inline code
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1") // images → alt text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // links → label
+    .replace(/<\/?[a-zA-Z][^>]*>/g, " ") // HTML tags
+    .replace(/&[a-z0-9#]+;/gi, " ") // HTML entities
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "") // ATX headers
+    .replace(/^\s{0,3}>\s?/gm, "") // blockquote markers
+    .replace(/^\s*[-*+]\s+/gm, "") // unordered list bullets
+    .replace(/^\s*\d+\.\s+/gm, "") // ordered list markers
+    .replace(/(\*\*|__)(.*?)\1/g, "$2") // bold
+    .replace(/(\*|_)(.*?)\1/g, "$2") // italic
+    .replace(/~~(.*?)~~/g, "$1") // strikethrough
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function formatCellValue(
   data: string | number | boolean | Record<string, unknown> | null | undefined
 ): string {
