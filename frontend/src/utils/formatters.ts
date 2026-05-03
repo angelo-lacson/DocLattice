@@ -139,20 +139,9 @@ export function truncateAtCodePoint(s: string, maxLen: number): string {
   return cps.length > maxLen ? cps.slice(0, maxLen).join("") + "\u2026" : s;
 }
 
-/**
- * Formats a datacell value for display in extract grids, truncating long objects.
- * @param data - The datacell value (string, number, boolean, object, null, or undefined)
- * @returns Formatted string representation with em-dash for null/undefined,
- *          "Yes"/"No" for booleans, and truncated JSON for large objects
- */
-/**
- * Strip Markdown / HTML markup from a string for plaintext preview rendering.
- *
- * Targets the syntax that actually appears in OpenContracts notes (headers,
- * emphasis, inline code, links, lists, blockquotes, fenced code, raw HTML
- * tags, HTML entities). Not a full Markdown parser — never feed the result
- * back through one. Whitespace is collapsed to a single space at the end.
- */
+// Strip Markdown / HTML markup for plaintext preview rendering.
+// Order-sensitive: fenced blocks must run before inline code so triple
+// backticks aren't mistakenly stripped as inline pairs.
 export function stripMarkdown(input?: string | null): string {
   if (!input) return "";
   return input

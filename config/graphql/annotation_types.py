@@ -340,10 +340,6 @@ class NoteType(AnnotatePermissionsForReadMixin, DjangoObjectType):
     )
     current_version = graphene.Int(description="Current version number of the note")
 
-    # Truncated body for search/list previews. The resolver prefers a
-    # `content_preview` attribute that callers may attach to the queryset
-    # via `annotate(content_preview=Left('content', N))` so the DB ships
-    # only the prefix; otherwise it slices the full string in Python.
     content_preview = graphene.String(
         description=(
             "First 400 characters of the note body for list/search previews. "

@@ -865,3 +865,396 @@ class MentionSearchTestCase(TestCase):
         preview = result["data"]["note"]["contentPreview"]
         self.assertEqual(len(preview), 400)
         self.assertTrue(preview.startswith("yyyy"))
+
+
+class SearchPermissionLeakageTestCase(TestCase):
+    """Cross-user leakage guards on every search resolver used by Discover.
+
+    Models the production concern: two regular users with disjoint, private
+    content must never see each other's data through any search resolver,
+    while a superuser sees everything. Each resolver
+    (corpuses/documents/annotations/notes) gets its own assertion so a
+    regression in any one of them fails loudly and points at the right code
+    path.
+    """
+
+    @mock.patch("opencontractserver.documents.signals.calculate_embedding_for_doc_text")
+    def setUp(self, mock_embedding_task):
+        from opencontractserver.annotations.models import Annotation, Note
+
+        # Two regular users (alice/bob) with disjoint private content, plus a
+        # superuser who must transparently see everything.
+        self.alice = User.objects.create_user(
+            username="alice", password="test", slug="alice"
+        )
+        self.bob = User.objects.create_user(
+            username="bob", password="test", slug="bob"
+        )
+        self.admin = User.objects.create_user(
+            username="superuser1",
+            password="test",
+            slug="superuser1",
+            is_superuser=True,
+        )
+
+        # Each user owns one private corpus + one private document + one
+        # private annotation + one private note. Titles share the substring
+        # "secret" so a single text query can flush out leaks across users.
+        self.alice_corpus = Corpus.objects.create(
+            title="Alice secret corpus",
+            description="alice-only",
+            creator=self.alice,
+            slug="alice-secret-corpus",
+        )
+        self.bob_corpus = Corpus.objects.create(
+            title="Bob secret corpus",
+            description="bob-only",
+            creator=self.bob,
+            slug="bob-secret-corpus",
+        )
+
+        self.alice_doc = Document.objects.create(
+            title="Alice secret document",
+            description="alice-only doc",
+            creator=self.alice,
+            slug="alice-secret-doc",
+            backend_lock=True,
+        )
+        self.bob_doc = Document.objects.create(
+            title="Bob secret document",
+            description="bob-only doc",
+            creator=self.bob,
+            slug="bob-secret-doc",
+            backend_lock=True,
+        )
+
+        # Owners get full permissions on their own resources; the other
+        # regular user gets nothing — visible_to_user must filter them out.
+        for user, corpus, doc in [
+            (self.alice, self.alice_corpus, self.alice_doc),
+            (self.bob, self.bob_corpus, self.bob_doc),
+        ]:
+            set_permissions_for_obj_to_user(
+                user,
+                corpus,
+                [
+                    PermissionTypes.READ,
+                    PermissionTypes.UPDATE,
+                    PermissionTypes.CREATE,
+                ],
+            )
+            set_permissions_for_obj_to_user(
+                user,
+                doc,
+                [
+                    PermissionTypes.READ,
+                    PermissionTypes.UPDATE,
+                    PermissionTypes.CREATE,
+                ],
+            )
+
+        self.alice_annotation = Annotation.objects.create(
+            annotation_label=None,
+            document=self.alice_doc,
+            corpus=self.alice_corpus,
+            creator=self.alice,
+            raw_text="alice secret annotation",
+            page=1,
+        )
+        self.bob_annotation = Annotation.objects.create(
+            annotation_label=None,
+            document=self.bob_doc,
+            corpus=self.bob_corpus,
+            creator=self.bob,
+            raw_text="bob secret annotation",
+            page=1,
+        )
+
+        self.alice_note = Note.objects.create(
+            title="Alice secret note",
+            content="alice-only note body",
+            document=self.alice_doc,
+            corpus=self.alice_corpus,
+            creator=self.alice,
+        )
+        self.bob_note = Note.objects.create(
+            title="Bob secret note",
+            content="bob-only note body",
+            document=self.bob_doc,
+            corpus=self.bob_corpus,
+            creator=self.bob,
+        )
+
+        self.client = GrapheneClient(schema)
+
+    def _execute(self, query: str, user, variables=None):
+        return self.client.execute(
+            query,
+            variables=variables or {},
+            context_value=type("Request", (), {"user": user})(),
+        )
+
+    def test_corpus_search_no_cross_user_leakage(self):
+        """`searchCorpusesForMention` filters by writable/creator/public."""
+        query = """
+            query SearchCorpuses($textSearch: String!) {
+                searchCorpusesForMention(textSearch: $textSearch) {
+                    edges { node { id slug title } }
+                }
+            }
+        """
+        variables = {"textSearch": "secret"}
+
+        alice_result = self._execute(query, self.alice, variables)
+        self.assertIsNone(alice_result.get("errors"))
+        alice_slugs = {
+            e["node"]["slug"]
+            for e in alice_result["data"]["searchCorpusesForMention"]["edges"]
+        }
+        self.assertIn("alice-secret-corpus", alice_slugs)
+        self.assertNotIn("bob-secret-corpus", alice_slugs)
+
+        bob_result = self._execute(query, self.bob, variables)
+        bob_slugs = {
+            e["node"]["slug"]
+            for e in bob_result["data"]["searchCorpusesForMention"]["edges"]
+        }
+        self.assertIn("bob-secret-corpus", bob_slugs)
+        self.assertNotIn("alice-secret-corpus", bob_slugs)
+
+        admin_result = self._execute(query, self.admin, variables)
+        admin_slugs = {
+            e["node"]["slug"]
+            for e in admin_result["data"]["searchCorpusesForMention"]["edges"]
+        }
+        self.assertIn("alice-secret-corpus", admin_slugs)
+        self.assertIn("bob-secret-corpus", admin_slugs)
+
+    def test_document_search_no_cross_user_leakage(self):
+        """`searchDocumentsForMention` filters via creator + write perms."""
+        query = """
+            query SearchDocs($textSearch: String!) {
+                searchDocumentsForMention(textSearch: $textSearch) {
+                    edges { node { id slug title } }
+                }
+            }
+        """
+        variables = {"textSearch": "secret"}
+
+        alice_result = self._execute(query, self.alice, variables)
+        self.assertIsNone(alice_result.get("errors"))
+        alice_slugs = {
+            e["node"]["slug"]
+            for e in alice_result["data"]["searchDocumentsForMention"]["edges"]
+        }
+        self.assertIn("alice-secret-doc", alice_slugs)
+        self.assertNotIn("bob-secret-doc", alice_slugs)
+
+        bob_result = self._execute(query, self.bob, variables)
+        bob_slugs = {
+            e["node"]["slug"]
+            for e in bob_result["data"]["searchDocumentsForMention"]["edges"]
+        }
+        self.assertIn("bob-secret-doc", bob_slugs)
+        self.assertNotIn("alice-secret-doc", bob_slugs)
+
+        admin_result = self._execute(query, self.admin, variables)
+        admin_slugs = {
+            e["node"]["slug"]
+            for e in admin_result["data"]["searchDocumentsForMention"]["edges"]
+        }
+        self.assertIn("alice-secret-doc", admin_slugs)
+        self.assertIn("bob-secret-doc", admin_slugs)
+
+    def test_annotation_search_no_cross_user_leakage(self):
+        """`searchAnnotationsForMention` inherits doc+corpus visibility."""
+        query = """
+            query SearchAnnotations($textSearch: String!) {
+                searchAnnotationsForMention(textSearch: $textSearch) {
+                    edges { node { id rawText } }
+                }
+            }
+        """
+        variables = {"textSearch": "secret"}
+
+        alice_result = self._execute(query, self.alice, variables)
+        self.assertIsNone(alice_result.get("errors"))
+        alice_texts = {
+            e["node"]["rawText"]
+            for e in alice_result["data"]["searchAnnotationsForMention"]["edges"]
+        }
+        self.assertIn("alice secret annotation", alice_texts)
+        self.assertNotIn("bob secret annotation", alice_texts)
+
+        bob_result = self._execute(query, self.bob, variables)
+        bob_texts = {
+            e["node"]["rawText"]
+            for e in bob_result["data"]["searchAnnotationsForMention"]["edges"]
+        }
+        self.assertIn("bob secret annotation", bob_texts)
+        self.assertNotIn("alice secret annotation", bob_texts)
+
+        admin_result = self._execute(query, self.admin, variables)
+        admin_texts = {
+            e["node"]["rawText"]
+            for e in admin_result["data"]["searchAnnotationsForMention"]["edges"]
+        }
+        self.assertIn("alice secret annotation", admin_texts)
+        self.assertIn("bob secret annotation", admin_texts)
+
+    def test_note_search_no_cross_user_leakage(self):
+        """`searchNotesForMention` inherits doc+corpus visibility."""
+        query = """
+            query SearchNotes($textSearch: String!) {
+                searchNotesForMention(textSearch: $textSearch) {
+                    edges { node { id title } }
+                }
+            }
+        """
+        variables = {"textSearch": "secret"}
+
+        alice_result = self._execute(query, self.alice, variables)
+        self.assertIsNone(alice_result.get("errors"))
+        alice_titles = {
+            e["node"]["title"]
+            for e in alice_result["data"]["searchNotesForMention"]["edges"]
+        }
+        self.assertIn("Alice secret note", alice_titles)
+        self.assertNotIn("Bob secret note", alice_titles)
+
+        bob_result = self._execute(query, self.bob, variables)
+        bob_titles = {
+            e["node"]["title"]
+            for e in bob_result["data"]["searchNotesForMention"]["edges"]
+        }
+        self.assertIn("Bob secret note", bob_titles)
+        self.assertNotIn("Alice secret note", bob_titles)
+
+        admin_result = self._execute(query, self.admin, variables)
+        admin_titles = {
+            e["node"]["title"]
+            for e in admin_result["data"]["searchNotesForMention"]["edges"]
+        }
+        self.assertIn("Alice secret note", admin_titles)
+        self.assertIn("Bob secret note", admin_titles)
+
+    def test_note_search_corpus_scoping_blocks_other_users_corpus(self):
+        """Scoping a search to another user's corpus must return nothing.
+
+        Even if a regular user supplies a `corpusId` belonging to another
+        user, `Note.objects.visible_to_user()` must run first; the scope
+        filter cannot widen visibility.
+        """
+        query = """
+            query SearchNotes($textSearch: String!, $corpusId: ID!) {
+                searchNotesForMention(textSearch: $textSearch, corpusId: $corpusId) {
+                    edges { node { id title } }
+                }
+            }
+        """
+        # Alice tries to look inside Bob's corpus by global ID.
+        result = self._execute(
+            query,
+            self.alice,
+            variables={
+                "textSearch": "secret",
+                "corpusId": to_global_id("CorpusType", self.bob_corpus.id),
+            },
+        )
+        self.assertIsNone(result.get("errors"))
+        edges = result["data"]["searchNotesForMention"]["edges"]
+        self.assertEqual(
+            edges,
+            [],
+            "Alice must not see Bob's notes even when scoping to Bob's corpus",
+        )
+
+        # Same scope for the superuser — admin sees Bob's notes.
+        admin_result = self._execute(
+            query,
+            self.admin,
+            variables={
+                "textSearch": "secret",
+                "corpusId": to_global_id("CorpusType", self.bob_corpus.id),
+            },
+        )
+        admin_titles = {
+            e["node"]["title"]
+            for e in admin_result["data"]["searchNotesForMention"]["edges"]
+        }
+        self.assertIn("Bob secret note", admin_titles)
+
+    def test_note_search_document_scoping_blocks_other_users_document(self):
+        """Document-scoped note search cannot reveal another user's notes."""
+        query = """
+            query SearchNotes($textSearch: String!, $documentId: ID!) {
+                searchNotesForMention(textSearch: $textSearch, documentId: $documentId) {
+                    edges { node { id title } }
+                }
+            }
+        """
+        result = self._execute(
+            query,
+            self.alice,
+            variables={
+                "textSearch": "secret",
+                "documentId": to_global_id("DocumentType", self.bob_doc.id),
+            },
+        )
+        self.assertIsNone(result.get("errors"))
+        self.assertEqual(
+            result["data"]["searchNotesForMention"]["edges"],
+            [],
+            "Alice must not see Bob's notes even when scoping to Bob's document",
+        )
+
+    def test_anonymous_user_sees_only_public_search_results(self):
+        """Unauthenticated users get nothing back from any search resolver
+        when all underlying content is private."""
+        from django.contrib.auth.models import AnonymousUser
+
+        anon = AnonymousUser()
+
+        for query, root in [
+            (
+                """query Q($t: String!) {
+                    searchCorpusesForMention(textSearch: $t) {
+                        edges { node { id } }
+                    }
+                }""",
+                "searchCorpusesForMention",
+            ),
+            (
+                """query Q($t: String!) {
+                    searchDocumentsForMention(textSearch: $t) {
+                        edges { node { id } }
+                    }
+                }""",
+                "searchDocumentsForMention",
+            ),
+            (
+                """query Q($t: String!) {
+                    searchAnnotationsForMention(textSearch: $t) {
+                        edges { node { id } }
+                    }
+                }""",
+                "searchAnnotationsForMention",
+            ),
+            (
+                """query Q($t: String!) {
+                    searchNotesForMention(textSearch: $t) {
+                        edges { node { id } }
+                    }
+                }""",
+                "searchNotesForMention",
+            ),
+        ]:
+            with self.subTest(resolver=root):
+                result = self._execute(query, anon, {"t": "secret"})
+                self.assertIsNone(result.get("errors"))
+                edges = result["data"][root]["edges"]
+                self.assertEqual(
+                    edges,
+                    [],
+                    f"Anonymous user must see no private content via {root}",
+                )
