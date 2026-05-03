@@ -23,7 +23,7 @@ from opencontractserver.agents.memory import (
     update_memory_content,
 )
 from opencontractserver.corpuses.models import Corpus
-from opencontractserver.documents.models import Document
+from opencontractserver.documents.models import Document, DocumentPath
 
 User = get_user_model()
 
@@ -227,4 +227,71 @@ class MemoryDocumentBlobRetentionTestCase(TransactionTestCase):
             stored,
             new_content.encode("utf-8"),
             "Memory document should contain the updated content after update",
+        )
+
+
+class DocumentDeleteBlobRetentionTestCase(TransactionTestCase):
+    """Issue #1464 spec regression: deleting a Document must not destroy
+    file blobs that are still referenced by sibling Documents (corpus-
+    isolated copies). Currently default ``Model.delete()`` does not
+    touch blobs, so this test passes today; it exists to fail loudly
+    if someone adds ``django-cleanup``, a ``post_delete`` blob handler,
+    or a custom ``Document.delete()`` that doesn't honour the invariant.
+    """
+
+    def setUp(self) -> None:
+        self.user = User.objects.create_user(username="delete-blob-user", password="x")
+        self.corpus_a = Corpus.objects.create(title="Origin", creator=self.user)
+
+        # UUID-prefix the filename so storage paths don't collide between
+        # test runs (FileSystemStorage appends suffixes on collision).
+        uid = uuid.uuid4().hex
+        self.source = Document.objects.create(
+            title="Shared Doc", creator=self.user, file_type="application/pdf"
+        )
+        self.source.pdf_file.save(
+            f"shared_{uid}.pdf", ContentFile(b"%PDF-1.4 dummy"), save=True
+        )
+        blob_name = self.source.pdf_file.name
+        self.assertIsNotNone(blob_name)
+        assert blob_name is not None  # narrow type for mypy
+        self.shared_blob_name: str = blob_name
+
+        # Make a corpus-isolated copy that shares the pdf_file blob.
+        self.copy, _status, _path = self.corpus_a.add_document(
+            document=self.source, user=self.user
+        )
+        self.assertEqual(self.copy.pdf_file.name, self.shared_blob_name)
+
+    def test_deleting_copy_preserves_blob_for_source(self) -> None:
+        """Deleting one Document must not destroy a blob still referenced
+        by another live Document."""
+        # DocumentPath.document uses on_delete=PROTECT; remove paths first.
+        DocumentPath.objects.filter(document=self.copy).delete()
+        self.copy.delete()
+
+        self.source.refresh_from_db()
+        self.assertEqual(self.source.pdf_file.name, self.shared_blob_name)
+        self.assertTrue(
+            default_storage.exists(self.shared_blob_name),
+            "Deleting a corpus copy destroyed the blob that the source "
+            "Document still references — issue #1464 regression.",
+        )
+        with self.source.pdf_file.open("rb") as fh:
+            self.assertEqual(fh.read(), b"%PDF-1.4 dummy")
+
+    def test_deleting_source_preserves_blob_for_copy(self) -> None:
+        """Symmetry: deleting the source must not destroy a blob still
+        referenced by a copy. (``source_document`` FK uses SET_NULL, so
+        the copy's row survives the source delete.)"""
+        # DocumentPath.document uses on_delete=PROTECT; remove source paths.
+        DocumentPath.objects.filter(document=self.source).delete()
+        self.source.delete()
+
+        self.copy.refresh_from_db()
+        self.assertEqual(self.copy.pdf_file.name, self.shared_blob_name)
+        self.assertTrue(
+            default_storage.exists(self.shared_blob_name),
+            "Deleting the source destroyed the blob that the copy still "
+            "references — issue #1464 regression.",
         )
