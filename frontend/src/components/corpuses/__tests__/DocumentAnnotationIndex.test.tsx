@@ -108,7 +108,7 @@ const renderIndex = (props: {
 describe("DocumentAnnotationIndex — section click deep-link routing", () => {
   beforeEach(() => {
     mockNavigate.mockReset();
-    openedCorpus(corpusForVar as any);
+    openedCorpus(corpusForVar);
   });
 
   it("navigates to the document URL with ?ann=<id> when clicked from the corpus home (default)", async () => {
