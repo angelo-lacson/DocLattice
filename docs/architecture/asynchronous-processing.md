@@ -17,6 +17,40 @@ OpenContracts makes extensive use of Celery, a powerful Python framework for dis
 | Agent Actions | Running AI agents on documents |
 | Export/Import | Creating and importing corpus exports |
 
+### Delivery semantics & task idempotency (Issue #1493)
+
+OpenContracts configures Celery for **at-least-once** delivery via two global
+settings (`config/settings/base.py`):
+
+```python
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+```
+
+The broker only removes a message after the task returns successfully, and
+hard-kills (SIGKILL, OOM, host loss, deploy eviction) cause the broker to
+requeue the message rather than silently treat it as done. Without these,
+long-running ingest/parse/embed tasks could die mid-flight and leave documents
+stuck with `backend_lock=True` and no parsed content.
+
+> **All Celery tasks in this project MUST be idempotent.**
+> Running the same task twice on the same input must not corrupt state,
+> double-count, or produce duplicate side effects.
+
+When you write a new task, follow these patterns:
+
+| Concern | Pattern |
+|---------|---------|
+| Creating DB rows | `Model.objects.get_or_create(...)` or `update_or_create` keyed on a deterministic field |
+| External webhooks / non-idempotent APIs | Pass an idempotency key derived from the task arguments, or guard with a "did we already do this?" check |
+| Counters / accumulators | Use SQL `UPDATE ... SET x = <absolute value>` rather than `x = x + 1`, or use a deduplication key |
+| Multi-step state transitions | Re-check the entry-state at the top of the task; bail early if already in the target state (this is how `ingest_doc` and `set_doc_lock_state` already behave) |
+| Truly non-idempotent work that cannot be guarded | Opt out per-task: `@shared_task(acks_late=False, reject_on_worker_lost=False)`. Document why in a comment. |
+
+If you cannot make a task idempotent, prefer the per-task opt-out over reverting
+the global default — the global default protects the long-running document
+processing pipeline that motivated the change.
+
 ### Queue Management
 
 If your Celery queue gets clogged due to unexpected issues or high volume, you can purge it:
