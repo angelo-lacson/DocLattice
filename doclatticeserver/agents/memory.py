@@ -233,8 +233,22 @@ async def update_memory_content(
                 )
             # Delete the old storage file to avoid orphans (Django's
             # FieldFile.save creates a new file rather than overwriting).
+            # BUT skip the storage delete if the blob is shared with a
+            # sibling Document (e.g. a corpus-isolated copy created via
+            # Corpus.add_document) — see issue #1464. ``DocumentModel``
+            # is already imported at function scope (line 216).
             if locked_doc.txt_extract_file:
-                locked_doc.txt_extract_file.delete(save=False)
+                blob_name = locked_doc.txt_extract_file.name
+                unique_paths = DocumentModel.objects.unique_blob_paths(locked_doc)
+                if blob_name in unique_paths:
+                    locked_doc.txt_extract_file.delete(save=False)
+                else:
+                    # Shared with another Document — clear the field on
+                    # this row only, leave the blob alive in storage.
+                    # The ``.save(...)`` call below writes a new blob
+                    # and reassigns the field to it; the OLD blob stays
+                    # in storage, still referenced by the sibling row.
+                    locked_doc.txt_extract_file = None
             locked_doc.txt_extract_file.save(
                 MEMORY_DOCUMENT_FILENAME,
                 ContentFile(new_content.encode("utf-8")),
