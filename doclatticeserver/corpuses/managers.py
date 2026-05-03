@@ -132,7 +132,7 @@ class CorpusActionExecutionManager(BaseVisibilityManager):
     def recent(self, hours: int = 24) -> CorpusActionExecutionQuerySet:
         return self.get_queryset().recent(hours)
 
-    def visible_to_user(
+    def visible_to_user(  # type: ignore[override]
         self, user: AbstractBaseUser | None = None
     ) -> CorpusActionExecutionQuerySet:
         """

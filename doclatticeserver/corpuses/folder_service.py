@@ -57,12 +57,9 @@ from doclatticeserver.utils.permissioning import (
 )
 
 if TYPE_CHECKING:
-    from django.contrib.auth import get_user_model
-
     from doclatticeserver.corpuses.models import Corpus, CorpusFolder
     from doclatticeserver.documents.models import Document, DocumentPath
-
-    User = get_user_model()
+    from doclatticeserver.users.models import User
 
 logger = logging.getLogger(__name__)
 
