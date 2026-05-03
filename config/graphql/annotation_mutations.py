@@ -27,6 +27,7 @@ from opencontractserver.annotations.models import (
     Relationship,
 )
 from opencontractserver.corpuses.models import Corpus
+from opencontractserver.documents.models import Document
 from opencontractserver.feedback.models import UserFeedback
 from opencontractserver.types.enums import LabelType, PermissionTypes
 from opencontractserver.utils.permissioning import (
@@ -209,6 +210,48 @@ class ApproveAnnotation(graphene.Mutation):
         )
 
 
+_ANNOTATION_PARENT_NOT_FOUND_MSG = (
+    "Document or corpus not found, or you do not have " "permission to annotate it."
+)
+
+
+def _resolve_annotation_parents(
+    user, corpus_pk: int, document_pk: int
+) -> tuple["Document", "Corpus"] | None:
+    """Resolve and validate the (document, corpus) parents for a new annotation.
+
+    Returns the (document, corpus) tuple when:
+        - both rows are visible to the user,
+        - the user has CREATE permission on the corpus,
+        - the document is a current member of the corpus (via DocumentPath).
+
+    Returns None on any failure so callers can surface a single uniform
+    "not found" error and avoid leaking existence/permission state. The
+    DocumentPath check closes a cross-corpus IDOR (user has visibility to
+    doc D in corpus A and CREATE on corpus B → would otherwise be allowed
+    to write `Annotation(document=D, corpus=B)`).
+    """
+    from opencontractserver.documents.models import DocumentPath
+
+    try:
+        document = Document.objects.visible_to_user(user).get(pk=document_pk)
+        corpus = Corpus.objects.visible_to_user(user).get(pk=corpus_pk)
+    except (Document.DoesNotExist, Corpus.DoesNotExist):
+        return None
+
+    if not user_has_permission_for_obj(
+        user, corpus, PermissionTypes.CREATE, include_group_permissions=True
+    ):
+        return None
+
+    if not DocumentPath.objects.filter(
+        document=document, corpus=corpus, is_current=True, is_deleted=False
+    ).exists():
+        return None
+
+    return document, corpus
+
+
 class AddAnnotation(graphene.Mutation):
     class Arguments:
         json = GenericScalar(
@@ -239,6 +282,7 @@ class AddAnnotation(graphene.Mutation):
         )
 
     ok = graphene.Boolean()
+    message = graphene.String()
     annotation = graphene.Field(AnnotationType)
 
     @login_required
@@ -261,12 +305,21 @@ class AddAnnotation(graphene.Mutation):
 
         user = info.context.user
 
+        parents = _resolve_annotation_parents(user, corpus_pk, document_pk)
+        if parents is None:
+            return AddAnnotation(
+                ok=False,
+                annotation=None,
+                message=_ANNOTATION_PARENT_NOT_FOUND_MSG,
+            )
+        document, corpus = parents
+
         annotation = Annotation(
             page=page,
             raw_text=raw_text,
             long_description=long_description,
-            corpus_id=corpus_pk,
-            document_id=document_pk,
+            corpus_id=corpus.pk,
+            document_id=document.pk,
             annotation_label_id=label_pk,
             creator=user,
             json=json,
@@ -274,9 +327,10 @@ class AddAnnotation(graphene.Mutation):
         )
         annotation.save()
         set_permissions_for_obj_to_user(user, annotation, [PermissionTypes.CRUD])
-        ok = True
 
-        return AddAnnotation(ok=ok, annotation=annotation)
+        return AddAnnotation(
+            ok=True, message="Annotation created", annotation=annotation
+        )
 
 
 class AddDocTypeAnnotation(graphene.Mutation):
@@ -293,31 +347,39 @@ class AddDocTypeAnnotation(graphene.Mutation):
         )
 
     ok = graphene.Boolean()
+    message = graphene.String()
     annotation = graphene.Field(AnnotationType)
 
     @login_required
     def mutate(
         root, info, corpus_id, document_id, annotation_label_id
     ) -> "AddDocTypeAnnotation":
-        annotation = None
-        ok = False
-
         corpus_pk = from_global_id(corpus_id)[1]
         document_pk = from_global_id(document_id)[1]
         annotation_label_pk = from_global_id(annotation_label_id)[1]
 
         user = info.context.user
 
+        parents = _resolve_annotation_parents(user, corpus_pk, document_pk)
+        if parents is None:
+            return AddDocTypeAnnotation(
+                ok=False,
+                annotation=None,
+                message=_ANNOTATION_PARENT_NOT_FOUND_MSG,
+            )
+        document, corpus = parents
+
         annotation = Annotation.objects.create(
-            corpus_id=corpus_pk,
-            document_id=document_pk,
+            corpus_id=corpus.pk,
+            document_id=document.pk,
             annotation_label_id=annotation_label_pk,
             creator=user,
         )
         set_permissions_for_obj_to_user(user, annotation, [PermissionTypes.CRUD])
-        ok = True
 
-        return AddDocTypeAnnotation(ok=ok, annotation=annotation)
+        return AddDocTypeAnnotation(
+            ok=True, message="Annotation created", annotation=annotation
+        )
 
 
 class RemoveRelationship(graphene.Mutation):

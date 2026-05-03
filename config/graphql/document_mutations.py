@@ -10,6 +10,7 @@ import uuid
 import graphene
 from celery import chain, chord, group
 from django.conf import settings
+from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Max, Q
@@ -35,7 +36,11 @@ from config.graphql.ratelimits import (
 )
 from config.graphql.serializers import DocumentSerializer
 from config.telemetry import record_event
-from opencontractserver.constants.zip_import import ZIP_MAX_TOTAL_SIZE_BYTES
+from opencontractserver.constants.zip_import import (
+    BULK_UPLOAD_OWNER_CACHE_PREFIX,
+    BULK_UPLOAD_OWNER_CACHE_TTL_SECONDS,
+    ZIP_MAX_TOTAL_SIZE_BYTES,
+)
 from opencontractserver.corpuses.models import Corpus, CorpusFolder, TemporaryFileHandle
 from opencontractserver.documents.models import Document, DocumentPath, IngestionSource
 from opencontractserver.extracts.models import Extract
@@ -567,6 +572,15 @@ class UploadDocumentsZip(graphene.Mutation):
             decoded_file_data = base64.decodebytes(base64_img_bytes)
 
             job_id = str(uuid.uuid4())
+
+            # IDOR protection: bind this job_id to the requesting user so the
+            # status resolver can refuse cross-user reads. Cache miss in the
+            # status resolver fails closed.
+            cache.set(
+                f"{BULK_UPLOAD_OWNER_CACHE_PREFIX}{job_id}",
+                info.context.user.id,
+                BULK_UPLOAD_OWNER_CACHE_TTL_SECONDS,
+            )
 
             with transaction.atomic():
                 temporary_file = TemporaryFileHandle.objects.create()
