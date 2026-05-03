@@ -663,8 +663,7 @@ class MentionSearchTestCase(TestCase):
         )
         self.assertIsNone(result.get("errors"))
         titles = [
-            e["node"]["title"]
-            for e in result["data"]["searchNotesForMention"]["edges"]
+            e["node"]["title"] for e in result["data"]["searchNotesForMention"]["edges"]
         ]
         self.assertIn("Doc1 indemnity note", titles)
         self.assertNotIn("OtherDoc indemnity note", titles)
@@ -698,8 +697,7 @@ class MentionSearchTestCase(TestCase):
         )
         self.assertIsNone(result.get("errors"))
         titles = [
-            e["node"]["title"]
-            for e in result["data"]["searchNotesForMention"]["edges"]
+            e["node"]["title"] for e in result["data"]["searchNotesForMention"]["edges"]
         ]
         self.assertNotIn("Anonymous-blocked indemnity note", titles)
 
