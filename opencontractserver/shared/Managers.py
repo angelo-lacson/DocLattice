@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from django.contrib.auth.models import AnonymousUser
 from django.db import IntegrityError
-from django.db.models import Manager, Prefetch, Q, QuerySet
+from django.db.models import FileField, Manager, Prefetch, Q, QuerySet
 
 from opencontractserver.shared.QuerySets import (
     AnnotationQuerySet,
@@ -335,8 +335,6 @@ class DocumentManager(BaseVisibilityManager):
             *only* by ``doc``. Safe to delete from storage. Empty/
             unset fields are omitted.
         """
-        from django.db.models import FileField
-
         blob_fields: list[str] = [
             field.name
             for field in doc._meta.get_fields()

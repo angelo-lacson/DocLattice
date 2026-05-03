@@ -28,7 +28,6 @@ class UniqueBlobPathsTestCase(TransactionTestCase):
     def setUp(self) -> None:
         self.user = User.objects.create_user(username="blob-test-user", password="x")
         self.corpus_a = Corpus.objects.create(title="Corpus A", creator=self.user)
-        self.corpus_b = Corpus.objects.create(title="Corpus B", creator=self.user)
 
         # Use UUID-prefixed filenames so parallel/sequential test runs never
         # collide on the same storage path (local FileSystemStorage does NOT
@@ -84,8 +83,9 @@ class UniqueBlobPathsTestCase(TransactionTestCase):
         copy.txt_extract_file.save(
             f"copy_{self.uid}.txt", ContentFile(b"copy content"), save=True
         )
-        # Refresh both from DB to avoid stale in-memory FieldFile state.
-        copy.refresh_from_db()
+        # add_document() shares the FieldFile object from source, so saving
+        # copy's field mutates the shared FieldFile's .name in memory.
+        # Refresh source from DB to get the original path back.
         self.source.refresh_from_db()
         self.assertNotEqual(
             copy.txt_extract_file.name, self.source.txt_extract_file.name
