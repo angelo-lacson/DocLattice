@@ -12,10 +12,16 @@ from __future__ import annotations
 
 import uuid
 
+from asgiref.sync import async_to_sync
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.test import TransactionTestCase
 
+from opencontractserver.agents.memory import (
+    get_or_create_memory_document,
+    update_memory_content,
+)
 from opencontractserver.corpuses.models import Corpus
 from opencontractserver.documents.models import Document
 
@@ -149,23 +155,14 @@ class MemoryDocumentBlobRetentionTestCase(TransactionTestCase):
         so storage generates a fresh path for the new content). The sibling
         continues to read the original content.
         """
-        import asyncio
-
-        from django.core.files.storage import default_storage
-
-        from opencontractserver.agents.memory import (
-            get_or_create_memory_document,
-            update_memory_content,
-        )
-
         new_content = "## New section\nFoo bar baz"
 
         # Create the memory document in corpus A
-        memory_doc = asyncio.run(
-            get_or_create_memory_document(self.corpus_a, self.user)
+        memory_doc = async_to_sync(get_or_create_memory_document)(
+            self.corpus_a, self.user
         )
-        original_blob_name: str = memory_doc.txt_extract_file.name  # type: ignore[assignment]
-        self.assertIsNotNone(original_blob_name)
+        original_blob_name = memory_doc.txt_extract_file.name
+        assert original_blob_name is not None
         self.assertTrue(default_storage.exists(original_blob_name))
 
         # Record the original content so we can verify sibling is unchanged.
@@ -183,7 +180,7 @@ class MemoryDocumentBlobRetentionTestCase(TransactionTestCase):
 
         # Update memory content on corpus A.  The OLD blob is still
         # referenced by sibling in corpus B and must not be clobbered.
-        asyncio.run(update_memory_content(self.corpus_a, new_content, self.user))
+        async_to_sync(update_memory_content)(self.corpus_a, new_content, self.user)
 
         # Assert: sibling's blob still holds the ORIGINAL content.
         sibling.refresh_from_db()
@@ -215,20 +212,13 @@ class MemoryDocumentBlobRetentionTestCase(TransactionTestCase):
         backend. What matters is that the memory document's file
         contains the new content after the call.)
         """
-        import asyncio
-
-        from opencontractserver.agents.memory import (
-            get_or_create_memory_document,
-            update_memory_content,
-        )
-
         new_content = "## Updated\nSome new text"
 
-        memory_doc = asyncio.run(
-            get_or_create_memory_document(self.corpus_a, self.user)
+        memory_doc = async_to_sync(get_or_create_memory_document)(
+            self.corpus_a, self.user
         )
 
-        asyncio.run(update_memory_content(self.corpus_a, new_content, self.user))
+        async_to_sync(update_memory_content)(self.corpus_a, new_content, self.user)
 
         memory_doc.refresh_from_db()
         with memory_doc.txt_extract_file.open("rb") as fh:
