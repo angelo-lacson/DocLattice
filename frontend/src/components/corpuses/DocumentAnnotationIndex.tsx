@@ -633,11 +633,6 @@ export const DocumentAnnotationIndex: React.FC<
     }
   }, [filterQuery, allNodeIds]);
 
-  // Handle section click - select annotation via URL params (routing mantra).
-  // `onDocumentPage` controls click routing; it is independent of `embedded`,
-  // which only affects visual layout. Conflating the two causes corpus-home
-  // TOC clicks to silently rewrite `?ann=` on the corpus URL instead of
-  // deep-linking into the document.
   const handleSectionClick = (node: SectionNode) => {
     if (onDocumentPage) {
       // Already on the document page — update ?ann= to select the annotation.
