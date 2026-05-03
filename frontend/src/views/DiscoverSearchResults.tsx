@@ -391,8 +391,8 @@ const DiscussionsSection: React.FC<DiscussionsSectionProps> = ({
     GetConversationsInputs
   >(GET_CONVERSATIONS, {
     variables,
-    fetchPolicy: "cache-first",
-    nextFetchPolicy: "cache-and-network",
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
     skip: !query,
   });
 
@@ -436,8 +436,8 @@ const AnnotationsSection: React.FC<AnnotationsSectionProps> = ({
     SearchAnnotationsForMentionInput
   >(SEARCH_ANNOTATIONS_FOR_MENTION, {
     variables: { textSearch: query, first: limit },
-    fetchPolicy: "cache-first",
-    nextFetchPolicy: "cache-and-network",
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
     skip: !query,
   });
 
@@ -503,8 +503,8 @@ const CorpusesSection: React.FC<CorpusesSectionProps> = ({ query, limit }) => {
     GetCorpusesInputs
   >(GET_CORPUSES, {
     variables: { textSearch: query, limit },
-    fetchPolicy: "cache-first",
-    nextFetchPolicy: "cache-and-network",
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
     skip: !query,
   });
 
@@ -534,8 +534,8 @@ const CorpusesSection: React.FC<CorpusesSectionProps> = ({ query, limit }) => {
             snippet={corpus.description || undefined}
             meta={
               <>
-                {corpus.creator?.email ? (
-                  <span>by {corpus.creator.email}</span>
+                {corpus.creator?.slug ? (
+                  <span>by {corpus.creator.slug}</span>
                 ) : null}
                 {typeof corpus.documentCount === "number" ? (
                   <span>· {corpus.documentCount} docs</span>
@@ -567,8 +567,8 @@ const NotesSection: React.FC<NotesSectionProps> = ({ query, limit }) => {
     SearchNotesForMentionInput
   >(SEARCH_NOTES_FOR_MENTION, {
     variables: { textSearch: query, first: limit },
-    fetchPolicy: "cache-first",
-    nextFetchPolicy: "cache-and-network",
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
     skip: !query,
   });
 
@@ -586,13 +586,9 @@ const NotesSection: React.FC<NotesSectionProps> = ({ query, limit }) => {
       errorMessage={error && !data ? SECTION_ERROR_FALLBACK : undefined}
     >
       {rows.map(({ node }) => {
-        // Deep-link with corpus context when available — getDocumentUrl needs
-        // the corpus slug to build a /d/<user>/<corpus>/<doc> URL.
         const url = getDocumentUrl(node.document, node.corpus, {
           noteId: node.id,
         });
-        // Note content is stored as Markdown — strip the syntax before
-        // truncating so the snippet doesn't render as raw `**bold**` etc.
         const cleaned = stripMarkdown(node.contentPreview ?? "");
         const snippet = cleaned ? cleaned.slice(0, 220) : undefined;
         return (

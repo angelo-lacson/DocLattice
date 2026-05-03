@@ -309,3 +309,144 @@ test("DiscoverSearchResults — populated results render rows for every section"
   // Capture the populated state for documentation.
   await docScreenshot(page, "discover--search-results--with-results");
 });
+
+// Tab-switching mocks: All-tab defaults (first/limit=5) plus the entity-tab
+// notes query (first=25) so the click resolves cleanly.
+const buildNotesEntityTabMocks = (textSearch: string): MockedResponse[] => [
+  ...buildEmptyMocks(textSearch),
+  {
+    request: {
+      query: SEARCH_NOTES_FOR_MENTION,
+      variables: { textSearch, first: 25 },
+    },
+    result: {
+      data: {
+        searchNotesForMention: {
+          edges: [
+            {
+              node: {
+                id: "Tm90ZTox",
+                title: "Indemnity drafting tips",
+                contentPreview: "Plain preview body.",
+                modified: "2026-04-15T09:00:00Z",
+                creator: { id: "VXNlcjox", username: "alice", slug: "alice" },
+                document: {
+                  id: "RG9jOjE=",
+                  title: "Master Services Agreement",
+                  slug: "msa",
+                  creator: { id: "VXNlcjox", slug: "alice" },
+                },
+                corpus: {
+                  id: "Q29ycHVzOjE=",
+                  title: "Vendor Agreements",
+                  slug: "vendor-agreements",
+                  creator: { id: "VXNlcjox", slug: "alice" },
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+  },
+];
+
+test("DiscoverSearchResults — selecting the Notes tab hides the other sections", async ({
+  mount,
+  page,
+}) => {
+  const component = await mount(
+    <LandingTestWrapper mocks={buildNotesEntityTabMocks("indemnity")}>
+      <DiscoverSearchResults />
+    </LandingTestWrapper>
+  );
+
+  const searchBox = component.getByPlaceholder(
+    "Search across legal knowledge…"
+  );
+  await searchBox.fill("indemnity");
+
+  // FilterTabs renders each entity option as a `.oc-filter-tab` button.
+  // Wait for debounce so the All-tab default queries don't intercept the
+  // notes-tab variables, then switch tabs.
+  await page.waitForTimeout(300);
+  await component.locator(".oc-filter-tab", { hasText: "Notes" }).click();
+  await page.waitForTimeout(700);
+
+  // Only the Notes section header renders; Discussions/Annotations/
+  // Collections section headers must not appear.
+  await expect(component.locator("text=Indemnity drafting tips")).toBeVisible();
+  // SectionTitle "Notes" lives inside an h2 — assert it's mounted.
+  await expect(component.locator("h2", { hasText: "Notes" })).toBeVisible();
+  await expect(component.locator("h2", { hasText: "Discussions" })).toHaveCount(
+    0
+  );
+  await expect(component.locator("h2", { hasText: "Annotations" })).toHaveCount(
+    0
+  );
+  await expect(component.locator("h2", { hasText: "Collections" })).toHaveCount(
+    0
+  );
+});
+
+test("DiscoverSearchResults — section error renders the recoverable fallback", async ({
+  mount,
+  page,
+}) => {
+  // Erroring mocks for every section so each Section renders its error
+  // branch (`error && !data`).
+  const errorMocks: MockedResponse[] = [
+    {
+      request: {
+        query: GET_CONVERSATIONS,
+        variables: {
+          conversationType: "THREAD",
+          title_Contains: "boom",
+          limit: 5,
+        },
+      },
+      error: new Error("Conversations service unavailable"),
+    },
+    {
+      request: {
+        query: SEARCH_ANNOTATIONS_FOR_MENTION,
+        variables: { textSearch: "boom", first: 5 },
+      },
+      error: new Error("Annotations service unavailable"),
+    },
+    {
+      request: {
+        query: GET_CORPUSES,
+        variables: { textSearch: "boom", limit: 5 },
+      },
+      error: new Error("Corpuses service unavailable"),
+    },
+    {
+      request: {
+        query: SEARCH_NOTES_FOR_MENTION,
+        variables: { textSearch: "boom", first: 5 },
+      },
+      error: new Error("Notes service unavailable"),
+    },
+  ];
+
+  const component = await mount(
+    <LandingTestWrapper mocks={errorMocks}>
+      <DiscoverSearchResults />
+    </LandingTestWrapper>
+  );
+
+  await component
+    .getByPlaceholder("Search across legal knowledge…")
+    .fill("boom");
+  await page.waitForTimeout(700);
+
+  // Each Section maps a query error to a stable user-facing message.
+  const errorAlerts = component.getByRole("alert");
+  await expect(errorAlerts.first()).toBeVisible();
+  await expect(errorAlerts.first()).toContainText(
+    "We couldn't load these results"
+  );
+  // All four sections error simultaneously.
+  await expect(errorAlerts).toHaveCount(4);
+});
