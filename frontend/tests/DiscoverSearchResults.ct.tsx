@@ -389,6 +389,400 @@ test("DiscoverSearchResults — selecting the Notes tab hides the other sections
   );
 });
 
+// ---------------------------------------------------------------------------
+// Edge-case mocks — exercise conditional render branches inside each row
+// (truncation, missing labels, untitled collection, missing description,
+// markdown-empty notes, deletedAt filter on threads).
+// ---------------------------------------------------------------------------
+const LONG_RAW_TEXT = "a".repeat(180);
+const buildEdgeCaseMocks = (textSearch: string): MockedResponse[] => [
+  {
+    request: {
+      query: GET_CONVERSATIONS,
+      variables: {
+        conversationType: "THREAD",
+        title_Contains: textSearch,
+        limit: 5,
+      },
+    },
+    result: {
+      data: {
+        conversations: {
+          edges: [
+            // Live thread — must render.
+            {
+              node: {
+                id: "Q29udjpsaXZl",
+                conversationType: "THREAD",
+                title: "Live thread keeps rendering",
+                description: null,
+                createdAt: "2026-04-01T12:00:00Z",
+                updatedAt: "2026-04-02T12:00:00Z",
+                creator: {
+                  id: "VXNlcjox",
+                  username: "alice",
+                  email: "alice@example.com",
+                },
+                chatWithCorpus: null,
+                chatWithDocument: null,
+                chatMessages: { totalCount: 0 },
+                isPublic: true,
+                myPermissions: ["READ"],
+                upvoteCount: 0,
+                downvoteCount: 0,
+                userVote: null,
+                isLocked: false,
+                lockedBy: null,
+                lockedAt: null,
+                isPinned: false,
+                pinnedBy: null,
+                pinnedAt: null,
+                deletedAt: null,
+              },
+            },
+            // Soft-deleted thread — filtered out before render.
+            {
+              node: {
+                id: "Q29udjpkZWxldGVk",
+                conversationType: "THREAD",
+                title: "Tombstoned thread should be hidden",
+                description: null,
+                createdAt: "2026-04-01T12:00:00Z",
+                updatedAt: "2026-04-02T12:00:00Z",
+                creator: {
+                  id: "VXNlcjox",
+                  username: "alice",
+                  email: "alice@example.com",
+                },
+                chatWithCorpus: null,
+                chatWithDocument: null,
+                chatMessages: { totalCount: 0 },
+                isPublic: true,
+                myPermissions: ["READ"],
+                upvoteCount: 0,
+                downvoteCount: 0,
+                userVote: null,
+                isLocked: false,
+                lockedBy: null,
+                lockedAt: null,
+                isPinned: false,
+                pinnedBy: null,
+                pinnedAt: null,
+                deletedAt: "2026-04-15T00:00:00Z",
+              },
+            },
+          ],
+          pageInfo: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            startCursor: null,
+            endCursor: null,
+          },
+          totalCount: 2,
+        },
+      },
+    },
+  },
+  {
+    request: {
+      query: SEARCH_ANNOTATIONS_FOR_MENTION,
+      variables: { textSearch, first: 5 },
+    },
+    result: {
+      data: {
+        searchAnnotationsForMention: {
+          edges: [
+            // > 140 chars → truncated with ellipsis.
+            {
+              node: {
+                id: "QW5uOmxvbmc=",
+                rawText: LONG_RAW_TEXT,
+                page: 0,
+                annotationLabel: {
+                  id: "TGFiOjE=",
+                  text: "Indemnification",
+                  color: "#ef4444",
+                },
+                document: {
+                  id: "RG9jOjE=",
+                  title: "Master Services Agreement",
+                  slug: "msa",
+                  creator: { id: "VXNlcjox", slug: "alice" },
+                },
+                // No corpus context — exercises null-corpus meta branch.
+                corpus: null,
+              },
+            },
+            // No rawText → label fallback for title.
+            {
+              node: {
+                id: "QW5uOmxhYmVs",
+                rawText: null,
+                page: null,
+                annotationLabel: {
+                  id: "TGFiOjI=",
+                  text: "Termination",
+                  color: null,
+                },
+                document: {
+                  id: "RG9jOjE=",
+                  title: "Master Services Agreement",
+                  slug: "msa",
+                  creator: { id: "VXNlcjox", slug: "alice" },
+                },
+                corpus: null,
+              },
+            },
+            // Neither rawText nor label → defaults to "Annotation".
+            {
+              node: {
+                id: "QW5uOmJhcmU=",
+                rawText: null,
+                page: null,
+                annotationLabel: null,
+                document: {
+                  id: "RG9jOjE=",
+                  title: "Master Services Agreement",
+                  slug: "msa",
+                  creator: { id: "VXNlcjox", slug: "alice" },
+                },
+                corpus: null,
+              },
+            },
+          ],
+        },
+      },
+    },
+  },
+  {
+    request: {
+      query: GET_CORPUSES,
+      variables: { textSearch, limit: 5 },
+    },
+    result: {
+      data: {
+        corpuses: {
+          edges: [
+            // Untitled, no description, no creator.slug, no documentCount,
+            // not public — every meta render branch chooses the null path.
+            {
+              node: {
+                id: "Q29ycHVzOmJhcmU=",
+                slug: "vendor-agreements",
+                icon: null,
+                title: null,
+                creator: { email: "alice@example.com", slug: null },
+                description: null,
+                isPublic: false,
+                isPersonal: false,
+                myPermissions: ["READ"],
+                documentCount: null,
+                parent: null,
+                labelSet: null,
+                categories: [],
+                license: null,
+                licenseLink: null,
+              },
+            },
+          ],
+          pageInfo: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            startCursor: null,
+            endCursor: null,
+          },
+        },
+      },
+    },
+  },
+  {
+    request: {
+      query: SEARCH_NOTES_FOR_MENTION,
+      variables: { textSearch, first: 5 },
+    },
+    result: {
+      data: {
+        searchNotesForMention: {
+          edges: [
+            // No contentPreview → snippet branch resolves to undefined.
+            // No corpus and anonymous creator → meta branches collapse.
+            {
+              node: {
+                id: "Tm90ZTpiYXJl",
+                title: "Note with no preview",
+                contentPreview: null,
+                modified: "2026-04-15T09:00:00Z",
+                creator: { id: "VXNlcjox", username: null, slug: "alice" },
+                document: {
+                  id: "RG9jOjE=",
+                  title: "Master Services Agreement",
+                  slug: "msa",
+                  creator: { id: "VXNlcjox", slug: "alice" },
+                },
+                corpus: null,
+              },
+            },
+          ],
+        },
+      },
+    },
+  },
+];
+
+test("DiscoverSearchResults — edge-case mocks exercise fallback render branches", async ({
+  mount,
+  page,
+}) => {
+  const component = await mount(
+    <LandingTestWrapper mocks={buildEdgeCaseMocks("indemnity")}>
+      <DiscoverSearchResults />
+    </LandingTestWrapper>
+  );
+
+  await component
+    .getByPlaceholder("Search across legal knowledge…")
+    .fill("indemnity");
+  await page.waitForTimeout(700);
+
+  // Live thread renders; tombstoned one does not.
+  await expect(
+    component.getByText("Live thread keeps rendering")
+  ).toBeVisible();
+  await expect(
+    component.getByText("Tombstoned thread should be hidden")
+  ).toHaveCount(0);
+
+  // Long rawText truncated with an ellipsis.
+  await expect(component.getByText(/a{140}…/)).toBeVisible();
+
+  // Title falls back to label when rawText is missing.
+  await expect(
+    component.getByText("Termination", { exact: true })
+  ).toBeVisible();
+
+  // Title falls back to "Annotation" when both are missing.
+  await expect(
+    component.getByText("Annotation", { exact: true })
+  ).toBeVisible();
+
+  // Untitled collection fallback fires.
+  await expect(component.getByText("Untitled collection")).toBeVisible();
+
+  // Note row renders even though contentPreview is null.
+  await expect(component.getByText("Note with no preview")).toBeVisible();
+});
+
+test("DiscoverSearchResults — clicking each row type navigates to the resolved URL", async ({
+  mount,
+  page,
+}) => {
+  // Reset history so the assertion below isn't polluted by a prior test.
+  await page.evaluate(() => window.history.replaceState(null, "", "/"));
+
+  const component = await mount(
+    <LandingTestWrapper mocks={buildPopulatedMocks("indemnity")}>
+      <DiscoverSearchResults />
+    </LandingTestWrapper>
+  );
+
+  await component
+    .getByPlaceholder("Search across legal knowledge…")
+    .fill("indemnity");
+  await page.waitForTimeout(700);
+
+  // Annotation row → /d/<creator>/<corpus>/<doc>?ann=<id>
+  // Each row is a <button>; click the button containing the rawText title.
+  await component
+    .getByRole("button")
+    .filter({ hasText: /Vendor shall indemnify Customer/ })
+    .click();
+  await expect
+    .poll(() => page.url())
+    .toContain("/d/alice/vendor-agreements/msa");
+  await expect.poll(() => page.url()).toContain("ann=QW5uOjE");
+
+  // Reset and click the corpus row → /c/<creator>/<corpus>
+  // Disambiguate from the annotation/note rows (which mention "Vendor
+  // Agreements" in their meta) by anchoring on "12 docs" — unique to the
+  // corpus card meta.
+  await page.evaluate(() => window.history.replaceState(null, "", "/"));
+  await component.getByRole("button").filter({ hasText: "12 docs" }).click();
+  await expect.poll(() => page.url()).toContain("/c/alice/vendor-agreements");
+
+  // Reset and click the note row → /d/<creator>/<corpus>/<doc>?note=<id>
+  await page.evaluate(() => window.history.replaceState(null, "", "/"));
+  await component
+    .getByRole("button")
+    .filter({ hasText: "Indemnity drafting tips" })
+    .click();
+  await expect
+    .poll(() => page.url())
+    .toContain("/d/alice/vendor-agreements/msa");
+  await expect.poll(() => page.url()).toContain("note=Tm90ZTox");
+});
+
+test("DiscoverSearchResults — initial ?q= and ?type= seed local state from the URL", async ({
+  mount,
+  page,
+}) => {
+  // Pre-set the URL so useSearchParams + VALID_TABS path are exercised
+  // on the first render (before any user interaction).
+  await page.evaluate(() =>
+    window.history.replaceState(null, "", "/?q=indemnity&type=notes")
+  );
+
+  const component = await mount(
+    <LandingTestWrapper mocks={buildNotesEntityTabMocks("indemnity")}>
+      <DiscoverSearchResults />
+    </LandingTestWrapper>
+  );
+
+  // Initial query is honored — search input reflects ?q= and the notes
+  // result resolves without any typing.
+  await expect(
+    component.getByPlaceholder("Search across legal knowledge…")
+  ).toHaveValue("indemnity");
+  await page.waitForTimeout(700);
+  await expect(component.getByText("Indemnity drafting tips")).toBeVisible();
+
+  // Notes tab is the active one — the other section headers are absent.
+  await expect(component.locator("h2", { hasText: "Notes" })).toBeVisible();
+  await expect(component.locator("h2", { hasText: "Discussions" })).toHaveCount(
+    0
+  );
+});
+
+test("DiscoverSearchResults — invalid ?type= falls back to the All tab", async ({
+  mount,
+  page,
+}) => {
+  // VALID_TABS guard rejects the bogus tab and resets to "all". Pre-seed
+  // the URL so the guard is exercised at mount time.
+  await page.evaluate(() =>
+    window.history.replaceState(null, "", "/?q=indemnity&type=bogus-tab")
+  );
+
+  const component = await mount(
+    <LandingTestWrapper mocks={buildEmptyMocks("indemnity")}>
+      <DiscoverSearchResults />
+    </LandingTestWrapper>
+  );
+
+  await page.waitForTimeout(700);
+
+  // All four section headers visible → "all" tab is active.
+  await expect(
+    component.locator("h2", { hasText: "Discussions" })
+  ).toBeVisible();
+  await expect(
+    component.locator("h2", { hasText: "Annotations" })
+  ).toBeVisible();
+  await expect(
+    component.locator("h2", { hasText: "Collections" })
+  ).toBeVisible();
+  await expect(component.locator("h2", { hasText: "Notes" })).toBeVisible();
+});
+
 test("DiscoverSearchResults — section error renders the recoverable fallback", async ({
   mount,
   page,
