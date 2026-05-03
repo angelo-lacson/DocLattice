@@ -2919,6 +2919,7 @@ export const GET_EMBEDDERS = gql`
         inputSchema
         vectorSize
         className
+        enabled
       }
     }
   }
