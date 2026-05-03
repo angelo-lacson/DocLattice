@@ -887,9 +887,7 @@ class SearchPermissionLeakageTestCase(TestCase):
         self.alice = User.objects.create_user(
             username="alice", password="test", slug="alice"
         )
-        self.bob = User.objects.create_user(
-            username="bob", password="test", slug="bob"
-        )
+        self.bob = User.objects.create_user(username="bob", password="test", slug="bob")
         self.admin = User.objects.create_user(
             username="superuser1",
             password="test",
