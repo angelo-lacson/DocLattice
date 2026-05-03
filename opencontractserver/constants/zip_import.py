@@ -7,8 +7,10 @@ These limits protect against:
 - Resource exhaustion
 - Denial of service
 
-All limits can be overridden via Django settings with the same name.
-Example: settings.ZIP_MAX_FILE_COUNT = 2000
+All limits can be overridden via Django settings with the same name and via
+the matching environment variable consumed in `config/settings/base.py`.
+Example: settings.ZIP_MAX_FILE_COUNT = 2000  (or `ZIP_MAX_FILE_COUNT=2000`
+in the environment).
 """
 
 from django.conf import settings
