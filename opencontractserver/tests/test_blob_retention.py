@@ -253,8 +253,7 @@ class DocumentDeleteBlobRetentionTestCase(TransactionTestCase):
             f"shared_{uid}.pdf", ContentFile(b"%PDF-1.4 dummy"), save=True
         )
         blob_name = self.source.pdf_file.name
-        self.assertIsNotNone(blob_name)
-        assert blob_name is not None  # narrow type for mypy
+        assert blob_name is not None
         self.shared_blob_name: str = blob_name
 
         # Make a corpus-isolated copy that shares the pdf_file blob.
@@ -270,7 +269,6 @@ class DocumentDeleteBlobRetentionTestCase(TransactionTestCase):
         DocumentPath.objects.filter(document=self.copy).delete()
         self.copy.delete()
 
-        self.source.refresh_from_db()
         self.assertEqual(self.source.pdf_file.name, self.shared_blob_name)
         self.assertTrue(
             default_storage.exists(self.shared_blob_name),
@@ -295,3 +293,5 @@ class DocumentDeleteBlobRetentionTestCase(TransactionTestCase):
             "Deleting the source destroyed the blob that the copy still "
             "references — issue #1464 regression.",
         )
+        with self.copy.pdf_file.open("rb") as fh:
+            self.assertEqual(fh.read(), b"%PDF-1.4 dummy")
