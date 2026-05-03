@@ -149,12 +149,13 @@ class AgentConfiguration(BaseOCModel):
         )
 
     def __str__(self):
-        # Constraint above guarantees ``corpus`` is set when scope == "CORPUS".
-        scope_label = (
-            f" ({self.corpus.title})"  # type: ignore[union-attr]
-            if self.scope == "CORPUS"
-            else " (Global)"
-        )
+        if self.scope == "CORPUS":
+            # CheckConstraint above enforces corpus__isnull=False when
+            # scope == "CORPUS", so this narrows safely for type-checking.
+            assert self.corpus is not None
+            scope_label = f" ({self.corpus.title})"
+        else:
+            scope_label = " (Global)"
         return f"{self.name}{scope_label}"
 
     def save(self, *args, **kwargs):

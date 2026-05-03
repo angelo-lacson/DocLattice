@@ -131,7 +131,11 @@ async def get_or_create_memory_document(corpus: Corpus, user: Any) -> Document:
             corpus.refresh_from_db()
             if corpus.memory_document_id:
                 # memory_document_id truthy implies the FK is set.
-                assert corpus.memory_document is not None
+                if corpus.memory_document is None:
+                    raise IntegrityError(
+                        f"corpus {corpus.pk} memory_document_id is set "
+                        f"but related Document is missing"
+                    )
                 return corpus.memory_document
             raise
 
