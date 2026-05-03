@@ -20,7 +20,14 @@ from config import celery_app
 
 
 class CeleryWorkerDeathResilienceSettingsTests(SimpleTestCase):
-    """Lock down the two settings and their propagation into the Celery app."""
+    """Lock down the two settings and their propagation into the Celery app.
+
+    Note: ``celery_app.conf`` is populated once at import time via
+    ``config_from_object`` in ``config/celery_app.py``. These tests pin the
+    *startup* configuration; they intentionally do not respond to
+    ``@override_settings``, since Celery has already cached the values by the
+    time any test runs.
+    """
 
     def test_django_settings_enable_acks_late(self) -> None:
         self.assertTrue(
@@ -39,15 +46,41 @@ class CeleryWorkerDeathResilienceSettingsTests(SimpleTestCase):
 
     def test_celery_app_picks_up_acks_late(self) -> None:
         self.assertTrue(
-            celery_app.app.conf.task_acks_late,
+            celery_app.conf.task_acks_late,
             "Celery app config did not pick up task_acks_late from Django "
             "settings — the namespace='CELERY' wiring may be broken.",
         )
 
     def test_celery_app_picks_up_reject_on_worker_lost(self) -> None:
         self.assertTrue(
-            celery_app.app.conf.task_reject_on_worker_lost,
+            celery_app.conf.task_reject_on_worker_lost,
             "Celery app config did not pick up task_reject_on_worker_lost "
             "from Django settings — the namespace='CELERY' wiring may be "
             "broken.",
+        )
+
+    def test_redis_visibility_timeout_exceeds_celery_default(self) -> None:
+        """The Redis visibility timeout must be raised above the 1h default.
+
+        With ``task_acks_late=True`` and Redis as broker, any task that runs
+        longer than the broker's visibility timeout will be redelivered to a
+        second worker while still executing on the first — an unconditional
+        double execution. The global default of 3600s is shorter than worst
+        case ingest/parse/embed runs, so we explicitly raise it.
+        """
+        transport_options = getattr(settings, "CELERY_BROKER_TRANSPORT_OPTIONS", {})
+        visibility = transport_options.get("visibility_timeout")
+        self.assertIsInstance(
+            visibility,
+            int,
+            "CELERY_BROKER_TRANSPORT_OPTIONS must set 'visibility_timeout' "
+            "to an integer number of seconds to override Celery's 1-hour "
+            "Redis default (Issue #1493).",
+        )
+        assert isinstance(visibility, int)  # narrow for mypy
+        self.assertGreater(
+            visibility,
+            3600,
+            "visibility_timeout must exceed Celery's 1-hour default; "
+            "otherwise long-running tasks will be double-delivered.",
         )

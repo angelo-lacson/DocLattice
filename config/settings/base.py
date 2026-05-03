@@ -694,6 +694,25 @@ CELERY_RESULT_BACKEND_MAX_RETRIES = 10
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
 
+# Redis broker visibility timeout (Issue #1493).
+# OpenContracts uses Redis as the Celery broker. Unlike RabbitMQ, Redis tracks
+# unacknowledged messages with a *visibility timeout*: once a worker pulls a
+# message, the broker considers it eligible for redelivery to *another* worker
+# after the timeout elapses, regardless of whether the original worker is still
+# alive. The Celery default is 1 hour (3600s).
+#
+# With CELERY_TASK_ACKS_LATE = True, any task that runs longer than this
+# timeout will be redelivered while still executing — a guaranteed double
+# execution even without a worker crash. Document parsing/embedding tasks on
+# very large documents can exceed this default, so we raise it to 12 hours
+# (longer than any expected document processing job).
+#
+# Tasks taking longer than this should be split into smaller chunks rather
+# than raising the timeout further; longer timeouts directly delay redelivery
+# after a real worker death.
+# https://docs.celeryq.dev/en/stable/getting-started/backends-and-brokers/redis.html#visibility-timeout
+CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 12 * 60 * 60}
+
 # Celery task routing
 # -----------------------------------------------------------------------
 # All task queue routes are defined here in one place. Do NOT assign

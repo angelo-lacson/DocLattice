@@ -51,6 +51,46 @@ If you cannot make a task idempotent, prefer the per-task opt-out over reverting
 the global default — the global default protects the long-running document
 processing pipeline that motivated the change.
 
+#### Redis visibility timeout
+
+OpenContracts uses Redis as the Celery broker. Redis tracks unacknowledged
+messages with a *visibility timeout*: once a worker pulls a message, the broker
+considers it eligible for redelivery to a different worker after the timeout
+elapses, regardless of whether the original worker is still alive. With
+`task_acks_late=True`, a task that runs longer than the visibility timeout will
+be redelivered while still executing — a guaranteed double execution even
+without any worker crash.
+
+To prevent this, `CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 12 * 60 * 60}`
+sets the timeout to 12 hours, longer than any expected document-processing
+task in this codebase. If you add a task that legitimately runs longer than
+12 hours, split it into smaller chunks rather than raising the timeout
+further — a long timeout directly delays redelivery after a real worker
+death.
+
+Reference:
+[Redis broker visibility timeout](https://docs.celeryq.dev/en/stable/getting-started/backends-and-brokers/redis.html#visibility-timeout).
+
+#### Known non-idempotent tasks
+
+The shift to at-least-once delivery exposes pre-existing tasks that create
+rows unconditionally. Until they are made idempotent, a worker death mid-task
+on these paths can produce duplicate database rows on retry:
+
+| Task | File / line | Risk |
+|------|-------------|------|
+| `process_corpus_action` (extract path) | `corpus_tasks.py` ~L251 | Duplicate `Datacell` rows |
+| `process_thread_corpus_action` | `corpus_tasks.py` ~L589 | Duplicate `CorpusActionExecution` |
+| `process_message_corpus_action` | `corpus_tasks.py` ~L681 | Duplicate `CorpusActionExecution` |
+| `generate_agent_response` | `agent_tasks.py` ~L148 | Duplicate `ChatMessage` |
+| Bulk import paths | `import_tasks.py` (raw `.create()` calls) | Duplicate imported objects |
+
+In practice, real worker deaths during these tasks are rare and the duplicate
+rows are recoverable. Hardening these paths (typically by switching to
+`get_or_create` keyed on a deterministic field, or by claiming a
+pre-allocated row at task start) is tracked separately. Treat any new task
+as idempotent-by-construction; do not extend this list.
+
 ### Queue Management
 
 If your Celery queue gets clogged due to unexpected issues or high volume, you can purge it:
