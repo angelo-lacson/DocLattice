@@ -674,6 +674,25 @@ CELERY_WORKER_MAX_MEMORY_PER_CHILD = 14240000  # 14 GB (thousands of kilobytes)
 CELERY_MAX_TASKS_PER_CHILD = 4
 CELERY_PREFETCH_MULTIPLIER = 1
 CELERY_RESULT_BACKEND_MAX_RETRIES = 10
+# Resilience to worker death (Issue #1493).
+# By default Celery acks messages on receive (at-most-once delivery): if a worker
+# dies mid-task — OOM, host failure, deploy, eviction, SIGKILL — the broker has
+# already removed the message and the task is silently lost. This is especially
+# painful for long-running ingest/parse/embed work where DB persistence happens
+# at the end of the task, leaving documents stuck with `backend_lock=True` and
+# no parsed content.
+#
+# task_acks_late: only ack after the task returns successfully, so the broker
+#   redelivers if the worker dies mid-task.
+# task_reject_on_worker_lost: requeue even on hard kills (SIGKILL / host loss),
+#   instead of treating the silent disappearance as success.
+#
+# Trade-off: at-least-once delivery means tasks may run twice. All new tasks
+# MUST be idempotent — see docs/architecture/asynchronous-processing.md.
+# https://docs.celeryq.dev/en/stable/userguide/configuration.html#task-acks-late
+# https://docs.celeryq.dev/en/stable/userguide/configuration.html#task-reject-on-worker-lost
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
 
 # Celery task routing
 # -----------------------------------------------------------------------
