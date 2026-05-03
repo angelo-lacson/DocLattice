@@ -783,6 +783,88 @@ test("DiscoverSearchResults — invalid ?type= falls back to the All tab", async
   await expect(component.locator("h2", { hasText: "Notes" })).toBeVisible();
 });
 
+test("DiscoverSearchResults — unrouteable rows render disabled and don't navigate", async ({
+  mount,
+  page,
+}) => {
+  // Corpus with no creator slug → getCorpusUrl returns "#".
+  // Replace only the corpus mock — keep the other three sections empty so
+  // we don't conflict with buildEmptyMocks's GET_CORPUSES entry.
+  const emptyExceptCorpuses = buildEmptyMocks("indemnity").filter(
+    (m) => m.request.query !== GET_CORPUSES
+  );
+  const unrouteableMocks: MockedResponse[] = [
+    ...emptyExceptCorpuses,
+    {
+      request: {
+        query: GET_CORPUSES,
+        variables: { textSearch: "indemnity", limit: 5 },
+      },
+      result: {
+        data: {
+          corpuses: {
+            edges: [
+              {
+                node: {
+                  id: "Q29ycHVzOmJyb2tlbg==",
+                  slug: "vendor-agreements",
+                  icon: null,
+                  title: "Broken Link Collection",
+                  // No creator.slug → getCorpusUrl returns "#".
+                  creator: { email: "alice@example.com", slug: null },
+                  description: null,
+                  isPublic: true,
+                  isPersonal: false,
+                  myPermissions: ["READ"],
+                  documentCount: 0,
+                  parent: null,
+                  labelSet: null,
+                  categories: [],
+                  license: null,
+                  licenseLink: null,
+                },
+              },
+            ],
+            pageInfo: {
+              hasNextPage: false,
+              hasPreviousPage: false,
+              startCursor: null,
+              endCursor: null,
+            },
+          },
+        },
+      },
+    },
+  ];
+
+  await page.evaluate(() => window.history.replaceState(null, "", "/"));
+
+  const component = await mount(
+    <LandingTestWrapper mocks={unrouteableMocks}>
+      <DiscoverSearchResults />
+    </LandingTestWrapper>
+  );
+
+  await component
+    .getByPlaceholder("Search across legal knowledge…")
+    .fill("indemnity");
+  await page.waitForTimeout(700);
+
+  const row = component
+    .getByRole("button")
+    .filter({ hasText: "Broken Link Collection" });
+  await expect(row).toBeVisible();
+  // Native disabled state — Playwright surfaces it via aria-disabled too.
+  await expect(row).toBeDisabled();
+
+  // Force-click bypasses the disabled state in the DOM but the React
+  // onClick handler is also short-circuited via `disabled`. Either way,
+  // the URL must not change to a `#` target or anything else.
+  await row.click({ force: true }).catch(() => {});
+  await page.waitForTimeout(200);
+  expect(new URL(page.url()).pathname).toBe("/");
+});
+
 test("DiscoverSearchResults — section error renders the recoverable fallback", async ({
   mount,
   page,

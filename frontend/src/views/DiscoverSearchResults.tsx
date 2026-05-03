@@ -1,6 +1,6 @@
 // Cross-content Discover search: one page that fans out across discussions, annotations, corpuses, and notes.
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import styled from "styled-components";
 import { useQuery } from "@apollo/client";
@@ -193,7 +193,7 @@ const ResultCard = styled.button`
   color: inherit;
   width: 100%;
 
-  &:hover {
+  &:hover:not(:disabled) {
     border-color: ${OS_LEGAL_COLORS.borderHover};
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
     transform: translateY(-1px);
@@ -202,6 +202,11 @@ const ResultCard = styled.button`
   &:focus-visible {
     outline: 2px solid ${OS_LEGAL_COLORS.primaryBlue};
     outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
   }
 `;
 
@@ -248,6 +253,13 @@ interface ResultRowBaseProps {
   meta?: React.ReactNode;
   onClick: () => void;
   leadingDot?: { color?: string | null };
+  /**
+   * Disable the click handler and visually mute the row when the
+   * resolved navigation target is unreachable (e.g., missing slugs
+   * caused getCorpusUrl/getDocumentUrl to return "#").
+   */
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 const ResultRow: React.FC<ResultRowBaseProps> = ({
@@ -256,8 +268,16 @@ const ResultRow: React.FC<ResultRowBaseProps> = ({
   meta,
   onClick,
   leadingDot,
+  disabled,
+  disabledReason,
 }) => (
-  <ResultCard type="button" onClick={onClick}>
+  <ResultCard
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    aria-disabled={disabled || undefined}
+    title={disabled ? disabledReason : undefined}
+  >
     <ResultTitle>
       {leadingDot ? (
         <LabelDot
@@ -362,6 +382,11 @@ const Section: React.FC<SectionWrapperProps> = ({
 const SECTION_ERROR_FALLBACK =
   "We couldn't load these results. Please try again.";
 
+// Shown via the native title tooltip on rows whose target URL is "#"
+// (missing slugs in the data — clicking would silently no-op otherwise).
+const UNROUTEABLE_ROW_TOOLTIP =
+  "This result is missing the data needed to open it.";
+
 const DISCUSSION_GRADIENT = `linear-gradient(135deg, ${CORPUS_COLORS.teal[600]} 0%, ${CORPUS_COLORS.teal[800]} 100%)`;
 const ANNOTATION_GRADIENT = `linear-gradient(135deg, ${OS_LEGAL_COLORS.primaryBlue} 0%, ${OS_LEGAL_COLORS.primaryBlueHover} 100%)`;
 const CORPUS_GRADIENT = `linear-gradient(135deg, ${CORPUS_COLORS.slate[600]} 0%, ${CORPUS_COLORS.slate[800]} 100%)`;
@@ -378,19 +403,15 @@ const DiscussionsSection: React.FC<DiscussionsSectionProps> = ({
   query,
   limit,
 }) => {
-  const variables: GetConversationsInputs = useMemo(
-    () => ({
-      conversationType: "THREAD",
-      title_Contains: query || undefined,
-      limit,
-    }),
-    [query, limit]
-  );
   const { data, loading, error } = useQuery<
     GetConversationsOutputs,
     GetConversationsInputs
   >(GET_CONVERSATIONS, {
-    variables,
+    variables: {
+      conversationType: "THREAD",
+      title_Contains: query || undefined,
+      limit,
+    },
     fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",
     skip: !query,
@@ -399,7 +420,9 @@ const DiscussionsSection: React.FC<DiscussionsSectionProps> = ({
   const threads = (data?.conversations.edges ?? [])
     .map((e) => e?.node)
     .filter((n): n is NonNullable<typeof n> => Boolean(n) && !n?.deletedAt);
-  const total = data?.conversations.totalCount ?? threads.length;
+  // Count what we render — server `totalCount` includes soft-deleted
+  // threads, so it would diverge from the visible row count.
+  const total = threads.length;
 
   return (
     <Section
@@ -460,6 +483,7 @@ const AnnotationsSection: React.FC<AnnotationsSectionProps> = ({
         const docUrl = getDocumentUrl(node.document, node.corpus, {
           annotationIds: [node.id],
         });
+        const unrouteable = docUrl === "#";
         const label = node.annotationLabel?.text;
         const title = node.rawText
           ? node.rawText.length > 140
@@ -479,9 +503,9 @@ const AnnotationsSection: React.FC<AnnotationsSectionProps> = ({
                 {node.page != null ? <span>· p. {node.page + 1}</span> : null}
               </>
             }
-            onClick={() => {
-              if (docUrl !== "#") navigate(docUrl);
-            }}
+            disabled={unrouteable}
+            disabledReason={UNROUTEABLE_ROW_TOOLTIP}
+            onClick={() => navigate(docUrl)}
           />
         );
       })}
@@ -527,6 +551,7 @@ const CorpusesSection: React.FC<CorpusesSectionProps> = ({ query, limit }) => {
     >
       {rows.map((corpus) => {
         const url = getCorpusUrl(corpus);
+        const unrouteable = url === "#";
         return (
           <ResultRow
             key={corpus.id}
@@ -543,9 +568,9 @@ const CorpusesSection: React.FC<CorpusesSectionProps> = ({ query, limit }) => {
                 {corpus.isPublic ? <span>· public</span> : null}
               </>
             }
-            onClick={() => {
-              if (url !== "#") navigate(url);
-            }}
+            disabled={unrouteable}
+            disabledReason={UNROUTEABLE_ROW_TOOLTIP}
+            onClick={() => navigate(url)}
           />
         );
       })}
@@ -589,6 +614,7 @@ const NotesSection: React.FC<NotesSectionProps> = ({ query, limit }) => {
         const url = getDocumentUrl(node.document, node.corpus, {
           noteId: node.id,
         });
+        const unrouteable = url === "#";
         const cleaned = stripMarkdown(node.contentPreview ?? "");
         const snippet = cleaned ? cleaned.slice(0, 220) : undefined;
         return (
@@ -605,9 +631,9 @@ const NotesSection: React.FC<NotesSectionProps> = ({ query, limit }) => {
                 ) : null}
               </>
             }
-            onClick={() => {
-              if (url !== "#") navigate(url);
-            }}
+            disabled={unrouteable}
+            disabledReason={UNROUTEABLE_ROW_TOOLTIP}
+            onClick={() => navigate(url)}
           />
         );
       })}

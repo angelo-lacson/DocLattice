@@ -341,11 +341,7 @@ test.describe("NewHeroSection", () => {
 
     const component = await mount(
       <LandingTestWrapper mocks={[emptyCategoriesMock]}>
-        <NewHeroSection
-          isAuthenticated={false}
-          selectedCategory={null}
-          onCategoryChange={() => {}}
-        />
+        <NewHeroSection selectedCategory={null} onCategoryChange={() => {}} />
       </LandingTestWrapper>
     );
 
@@ -369,11 +365,7 @@ test.describe("NewHeroSection", () => {
 
     const component = await mount(
       <LandingTestWrapper mocks={[emptyCategoriesMock]}>
-        <NewHeroSection
-          isAuthenticated={false}
-          selectedCategory={null}
-          onCategoryChange={() => {}}
-        />
+        <NewHeroSection selectedCategory={null} onCategoryChange={() => {}} />
       </LandingTestWrapper>
     );
 

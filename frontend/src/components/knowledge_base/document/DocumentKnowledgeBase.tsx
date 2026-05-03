@@ -1626,15 +1626,16 @@ const DocumentKnowledgeBase: React.FC<DocumentKnowledgeBaseProps> = ({
   // Auto-open the note detail modal when ?note= deep-link is present.
   const deepLinkedNoteId = useReactiveVar(selectedNoteId);
   useEffect(() => {
-    if (!deepLinkedNoteId || !combinedData?.document || notes.length === 0)
-      return;
+    // Wait until the document query has resolved before deciding the
+    // ?note=<id> param is unresolvable — `notes` is empty during the
+    // loading window too, and clearing then would race the load.
+    if (!deepLinkedNoteId || !combinedData?.document) return;
     const target = notes.find((n) => n.id === deepLinkedNoteId);
-    if (target) {
-      setSelectedNote(target);
-    }
-    // Clear regardless of match: a missing target means the note is
-    // inaccessible, deleted, or the ID is stale — leaving the var set would
-    // pin ?note=<id> in the URL forever via CentralRouteManager.
+    if (target) setSelectedNote(target);
+    // Clear regardless of match: once the document is loaded, a missing
+    // target means the note is inaccessible, deleted, or the ID is stale —
+    // leaving the var set would pin ?note=<id> in the URL forever via
+    // CentralRouteManager.
     selectedNoteId(null);
   }, [deepLinkedNoteId, combinedData?.document, notes]);
 
