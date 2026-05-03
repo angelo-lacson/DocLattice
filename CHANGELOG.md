@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Annotation sidecar size limit raised and made env-configurable** (`opencontractserver/constants/zip_import.py:49`, `config/settings/base.py:730`): the per-sidecar JSON cap during zip import was 10 MB, which silently dropped annotations for larger corpora — `_read_sidecar` (`opencontractserver/tasks/import_tasks.py:572`) raised `ValueError` and the importer recorded it under `errors` while still returning `success: True, completed: True`, so callers had no signal that annotations were lost. Default raised to 50 MB and the setting is now read from the `ZIP_MAX_SIDECAR_SIZE_BYTES` env var via `django-environ` in `config/settings/base.py`, mirroring the pattern used for `MAX_WORKER_UPLOAD_SIZE_BYTES` and friends. The constants module's `getattr(settings, ...)` fallback was bumped to 50 MB so non-Django importers see the same default. Existing tests in `opencontractserver/tests/test_sidecar_import.py` patch the constant directly and are unaffected.
+
 ### Added
 
 - **Loud guardrail against the `system_prompt=` foot-gun in pydantic-ai** (Issue #1451): `pydantic_ai.Agent` accepts both `system_prompt=` and `instructions=`, but the `system_prompt` value is *only* materialised into the model request when `message_history` is `None`. OpenContracts' `chat()` flow always persists the user's HUMAN message before calling `Agent.run()`, so `message_history` is never empty in practice and any `system_prompt=` argument is silently dropped — the LLM runs without any system instruction. CLAUDE.md pitfall #14 documented the workaround (use `instructions=`), but a future pydantic-ai bump that renames or re-precedences these parameters could re-introduce the regression silently.

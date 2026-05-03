@@ -727,6 +727,15 @@ MAX_WORKER_METADATA_SIZE_BYTES = int(
     env("MAX_WORKER_METADATA_SIZE_BYTES", default=str(500 * 1024 * 1024))
 )
 
+# Zip Import Sidecar Size Limit
+# ------------------------------------------------------------------------------
+# Maximum size (in bytes) of a single annotation sidecar JSON inside an import
+# zip. Sidecars are fully loaded into memory for JSON parsing, so this caps
+# per-sidecar memory use. Default: 50 MB.
+ZIP_MAX_SIDECAR_SIZE_BYTES = int(
+    env("ZIP_MAX_SIDECAR_SIZE_BYTES", default=str(50 * 1024 * 1024))
+)
+
 # django-rest-framework
 # -------------------------------------------------------------------------------
 # django-rest-framework - https://www.django-rest-framework.org/api-guide/settings/
