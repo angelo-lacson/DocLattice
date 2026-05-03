@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Preferred Embedder dropdown showed disabled embedders for superusers** (`frontend/src/components/widgets/CRUD/EmbedderSelector.tsx`, `frontend/src/graphql/queries.ts`): the create/edit corpus form's `EmbedderSelector` listed every embedder returned by `pipelineComponents.embedders`. The backend resolver in `config/graphql/pipeline_queries.py` only filters by configured/preferred class names for non-superusers, so a superuser saw embedders that `PipelineSettings.enabled_components` had explicitly disallowed and could pick one the rest of the system would refuse to use. The `enabled` flag was already computed and exposed on `PipelineComponentType` but the `GET_EMBEDDERS` query did not request it. Added `enabled` to the query and filter `embedder.enabled !== false` on the client (`undefined` from older backends still passes through). Test mocks in `frontend/tests/EmbedderSelector.ct.tsx` and `frontend/tests/corpus-modal.ct.tsx` updated, and a new test case verifies a `enabled: false` embedder is omitted from the dropdown.
+
 ### Added
 
 - **Loud guardrail against the `system_prompt=` foot-gun in pydantic-ai** (Issue #1451): `pydantic_ai.Agent` accepts both `system_prompt=` and `instructions=`, but the `system_prompt` value is *only* materialised into the model request when `message_history` is `None`. OpenContracts' `chat()` flow always persists the user's HUMAN message before calling `Agent.run()`, so `message_history` is never empty in practice and any `system_prompt=` argument is silently dropped — the LLM runs without any system instruction. CLAUDE.md pitfall #14 documented the workaround (use `instructions=`), but a future pydantic-ai bump that renames or re-precedences these parameters could re-introduce the regression silently.
