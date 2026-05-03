@@ -46,7 +46,7 @@ class AgentConfigurationManager(BaseVisibilityManager):
     def get_queryset(self):
         return AgentConfigurationQuerySet(self.model, using=self._db)
 
-    def visible_to_user(self, user):
+    def visible_to_user(self, user):  # type: ignore[override]
         """Override to use AgentConfigurationQuerySet's visible_to_user method."""
         return self.get_queryset().visible_to_user(user)
 
@@ -121,8 +121,9 @@ class AgentConfiguration(BaseOCModel):
         help_text="Whether this agent is active and can be used",
     )
 
-    # Manager
-    objects = AgentConfigurationManager()
+    # Manager (django-stubs flags re-declaring ``objects`` as overriding a
+    # class variable; intentional manager override).
+    objects = AgentConfigurationManager()  # type: ignore[misc]
 
     class Meta:
         constraints = [
@@ -148,8 +149,11 @@ class AgentConfiguration(BaseOCModel):
         )
 
     def __str__(self):
+        # Constraint above guarantees ``corpus`` is set when scope == "CORPUS".
         scope_label = (
-            f" ({self.corpus.title})" if self.scope == "CORPUS" else " (Global)"
+            f" ({self.corpus.title})"  # type: ignore[union-attr]
+            if self.scope == "CORPUS"
+            else " (Global)"
         )
         return f"{self.name}{scope_label}"
 
@@ -216,7 +220,7 @@ class AgentActionResultManager(BaseVisibilityManager):
     def get_queryset(self):
         return AgentActionResultQuerySet(self.model, using=self._db)
 
-    def visible_to_user(self, user):
+    def visible_to_user(self, user):  # type: ignore[override]
         return self.get_queryset().visible_to_user(user)
 
 
@@ -305,8 +309,9 @@ class AgentActionResult(BaseOCModel):
         help_text="Additional execution metadata (model used, token counts, etc.)",
     )
 
-    # Manager
-    objects = AgentActionResultManager()
+    # Manager (django-stubs flags re-declaring ``objects`` as overriding a
+    # class variable; intentional manager override).
+    objects = AgentActionResultManager()  # type: ignore[misc]
 
     class Meta:
         ordering = ["-started_at"]

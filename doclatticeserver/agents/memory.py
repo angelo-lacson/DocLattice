@@ -130,6 +130,8 @@ async def get_or_create_memory_document(corpus: Corpus, user: Any) -> Document:
             # Another transaction created it concurrently; re-read
             corpus.refresh_from_db()
             if corpus.memory_document_id:
+                # memory_document_id truthy implies the FK is set.
+                assert corpus.memory_document is not None
                 return corpus.memory_document
             raise
 
@@ -327,7 +329,7 @@ async def get_memory_for_injection(corpus: Corpus, query: str = "") -> str:
 
     if not query:
         # No query signal — return first N sections up to token budget
-        result_parts = []
+        result_parts: list[str] = []
         budget = MEMORY_FULL_INJECTION_MAX_TOKENS
         for section in sections:
             cost = estimate_token_count(section)
