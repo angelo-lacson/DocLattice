@@ -35,12 +35,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     (`frontend/src/graphql/cache.ts`), `QueryParams.noteId`
     (`frontend/src/utils/navigationUtils.ts`), and the central manager
     Phase 2/4 sync (`frontend/src/routing/CentralRouteManager.tsx`).
+    `DocumentKnowledgeBase` now consumes the var: when the loaded
+    document contains a note matching the URL id, the existing note
+    detail modal opens once and the param is consumed (one-shot
+    deep-link, mirrored back to the URL via Phase 4).
   - Hero wiring: `NewHeroSection.handleSearchSubmit` now navigates to
     `/discover/search?q=...`. The legacy `/discussions?search=...` route is
     preserved for callers that want a discussion-only listing.
-  - Test: `MentionSearchTestCase.test_search_notes_for_mention`
-    (`opencontractserver/tests/test_mentions.py`) covers visibility
-    filtering, content-substring matching, and corpus scoping.
+  - Tests: `MentionSearchTestCase` in
+    `opencontractserver/tests/test_mentions.py` covers visibility
+    filtering, content-substring matching, corpus / document scoping,
+    anonymous-user filtering, wrong-type global-id rejection, the
+    `-modified` ordering contract, and both
+    `content_preview` paths (DB-annotated `Left('content', 400)` for
+    search results, Python fallback for per-id note fetch).
+  - Component test: `frontend/tests/DiscoverSearchResults.ct.tsx`
+    covers the empty-prompt state, the four-section header render
+    after typing, and a populated-results render exercising every
+    section's row primitives. Captures both
+    `discover--search-results--empty-prompt.png` and
+    `discover--search-results--with-results.png` for docs.
 
 - **Loud guardrail against the `system_prompt=` foot-gun in pydantic-ai** (Issue #1451): `pydantic_ai.Agent` accepts both `system_prompt=` and `instructions=`, but the `system_prompt` value is *only* materialised into the model request when `message_history` is `None`. OpenContracts' `chat()` flow always persists the user's HUMAN message before calling `Agent.run()`, so `message_history` is never empty in practice and any `system_prompt=` argument is silently dropped — the LLM runs without any system instruction. CLAUDE.md pitfall #14 documented the workaround (use `instructions=`), but a future pydantic-ai bump that renames or re-precedences these parameters could re-introduce the regression silently.
   - **Single construction path** (`opencontractserver/llms/agents/pydantic_ai_factory.py`): new `make_pydantic_ai_agent(...)` factory is now the only place in the codebase that instantiates `pydantic_ai.Agent`. The factory uses a sentinel-based check (not `is not None`) to refuse `system_prompt=` outright — even `system_prompt=None` raises `TypeError` so the lesson cannot be re-learned by accident. The error message references issue #1451 and CLAUDE.md pitfall #14.

@@ -783,7 +783,7 @@ class MentionSearchTestCase(TestCase):
             e["node"]["title"] for e in result["data"]["searchNotesForMention"]["edges"]
         ]
         self.assertEqual(
-            titles[: len(titles)].index(newer.title),
+            titles.index(newer.title),
             0,
             "newest-modified note should be first",
         )
@@ -792,3 +792,76 @@ class MentionSearchTestCase(TestCase):
             titles.index(older.title),
             "newer note should sort before older note",
         )
+
+    def test_search_notes_content_preview_truncates_at_400_chars(self):
+        """`contentPreview` ships at most 400 characters of the note body.
+
+        Exercises the DB-annotated `Left('content', 400)` path used by the
+        resolver. A note with content longer than 400 chars must surface a
+        preview clipped to that bound (catches accidental drops of the
+        ``annotate(content_preview=...)`` clause).
+        """
+        from opencontractserver.annotations.models import Note
+
+        body = "x" * 500
+        Note.objects.create(
+            title="Long indemnity note",
+            content=body,
+            document=self.doc1,
+            corpus=self.corpus1,
+            creator=self.user1,
+        )
+
+        query = """
+            query SearchNotes($textSearch: String!) {
+                searchNotesForMention(textSearch: $textSearch) {
+                    edges { node { id title contentPreview } }
+                }
+            }
+        """
+        result = self.client.execute(
+            query,
+            variables={"textSearch": "indemnity"},
+            context_value=type("Request", (), {"user": self.user1})(),
+        )
+        self.assertIsNone(result.get("errors"))
+        edges = result["data"]["searchNotesForMention"]["edges"]
+        long_edges = [e for e in edges if e["node"]["title"] == "Long indemnity note"]
+        self.assertEqual(len(long_edges), 1)
+        preview = long_edges[0]["node"]["contentPreview"]
+        self.assertEqual(len(preview), 400)
+        self.assertTrue(preview.startswith("xxxx"))
+
+    def test_note_content_preview_python_fallback(self):
+        """Python fallback path on ``NoteType.resolve_content_preview``.
+
+        When a note is fetched without the ``content_preview`` annotation
+        (e.g. via the per-id ``note`` query) the resolver must still slice
+        the in-memory ``content`` to 400 chars rather than shipping the
+        full body or raising.
+        """
+        from opencontractserver.annotations.models import Note
+
+        body = "y" * 600
+        note = Note.objects.create(
+            title="Plain fallback note",
+            content=body,
+            document=self.doc1,
+            corpus=self.corpus1,
+            creator=self.user1,
+        )
+
+        query = """
+            query GetNote($id: ID!) {
+                note(id: $id) { id title contentPreview }
+            }
+        """
+        result = self.client.execute(
+            query,
+            variables={"id": to_global_id("NoteType", note.id)},
+            context_value=type("Request", (), {"user": self.user1})(),
+        )
+        self.assertIsNone(result.get("errors"))
+        preview = result["data"]["note"]["contentPreview"]
+        self.assertEqual(len(preview), 400)
+        self.assertTrue(preview.startswith("yyyy"))

@@ -469,10 +469,16 @@ class SearchQueryMixin:
             qs = qs.filter(document_id=int(document_pk))
 
         if text_search:
-            # Note has no `search_vector` column today (unlike Annotation), so
-            # `icontains` is the only available substring matcher. Acceptable
-            # for the current note volume; future scale work should add a
-            # `SearchVectorField` + GIN index and switch this to FTS.
+            # TODO(perf): Note has no `search_vector` column today (unlike
+            # Annotation), so `icontains` is the only available substring
+            # matcher. This is `LIKE '%…%'` and cannot use a B-tree or GIN
+            # index — it degrades to a sequential scan as note volume grows
+            # and returns lower-quality matches than FTS (no stemming/rank).
+            # The fix is to add a `SearchVectorField` + GIN index to `Note`,
+            # backfill it, and switch this filter to `SearchQuery` /
+            # `SearchVector` with `FTS_CONFIG` (mirroring
+            # `resolve_search_annotations_for_mention`). Acceptable for the
+            # small note corpora this was tested against.
             qs = qs.filter(
                 Q(title__icontains=text_search) | Q(content__icontains=text_search)
             )
