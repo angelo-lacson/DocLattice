@@ -8,10 +8,12 @@ Verifies:
 4. Search query permission filtering
 """
 
+import datetime
 from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 from graphene.test import Client as GrapheneClient
 from graphql_relay import to_global_id
 
@@ -733,3 +735,60 @@ class MentionSearchTestCase(TestCase):
         self.assertIsNone(result.get("errors"))
         edges = result["data"]["searchNotesForMention"]["edges"]
         self.assertEqual(len(edges), 0)
+
+    def test_search_notes_for_mention_orders_by_modified_desc(self):
+        """Results are returned newest-modified first.
+
+        Guards against an accidental drop of the resolver's
+        ``order_by("-modified")`` clause; the page relies on this
+        ordering so the most recent activity surfaces at the top.
+        """
+        from opencontractserver.annotations.models import Note
+
+        older = Note.objects.create(
+            title="Older indemnity note",
+            content="older",
+            document=self.doc1,
+            corpus=self.corpus1,
+            creator=self.user1,
+        )
+        newer = Note.objects.create(
+            title="Newer indemnity note",
+            content="newer",
+            document=self.doc1,
+            corpus=self.corpus1,
+            creator=self.user1,
+        )
+
+        # Force a deterministic gap between the two `modified` timestamps so
+        # the assertion does not depend on per-row creation timing.
+        Note.objects.filter(pk=older.pk).update(
+            modified=timezone.now() - datetime.timedelta(hours=1)
+        )
+
+        query = """
+            query SearchNotes($textSearch: String!) {
+                searchNotesForMention(textSearch: $textSearch) {
+                    edges { node { id title } }
+                }
+            }
+        """
+        result = self.client.execute(
+            query,
+            variables={"textSearch": "indemnity"},
+            context_value=type("Request", (), {"user": self.user1})(),
+        )
+        self.assertIsNone(result.get("errors"))
+        titles = [
+            e["node"]["title"] for e in result["data"]["searchNotesForMention"]["edges"]
+        ]
+        self.assertEqual(
+            titles[: len(titles)].index(newer.title),
+            0,
+            "newest-modified note should be first",
+        )
+        self.assertLess(
+            titles.index(newer.title),
+            titles.index(older.title),
+            "newer note should sort before older note",
+        )

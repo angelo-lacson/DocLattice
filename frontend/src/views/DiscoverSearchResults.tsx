@@ -1,11 +1,4 @@
-/**
- * DiscoverSearchResults
- *
- * Cross-content search results page reached from the Discover hero search box.
- * Searches across discussions, annotations, corpuses, and notes in parallel,
- * each tab paginating its own connection. Result rows deep-link to the
- * canonical entity URL via the central routing conventions.
- */
+// Cross-content Discover search: one page that fans out across discussions, annotations, corpuses, and notes.
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -46,6 +39,7 @@ import {
 } from "../components/threads/styles/discussionStyles";
 import { getCorpusUrl, getDocumentUrl } from "../utils/navigationUtils";
 import { stripMarkdown } from "../utils/formatters";
+import { useDebouncedValue } from "../utils/hooks";
 import {
   DISCOVER_SEARCH_ALL_TAB_PREVIEW,
   DISCOVER_SEARCH_DEBOUNCE_MS,
@@ -183,7 +177,7 @@ const LoadingContainer = styled.div`
 // Result row primitives
 // ---------------------------------------------------------------------------
 
-const ResultCard = styled.div`
+const ResultCard = styled.button`
   background: ${OS_LEGAL_COLORS.surface};
   border: 1px solid ${OS_LEGAL_COLORS.border};
   border-radius: 12px;
@@ -194,11 +188,20 @@ const ResultCard = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  width: 100%;
 
   &:hover {
     border-color: ${OS_LEGAL_COLORS.borderHover};
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
     transform: translateY(-1px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${OS_LEGAL_COLORS.primaryBlue};
+    outline-offset: 2px;
   }
 `;
 
@@ -254,18 +257,7 @@ const ResultRow: React.FC<ResultRowBaseProps> = ({
   onClick,
   leadingDot,
 }) => (
-  <ResultCard
-    onClick={onClick}
-    role="button"
-    tabIndex={0}
-    onKeyDown={(e) => {
-      // Activation parity with native <button>: Enter and Space fire onClick.
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onClick();
-      }
-    }}
-  >
+  <ResultCard type="button" onClick={onClick}>
     <ResultTitle>
       {leadingDot ? (
         <LabelDot
@@ -279,19 +271,6 @@ const ResultRow: React.FC<ResultRowBaseProps> = ({
     {meta ? <ResultMeta>{meta}</ResultMeta> : null}
   </ResultCard>
 );
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function useDebouncedValue<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState<T>(value);
-  useEffect(() => {
-    const handle = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(handle);
-  }, [value, delay]);
-  return debounced;
-}
 
 type EntityTab = "all" | "discussions" | "annotations" | "corpuses" | "notes";
 
@@ -343,6 +322,7 @@ interface SectionWrapperProps {
   loading: boolean;
   empty: boolean;
   emptyMessage: string;
+  errorMessage?: string;
   children: React.ReactNode;
 }
 
@@ -354,18 +334,23 @@ const Section: React.FC<SectionWrapperProps> = ({
   loading,
   empty,
   emptyMessage,
+  errorMessage,
   children,
 }) => (
   <SectionContainer>
     <SectionHeader>
       <SectionIcon $color={iconColor}>{icon}</SectionIcon>
       <SectionTitle>{title}</SectionTitle>
-      <SectionCount>{loading ? "…" : countLabel}</SectionCount>
+      <SectionCount>
+        {loading ? "…" : errorMessage ? "error" : countLabel}
+      </SectionCount>
     </SectionHeader>
     {loading ? (
       <LoadingContainer>
         <ModernLoadingDisplay message="Searching…" size="small" />
       </LoadingContainer>
+    ) : errorMessage ? (
+      <EmptyState role="alert">{errorMessage}</EmptyState>
     ) : empty ? (
       <EmptyState>{emptyMessage}</EmptyState>
     ) : (
@@ -373,6 +358,9 @@ const Section: React.FC<SectionWrapperProps> = ({
     )}
   </SectionContainer>
 );
+
+const SECTION_ERROR_FALLBACK =
+  "We couldn't load these results. Please try again.";
 
 const DISCUSSION_GRADIENT = `linear-gradient(135deg, ${CORPUS_COLORS.teal[600]} 0%, ${CORPUS_COLORS.teal[800]} 100%)`;
 const ANNOTATION_GRADIENT = `linear-gradient(135deg, ${OS_LEGAL_COLORS.primaryBlue} 0%, ${OS_LEGAL_COLORS.primaryBlueHover} 100%)`;
@@ -398,7 +386,7 @@ const DiscussionsSection: React.FC<DiscussionsSectionProps> = ({
     }),
     [query, limit]
   );
-  const { data, loading } = useQuery<
+  const { data, loading, error } = useQuery<
     GetConversationsOutputs,
     GetConversationsInputs
   >(GET_CONVERSATIONS, {
@@ -422,6 +410,7 @@ const DiscussionsSection: React.FC<DiscussionsSectionProps> = ({
       loading={loading && !data}
       empty={!loading && threads.length === 0}
       emptyMessage="No matching discussions"
+      errorMessage={error && !data ? SECTION_ERROR_FALLBACK : undefined}
     >
       {threads.map((thread) => (
         <ThreadListItem key={thread.id} thread={thread as ConversationType} />
@@ -442,7 +431,7 @@ const AnnotationsSection: React.FC<AnnotationsSectionProps> = ({
   limit,
 }) => {
   const navigate = useNavigate();
-  const { data, loading } = useQuery<
+  const { data, loading, error } = useQuery<
     SearchAnnotationsForMentionOutput,
     SearchAnnotationsForMentionInput
   >(SEARCH_ANNOTATIONS_FOR_MENTION, {
@@ -465,6 +454,7 @@ const AnnotationsSection: React.FC<AnnotationsSectionProps> = ({
       loading={loading && !data}
       empty={!loading && rows.length === 0}
       emptyMessage="No matching annotations"
+      errorMessage={error && !data ? SECTION_ERROR_FALLBACK : undefined}
     >
       {rows.map(({ node }) => {
         const docUrl = getDocumentUrl(node.document, node.corpus, {
@@ -508,15 +498,15 @@ interface CorpusesSectionProps {
 
 const CorpusesSection: React.FC<CorpusesSectionProps> = ({ query, limit }) => {
   const navigate = useNavigate();
-  const { data, loading } = useQuery<GetCorpusesOutputs, GetCorpusesInputs>(
-    GET_CORPUSES,
-    {
-      variables: { textSearch: query, limit },
-      fetchPolicy: "cache-first",
-      nextFetchPolicy: "cache-and-network",
-      skip: !query,
-    }
-  );
+  const { data, loading, error } = useQuery<
+    GetCorpusesOutputs,
+    GetCorpusesInputs
+  >(GET_CORPUSES, {
+    variables: { textSearch: query, limit },
+    fetchPolicy: "cache-first",
+    nextFetchPolicy: "cache-and-network",
+    skip: !query,
+  });
 
   const rows = (data?.corpuses.edges ?? [])
     .map((e) => e.node)
@@ -533,6 +523,7 @@ const CorpusesSection: React.FC<CorpusesSectionProps> = ({ query, limit }) => {
       loading={loading && !data}
       empty={!loading && rows.length === 0}
       emptyMessage="No matching collections"
+      errorMessage={error && !data ? SECTION_ERROR_FALLBACK : undefined}
     >
       {rows.map((corpus) => {
         const url = getCorpusUrl(corpus);
@@ -571,7 +562,7 @@ interface NotesSectionProps {
 
 const NotesSection: React.FC<NotesSectionProps> = ({ query, limit }) => {
   const navigate = useNavigate();
-  const { data, loading } = useQuery<
+  const { data, loading, error } = useQuery<
     SearchNotesForMentionOutput,
     SearchNotesForMentionInput
   >(SEARCH_NOTES_FOR_MENTION, {
@@ -592,6 +583,7 @@ const NotesSection: React.FC<NotesSectionProps> = ({ query, limit }) => {
       loading={loading && !data}
       empty={!loading && rows.length === 0}
       emptyMessage="No matching notes"
+      errorMessage={error && !data ? SECTION_ERROR_FALLBACK : undefined}
     >
       {rows.map(({ node }) => {
         // Deep-link with corpus context when available — getDocumentUrl needs
@@ -601,7 +593,7 @@ const NotesSection: React.FC<NotesSectionProps> = ({ query, limit }) => {
         });
         // Note content is stored as Markdown — strip the syntax before
         // truncating so the snippet doesn't render as raw `**bold**` etc.
-        const cleaned = stripMarkdown(node.content);
+        const cleaned = stripMarkdown(node.contentPreview ?? "");
         const snippet = cleaned ? cleaned.slice(0, 220) : undefined;
         return (
           <ResultRow

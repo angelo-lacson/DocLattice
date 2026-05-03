@@ -8,6 +8,7 @@ from typing import Any
 import graphene
 from django.contrib.postgres.search import SearchQuery
 from django.db.models import Q
+from django.db.models.functions import Left
 from graphene_django.fields import DjangoConnectionField
 from graphql_jwt.decorators import login_required
 from graphql_relay import from_global_id
@@ -468,13 +469,24 @@ class SearchQueryMixin:
             qs = qs.filter(document_id=int(document_pk))
 
         if text_search:
+            # Note has no `search_vector` column today (unlike Annotation), so
+            # `icontains` is the only available substring matcher. Acceptable
+            # for the current note volume; future scale work should add a
+            # `SearchVectorField` + GIN index and switch this to FTS.
             qs = qs.filter(
                 Q(title__icontains=text_search) | Q(content__icontains=text_search)
             )
 
-        # Eager-load the relations the result row needs for deep-linking.
-        qs = qs.select_related("document", "document__creator", "corpus", "creator")
+        # Eager-load the relations the result row needs for deep-linking, and
+        # annotate a DB-truncated preview so the wire payload doesn't ship the
+        # full markdown body for every result.
+        qs = qs.select_related(
+            "document", "document__creator", "corpus", "creator"
+        ).annotate(content_preview=Left("content", 400))
 
+        # NoteType.get_queryset re-applies `visible_to_user` as a defensive
+        # second pass, so callers cannot widen visibility by bypassing this
+        # resolver.
         return qs.order_by("-modified")
 
     # SEMANTIC SEARCH QUERIES #############################################
