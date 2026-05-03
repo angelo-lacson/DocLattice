@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import requests
 from django.db.utils import IntegrityError
@@ -41,10 +41,10 @@ def get_gremlin_manifests(gremlin_id: int) -> list[AnalyzerManifest] | None:
         manifest_list: list[AnalyzerManifest] = manifest_json.get("items", None)
 
         for analyzer_metadata in manifest_list:
-            # is_dict_instance_of_typed_dict expects a plain dict; AnalyzerManifest
-            # is a TypedDict at the type level but a regular dict at runtime.
+            # AnalyzerManifest is a TypedDict (plain dict at runtime); cast for the
+            # checker without the cost of materialising a copy via dict(...).
             if not is_dict_instance_of_typed_dict(
-                dict(analyzer_metadata), AnalyzerManifest
+                cast(dict, analyzer_metadata), AnalyzerManifest
             ):
                 raise ValueError(
                     "Received Gremlin manifest is not of expected format AnalyzerMetaDataType"
