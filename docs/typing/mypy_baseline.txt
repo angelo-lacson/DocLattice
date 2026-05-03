@@ -1211,8 +1211,6 @@ doclatticeserver/shared/Managers.py:341: note: See https://mypy.readthedocs.io/e
 doclatticeserver/shared/Managers.py:346: error: "NoteQuerySet[Any, Any]" has no attribute "for_user"  [attr-defined]
 doclatticeserver/shared/Managers.py:386: error: Variable "doclatticeserver.shared.Managers.User" is not valid as a type  [valid-type]
 doclatticeserver/shared/Managers.py:386: note: See https://mypy.readthedocs.io/en/stable/common_issues.html#variables-vs-type-aliases
-doclatticeserver/shared/QuerySets.py:102: error: Module "django.utils.timezone" does not explicitly export attribute "timedelta"  [attr-defined]
-doclatticeserver/shared/QuerySets.py:20: error: Module "django.utils.timezone" does not explicitly export attribute "timedelta"  [attr-defined]
 doclatticeserver/shared/decorators.py:123: error: callable? not callable  [misc]
 doclatticeserver/shared/decorators.py:235: error: Item "list[Any]" of "Any | list[Any]" has no attribute "create_doclattice_annotation_from_span"  [union-attr]
 doclatticeserver/shared/decorators.py:272: error: Value of type "Any | None" is not indexable  [index]
@@ -1221,14 +1219,6 @@ doclatticeserver/shared/decorators.py:33: note: Perhaps you meant "typing.Callab
 doclatticeserver/shared/decorators.py:52: error: Function "builtins.callable" is not valid as a type  [valid-type]
 doclatticeserver/shared/decorators.py:52: note: Perhaps you meant "typing.Callable" instead of "callable"?
 doclatticeserver/shared/decorators.py:584: error: Item "list[Any]" of "Any | list[Any]" has no attribute "create_doclattice_annotation_from_span"  [union-attr]
-doclatticeserver/shared/fields.py:72: error: Signature of "formfield" incompatible with supertype "django.db.models.fields.Field"  [override]
-doclatticeserver/shared/fields.py:72: note:          def formfield(self, **kwargs: Any) -> Any
-doclatticeserver/shared/fields.py:72: note:          def formfield(self, form_class: type[Field] | None = ..., choices_form_class: type[ChoiceField] | None = ..., **kwargs: Any) -> Field | None
-doclatticeserver/shared/fields.py:72: note:      Subclass:
-doclatticeserver/shared/fields.py:72: note:      Superclass:
-doclatticeserver/shared/mixins.py:204: error: "HasEmbeddingMixin" has no attribute "creator"  [attr-defined]
-doclatticeserver/shared/mixins.py:230: error: "HasEmbeddingMixin" has no attribute "creator"  [attr-defined]
-doclatticeserver/shared/mixins.py:83: error: "VectorSearchViaEmbeddingMixin" has no attribute "filter"  [attr-defined]
 doclatticeserver/tasks/agent_tasks.py:1171: error: Argument "tools" to "for_corpus" of "AgentAPI" has incompatible type "list[str]"; expected "list[str | CoreTool | callable?] | None"  [arg-type]
 doclatticeserver/tasks/agent_tasks.py:1171: note: "list" is invariant -- see https://mypy.readthedocs.io/en/stable/common_issues.html#variance
 doclatticeserver/tasks/agent_tasks.py:1171: note: Consider using "Sequence" instead, which is covariant
