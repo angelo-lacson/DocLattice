@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Celery configured for at-least-once delivery so worker death no longer silently loses tasks** (Issue #1493, `config/settings/base.py:677`): `CELERY_TASK_ACKS_LATE = True` and `CELERY_TASK_REJECT_ON_WORKER_LOST = True` are now set globally. Previously Celery acked messages on receive (at-most-once): if a worker died mid-task — OOM, host failure, deploy, eviction, SIGKILL — the broker had already removed the message and the task was silently lost, leaving long-running ingest/parse/embed work with documents stuck at `backend_lock=True` and no parsed content. With the new settings the broker only acks after the task returns successfully, and hard-killed workers cause redelivery rather than silent disappearance. To prevent the Redis broker from double-delivering long-running tasks (the default visibility timeout is 1 hour), `CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 12 * 60 * 60}` raises the threshold above any expected document-processing job. The redundant per-task `acks_late=True` on `opencontractserver/worker_uploads/tasks.py:76` is left in place as an explicit declaration of intent (it is now equivalent to the global default). Trade-off: at-least-once delivery means tasks may run twice, so all tasks must be idempotent — `docs/architecture/asynchronous-processing.md` documents the contract, lists known non-idempotent tasks to harden in follow-up work, and describes the per-task opt-out (`@shared_task(acks_late=False, reject_on_worker_lost=False)`) for tasks that genuinely cannot be made idempotent. Regression test in `opencontractserver/tests/test_celery_worker_death_resilience.py` pins all three settings and verifies the namespaced Django→Celery wiring still propagates them, so a future settings refactor cannot silently revert the resilience guarantee.
+
 ### Added
 
 - **Cross-content Discover search** at `/discover/search`. The Discover hero
