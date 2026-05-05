@@ -1,4 +1,4 @@
-from django.contrib.auth import get_user_model
+from typing import TYPE_CHECKING
 
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.tasks import fork_corpus
@@ -6,10 +6,11 @@ from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.corpus_collector import collect_corpus_objects
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from doclatticeserver.users.models import User
 
 
-def build_fork_corpus_task(corpus_pk_to_fork: str, user: User):
+def build_fork_corpus_task(corpus_pk_to_fork: str, user: "User"):
     """
     Build a Celery task to fork a corpus.
 
