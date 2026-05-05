@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Type-checking: graduated `opencontractserver.utils.*` chunk 1 from mypy baseline** (issue #1480, sub-issue of #1447). Removed `[mypy-…]` ignore blocks for `utils.analysis`, `utils.analyzer`, `utils.cleanup`, `utils.corpus_forking`, `utils.embeddings`, and `utils.etl` and fixed all surfaced errors. Notable production fixes uncovered by typing:
+    - `opencontractserver/utils/cleanup.py:34` — `delete_analysis_and_annotations` was calling `Analysis.annotations.filter(...)` on the class-level reverse descriptor (would fail at runtime with `AttributeError`); now correctly uses `analysis.annotations.all().delete()`.
+    - `opencontractserver/utils/analyzer.py:204` — `run_analysis` now raises `ValueError` early when `analyzer.host_gremlin` is `None` instead of crashing on `gremlin.url` later.
+    - `opencontractserver/utils/analyzer.py:272` — Submission-response logging used `f"{submission_response.content}"` which produced `b'…'` rather than the response body; switched to `!r` for safe bytes formatting.
+    - `opencontractserver/utils/analyzer.py:install_analyzers` and `opencontractserver/tasks/analyzer_tasks.py:install_analyzer_task` — return type corrected from `list[int]` to `list[str]` (Analyzer PKs are CharField).
+    - `opencontractserver/utils/embeddings.py` — `get_embedder` / `aget_embedder` parameter and return types now reflect that any of `corpus_id`, `mimetype_or_enum`, `embedder_class`, and `embedder_path` may be `None`. Removed an outdated `# type: ignore[attr-defined]` on `embed_text`.
+    - `opencontractserver/utils/etl.py:404` — Renamed inner PDF-burn-in loop variable from `page` to `pdf_page` so it no longer collides with the `PageAnnotationData` `page` from `iter_page_annotations`. Color tuple is now an explicit `tuple[float, float, float]` instead of variable-length.
+- Pruned 52 corresponding lines from `docs/typing/mypy_baseline.txt`.
+
 ### Fixed
 
 - **Doc-blob deletion guard follow-up** (issue #1496). Tightened the safety net introduced in #1464:
