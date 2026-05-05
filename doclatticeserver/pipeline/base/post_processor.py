@@ -4,6 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 
+from doclatticeserver.pipeline.base.file_types import FileTypeEnum
 from doclatticeserver.types.dicts import DocLatticeExportDataJsonPythonType
 from doclatticeserver.utils.logging import redact_sensitive_kwargs
 
@@ -23,6 +24,7 @@ class BasePostProcessor(PipelineComponentBase, ABC):
     description: str = ""
     author: str = ""
     dependencies: list[str] = []
+    supported_file_types: list[FileTypeEnum] = []
     input_schema: Mapping = (
         {}
     )  # If you want user to provide inputs, define a jsonschema here
