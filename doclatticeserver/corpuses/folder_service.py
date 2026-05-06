@@ -60,6 +60,7 @@ if TYPE_CHECKING:
     from doclatticeserver.corpuses.models import Corpus, CorpusFolder
     from doclatticeserver.documents.models import Document, DocumentPath
     from doclatticeserver.users.models import User
+    from doclatticeserver.users.types import UserOrAnonymous
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,7 @@ class DocumentFolderService:
     @classmethod
     def check_corpus_read_permission(
         cls,
-        user: User,
+        user: UserOrAnonymous,
         corpus: Corpus,
     ) -> bool:
         """
@@ -2784,7 +2785,7 @@ class DocumentFolderService:
     @classmethod
     def get_corpus_documents(
         cls,
-        user: User,
+        user: UserOrAnonymous,
         corpus: Corpus,
         include_deleted: bool = False,
     ) -> QuerySet[Document]:
