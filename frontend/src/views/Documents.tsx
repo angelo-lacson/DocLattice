@@ -51,7 +51,11 @@ import {
   RequestDocumentsForListInputs,
   RequestDocumentsForListOutputs,
   GET_DOCUMENTS_FOR_LIST,
+  RequestDocumentStatsInputs,
+  RequestDocumentStatsOutputs,
+  GET_DOCUMENT_STATS,
 } from "../graphql/queries";
+import { buildDocumentStatsVariables } from "./documentStatsVariables";
 import {
   documentSearchTerm,
   editingDocument,
@@ -923,36 +927,63 @@ export const Documents = () => {
     return document_items;
   }, [document_items, activeStatusFilter]);
 
-  // Calculate stats with single pass through array
-  const stats = useMemo(() => {
-    const result = document_items.reduce(
-      (acc, doc) => {
-        acc.totalPages += doc.pageCount || 0;
-        if (doc.backendLock) {
-          acc.processingCount += 1;
-        } else {
-          acc.processedCount += 1;
-        }
-        return acc;
-      },
-      { totalPages: 0, processedCount: 0, processingCount: 0 }
-    );
+  // Stats are computed by a single backend ``aggregate()`` over
+  // ``Document.objects.visible_to_user`` so the tile counters reflect the
+  // user's full permission scope rather than the paginated edges that
+  // happen to be loaded into Apollo's cache. The previous client-side
+  // reduce over ``document_items`` was bounded by the page size and
+  // additionally over-counted whenever filter changes leaked stale
+  // edges into the cache (the documents connection has no keyArgs).
+  const documentStatsVariables: RequestDocumentStatsInputs = useMemo(
+    () =>
+      buildDocumentStatsVariables({
+        searchTerm: document_search_term,
+        labelId: filtered_to_label_id,
+        corpus: filtered_to_corpus,
+      }),
+    [document_search_term, filtered_to_label_id, filtered_to_corpus]
+  );
 
-    return {
-      totalDocs: document_items.length,
-      totalPages: result.totalPages,
-      processedCount: result.processedCount,
-      processingCount: result.processingCount,
-    };
-  }, [document_items]);
+  // ``cache-and-network`` so the tiles update when the user revisits the
+  // view (e.g. after a document finishes processing and ``backendLock`` flips
+  // from true to false in another session). Without it, the default
+  // ``cache-first`` policy would never refetch as long as the variables
+  // remained stable, leaving processed/processing counters stuck at the
+  // values from the first visit.
+  const { data: stats_data, error: stats_error } = useQuery<
+    RequestDocumentStatsOutputs,
+    RequestDocumentStatsInputs
+  >(GET_DOCUMENT_STATS, {
+    variables: documentStatsVariables,
+    fetchPolicy: "cache-and-network",
+  });
 
-  // Filter tabs configuration
+  // Surface stats failures in the console so they don't silently render as
+  // zero counts (the same shape as the loading state). UI-side, we keep the
+  // zero fallback rather than a dash because the rest of the view stays
+  // usable; this is a complementary signal, not a hard error.
+  useEffect(() => {
+    if (stats_error) {
+      console.error("Documents view: GET_DOCUMENT_STATS failed", stats_error);
+    }
+  }, [stats_error]);
+
+  const stats = stats_data?.documentStats ?? {
+    totalDocs: 0,
+    totalPages: 0,
+    processedCount: 0,
+    processingCount: 0,
+  };
+
+  // Filter tabs configuration — ``All Documents`` reflects the full
+  // permission-filtered total, NOT the paginated subset, so the badge
+  // matches the tile counter to the right of it.
   const statusFilterItems: FilterTabItem[] = useMemo(
     () => [
       {
         id: STATUS_FILTERS.ALL,
         label: "All Documents",
-        count: String(document_items.length),
+        count: String(stats.totalDocs),
       },
       {
         id: STATUS_FILTERS.PROCESSED,
@@ -965,7 +996,7 @@ export const Documents = () => {
         count: String(stats.processingCount),
       },
     ],
-    [document_items.length, stats.processedCount, stats.processingCount]
+    [stats.totalDocs, stats.processedCount, stats.processingCount]
   );
 
   // Apollo's ``useQuery`` automatically refetches when ``variables`` change
