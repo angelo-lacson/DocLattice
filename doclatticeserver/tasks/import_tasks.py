@@ -6,12 +6,15 @@ import json
 import logging
 import pathlib
 import zipfile
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from django.contrib.auth.models import AbstractBaseUser
-
     from doclatticeserver.annotations.models import AnnotationLabel
+
+    # Aliased to avoid colliding with the runtime ``User = get_user_model()``
+    # below; matches the pattern in ``import_tasks_v2.py``.
+    from doclatticeserver.users.models import User as UserModel
     from doclatticeserver.utils.metadata_file_parser import DocumentMetadata
 
 import filetype
@@ -34,7 +37,6 @@ from doclatticeserver.corpuses.models import Corpus, TemporaryFileHandle
 from doclatticeserver.documents.models import Document
 from doclatticeserver.pipeline.registry import get_allowed_mime_types
 from doclatticeserver.types.dicts import (
-    DocLatticeDocExport,
     DocLatticeAnnotatedDocumentImportType,
 )
 from doclatticeserver.types.enums import PermissionTypes
@@ -441,7 +443,7 @@ def process_documents_zip(
 
 def create_relationships_from_parsed(
     corpus: Corpus,
-    user: AbstractBaseUser,
+    user: UserModel,
     document_path_map: dict[str, Document],
     parsed_relationships: list[Any],
     logger: logging.Logger,
@@ -604,8 +606,8 @@ _RELATIONSHIP_REQUIRED_KEYS = {
 
 
 def _validate_sidecar_schema(
-    doc_data: dict[str, Any],
-    sidecar_path: str,
+    doc_data: Mapping[str, Any],
+    sidecar_path: str | None,
 ) -> list[str]:
     """
     Validate the top-level structure and required fields of a sidecar JSON
@@ -691,11 +693,11 @@ def _validate_sidecar_schema(
 
 
 def _apply_sidecar_annotations(
-    doc_data: DocLatticeDocExport,
-    sidecar_path: str,
+    doc_data: Mapping[str, Any],
+    sidecar_path: str | None,
     corpus_doc: Document,
     corpus_obj: Corpus,
-    user_obj: AbstractBaseUser,
+    user_obj: UserModel,
     label_lookup: dict[str, AnnotationLabel],
     doc_label_lookup: dict[str, AnnotationLabel],
     results: dict[str, Any],

@@ -5,16 +5,13 @@ Celery tasks for badge auto-awarding and management.
 import logging
 from typing import Optional
 
-from django.contrib.auth import get_user_model
-
 from config import celery_app
 from doclatticeserver.badges.models import Badge, BadgeTypeChoices, UserBadge
 from doclatticeserver.conversations.models import ChatMessage
 from doclatticeserver.corpuses.models import Corpus
+from doclatticeserver.users.models import User
 
 logger = logging.getLogger(__name__)
-
-User = get_user_model()
 
 
 class BadgeCriteriaType:
