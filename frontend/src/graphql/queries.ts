@@ -132,6 +132,47 @@ export const GET_DOCUMENTS = gql`
   }
 `;
 
+// Aggregate stats for the Documents view tile counters. Computed by a single
+// backend ``aggregate()`` over ``Document.objects.visible_to_user`` so the
+// numbers reflect the user's full permission scope rather than the paginated
+// edges currently sitting in Apollo's cache.
+export interface RequestDocumentStatsInputs {
+  textSearch?: string;
+  hasLabelWithId?: string;
+  inCorpusWithId?: string;
+  includeCaml?: boolean;
+}
+
+export interface RequestDocumentStatsOutputs {
+  documentStats: {
+    totalDocs: number;
+    totalPages: number;
+    processedCount: number;
+    processingCount: number;
+  };
+}
+
+export const GET_DOCUMENT_STATS = gql`
+  query GetDocumentStats(
+    $textSearch: String
+    $hasLabelWithId: String
+    $inCorpusWithId: String
+    $includeCaml: Boolean
+  ) {
+    documentStats(
+      textSearch: $textSearch
+      hasLabelWithId: $hasLabelWithId
+      inCorpusWithId: $inCorpusWithId
+      includeCaml: $includeCaml
+    ) {
+      totalDocs
+      totalPages
+      processedCount
+      processingCount
+    }
+  }
+`;
+
 // Slim list-view query for the top-level Documents view (frontend/src/views/Documents.tsx).
 //
 // GET_DOCUMENTS is shared by many surfaces (modals, corpus tabs, upload flow,
