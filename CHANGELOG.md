@@ -84,6 +84,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **STRIDE P0 follow-up review fixes** (issue #1466, follow-up to PR #1463).
+  - `_add_doc_type_annotation` test helper in
+    `opencontractserver/tests/test_add_annotation_idor.py:157` now passes the
+    `user` argument it accepts into `_MutationContext` instead of the
+    hard-coded `self.attacker`. The previous version made the helper appear
+    parameterised but always executed as the attacker, so any future caller
+    that passed `self.victim` would have silently re-run the attacker case
+    and could miss a regression.
+  - `_resolve_annotation_parents` in
+    `config/graphql/annotation_mutations.py:218` now imports `DocumentPath`
+    at module level alongside `Document` (no circular dependency exists),
+    removing the unexplained lazy import.
+  - `resolve_bulk_document_upload_status` in
+    `config/graphql/document_queries.py:215` now constructs the opaque
+    "not found" `BulkDocumentUploadStatusType` only inside the rejection
+    branch instead of allocating it unconditionally on every status query.
+    (Code-quality cleanup, not a security fix — the previous code
+    allocated the response eagerly but only ever returned it on the
+    rejection path, so externally-observable behaviour is unchanged.)
+  - `BULK_UPLOAD_OWNER_CACHE_TTL_SECONDS` in
+    `opencontractserver/constants/zip_import.py:60` carries a comment
+    explaining why the 24-hour default is intentionally generous (a large
+    zip can take many hours and the user must remain able to poll progress
+    for the full lifetime of the job).
+  - `ingest_doc` in `opencontractserver/tasks/doc_tasks.py:350` carries a
+    comment explaining why the worker-side check uses `PermissionTypes.READ`
+    while the parallel `retry_document_processing` path uses
+    `PermissionTypes.UPDATE`.
+  - `retry_document_processing` in
+    `opencontractserver/tasks/doc_tasks.py:846` now emits a
+    `[SECURITY]`-tagged log line on the `User.DoesNotExist` early-exit and
+    returns the more accurate `"Invalid user for retry"` message instead
+    of the misleading `"Document not found"`. Audit symmetry with the
+    `ingest_doc` path is now preserved.
+  - `Corpus._propagate_public_status_to_documents` in
+    `opencontractserver/corpuses/models.py:522` moves the
+    `cross_owner_blocked_ids` query inside the `transaction.atomic()`
+    block, closing the narrow race where a document added to a new
+    cross-owner private corpus between the membership check and the
+    update could be incorrectly publicized. The same method now passes
+    `batch_size=500` to `Notification.objects.bulk_create` so a corpus
+    with thousands of cross-owner documents does not blow up a single
+    SQL statement.
+
 - **Bulk and single document import no longer crash with Apollo "Payload allocation size overflow"** before the network request fires. The previous transport base64-encoded the entire file (PDF or zip) into a single GraphQL `String` variable; Apollo then `JSON.stringify`'d the request body, which V8 cannot allocate as a contiguous string for large files (~33% inflation pushes a moderately sized zip past the V8 string limit / heap fragmentation ceiling). The frontend now streams uploads as `multipart/form-data` via `fetch` to two new REST endpoints, so the binary bytes never become a JS string. Files affected:
   - `frontend/src/components/widgets/modals/UploadModal/hooks/useUploadMutations.ts` — replaces the `UPLOAD_DOCUMENT` and `UPLOAD_DOCUMENTS_ZIP` Apollo mutations with `fetch` calls.
   - `frontend/src/utils/importHttp.ts` (new) — multipart helpers (`importDocumentMultipart`, `importDocumentsZipMultipart`) that attach the JWT bearer token and parse REST error bodies into structured results.
