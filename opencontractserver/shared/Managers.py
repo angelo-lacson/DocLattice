@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from django.contrib.auth.models import AnonymousUser
 from django.db import IntegrityError
-from django.db.models import FileField, Manager, Prefetch, Q, QuerySet
+from django.db.models import Manager, Prefetch, Q, QuerySet
 
 from opencontractserver.shared.prefetch_attrs import (
     user_group_perm_attr,
@@ -396,14 +397,8 @@ class DocumentManager(BaseVisibilityManager):
             *only* by ``doc``. Safe to delete from storage. Empty/
             unset fields are omitted.
         """
-        blob_fields: list[str] = [
-            field.name
-            for field in doc._meta.get_fields()
-            if isinstance(field, FileField)
-        ]
-
         unique: set[str] = set()
-        for field_name in blob_fields:
+        for field_name in type(doc).blob_field_names():
             file_field = getattr(doc, field_name)
             if not file_field:
                 continue
@@ -413,6 +408,64 @@ class DocumentManager(BaseVisibilityManager):
             shared = self.filter(**{field_name: blob_name}).exclude(pk=doc.pk).exists()
             if not shared:
                 unique.add(blob_name)
+        return unique
+
+    def unique_blob_paths_for_many(
+        self, queryset_or_pks: QuerySet | Iterable[Any]
+    ) -> set[str]:
+        """Batched complement to ``unique_blob_paths`` for bulk deletion.
+
+        Returns the set of blob paths referenced by any Document in the
+        input set that are NOT referenced by any Document outside the
+        input set. These are the blobs that would be orphaned in storage
+        if every Document in the input were deleted.
+
+        Where ``unique_blob_paths`` runs N queries per Document (one per
+        FileField), this runs at most ``2 * len(FileFields)`` queries
+        regardless of the input size — suitable for queryset-style
+        deletes where the per-row form would be N+1.
+
+        Args:
+            queryset_or_pks: A Document queryset, or an iterable of
+                Document primary keys.
+
+        Returns:
+            Set of blob names safe to schedule for deletion if every
+            input Document is deleted. Empty/unset fields are omitted.
+        """
+        if isinstance(queryset_or_pks, QuerySet):
+            target_pks: list[Any] = list(queryset_or_pks.values_list("pk", flat=True))
+        else:
+            target_pks = [pk for pk in queryset_or_pks if pk is not None]
+
+        if not target_pks:
+            return set()
+
+        unique: set[str] = set()
+        for field_name in self.model.blob_field_names():
+            # Single round-trip per field: collect every distinct,
+            # non-empty path used by the targets.
+            target_paths: set[str] = {
+                path
+                for path in self.filter(pk__in=target_pks)
+                .exclude(**{field_name: ""})
+                .exclude(**{f"{field_name}__isnull": True})
+                .values_list(field_name, flat=True)
+                .distinct()
+                if path
+            }
+            if not target_paths:
+                continue
+
+            # Single round-trip per field: of those, which are still
+            # referenced OUTSIDE the target set?
+            shared_paths: set[str] = set(
+                self.exclude(pk__in=target_pks)
+                .filter(**{f"{field_name}__in": list(target_paths)})
+                .values_list(field_name, flat=True)
+            )
+
+            unique.update(target_paths - shared_paths)
         return unique
 
 
