@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Anonymous users could see public structural annotations but not their attached images** (`opencontractserver/annotations/views.py`, `opencontractserver/llms/tools/image_tools.py:472`, `opencontractserver/tests/test_annotation_images_api.py`, `docs/permissioning/consolidated_permissioning_guide.md`). `AnnotationImagesView` (`/api/annotations/<id>/images/`) was hardcoded to `IsAuthenticated`, so the frontend hook silently rendered "No thumbnail" for anonymous viewers even when the annotation was returned by the GraphQL feed under public-read rules. The endpoint now uses `AllowAny`; `get_annotation_images_with_permission` delegates directly to `AnnotationQuerySet.visible_to_user` so image visibility is **identical** to annotation visibility (no forked rule set to drift). Throttling is split into authenticated (`AnnotationImagesThrottle`) and anonymous (`AnnotationImagesAnonThrottle`) buckets, each gated on the matching user type so anonymous requests no longer consume two cache slots in lockstep. IDOR protection unchanged — empty 200 for missing/unauthorized.
+
 ### Changed
 
 - **Tokenize hardcoded navigation colors and tighten test-wrapper / focus-effect conventions in the Corpuses split** (`frontend/src/views/Corpuses.styles.ts`, `frontend/src/views/CorpusQueryView.tsx`, `frontend/tests/CorpusQueryViewTestWrapper.tsx`, `frontend/src/assets/configurations/osLegalStyles.ts`). Follow-up to PR #1578 review feedback:
