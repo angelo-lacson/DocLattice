@@ -95,8 +95,9 @@ from .search import (  # noqa: F401
     search_exact_text_as_sources,
 )
 from .text_extracts import (  # noqa: F401
-    _DOC_TXT_CACHE,
     aload_document_txt_extract,
+    get_cached_txt_extract_length,
+    is_txt_extract_cached,
     load_document_txt_extract,
 )
 
@@ -104,7 +105,6 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     # Helpers (kept private but historically importable from this module)
-    "_DOC_TXT_CACHE",
     "_apply_ndiff_patch",
     "_db_sync_to_async",
     "_token_count",
@@ -134,6 +134,8 @@ __all__ = [
     "update_document_note",
     # Plain-text extracts
     "aload_document_txt_extract",
+    "get_cached_txt_extract_length",
+    "is_txt_extract_cached",
     "load_document_txt_extract",
     # Descriptions
     "aget_corpus_description",

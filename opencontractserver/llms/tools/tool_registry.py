@@ -174,17 +174,43 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
         category=ToolCategory.DOCUMENT,
     ),
     ToolDefinition(
+        name="get_remaining_context_budget",
+        description=(
+            "Inspect the agent's remaining context-window budget for this "
+            "turn. Returns model name, total context window, estimated "
+            "tokens already used, tokens left before compaction trips, "
+            "the compaction threshold ratio, and the recommended "
+            "character chunk size for the next ``load_document_text`` "
+            "call. Use this when planning multi-step document reads so "
+            "each call uses an appropriately-sized chunk."
+        ),
+        category=ToolCategory.DOCUMENT,
+    ),
+    # NOTE for developers: the document agent (``PydanticAIDocumentAgent``)
+    # replaces this registry entry at runtime with an adaptive variant that
+    # auto-sizes ``end`` to the agent's remaining context budget when
+    # omitted. The adaptive variant ships its own LLM-facing description.
+    # The description below is what non-document-agent callers (and the
+    # registry's own docs) see, so keep it user/LLM-focused only.
+    ToolDefinition(
         name="load_document_text",
         description=(
-            "Load a slice of the document's plain-text extract. Always use "
-            "get_document_text_length first to plan chunking. Load in chunks of "
-            "5K-50K chars to avoid context overflow. After reading, call "
-            "search_exact_text on key passages to create citations."
+            "Load a slice of the document's plain-text extract by "
+            "character index. ``start`` defaults to 0; if ``end`` is "
+            "omitted the slice runs to the end of the file. After "
+            "reading, call ``search_exact_text`` on key passages to "
+            "create citations."
         ),
         category=ToolCategory.DOCUMENT,
         parameters=(
             ("start", "Inclusive start character index (default 0)", False),
-            ("end", "Exclusive end character index (defaults to end of file)", False),
+            (
+                "end",
+                "Exclusive end character index. If omitted on the document "
+                "agent, defaults to a chunk sized for the remaining context "
+                "budget; otherwise defaults to the end of the file.",
+                False,
+            ),
             ("refresh", "If true, refresh the cached content from disk", False),
         ),
     ),
@@ -1062,11 +1088,12 @@ class ToolFunctionRegistry:
             "get_corpus_memory": (aget_corpus_memory, ()),
             "suggest_memory_update": (asuggest_memory_update, ()),
         }
-        # NOTE: similarity_search, get_document_text_length, list_documents,
-        # and ask_document are NOT in FUNCTION_MAP because they require
-        # runtime context (vector store, cache, sub-agent) that is built
-        # in the agent factory.  They have ToolDefinition entries only for
-        # the GraphQL "available tools" API.
+        # NOTE: similarity_search, get_document_text_length,
+        # get_remaining_context_budget, list_documents, and ask_document
+        # are NOT in FUNCTION_MAP because they require runtime context
+        # (vector store, cache, agent deps snapshot, sub-agent) that is
+        # built in the agent factory.  They have ToolDefinition entries
+        # only for the GraphQL "available tools" API.
 
         # Legacy aliases (short names -> canonical names)
         LEGACY_ALIASES: dict[str, str] = {

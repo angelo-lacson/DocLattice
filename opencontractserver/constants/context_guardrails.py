@@ -73,6 +73,38 @@ TOOL_OUTPUT_TRUNCATION_NOTICE: str = (
     "use start/end parameters to load specific sections]"
 )
 
+# Floor (in characters) for the budget-derived default chunk size used by
+# ``load_document_text`` when ``end`` is omitted. Keeps the implicit slice
+# big enough to be useful for whole-document tasks (summarisation, full-text
+# Q&A) even when the per-turn context budget is starved. ``MAX_TOOL_OUTPUT_CHARS``
+# is the wrapper-level ceiling for stringified tool returns; the dict-returning
+# ``load_document_text`` deliberately bypasses that truncation, so a 5K floor
+# is comfortably below any model's residual context.
+#
+# Trade-off: when the agent is genuinely starved (≈4K-token effective budget,
+# ≈14K chars residual), several end-less ``load_document_text`` calls will
+# each individually clear the floor but can collectively overflow. The
+# in-turn deduction (``turn_implicit_doc_text_chars``) backs successive
+# implicit reads off proportionally, but a single call still serves at
+# least 5K chars even if that crosses the residual budget. We accept this
+# usability tax over the alternative of the agent receiving a sub-1K
+# slice that's useless for whole-document tasks.
+MIN_IMPLICIT_DOCUMENT_CHUNK_CHARS: int = 5_000
+
+# Soft warning threshold for the budget-derived implicit chunk size,
+# expressed as a fraction of the model's full context window in characters
+# (``context_window_tokens * CHARS_PER_TOKEN_ESTIMATE``). When
+# ``recommended_chunk_chars`` exceeds this fraction of the window,
+# ``load_document_text`` emits a warning so the heuristic's drift is
+# observable in production logs (e.g. when ``CHARS_PER_TOKEN_ESTIMATE``
+# no longer reflects the tokenisation density of multilingual or code-heavy
+# documents). The threshold is *relative* so 1M-token models (Gemini 1.5,
+# Claude Opus large-context) don't spam the warning on legitimately large
+# recommendations — half the entire window is the sign of real drift, not
+# just a big context. This is only an observability signal — the chunk is
+# still served at the budgeted size.
+LARGE_IMPLICIT_CHUNK_WARN_RATIO: float = 0.5
+
 # ---------------------------------------------------------------------------
 # Compaction summary budget
 # ---------------------------------------------------------------------------
