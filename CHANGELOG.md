@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Cookie consent modal visual polish on mobile** (`frontend/src/components/cookies/CookieConsent.tsx`). The mobile presentation of the consent modal was cramped and felt off-brand compared with the rest of the OS Legal surfaces. Reworked mobile styling without touching desktop: `.oc-modal` now uses `display: flex; flex-direction: column` with a `flex-shrink: 0` header, a `flex: 1 1 auto; overflow-y: auto` body, and a `flex-shrink: 0` footer so the Accept button stays anchored above the safe-area inset with a soft top shadow instead of relying purely on `position: sticky`. The body's mobile background switches to `OS_LEGAL_COLORS.background` so the white data cards lift off the surface with their new `OS_LEGAL_SHADOWS.card` shadow. Data list items adopt `accentSurface` + `textPrimary` on mobile (replacing the heavier slate-chip look) to feel brand-cohesive. The demo banner gains a 3px warning-text left bar for clearer hierarchy; the header icon badge gains an inner accent ring; section labels, lead copy, and disclaimer text get tighter mobile sizing. The Accept & Continue footer button is 48px tall with `font-weight: 600` for a comfortable thumb target and visual weight.
+
 ### Fixed
 
 - **Mobile-nav follow-up: dialog/landmark semantic conflict, missing type imports, and iOS scroll-lock bleed-through** (`frontend/src/components/layout/MobileNavMenu.tsx`, `frontend/src/utils/initials.ts`, `frontend/tests/NavMenu.ct.tsx`). Closes #1610 — surgical follow-up to PR #1606. Code-review feedback on the new floating-sheet mobile nav surfaced four real defects (#1, #6, #7, plus three latent code-clarity issues #2/#3/#4) and confirmed one non-issue (#5):
