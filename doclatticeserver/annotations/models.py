@@ -40,6 +40,7 @@ from doclatticeserver.shared.Managers import (
     AnnotationManager,
     EmbeddingManager,
     NoteManager,
+    RelationshipManager,
 )
 from doclatticeserver.shared.mixins import HasEmbeddingMixin
 from doclatticeserver.shared.Models import BaseOCModel
@@ -172,6 +173,8 @@ class AnnotationLabel(BaseOCModel):
 
 
 class Relationship(BaseOCModel):
+    objects = RelationshipManager()  # type: ignore[misc]
+
     relationship_label = django.db.models.ForeignKey(
         "AnnotationLabel",
         null=True,
