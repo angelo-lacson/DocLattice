@@ -17,7 +17,9 @@ The frontend uses different environment variable prefixes depending on the deplo
 | Local development (Vite) | `VITE_` | `VITE_USE_AUTH0=true` |
 | Production (Docker/K8s) | `DOCLATTICE_` | `DOCLATTICE_REACT_APP_USE_AUTH0=true` |
 
-**How it works**: In production, the container entrypoint converts `DOCLATTICE_REACT_APP_*` environment variables to `REACT_APP_*` on `window._env_`. For example, `DOCLATTICE_REACT_APP_USE_AUTH0` becomes available as `REACT_APP_USE_AUTH0` in the frontend code.
+**How it works**: In production, the container entrypoint script writes a runtime-loaded file at `frontend/public/env-config.js` that populates `window._env_` with the `REACT_APP_*` variables converted from `DOCLATTICE_REACT_APP_*`. For example, `DOCLATTICE_REACT_APP_USE_AUTH0` becomes `window._env_.REACT_APP_USE_AUTH0` in the frontend code. The browser fetches `env-config.js` on every page load, so configuration changes do **not** require a frontend rebuild — only a container restart (or `env-config.js` regeneration) is needed.
+
+See [`frontend/public/env-config.js`](https://github.com/angelo-lacson/DocLattice/blob/main/frontend/public/env-config.js) for the file structure and the [Frontend Telemetry doc](../telemetry/Frontend.md) for how the same mechanism is used to inject PostHog keys.
 
 ## Available Configuration Options
 
