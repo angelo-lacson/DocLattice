@@ -38,6 +38,8 @@ class ToolCategory(str, Enum):
     IMAGE = "image"
     WEB = "web"
     MEMORY = "memory"
+    EXTRACTS = "extracts"
+    ANALYZERS = "analyzers"
 
 
 @dataclass(frozen=True)
@@ -819,6 +821,145 @@ AVAILABLE_TOOLS: tuple[ToolDefinition, ...] = (
             ),
         ),
     ),
+    # -------------------------------------------------------------------------
+    # EXTRACT TOOLS
+    # -------------------------------------------------------------------------
+    ToolDefinition(
+        name="list_fieldsets",
+        description=(
+            "List the configured Fieldsets (extract column schemas) visible to "
+            "the user. Use this to pick an existing Fieldset before calling "
+            "start_extract — do not invent new column definitions. Returns "
+            "each Fieldset's name, description, and column names. Pass "
+            "include_columns=true to also get the full column definitions "
+            "(query, output_type, instructions) inline."
+        ),
+        category=ToolCategory.EXTRACTS,
+        requires_corpus=True,
+        parameters=(
+            ("limit", "Max number of fieldsets to return (default 20)", False),
+            (
+                "include_columns",
+                "When true, include the full column definitions "
+                "(query/match_text/output_type/instructions/extract_is_list) "
+                "inline. Default false returns column names only to keep "
+                "the response compact.",
+                False,
+            ),
+        ),
+    ),
+    ToolDefinition(
+        name="start_extract",
+        description=(
+            "Run a configured Fieldset over the corpus to extract structured "
+            "data into Datacells. Always pick a fieldset_id from list_fieldsets; "
+            "this tool does not invent new columns. Returns the new extract_id "
+            "with status='queued' — the Celery pipeline runs asynchronously. "
+            "If document_ids is omitted on a corpus agent the run targets the "
+            "entire corpus; for corpora with thousands of documents pass an "
+            "explicit document_ids subset to bound the dispatch cost."
+        ),
+        category=ToolCategory.EXTRACTS,
+        requires_corpus=True,
+        requires_approval=True,
+        requires_write_permission=True,
+        parameters=(
+            (
+                "fieldset_id",
+                "Integer ID of an existing Fieldset to apply (Fieldset PKs "
+                "are auto-increment integers — pass the `id` value from "
+                "list_fieldsets, not the `name`).",
+                True,
+            ),
+            ("name", "Optional name for the new Extract record", False),
+            (
+                "document_ids",
+                "Optional list of Document IDs to scope the run. Omitted = "
+                "current document for doc agents, whole corpus for corpus "
+                "agents.",
+                False,
+            ),
+        ),
+    ),
+    ToolDefinition(
+        name="list_recent_extracts",
+        description=(
+            "List the most recent Extracts on this corpus visible to the user, "
+            "with status and fieldset info. Use this before start_extract to "
+            "avoid re-running an extract that already completed."
+        ),
+        category=ToolCategory.EXTRACTS,
+        requires_corpus=True,
+        parameters=(("limit", "Max number of extracts to return (default 10)", False),),
+    ),
+    # -------------------------------------------------------------------------
+    # ANALYZER TOOLS
+    # -------------------------------------------------------------------------
+    ToolDefinition(
+        name="list_analyzers",
+        description=(
+            "List the Analyzers visible to the user. The corpus_id is used "
+            "to verify you can access this corpus, but the returned list is "
+            "NOT filtered by corpus-type affinity — it contains every "
+            "non-disabled analyzer visible to you, and the agent is "
+            "responsible for picking one that makes sense for the corpus. "
+            "Use this to pick an analyzer_id before calling start_analysis. "
+            "Note: Analyzer.id is a STRING (e.g. 'noop.analyzer'), unlike "
+            "Fieldset.id which is an integer."
+        ),
+        category=ToolCategory.ANALYZERS,
+        requires_corpus=True,
+        parameters=(
+            ("limit", "Max number of analyzers to return (default 20)", False),
+        ),
+    ),
+    ToolDefinition(
+        name="start_analysis",
+        description=(
+            "Run a configured Analyzer over the corpus. Returns the new "
+            "analysis_id with status='queued' — the analyzer runs "
+            "asynchronously via the existing Gremlin/task pipeline. If "
+            "document_ids is omitted on a corpus agent the run targets the "
+            "entire corpus; for corpora with thousands of documents pass an "
+            "explicit document_ids subset to bound the dispatch cost."
+        ),
+        category=ToolCategory.ANALYZERS,
+        requires_corpus=True,
+        requires_approval=True,
+        requires_write_permission=True,
+        parameters=(
+            (
+                "analyzer_id",
+                "STRING ID of an existing Analyzer (Analyzer PKs are "
+                "CharFields like 'noop.analyzer' — pass the `id` value from "
+                "list_analyzers, not the `description`).",
+                True,
+            ),
+            (
+                "document_ids",
+                "Optional list of Document IDs to scope the run. Omitted = "
+                "current document for doc agents, whole corpus for corpus "
+                "agents.",
+                False,
+            ),
+            (
+                "analysis_input_data",
+                "Optional JSON object matching the analyzer's input_schema",
+                False,
+            ),
+        ),
+    ),
+    ToolDefinition(
+        name="list_recent_analyses",
+        description=(
+            "List the most recent Analyses on this corpus visible to the user, "
+            "with status and analyzer info. Use this before start_analysis to "
+            "avoid re-running an analyzer that already produced results."
+        ),
+        category=ToolCategory.ANALYZERS,
+        requires_corpus=True,
+        parameters=(("limit", "Max number of analyses to return (default 10)", False),),
+    ),
 )
 
 
@@ -1022,6 +1163,10 @@ class ToolFunctionRegistry:
             aget_md_summary_token_length,
             aget_notes_for_document_corpus,
             aget_page_image,
+            alist_analyzers,
+            alist_fieldsets,
+            alist_recent_analyses,
+            alist_recent_extracts,
             aload_document_md_summary,
             aload_document_txt_extract,
             amove_document,
@@ -1030,6 +1175,8 @@ class ToolFunctionRegistry:
             ascan_and_annotate_pii,
             asearch_document_notes,
             asearch_exact_text_as_sources,
+            astart_analysis,
+            astart_extract,
             asuggest_memory_update,
             aupdate_corpus_description,
             aupdate_document_description,
@@ -1126,6 +1273,13 @@ class ToolFunctionRegistry:
             # Memory tools
             "get_corpus_memory": (aget_corpus_memory, ()),
             "suggest_memory_update": (asuggest_memory_update, ()),
+            # Extract & analyzer tools
+            "list_fieldsets": (alist_fieldsets, ()),
+            "start_extract": (astart_extract, ()),
+            "list_recent_extracts": (alist_recent_extracts, ()),
+            "list_analyzers": (alist_analyzers, ()),
+            "start_analysis": (astart_analysis, ()),
+            "list_recent_analyses": (alist_recent_analyses, ()),
         }
         # NOTE: similarity_search, get_document_text_length,
         # get_remaining_context_budget, list_documents, and ask_document
