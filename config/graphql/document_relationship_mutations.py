@@ -11,6 +11,7 @@ from graphql_relay import from_global_id
 
 from config.graphql.graphene_types import DocumentRelationshipType
 from doclatticeserver.annotations.models import AnnotationLabel
+from doclatticeserver.corpuses.corpus_objs_service import CorpusObjsService
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document, DocumentRelationship
 from doclatticeserver.documents.query_optimizer import (
@@ -378,9 +379,13 @@ class UpdateDocumentRelationship(graphene.Mutation):
                             message="Corpus not found",
                         )
 
-                    # Validate both documents are in the new corpus
+                    # Validate both documents are in the new corpus.
+                    # Routes through the canonical service so corpus READ is
+                    # enforced against the requesting user.
                     docs_in_corpus = (
-                        corpus.get_documents()
+                        CorpusObjsService.get_corpus_documents(
+                            user=info.context.user, corpus=corpus
+                        )
                         .filter(
                             id__in=[
                                 doc_relationship.source_document_id,
