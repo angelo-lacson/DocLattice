@@ -22,7 +22,7 @@ from doclatticeserver.analyzer.models import Analysis, Analyzer
 from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import DocumentAnalysisRow
-from doclatticeserver.tests.base import BaseFixtureTestCase
+from doclatticeserver.tests.base import TransactionFixtureTestCase
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
@@ -37,7 +37,7 @@ class TestContext:
         self.user = user
 
 
-class TestAgenticHighlighterClaude(BaseFixtureTestCase):
+class TestAgenticHighlighterClaude(TransactionFixtureTestCase):
     """Test suite for agentic_highlighter_claude task."""
 
     def setUp(self):

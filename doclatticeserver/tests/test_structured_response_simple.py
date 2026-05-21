@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from doclatticeserver.llms import agents
 from doclatticeserver.llms.types import AgentFramework
-from doclatticeserver.tests.base import BaseFixtureTestCase
+from doclatticeserver.tests.base import TransactionFixtureTestCase
 
 
 # Set up logging for structured data results
@@ -91,7 +91,7 @@ class SimpleExtraction(BaseModel):
 
 
 @pytest.mark.asyncio
-class TestStructuredResponseBasic(BaseFixtureTestCase):
+class TestStructuredResponseBasic(TransactionFixtureTestCase):
     """Basic tests for structured response API."""
 
     @vcr.use_cassette(
