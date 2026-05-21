@@ -197,10 +197,13 @@ class ComprehensivePermissionTestCase(TestCase):
         )
         variables = {"id": to_global_id("CorpusType", corpus_to_delete.id)}
 
-        # Test for regular user (should fail)
+        # Test for regular user (should fail with unified ok=False envelope).
+        # Phase D #1658: DeleteCorpusMutation now returns ok=False instead of
+        # raising Corpus.DoesNotExist so the response shape doesn't leak
+        # existence-vs-permission to enumerating callers.
         result = self.regular_client.execute(mutation, variable_values=variables)
-        self.assertIsNone(result["data"]["deleteCorpus"])
-        self.assertIn("errors", result)
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["deleteCorpus"]["ok"])
 
         # Verify corpus still exists in database
         self.assertTrue(Corpus.objects.filter(id=corpus_to_delete.id).exists())
@@ -229,10 +232,14 @@ class ComprehensivePermissionTestCase(TestCase):
         )
         variables = {"id": to_global_id("CorpusType", private_corpus.id)}
 
-        # Test for collaborator (should fail)
+        # Test for collaborator (should fail with unified ok=False envelope).
+        # Phase D #1658: same IDOR-safe response whether the corpus is hidden
+        # by visibility or visible-but-undeletable; previously the unauthorized
+        # branch raised Corpus.DoesNotExist which surfaced as a GraphQL errors
+        # entry.
         result = self.collaborator_client.execute(mutation, variable_values=variables)
-        self.assertIsNone(result["data"]["deleteCorpus"])
-        self.assertIn("errors", result)
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["deleteCorpus"]["ok"])
 
         # Verify corpus still exists in database
         self.assertTrue(Corpus.objects.filter(id=private_corpus.id).exists())
@@ -243,6 +250,38 @@ class ComprehensivePermissionTestCase(TestCase):
 
         # Verify corpus is actually deleted from database
         self.assertFalse(Corpus.objects.filter(id=private_corpus.id).exists())
+
+    def test_delete_personal_corpus_returns_unified_envelope(self):
+        """Phase D #1658: even the ``is_personal`` rejection must travel via
+        ``{ok: false, message}`` rather than ``GraphQLError``, so frontend
+        consumers can pattern-match a single response shape.
+        """
+        mutation = """
+        mutation($id: String!) {
+          deleteCorpus(id: $id) {
+            ok
+            message
+          }
+        }
+        """
+        # The owner's personal corpus is auto-created by the user signal —
+        # the ``one_personal_corpus_per_user`` constraint forbids a second.
+        personal_corpus = Corpus.objects.get(creator=self.owner, is_personal=True)
+        set_permissions_for_obj_to_user(
+            self.owner.id, personal_corpus, [PermissionTypes.CRUD]
+        )
+        variables = {"id": to_global_id("CorpusType", personal_corpus.id)}
+
+        result = self.owner_client.execute(mutation, variable_values=variables)
+
+        # No raw GraphQL errors must surface — all rejections live in
+        # ``data.deleteCorpus.{ok,message}``.
+        self.assertIsNone(result.get("errors"))
+        self.assertFalse(result["data"]["deleteCorpus"]["ok"])
+        self.assertIn("personal", result["data"]["deleteCorpus"]["message"].lower())
+
+        # Corpus remains in the database.
+        self.assertTrue(Corpus.objects.filter(id=personal_corpus.id).exists())
 
     def test_permission_change_effect(self):
         query = """
