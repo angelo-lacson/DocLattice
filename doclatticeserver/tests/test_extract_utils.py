@@ -16,7 +16,6 @@ from doclatticeserver.documents.models import Document
 from doclatticeserver.extracts.models import Column, Extract, Fieldset
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.extract import create_and_setup_extract
-from doclatticeserver.utils.permissioning import user_has_permission_for_obj
 
 logger = logging.getLogger(__name__)
 
@@ -73,12 +72,7 @@ class CreateAndSetupExtractTestCase(TestCase):
             PermissionTypes.DELETE,
         ):
             self.assertTrue(
-                user_has_permission_for_obj(
-                    self.user,
-                    extract,
-                    permission,
-                    include_group_permissions=True,
-                ),
+                extract.user_can(self.user, permission),
                 f"creator should have {permission.name} on Extract "
                 f"created via the framework helper",
             )

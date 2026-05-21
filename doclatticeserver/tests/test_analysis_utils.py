@@ -12,7 +12,6 @@ from doclatticeserver.documents.models import Document
 from doclatticeserver.tests.fixtures import SAMPLE_GREMLIN_ENGINE_MANIFEST_PATH
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.analysis import create_and_setup_analysis
-from doclatticeserver.utils.permissioning import user_has_permission_for_obj
 
 logger = logging.getLogger(__name__)
 
@@ -125,12 +124,7 @@ class TestAnalysisUtils(TestCase):
             PermissionTypes.DELETE,
         ):
             self.assertTrue(
-                user_has_permission_for_obj(
-                    self.user,
-                    analysis,
-                    permission,
-                    include_group_permissions=True,
-                ),
+                analysis.user_can(self.user, permission),
                 f"creator should have {permission.name} on Analysis "
                 f"created via the framework helper",
             )
