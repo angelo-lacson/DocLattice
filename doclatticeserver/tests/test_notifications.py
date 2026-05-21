@@ -15,7 +15,7 @@ Tests cover:
 """
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase
 
 from doclatticeserver.badges.models import Badge, BadgeTypeChoices, UserBadge
 from doclatticeserver.conversations.models import (
@@ -192,7 +192,7 @@ class TestNotificationModel(TestCase):
         self.assertIn("unread", str_repr)
 
 
-class TestNotificationSignals(TransactionTestCase):
+class TestNotificationSignals(TestCase):
     """Test signal handlers that create notifications automatically."""
 
     def setUp(self):
