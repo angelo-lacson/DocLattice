@@ -29,15 +29,16 @@ Both layers work together: the manager/queryset produces the base filtered set, 
 
 | Optimizer | File | Scope |
 |-----------|------|-------|
-| `AnnotationQueryOptimizer` | `doclatticeserver/annotations/query_optimizer.py:16-667` | Annotation + Relationship bulk permissions |
-| `AnalysisQueryOptimizer` | `doclatticeserver/annotations/query_optimizer.py:946-1148` | Analysis visibility with corpus checks |
-| `ExtractQueryOptimizer` | `doclatticeserver/annotations/query_optimizer.py:1150-1349` | Extract visibility with corpus checks |
+| `AnnotationService` | `doclatticeserver/annotations/services/annotation_service.py` | Annotation bulk permissions |
+| `RelationshipService` | `doclatticeserver/annotations/services/relationship_service.py` | Relationship bulk permissions |
+| `AnalysisService` | `doclatticeserver/analyzer/services/analysis_service.py` | Analysis visibility with corpus checks |
+| `ExtractService` | `doclatticeserver/extracts/services/extract_service.py` | Extract visibility with corpus checks |
 | `ConversationService` | `doclatticeserver/conversations/services/conversation_service.py` | Request-level caching for corpus/doc visibility |
 | `PermissionQueryOptimizer` | `doclatticeserver/utils/permission_optimizer.py` | Per-request `user_can` cache for any visibility-managed model |
 | `DocumentActionsService` | `doclatticeserver/documents/services/actions.py` | Document action permissions |
 | `DocumentRelationshipService` | `doclatticeserver/documents/services/relationships.py` | Document relationship permissions |
 | `DocumentVersionService` | `doclatticeserver/documents/services/versions.py` | Document version-tree counts |
-| `MetadataQueryOptimizer` | `doclatticeserver/extracts/query_optimizer.py:19-572` | Extract metadata permissions |
+| `MetadataService` | `doclatticeserver/extracts/services/metadata.py` | Extract metadata permissions |
 | `BadgeService` | `doclatticeserver/badges/services/badge_service.py` | Badge visibility |
 | `UserService` | `doclatticeserver/users/services/user_service.py` | User profile permissions |
 

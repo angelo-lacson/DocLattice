@@ -120,10 +120,10 @@ def get_annotation_resource(
     Returns: JSON with annotation details including label and bounding box
 
     Note: Document membership is resolved through CorpusDocumentService, then
-    annotations are filtered through AnnotationQueryOptimizer's effective
+    annotations are filtered through AnnotationService's effective
     permission checks.
     """
-    from doclatticeserver.annotations.query_optimizer import AnnotationQueryOptimizer
+    from doclatticeserver.annotations.services import AnnotationService
     from doclatticeserver.corpuses.models import Corpus
     from doclatticeserver.corpuses.services import CorpusDocumentService
 
@@ -139,7 +139,7 @@ def get_annotation_resource(
     )
 
     # Use query optimizer for efficient permission checking
-    annotations = AnnotationQueryOptimizer.get_document_annotations(
+    annotations = AnnotationService.get_document_annotations(
         document_id=document.id, user=user, corpus_id=corpus.id
     )
 
