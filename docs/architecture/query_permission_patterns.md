@@ -32,13 +32,14 @@ Both layers work together: the manager/queryset produces the base filtered set, 
 | `AnnotationQueryOptimizer` | `doclatticeserver/annotations/query_optimizer.py:16-667` | Annotation + Relationship bulk permissions |
 | `AnalysisQueryOptimizer` | `doclatticeserver/annotations/query_optimizer.py:946-1148` | Analysis visibility with corpus checks |
 | `ExtractQueryOptimizer` | `doclatticeserver/annotations/query_optimizer.py:1150-1349` | Extract visibility with corpus checks |
-| `ConversationQueryOptimizer` | `doclatticeserver/conversations/query_optimizer.py:18-204` | Request-level caching for corpus/doc visibility |
+| `ConversationService` | `doclatticeserver/conversations/services/conversation_service.py` | Request-level caching for corpus/doc visibility |
 | `PermissionQueryOptimizer` | `doclatticeserver/utils/permission_optimizer.py` | Per-request `user_can` cache for any visibility-managed model |
-| `DocumentActionsQueryOptimizer` | `doclatticeserver/documents/query_optimizer.py:16-312` | Document action permissions |
-| `DocumentRelationshipQueryOptimizer` | `doclatticeserver/documents/query_optimizer.py:314-668` | Document relationship permissions |
+| `DocumentActionsService` | `doclatticeserver/documents/services/actions.py` | Document action permissions |
+| `DocumentRelationshipService` | `doclatticeserver/documents/services/relationships.py` | Document relationship permissions |
+| `DocumentVersionService` | `doclatticeserver/documents/services/versions.py` | Document version-tree counts |
 | `MetadataQueryOptimizer` | `doclatticeserver/extracts/query_optimizer.py:19-572` | Extract metadata permissions |
-| `BadgeQueryOptimizer` | `doclatticeserver/badges/query_optimizer.py:16-158` | Badge visibility |
-| `UserQueryOptimizer` | `doclatticeserver/users/query_optimizer.py:15-237` | User profile permissions |
+| `BadgeService` | `doclatticeserver/badges/services/badge_service.py` | Badge visibility |
+| `UserService` | `doclatticeserver/users/services/user_service.py` | User profile permissions |
 
 ## Permission Models by Object Type
 
@@ -65,8 +66,8 @@ For models with direct guardian permissions, query the `{model}userobjectpermiss
 - Also: `doclatticeserver/shared/QuerySets.py:210-225` (DocumentQuerySet)
 
 ### Request-Level Caching
-`ConversationQueryOptimizer` caches corpus and document visibility subqueries per request to avoid repeated permission checks.
-- Implementation: `doclatticeserver/conversations/query_optimizer.py`
+`ConversationService` caches corpus and document visibility subqueries per request to avoid repeated permission checks.
+- Implementation: `doclatticeserver/conversations/services/conversation_service.py`
 
 ### Two-Tier `user_can` Caching (issue #1640)
 Authorization checks via the centralized `Manager.user_can` / `obj.user_can` /
