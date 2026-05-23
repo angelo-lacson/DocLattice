@@ -11,8 +11,8 @@ from graphql_relay import from_global_id
 
 from config.graphql.graphene_types import DocumentRelationshipType
 from doclatticeserver.annotations.models import AnnotationLabel
-from doclatticeserver.corpuses.corpus_objs_service import CorpusObjsService
 from doclatticeserver.corpuses.models import Corpus
+from doclatticeserver.corpuses.services import CorpusDocumentService
 from doclatticeserver.documents.models import Document, DocumentRelationship
 from doclatticeserver.documents.query_optimizer import (
     DocumentRelationshipQueryOptimizer,
@@ -352,7 +352,7 @@ class UpdateDocumentRelationship(graphene.Mutation):
                     # Routes through the canonical service so corpus READ is
                     # enforced against the requesting user.
                     docs_in_corpus = (
-                        CorpusObjsService.get_corpus_documents(
+                        CorpusDocumentService.get_corpus_documents(
                             user=info.context.user, corpus=corpus
                         )
                         .filter(

@@ -12,6 +12,8 @@ Each service inherits :class:`doclatticeserver.shared.services.base.BaseService`
   — document-in-folder placement, listing, and counts.
 - :class:`~doclatticeserver.corpuses.services.corpus_documents.CorpusDocumentService`
   — document-in-corpus reads / writes and corpus membership.
+- :class:`~doclatticeserver.corpuses.services.corpus_service.CorpusService`
+  — Corpus-row CRUD: delete, visibility, and description versioning.
 - :class:`~doclatticeserver.corpuses.services.lifecycle.DocumentLifecycleService`
   — soft-delete / restore / trash.
 - :class:`~doclatticeserver.corpuses.services.paths.CorpusPathService`
@@ -20,15 +22,12 @@ Each service inherits :class:`doclatticeserver.shared.services.base.BaseService`
 Import the specific service you need from this package::
 
     from doclatticeserver.corpuses.services import FolderCRUDService
-
-The legacy ``CorpusObjsService`` facade in
-``doclatticeserver.corpuses.corpus_objs_service`` is deprecated and will be
-removed once all call sites are migrated.
 """
 
 from doclatticeserver.corpuses.services.corpus_documents import (
     CorpusDocumentService,
 )
+from doclatticeserver.corpuses.services.corpus_service import CorpusService
 from doclatticeserver.corpuses.services.folder_documents import (
     FolderDocumentService,
 )
@@ -40,6 +39,7 @@ __all__ = [
     "FolderCRUDService",
     "FolderDocumentService",
     "CorpusDocumentService",
+    "CorpusService",
     "DocumentLifecycleService",
     "CorpusPathService",
 ]

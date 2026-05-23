@@ -24,8 +24,8 @@ from config.graphql.graphene_types import (
     FieldsetType,
 )
 from config.telemetry import record_event
-from doclatticeserver.corpuses.corpus_objs_service import CorpusObjsService
 from doclatticeserver.corpuses.models import Corpus
+from doclatticeserver.corpuses.services import CorpusDocumentService
 from doclatticeserver.documents.models import Document
 from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
 from doclatticeserver.tasks.extract_orchestrator_tasks import run_extract
@@ -826,7 +826,7 @@ class CreateExtract(graphene.Mutation):
             # mutation already gated on corpus access upstream; this just
             # keeps the data path through one entry point).
             extract.documents.add(
-                *CorpusObjsService.get_corpus_documents(
+                *CorpusDocumentService.get_corpus_documents(
                     user=info.context.user, corpus=corpus
                 )
             )

@@ -23,8 +23,8 @@ from config.graphql.og_metadata_types import (
 from config.graphql.ratelimits import graphql_ratelimit
 from config.graphql.user_types import redacted_handle
 from doclatticeserver.conversations.models import Conversation
-from doclatticeserver.corpuses.corpus_objs_service import CorpusObjsService
 from doclatticeserver.corpuses.models import Corpus
+from doclatticeserver.corpuses.services import CorpusDocumentService
 from doclatticeserver.documents.models import Document
 
 logger = logging.getLogger(__name__)
@@ -172,7 +172,7 @@ class OGMetadataQueryMixin:
             # public gate so private documents inside an otherwise-public
             # corpus remain hidden from the OG endpoint.
             document = (
-                CorpusObjsService.get_corpus_documents(
+                CorpusDocumentService.get_corpus_documents(
                     user=AnonymousUser(), corpus=corpus
                 )
                 .filter(slug=document_slug, is_public=True)
