@@ -38,6 +38,7 @@ import {
   PdfTokenBlock,
   textBlockToBounds,
 } from "../../../../utils/textBlockEncoding";
+import { computeFitToWidthZoom } from "../../../../utils/pdfZoom";
 
 /**
  * This wrapper is inline-block (shrink-wrapped) and position:relative
@@ -194,26 +195,25 @@ export const PDFPage = ({
   useEffect(() => {
     // If this is page #1, and we haven't set initial zoom yet, and containerWidth is known:
     if (!initialZoomSet && containerWidth && pageInfo.page.pageNumber === 1) {
-      (async () => {
-        try {
-          // measure the PDF's natural width
-          const viewport = pageInfo.page.getViewport({ scale: 1 });
-          const naturalWidth = viewport.width;
-
-          // compute scale
-          const scaleToFit = containerWidth / naturalWidth;
-
-          // clamp if you like, e.g. [0.3 ... 3.0]
-          const safeScale = Math.min(Math.max(scaleToFit, 0.3), 4.0);
+      try {
+        // Reserve FIT_WIDTH_MARGIN to prevent horizontal overflow on narrower viewports (issue #1736).
+        const naturalWidth = pageInfo.page.getViewport({ scale: 1 }).width;
+        const safeScale = computeFitToWidthZoom(naturalWidth, containerWidth);
+        if (safeScale !== null) {
           setZoomLevel(safeScale);
-
           setInitialZoomSet(true);
-        } catch (err) {
-          console.warn("Failed computing initial PDF scale:", err);
         }
-      })();
+      } catch (err) {
+        console.warn("Failed computing initial PDF scale:", err);
+      }
     }
-  }, [initialZoomSet, containerWidth, pageInfo.page, setZoomLevel]);
+  }, [
+    initialZoomSet,
+    containerWidth,
+    pageInfo.page,
+    setZoomLevel,
+    setInitialZoomSet,
+  ]);
 
   /**
    * Handles resizing of the PDF page canvas using shared coordinated rendering.
