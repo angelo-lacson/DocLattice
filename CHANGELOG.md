@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Discovery endpoints rebranded to [cite]** (`doclatticeserver/discovery/views.py`). The agent/crawler-facing static surfaces (`/llms.txt`, `/llms-full.txt`, `/.well-known/mcp.json`) now identify as `cite` with the citation-graph framing from the README, instead of describing the platform as "DocLattice … document analytics platform". `Source code` / `Project home` links repoint from `angelo-lacson/DocLattice` + `contracts.opensource.legal` to `Open-Source-Legal/cite` + `cite.opensource.legal`. In `/.well-known/mcp.json` the global server key is renamed from `doclattice` to `cite` and scoped entries from `doclattice-{slug}` to `cite-{slug}` — cosmetic for clients (they pick their own local label) but aligns the discovery document with the new brand. Each text endpoint carries a one-line rebrand note ("Released as DocLattice since 2019; rebranded as cite for the v3 release line") so crawlers indexing the old name still get a match. `robots.txt`, `sitemap.xml`, `/.well-known/oauth-protected-resource`, and `/api/search/` were already brand-free and untouched. Tests in `doclatticeserver/discovery/tests/test_discovery_views.py` updated to pin the new strings.
+
 ### Added
 
 - **v3 surface rebrand: DocLattice → [cite]** (PR #1781). Ships the public-surface rebrand from DocLattice to [cite] as part of the v3 milestone. Scope is intentionally narrow: brand assets + landing + /about + chrome (NavMenu, Footer, Login, CookieConsent). The deeper product UI strings, repo name, README references, MCP/agent identity strings, GraphQL types, and the loading splash still use the DocLattice name and are explicitly out of scope.
