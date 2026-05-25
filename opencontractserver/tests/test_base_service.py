@@ -155,6 +155,87 @@ class TestBaseServiceLookup(TestCase):
         )
         self.assertNotIn(self.corpus.pk, visible_ids)
 
+    def test_filter_visible_qs_preserves_incoming_filter(self):
+        """``filter_visible_qs`` must intersect with prior filters in one pass.
+
+        Issue #1782 regression: the legacy
+        ``filter_visible(...).values('pk') | queryset.filter(pk__in=...)``
+        pattern produced a correlated subquery over the full model table.
+        ``filter_visible_qs`` chains the queryset's own ``visible_to_user``
+        method, keeping the visibility predicate in the same WHERE tree as
+        any prior ``.filter(...)`` clauses on the incoming queryset.
+        """
+        # Another corpus owned by the same user — would be returned by an
+        # unfiltered ``visible_to_user`` query but must be excluded by the
+        # incoming ``.filter(pk=...)`` clause we chain onto.
+        other_corpus = Corpus.objects.create(
+            title="Other Owned Corpus", creator=self.owner, is_public=False
+        )
+
+        prefiltered = Corpus.objects.filter(pk=self.corpus.pk)
+        result = BaseService.filter_visible_qs(prefiltered, self.owner)
+
+        # The pre-filter survives: exactly the corpus we asked for,
+        # not the other one the user can see.
+        self.assertEqual(list(result), [self.corpus])
+        self.assertNotIn(other_corpus, result)
+
+        # And the visibility filter is a single SQL pass: the compiled
+        # query references the corpus table no more times than the
+        # baseline queryset already does. The legacy
+        # ``pk__in=<filter_visible.values('pk')>`` pattern added an extra
+        # ``IN (SELECT … FROM corpuses_corpus …)`` subquery — an extra
+        # full-table scan on top of the baseline. ``filter_visible_qs``
+        # chains the queryset's own ``visible_to_user``, so the FROM count
+        # against the model's own table must match the baseline (subqueries
+        # against guardian permission tables are fine and expected).
+        #
+        # Comparing against the baseline rather than asserting an absolute
+        # count keeps the test robust to model-level concerns like
+        # django-tree-queries' recursive CTE, which adds its own FROM
+        # reference to the corpus table irrespective of visibility logic.
+        #
+        # ``str(queryset.query)`` renders parameterized SQL via Django's
+        # internal ``Query.as_sql()`` rather than the exact string the DB
+        # backend receives. The output format is stable within a Django
+        # minor version but has changed subtly across majors. Re-verify on
+        # any Django major upgrade — if the quoting or alias style shifts,
+        # both ``baseline_from_count`` and ``result_from_count`` should
+        # shift in lockstep, so the *equality* assertion stays valid even
+        # when the absolute counts move. The test fails loudly here rather
+        # than silently if that ever stops being true.
+        corpus_table = Corpus._meta.db_table
+        baseline_from_count = str(prefiltered.query).count(f'FROM "{corpus_table}"')
+        result_from_count = str(result.query).count(f'FROM "{corpus_table}"')
+        self.assertEqual(
+            result_from_count,
+            baseline_from_count,
+            f"filter_visible_qs added {result_from_count - baseline_from_count} "
+            f"extra FROM(s) against {corpus_table!r} on top of the baseline "
+            f"({baseline_from_count}). Compiled SQL: {result.query}",
+        )
+
+    def test_filter_visible_qs_excludes_other_user(self):
+        """The ownership filter excludes objects owned by a different user."""
+        prefiltered = Corpus.objects.filter(pk=self.corpus.pk)
+        result = BaseService.filter_visible_qs(prefiltered, self.other)
+        self.assertNotIn(self.corpus, result)
+
+    def test_filter_visible_qs_passes_exotic_input_through(self):
+        """Inputs without ``visible_to_user`` (e.g. prefetched caches) pass through.
+
+        Real callers always pass a QuerySet or RelatedManager — both expose
+        ``visible_to_user``. The hasattr guard exists so an exotic shape
+        (Prefetch wrapper, custom proxy) does not raise AttributeError
+        deep inside graphene's ``get_queryset`` dispatch.
+        """
+
+        class _Exotic:
+            pass
+
+        sentinel = _Exotic()
+        self.assertIs(BaseService.filter_visible_qs(sentinel, self.owner), sentinel)
+
 
 class TestBaseServiceRequirePermission(TestCase):
     """SCENARIO: require_permission is the uniform write-operation gate.

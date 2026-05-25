@@ -49,11 +49,33 @@ def test_graphql_module_uses_service_layer(module_path: Path) -> None:
 
 
 def test_allowlist_is_documented() -> None:
-    """Every allowlist entry must exist in the filesystem.
+    """Pin the allowlist's shape and prevent silent rot.
 
-    Prevents the allowlist from rotting silently when a file is renamed
-    or removed.
+    The live allowlist is currently empty: ``filters.py`` no longer needs
+    an entry because its only remaining references to forbidden Tier-0
+    identifiers are inside comments, which the AST scanner ignores. If a
+    future contributor adds an entry, the loop below also asserts that
+    the entry points at a real file — preventing the allowlist from
+    rotting silently when a file is renamed or removed.
+
+    Asserting ``ALLOWED_FILES == frozenset()`` directly (rather than only
+    iterating over its entries) keeps this test non-vacuous: a stray
+    addition without a matching docstring/CHANGELOG update will trip
+    here and force a deliberate sign-off.
     """
+    assert ALLOWED_FILES == frozenset(), (
+        "Service-layer lint guard allowlist is no longer empty: "
+        f"{sorted(ALLOWED_FILES)}. Each entry MUST have a comment in "
+        "``architecture_audit.ALLOWED_FILES`` explaining why the file "
+        "cannot migrate, and the CHANGELOG / "
+        "``docs/development/architecture_invariants.md`` text MUST be "
+        "refreshed to match — see issue #1720 / #1782."
+    )
+    # The loop below is intentionally dead while ``ALLOWED_FILES`` is empty
+    # — the assertion above short-circuits the test before we reach it.
+    # Keep it in place so any future allowlist entry is validated for
+    # filesystem existence (renames or deletions surface immediately
+    # instead of silently rotting).
     for name in ALLOWED_FILES:
         assert (
             GRAPHQL_DIR / name
@@ -66,15 +88,42 @@ def test_django_system_check_is_registered() -> None:
     Pytest runs in CI; the Django system check ALSO fires on every
     ``manage.py`` command (``runserver``, ``migrate``, ``shell``, ...) so
     a developer can't ship a violation without immediate local feedback.
-    This test pins the system check to the wired-up state via the public
-    ``tag_exists`` API (no internal-registry attribute access).
+
+    Two assertions pin the wiring:
+
+    1. The ``architecture`` tag is registered at all (cheap public-API
+       check via ``tag_exists`` — no internal-registry attribute access).
+    2. ``check_graphql_service_layer`` specifically is registered under
+       that tag. The earlier ``tag_exists("architecture")`` guard alone
+       would silently pass if our check were deleted but some other
+       ``"architecture"``-tagged check were added — pinning the function
+       identity closes that gap.
     """
     from django.core.checks import tag_exists
+    from django.core.checks.registry import registry
+
+    from opencontractserver.shared.checks import check_graphql_service_layer
 
     assert tag_exists("architecture"), (
         "The ``architecture`` system-check tag is not registered. Confirm "
         "``opencontractserver.users.apps.UsersConfig.ready`` still imports "
         "``opencontractserver.shared.checks``."
+    )
+
+    # ``CheckRegistry.get_checks`` in Django 5.x takes no ``tags`` kwarg, so we
+    # filter ``registered_checks`` by the per-check ``tags`` attribute the
+    # ``@register("architecture")`` decorator sets — this pins the exact
+    # function identity, not just tag presence.
+    architecture_checks = [
+        c
+        for c in registry.registered_checks
+        if "architecture" in getattr(c, "tags", ())
+    ]
+    assert check_graphql_service_layer in architecture_checks, (
+        "``check_graphql_service_layer`` is not registered under the "
+        "``architecture`` tag. Confirm the ``@register('architecture')`` "
+        "decorator on ``opencontractserver.shared.checks.check_graphql_service_layer`` "
+        "is still in place."
     )
 
 
