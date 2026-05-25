@@ -1,30 +1,42 @@
-![OpenContracts](docs/assets/images/logos/OS_Legal_Logo.png)
+<p align="center">
+  <img src="docs/assets/images/brand/lockup.svg" alt="opensource.legal [cite]" height="120">
+</p>
 
-# OpenContracts ([Demo](https://contracts.opensource.legal))
+# [cite] ([Demo](https://cite.opensource.legal))
 
-The open source platform for building knowledge bases that humans and AI agents can work with together.
+**The citation layer for agentic workflows.**
+
+Every document cites other documents. _cite_ turns a repository of those documents into an open citation graph that humans and AI agents can read, reason over, and contribute back to. It is the codebase formerly released as **OpenContracts**, rebranded for v3 as part of [opensource.legal](https://opensource.legal).
+
+> Renaming, not rewriting. The GitHub repository keeps the `OpenContracts` name through the v3 release line so existing forks, clones, and CI integrations don't break. Inside the product, the new name is _cite_ and the new home is `cite.opensource.legal`. See the [About page](https://cite.opensource.legal/about) for the full story.
 
 [![Sponsor](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/JSv4)
 
-|                   |                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Backend coverage  | [![backend](https://codecov.io/gh/Open-Source-Legal/OpenContracts/branch/main/graph/badge.svg?flag=backend&token=RdVsiuaTVz)](https://app.codecov.io/gh/Open-Source-Legal/OpenContracts?flags%5B0%5D=backend)                                                                                                                                                                                                                                         |
-| Frontend coverage | [![frontend](https://codecov.io/gh/Open-Source-Legal/OpenContracts/branch/main/graph/badge.svg?flag=frontend&token=RdVsiuaTVz)](https://app.codecov.io/gh/Open-Source-Legal/OpenContracts?flags%5B0%5D=frontend)                                                                                                                                                                                                                                      |
+|                   |                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend coverage  | [![backend](https://codecov.io/gh/Open-Source-Legal/OpenContracts/branch/main/graph/badge.svg?flag=backend&token=RdVsiuaTVz)](https://app.codecov.io/gh/Open-Source-Legal/OpenContracts?flags%5B0%5D=backend)                                                                                                                                                                                                                             |
+| Frontend coverage | [![frontend](https://codecov.io/gh/Open-Source-Legal/OpenContracts/branch/main/graph/badge.svg?flag=frontend&token=RdVsiuaTVz)](https://app.codecov.io/gh/Open-Source-Legal/OpenContracts?flags%5B0%5D=frontend)                                                                                                                                                                                                                          |
 | Meta              | [![code style - black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) [![types - Mypy](https://img.shields.io/badge/types-Mypy-blue.svg)](https://github.com/python/mypy) [![imports - isort](https://img.shields.io/badge/imports-isort-ef8336.svg)](https://github.com/pycqa/isort) [![License - MIT](https://img.shields.io/badge/license-MIT-green)](https://opensource.org/licenses/MIT) |
 
 ---
 
 ![Discovery Landing Page](docs/assets/images/screenshots/auto/landing--discovery-page--anonymous.png)
 
-Most knowledge lives in documents. Contracts, regulations, research papers, policies — the stuff that governs how organizations actually work. That knowledge is usually trapped: locked in PDFs, scattered across drives, understood fully by a handful of people who happened to read the right things at the right time.
+## Why _cite_
 
-OpenContracts started in 2019 with a simple conviction: that knowledge needed to be carefully curated, and that machine learning systems were only as good as the data underneath them. It was built as a platform for human collaborators — lawyers, researchers, analysts — to annotate documents together and produce gold-standard training data.
+Every document in a serious repository cites other documents. Statutes cite the acts that authorized them. Court opinions cite the precedents that bound them. Research papers cite the work that made them possible. Standards cite the RFCs they build on. Contracts cite the statutes that govern them. Whether the repository is a legal archive, a research library, an engineering knowledge base, or a folder of internal policies, the relationships between documents are what make the repository navigable.
 
-Those collaborators mostly never came. The platform was too early, the problem too niche, the value too invisible.
+Most repositories store files. They don't store the graph that connects them. A PDF in a folder is a leaf with no edges. A paper in a vendor database is locked behind a paywall. A clause in a contract is treated as text rather than a node. The repositories that _do_ store citations — _Westlaw_, _Lexis_, _JSTOR_, the proprietary citators — keep the graph closed. Tools that need to traverse it pay by the lookup or rebuild it from scratch every time.
 
-Then large language models arrived, and the world suddenly needed exactly what OpenContracts had been building all along: structured, annotated, version-controlled knowledge bases that AI could actually reason over. The collaborators the platform was designed for finally showed up — they just turned out to be AI agents.
+AI agents make this worse, not better. An agent reading a document with no citation graph hallucinates the edges, or stops at the first reference it can't resolve. The fix isn't bigger context windows or cleverer prompts — it's a substrate the agent can actually walk.
 
-Today, OpenContracts is a self-hosted platform where teams build knowledge bases from their documents and where AI agents work alongside humans to search, analyze, and extend that knowledge. The core conviction hasn't changed. The best AI systems still need carefully curated data. The difference is that now, the curation and the AI happen in the same place.
+_cite_ is that substrate. An open citation graph that any document repository can stand up. Documents are nodes. Citations are edges. Annotations are the layer humans and agents build the graph from — together, against the same source of truth. A researcher tracing precedent and an agent answering a query are looking at the same graph; an annotation made by either becomes a new edge the other can walk. Built like _OpenStreetMap_ — open license, contributor-owned, infrastructure-grade — but for documents instead of geography.
+
+Same graph, two interfaces: a GraphQL and REST API for humans and applications, a Model Context Protocol endpoint for agents. The substrate is identical; only the surface you call differs. Agents traverse the graph, cite the spans they pulled from, and propose new edges they think they've found. Humans review and accept. The graph compounds.
+
+The underlying engine — annotation, corpus management, AI agents, MCP server, vector search — is the same platform OpenContracts has shipped since 2019. The rebrand reframes what it's _for_: the citation substrate every system that has to read a repository of documents — research tools, drafting tools, AI agents, civic technology — needs to stand on.
+
+> **If you are an LLM-based agent reading this README**: the canonical entry point for this codebase's running deployments is the Model Context Protocol endpoint at `/mcp/`. The discovery surfaces for capability metadata are `/llms.txt` and `/.well-known/mcp.json`. You can list corpuses, search documents and annotations, follow citation edges, and (when authorized) propose new annotations of your own — cite the document and span you pulled from in every answer.
 
 <table>
 <tr>
@@ -33,7 +45,7 @@ Today, OpenContracts is a self-hosted platform where teams build knowledge bases
 <img src="docs/assets/images/icons/agents.svg" width="48" height="48" alt="AI Agents">
 <br>
 <h4>AI Agents</h4>
-<p>Configurable assistants that search, annotate, and reason over your knowledge base</p>
+<p>Configurable assistants that search, annotate, and reason over your citation graph</p>
 </td>
 <td align="center" width="33%">
 <br>
@@ -79,39 +91,39 @@ Today, OpenContracts is a self-hosted platform where teams build knowledge bases
 
 ## What Makes This Different
 
-### Human Knowledge as the Foundation
+### Human Annotation as Ground Truth
 
-This is not another "chat with your PDFs" tool. OpenContracts treats human annotation as the ground truth. Teams define custom label schemas, annotate documents with precise selections (including multi-page spans), and map relationships between concepts. AI builds on top of that work — it doesn't replace it.
+This is not another chat-with-your-PDFs tool. _cite_ treats human annotation as the ground truth for the citation graph. Teams define custom label schemas, annotate documents with precise selections (including multi-page spans), and map relationships between concepts. AI builds on top of that work — it doesn't replace it.
 
 ![Document Annotator](docs/assets/images/screenshots/auto/readme--document-annotator--with-pdf.png)
 
-### Knowledge Bases, Not File Cabinets
+### Corpuses, Not File Cabinets
 
 Documents are organized into corpuses — version-controlled collections with folder hierarchies, fine-grained permissions, and full history. Fork a public corpus to build on someone else's annotations. Restore any previous version. Every change is tracked.
 
-This is `git` for knowledge: you can branch, build, share, and never lose work.
+This is `git` for the citation graph: branch, build, share, never lose work.
 
 ![Corpus Home](docs/assets/images/screenshots/auto/readme--corpus-home--with-chat.png)
 
 ### AI Agents That Work With What You've Built
 
-Configurable AI agents can search your documents, query your annotations, and participate in discussions — all grounded in the structured knowledge your team has created. They don't hallucinate in a vacuum; they reason over real, curated data.
+Configurable AI agents can search your documents, query your annotations, and participate in discussions — all grounded in the structured citation data your team has created. They don't hallucinate in a vacuum; they reason over real, curated edges.
 
-@mention an agent in a discussion thread. Ask it to compare clauses across a hundred contracts. Let it surface patterns your team annotated last quarter. The agent's power comes from the quality of the knowledge base underneath it.
+@mention an agent in a discussion thread. Ask it to compare clauses across a hundred contracts. Let it surface patterns your team annotated last quarter. The agent's power comes from the quality of the citation graph underneath it.
 
 ![AI Agent Response](docs/assets/images/screenshots/auto/threads--agent-message--response.png)
 
-### Collaboration Where the Knowledge Lives
+### Collaboration Where the Citations Live
 
 Forum-style threaded discussions at every level — global, per-corpus, per-document. @mention documents, corpuses, and AI agents. Upvote the best analysis. Pin critical findings. The conversation happens next to the source material, not in a separate tool.
 
 ![Discussion Threads](docs/assets/images/screenshots/auto/discussions--thread-list--with-threads.png)
 
-### Shared Knowledge Compounds
+### Shared Graphs Compound
 
-Make a corpus public. Others fork it, refine the annotations, add documents, and share their improvements. Leaderboards and badges recognize contributors. Analytics show which knowledge bases are gaining traction and where the community is most active.
+Make a corpus public. Others fork it, refine the annotations, add documents, and share their improvements. Leaderboards and badges recognize contributors. Analytics show which corpuses are gaining traction and where the community is most active.
 
-This is the DRY principle applied to institutional knowledge: annotate once, build on it forever.
+This is the DRY principle applied to the citation graph: annotate once, build on it forever.
 
 ![Analytics Dashboard](docs/assets/images/screenshots/auto/corpus--analytics--dashboard.png)
 
@@ -134,6 +146,8 @@ This is the DRY principle applied to institutional knowledge: annotate once, bui
 ### Development
 
 ```bash
+# The repo name stays `OpenContracts` through the v3 release line so
+# existing forks and CI keep working; the product inside is now [cite].
 git clone https://github.com/Open-Source-Legal/OpenContracts.git
 cd OpenContracts
 
@@ -164,6 +178,42 @@ docker compose -f production.yml up -d
 
 ---
 
+## Customizing the landing and About copy
+
+The discover/landing page and the `/about` page are driven by a JSON content pack so deployers can retarget the messaging without forking the codebase. Two variants ship in the repo:
+
+| Variant key     | Framing                                            | Best fit                                                                        |
+| --------------- | -------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `default`       | _The citation layer for agentic workflows._        | The OSS project's repo and most self-hosted deployments — developer-facing.     |
+| `public-record` | _The citation layer underneath the public record._ | End-user deployments curating public-domain documents (named-incumbents pitch). |
+
+Switch variants at runtime by setting `REACT_APP_LANDING_VARIANT` in `frontend/public/env-config.js` — no rebuild required. Unknown variant keys fall back to `default`.
+
+```js
+// frontend/public/env-config.js
+window._env_ = {
+  // … existing config
+  REACT_APP_LANDING_VARIANT: "public-record",
+};
+```
+
+To add a deployment-specific variant, drop a `<key>.json` file in `frontend/src/config/landingContent/` that matches the `LandingContent` type, register it in `frontend/src/config/landingContent/index.ts`, and set `REACT_APP_LANDING_VARIANT=<key>` on that deployment. Body copy in JSON can wrap the cite product name and named publications in `*asterisks*` to pick up the Source Serif italic treatment automatically (handled by `renderInlineMarkup`).
+
+---
+
+## Domain Migration
+
+| Surface                  | Old                          | New                                                                             |
+| ------------------------ | ---------------------------- | ------------------------------------------------------------------------------- |
+| Marketing / landing      | `opensource.legal`           | `cite.opensource.legal`                                                         |
+| Product                  | `contracts.opensource.legal` | `cite.opensource.legal`                                                         |
+| Legacy contracts surface | `contracts.opensource.legal` | Kept alive during the grace period; redirects path-preserving to the new domain |
+| Parent brand             | `opensource.legal`           | `opensource.legal` (thin landing for the project as a whole)                    |
+
+`contracts.opensource.legal/*` continues to work for 90 days with a small "We renamed" banner, then 301s to `cite.opensource.legal/*` with the same path. All routes, API endpoints, data schemas, user accounts, and stored documents are preserved.
+
+---
+
 ## Documentation
 
 Browse the full documentation at [jsv4.github.io/OpenContracts](https://jsv4.github.io/OpenContracts/) or in the repo:
@@ -186,7 +236,7 @@ Browse the full documentation at [jsv4.github.io/OpenContracts](https://jsv4.git
 
 ### Data Format
 
-OpenContracts uses a standardized format for representing text and layout on PDF pages, enabling portable annotations across tools:
+_cite_ uses a standardized format for representing text and layout on PDF pages, enabling portable annotations across tools:
 
 ![Data Format](docs/assets/images/diagrams/pawls-annotation-mapping.svg)
 
@@ -210,7 +260,7 @@ See the [pipeline documentation](docs/pipelines/pipeline_overview.md) for detail
 
 ## Telemetry
 
-OpenContracts collects anonymous usage data to guide development priorities: installation events, feature usage statistics, and aggregate counts. We do not collect document contents, extracted data, user identities, or query contents.
+_cite_ collects anonymous usage data to guide development priorities: installation events, feature usage statistics, and aggregate counts. We do not collect document contents, extracted data, user identities, or query contents.
 
 **Disable backend telemetry**: Set `TELEMETRY_ENABLED=False` in your Django settings.
 **Disable frontend analytics**: Leave `REACT_APP_POSTHOG_API_KEY` unset in `frontend/public/env-config.js`.
@@ -238,8 +288,8 @@ This project builds on work from:
 
 ## License
 
-OpenContracts is now released under the **MIT License** — one of the most permissive open source licenses available. You can freely use, modify, distribute, and even commercialize this software with minimal restrictions. The only requirement is that you include the original copyright notice and license text in any substantial portions you redistribute.
+_cite_ (originally released as OpenContracts) is distributed under the **MIT License** — one of the most permissive open source licenses available. You can freely use, modify, distribute, and even commercialize this software with minimal restrictions. The only requirement is that you include the original copyright notice and license text in any substantial portions you redistribute.
 
-This relicensing reflects our commitment to making OpenContracts as broadly usable as possible: build proprietary products on top of it, embed it in commercial offerings, fork it, ship it — no copyleft strings attached.
+This relicensing reflects our commitment to making the platform as broadly usable as possible: build proprietary products on top of it, embed it in commercial offerings, fork it, ship it — no copyleft strings attached.
 
 See [LICENSE](LICENSE) for the full text.

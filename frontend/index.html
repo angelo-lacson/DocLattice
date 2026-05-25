@@ -4,31 +4,35 @@
     <meta charset="utf-8" />
     <!-- Load runtime environment. Only one runtime env script should be included -->
     <script src="/env-config.js"></script>
-    <link rel="icon" href="/favicon.ico" />
+    <!-- SVG favicon (modern browsers); .ico kept as legacy fallback. -->
+    <!-- `sizes="any"` is the spec-correct value for scalable formats — pixel
+         sizes on SVG <link rel="icon"> are semantically wrong (the source
+         tile-rounded versions only exist as a perceptual nudge for browser
+         devtools that surface tab/bookmark sizing). -->
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon-32.svg" />
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon-16.svg" />
+    <link rel="alternate icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#FAFAF7" />
     <meta
       name="description"
-      content="OpenContracts is an AGPL-3.0 licensed document analytics and sharing platform designed to make it
-      easy to query, analyze and label complex natural language documents. It's open, extensible, and designed for
-      teams and collaboration."
+      content="cite turns a repository of documents into an open citation graph that humans and AI agents can read, reason over, and contribute back to. Built like infrastructure, contributor-owned, open license."
     />
     <meta property="og:type" content="website" key="Type" />
     <meta
       property="og:title"
-      content="Open Contracts: Free and Open Source Document Annotation"
+      content="[cite] — the citation layer for agentic workflows"
       key="Title"
     />
     <meta
       property="og:description"
-      content="OpenContracts is an AGPL-3.0 licensed document analytics and sharing platform designed to make it
-      easy to query, analyze and label complex natural language documents. It's open, extensible, and designed for
-      teams and collaboration."
+      content="Every document cites other documents. cite turns that graph into open infrastructure for research tools, drafting tools, and AI agents."
       key="Description"
     />
     <meta
       property="og:url"
-      content="https://contracts.opensource.legal/"
+      content="https://cite.opensource.legal/"
       key="Url"
     />
     <meta
@@ -36,13 +40,13 @@
       content="/OpenContractsScreenshot.png"
       key="Image"
     />
-    <meta property="og:site_name" content="Open Contracts" key="Site" />
+    <meta property="og:site_name" content="cite" key="Site" />
 
-    <!-- Google Fonts - Inter (for OpenContracts UI components) -->
+    <!-- Google Fonts - Inter (UI) + Source Serif 4 (display / wordmark / body) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;1,8..60,400&display=swap"
       rel="stylesheet"
     />
 
@@ -67,13 +71,14 @@
         "@graph": [
           {
             "@type": "WebApplication",
-            "@id": "https://contracts.opensource.legal/#app",
-            "name": "OpenContracts",
-            "description": "Open-source document analytics platform for analyzing, annotating, and querying complex documents with AI-powered search and Model Context Protocol (MCP) integration.",
-            "url": "https://contracts.opensource.legal/",
-            "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+            "@id": "https://cite.opensource.legal/#app",
+            "name": "cite",
+            "alternateName": "OpenContracts",
+            "description": "The citation layer for agentic workflows. cite turns a repository of documents into an open, traversable citation graph that humans and AI agents can read, reason over, and contribute back to.",
+            "url": "https://cite.opensource.legal/",
+            "license": "https://opensource.org/licenses/MIT",
             "applicationCategory": "BusinessApplication",
-            "applicationSubCategory": "Document Analytics",
+            "applicationSubCategory": "Citation Graph",
             "operatingSystem": "Web",
             "softwareVersion": "3.0",
             "inLanguage": "en",
@@ -84,11 +89,11 @@
               "priceCurrency": "USD"
             },
             "featureList": [
-              "PDF and document annotation",
+              "Open citation graph of the public record",
+              "Document annotation and citation editing",
               "AI-powered semantic search",
-              "Natural language document querying via MCP",
+              "Natural language querying via Model Context Protocol",
               "Collaborative corpus management",
-              "Pluggable ML document processing pipelines",
               "Vector embeddings with pgvector"
             ],
             "screenshot": "/OpenContractsScreenshot.png",
@@ -128,12 +133,13 @@
           },
           {
             "@type": "SoftwareSourceCode",
-            "name": "OpenContracts",
-            "description": "Open-source document analytics platform with AI-powered annotation, search, and MCP integration.",
+            "name": "cite",
+            "alternateName": "OpenContracts",
+            "description": "Open commons of the citation graph. The codebase that powers cite, formerly released as OpenContracts.",
             "codeRepository": "https://github.com/Open-Source-Legal/OpenContracts",
             "programmingLanguage": ["Python", "TypeScript"],
             "runtimePlatform": ["Django", "React"],
-            "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+            "license": "https://opensource.org/licenses/MIT",
             "author": {
               "@type": "Organization",
               "@id": "https://opensource.legal/#org"
@@ -143,7 +149,11 @@
       }
     </script>
 
-    <link rel="apple-touch-icon" href="/logo192.png" />
+    <!-- iOS does not support SVG apple-touch-icon reliably; use the 192px
+         cite PNG. The full PWA install icon set (192/512 + maskable) lives
+         in manifest.json. Both files are generated from the cite icon mark
+         SVG via scripts/generate-brand-pngs.js. -->
+    <link rel="apple-touch-icon" href="/cite-192.png" />
     <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
@@ -153,7 +163,7 @@
       Vite serves files from the 'public' directory at the root path '/'.
       Make sure your assets (favicon.ico, manifest.json, etc.) are in the 'public' folder.
     -->
-    <title>Open Contracts</title>
+    <title>cite — the citation layer for agentic workflows</title>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

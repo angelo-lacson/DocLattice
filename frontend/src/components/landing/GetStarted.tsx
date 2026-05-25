@@ -1,17 +1,23 @@
 /**
- * GetStarted Component
+ * GetStarted Component — cite rebrand.
  *
- * Displays a Getting Started guide with action items for new users.
- * Can be dismissed by authenticated users - preference is persisted to backend.
- * For anonymous users, dismissal is stored in localStorage.
+ * Displays the Get Started action list shown on the landing page. Each row
+ * uses the `[•]` icon mark per the brand spec (`04_landing/landing_spec.md`).
+ * Authenticated users can dismiss the card; preference is persisted to the
+ * backend. Anonymous users have their dismissal stored in localStorage.
  */
 import React from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "@apollo/client";
 import { gql } from "@apollo/client";
-import { X, Upload, Users, FolderPlus, BookOpen } from "lucide-react";
+import { X } from "lucide-react";
 import { OS_LEGAL_COLORS } from "../../assets/configurations/osLegalStyles";
+import { CiteMark } from "../brand/CiteMark";
+import {
+  useLandingContent,
+  type GetStartedAction,
+} from "../../config/landingContent";
 
 // GraphQL mutation to dismiss Getting Started
 export const DISMISS_GETTING_STARTED = gql`
@@ -34,18 +40,19 @@ const Container = styled.div`
 `;
 
 const Title = styled.h3`
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 500;
   color: ${OS_LEGAL_COLORS.textPrimary};
   margin: 0 0 16px 0;
 `;
 
 const Card = styled.div`
-  background: white;
-  border-radius: 16px;
+  background: ${OS_LEGAL_COLORS.surface};
+  border-radius: 8px;
   border: 1px solid ${OS_LEGAL_COLORS.border};
-  padding: 1rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  padding: 18px 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 `;
 
 const DismissButton = styled.button`
@@ -79,67 +86,33 @@ const ActionList = styled.div`
 const ActionItem = styled.button`
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 14px;
+  padding: 10px 18px;
   background: transparent;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   text-align: left;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease;
 
   &:hover {
     background: ${OS_LEGAL_COLORS.surfaceHover};
   }
 `;
 
-const ActionIcon = styled.span`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: ${OS_LEGAL_COLORS.accent};
-
-  svg {
-    width: 18px;
-    height: 18px;
-  }
-`;
-
 const ActionLabel = styled.span`
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
   color: ${OS_LEGAL_COLORS.accent};
 `;
 
-// Get Started action items
-const actions = [
-  {
-    id: "upload",
-    label: "Upload your first document",
-    icon: Upload,
-    path: "/documents",
-  },
-  {
-    id: "browse",
-    label: "Browse knowledge bases",
-    icon: Users,
-    path: "/corpuses",
-  },
-  {
-    id: "create",
-    label: "Create new corpus",
-    icon: FolderPlus,
-    path: "/corpuses?create=true",
-  },
-  {
-    id: "guide",
-    label: "Read the contributor guide",
-    icon: BookOpen,
-    path: "https://open-source-legal.github.io/OpenContracts/",
-    external: true,
-  },
-];
-
+/**
+ * Action items and section title come from the active landingContent
+ * variant. The aria-label on the dismiss button mirrors the configured
+ * title so screen readers stay in sync when a deployer renames the
+ * section.
+ */
 export const GetStarted: React.FC<GetStartedProps> = ({
   isAuthenticated,
   isDismissed,
@@ -147,6 +120,7 @@ export const GetStarted: React.FC<GetStartedProps> = ({
 }) => {
   const navigate = useNavigate();
   const [dismissMutation] = useMutation(DISMISS_GETTING_STARTED);
+  const { getStarted } = useLandingContent();
 
   const handleDismiss = async () => {
     if (isAuthenticated) {
@@ -159,7 +133,7 @@ export const GetStarted: React.FC<GetStartedProps> = ({
     onDismiss();
   };
 
-  const handleActionClick = (action: (typeof actions)[0]) => {
+  const handleActionClick = (action: GetStartedAction) => {
     if (action.external) {
       window.open(action.path, "_blank", "noopener,noreferrer");
     } else {
@@ -167,30 +141,27 @@ export const GetStarted: React.FC<GetStartedProps> = ({
     }
   };
 
-  // Don't render if dismissed
   if (isDismissed) {
     return null;
   }
 
   return (
     <Container>
-      <Title>Get Started</Title>
+      <Title>{getStarted.title}</Title>
       <DismissButton
         onClick={handleDismiss}
-        aria-label="Dismiss Getting Started"
+        aria-label={`Dismiss ${getStarted.title}`}
       >
         <X size={16} />
       </DismissButton>
       <Card>
         <ActionList>
-          {actions.map((action) => (
+          {getStarted.actions.map((action) => (
             <ActionItem
               key={action.id}
               onClick={() => handleActionClick(action)}
             >
-              <ActionIcon>
-                <action.icon />
-              </ActionIcon>
+              <CiteMark size={16} ariaLabel="" />
               <ActionLabel>{action.label}</ActionLabel>
             </ActionItem>
           ))}

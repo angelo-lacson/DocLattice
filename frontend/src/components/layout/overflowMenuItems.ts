@@ -8,11 +8,11 @@
  *  - Privacy Policy  → /privacy            (route exists, keep)
  *  - Terms of Service → /terms_of_service  (route exists, keep)
  *  - GitHub          → external repo link  (keep)
- *  - Site Map        → /                   (redundant with the brand logo, drop)
- *  - Contact Us      → /contact            (route is NOT registered in App.tsx
- *                                           — would 404; intentionally omitted
- *                                           from the always-on overflow rather
- *                                           than promote a broken destination)
+ *  - About cite      → /about              (route exists, keep)
+ *  - Contact Us      → /contact            (no route registered in App.tsx; the
+ *                                           Footer no longer links to it either
+ *                                           after the v3 cite rebrand, so this
+ *                                           overflow keeps the parity)
  *
  * The in-flow Footer keeps its current link set unchanged for landing /
  * corpus list / settings views, per the issue ("don't toggle visibility
@@ -29,6 +29,11 @@ export type OverflowMenuLink =
   | { id: string; label: string; to?: never; href: string };
 
 export const OVERFLOW_MENU_LINKS: OverflowMenuLink[] = [
+  {
+    id: "overflow_about",
+    label: "About cite",
+    to: "/about",
+  },
   {
     id: "overflow_privacy",
     label: "Privacy Policy",

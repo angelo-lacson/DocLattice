@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **v3 surface rebrand: OpenContracts → [cite]** (PR #1781). Ships the public-surface rebrand from OpenContracts to [cite] as part of the v3 milestone. Scope is intentionally narrow: brand assets + landing + /about + chrome (NavMenu, Footer, Login, CookieConsent). The deeper product UI strings, repo name, README references, MCP/agent identity strings, GraphQL types, and the loading splash still use the OpenContracts name and are explicitly out of scope.
+  - **Brand components.** New `frontend/src/components/brand/CiteMark.tsx` (the bracketed teal node icon, with scaled stroke widths and auto-aria-hidden when used decoratively) and `CiteWordmark.tsx` (the `[cite]` wordmark as inline SVG with a Source Serif fallback chain). Wired into `Login`, `NavMenu`, `Footer`, `CallToAction`, `GetStarted`, `About`, and `CookieConsent`.
+  - **/about page.** New `frontend/src/views/About.tsx` + route, plus a JSON-driven landing-content variant system (`frontend/src/config/landingContent/`) with `default` and `public-record` packs selectable via `REACT_APP_LANDING_VARIANT`. Hero, GetStarted, CallToAction, About copy all source from the active variant.
+  - **Chrome + meta.** `index.html` (title, description, og tags, JSON-LD), `manifest.json` (cite name + theme color `#FAFAF7`), favicons (SVG), Source Serif 4 + Inter from Google Fonts. NavMenu's brand slot, Footer lockup, and Login card now show the cite wordmark/lockup.
+  - **PWA + OG assets.** New `frontend/public/cite-192.png`, `cite-512.png`, and `cite-maskable.png` (with the 80% safe-area inset on the brand background) wired into `manifest.json` with the correct `purpose: any` / `purpose: maskable` split. `apple-touch-icon` now points to `cite-192.png`. Open Graph / Twitter card (`OpenContractsScreenshot.png` — legacy filename retained so the existing `<meta og:image>` reference resolves) regenerated as a cite-branded card. All four are produced by `frontend/scripts/generate-brand-pngs.js`, which renders the icon-mark SVG at the target sizes through headless Chromium so we don't pull in a librsvg / sharp / inkscape dependency.
+  - **Tests + screenshots.** New Playwright CT tests for `About`, `Login` (cite branding), `Footer`, `NavMenu` branding, `CookieConsent` rebrand, plus updated `landing-components.ct.tsx` and a Vitest suite (`landingContent.test.ts`) that pins the variant registry contract. Doc + release screenshots refreshed.
+  - **Out of scope.** A codebase-wide string scrub of `OpenContracts`/`Open Contracts` (repo name, README, MCP/agent identity strings, GraphQL types, in-product loading splash, etc.).
+
 ### Fixed
 
 - **Phase 5 follow-ups — correctness + lint hygiene on the PR #1770 service-layer migration** (issue #1779). Five small post-merge items surfaced by code review on PR #1770. No behaviour change for happy paths; only error-handling polish and mypy/lint hygiene.
