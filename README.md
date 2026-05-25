@@ -2,7 +2,7 @@
   <img src="docs/assets/images/brand/lockup.svg" alt="opensource.legal [cite]" height="120">
 </p>
 
-# [cite] ([Demo](https://cite.opensource.legal))
+# [cite] ([Demo](https://contracts.opensource.legal))
 
 **The citation layer for agentic workflows.**
 
