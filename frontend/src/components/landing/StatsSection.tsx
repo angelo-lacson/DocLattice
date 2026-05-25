@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { StatBlock, StatGrid } from "@os-legal/ui";
+import { useLandingContent } from "../../config/landingContent";
 
 // Wrapper to increase stat sizes to match design reference
 const StatsWrapper = styled.div`
@@ -45,40 +46,27 @@ function formatNumber(num: number): string {
   return num.toLocaleString();
 }
 
-// Stat configurations matching Storybook design
-const statConfigs = [
-  {
-    key: "totalUsers" as keyof CommunityStats,
-    label: "Contributors",
-    sublabel: "from the community",
-  },
-  {
-    key: "totalAnnotations" as keyof CommunityStats,
-    label: "Annotations",
-    sublabel: "community contributed",
-  },
-  {
-    key: "totalThreads" as keyof CommunityStats,
-    label: "Discussions",
-    sublabel: "active threads",
-  },
-  {
-    key: "activeUsersThisWeek" as keyof CommunityStats,
-    label: "Active This Week",
-    sublabel: "contributors",
-  },
-];
-
+/**
+ * Stat configurations come from the active landingContent variant
+ * (see `src/config/landingContent`). The key field must match a
+ * GraphQL `CommunityStats` field — the JSON `CommunityStatKey` union
+ * keeps that contract honest at build time.
+ */
 export const StatsSection: React.FC<StatsSectionProps> = ({
   stats,
   loading,
 }) => {
+  const { stats: statConfigs } = useLandingContent();
   return (
     <StatsWrapper>
       <StatGrid columns={4}>
         {statConfigs.map((config) => {
           const value =
-            loading || !stats ? "—" : formatNumber(stats[config.key] as number);
+            loading || !stats
+              ? "—"
+              : formatNumber(
+                  stats[config.key as keyof CommunityStats] as number
+                );
 
           return (
             <StatBlock
