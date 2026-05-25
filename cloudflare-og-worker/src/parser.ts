@@ -1,5 +1,5 @@
 /**
- * URL route parser for DocLattice deep-links
+ * URL route parser for cite deep-links
  *
  * Parses URL pathnames to extract entity information for OG metadata fetching.
  * Supports all deep-link patterns defined in docs/architecture/deep-linking.md
