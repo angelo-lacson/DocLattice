@@ -27,6 +27,7 @@ from django.test import SimpleTestCase, TestCase
 
 from doclatticeserver.corpuses.models import Corpus, CorpusFolder
 from doclatticeserver.corpuses.services import (
+    CorpusActionService,
     CorpusDocumentService,
     CorpusPathService,
     CorpusService,
@@ -49,6 +50,7 @@ SEGMENTED_SERVICES = (
     DocumentLifecycleService,
     CorpusPathService,
     CorpusVoteService,
+    CorpusActionService,
 )
 
 
@@ -85,6 +87,8 @@ class TestServicesPackageStructure(SimpleTestCase):
                     "DocumentLifecycleService",
                     "CorpusPathService",
                     "CorpusVoteService",
+                    "CorpusActionService",
+                    "BatchRunSummary",
                 ]
             ),
         )
