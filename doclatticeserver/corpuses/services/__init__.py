@@ -16,6 +16,8 @@ Each service inherits :class:`doclatticeserver.shared.services.base.BaseService`
   — document-in-corpus reads / writes and corpus membership.
 - :class:`~doclatticeserver.corpuses.services.corpus_service.CorpusService`
   — Corpus-row CRUD: delete, visibility, and description versioning.
+- :class:`~doclatticeserver.corpuses.services.corpus_category_service.CorpusCategoryService`
+  — CRUD for the runtime-configurable corpus category (tag) set.
 - :class:`~doclatticeserver.corpuses.services.lifecycle.DocumentLifecycleService`
   — soft-delete / restore / trash.
 - :class:`~doclatticeserver.corpuses.services.paths.CorpusPathService`
@@ -29,6 +31,9 @@ Import the specific service you need from this package::
 from doclatticeserver.corpuses.services.corpus_actions import (
     BatchRunSummary,
     CorpusActionService,
+)
+from doclatticeserver.corpuses.services.corpus_category_service import (
+    CorpusCategoryService,
 )
 from doclatticeserver.corpuses.services.corpus_documents import (
     CorpusDocumentService,
@@ -45,6 +50,7 @@ from doclatticeserver.corpuses.services.votes import CorpusVoteService
 __all__ = [
     "BatchRunSummary",
     "CorpusActionService",
+    "CorpusCategoryService",
     "FolderCRUDService",
     "FolderDocumentService",
     "CorpusDocumentService",
