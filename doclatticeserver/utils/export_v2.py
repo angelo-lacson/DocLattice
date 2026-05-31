@@ -45,6 +45,7 @@ from doclatticeserver.types.dicts import (
     StructuralAnnotationSetExport,
 )
 from doclatticeserver.utils.compact_pawls import expand_pawls_pages
+from doclatticeserver.utils.files import read_field_file_text
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -78,8 +79,7 @@ def package_structural_annotation_set(
         # Read text extract
         txt_content = ""
         if structural_set.txt_extract_file:
-            with structural_set.txt_extract_file.open("r") as f:
-                txt_content = f.read()
+            txt_content = read_field_file_text(structural_set.txt_extract_file)
 
         # Get structural annotations
         structural_annotations: list[DocLatticeAnnotationPythonType] = []

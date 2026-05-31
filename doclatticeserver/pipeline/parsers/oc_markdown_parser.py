@@ -1,12 +1,11 @@
 import logging
 from typing import Optional
 
-from django.core.files.storage import default_storage
-
 from doclatticeserver.documents.models import Document
 from doclatticeserver.pipeline.base.file_types import FileTypeEnum
 from doclatticeserver.pipeline.base.parser import BaseParser
 from doclatticeserver.types.dicts import DocLatticeDocExport
+from doclatticeserver.utils.files import read_field_file_text
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +38,7 @@ class MarkdownParser(BaseParser):
             logger.error(f"No txt file found for document {doc_id}")
             return None
 
-        txt_path = document.txt_extract_file.name
-        with default_storage.open(txt_path, mode="r") as txt_file:
-            # Storage backends may not support encoding= kwarg, so decode
-            # the bytes explicitly to handle non-ASCII content safely.
-            raw = txt_file.read()
-            text_content = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+        text_content = read_field_file_text(document.txt_extract_file)
 
         result: DocLatticeDocExport = {
             "title": document.title or "",
