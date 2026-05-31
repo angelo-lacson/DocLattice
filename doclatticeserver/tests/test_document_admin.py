@@ -1,15 +1,13 @@
 import logging
 import random
 
-from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
 from doclatticeserver.annotations.models import Embedding
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
-
-User = get_user_model()
+from doclatticeserver.users.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +27,14 @@ class TestDocumentAdmin(TestCase):
       - total_embeddings annotation
       - Displaying dimension info
     """
+
+    superuser: User
+    corpus: Corpus
+    document: Document
+    document2: Document
+    embedding_384: Embedding
+    embedding2_384: Embedding
+    embedding2_768: Embedding
 
     @classmethod
     def setUpTestData(cls):
