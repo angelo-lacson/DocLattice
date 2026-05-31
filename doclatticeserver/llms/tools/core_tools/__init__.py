@@ -15,10 +15,7 @@ import logging
 # patch attributes such as ``doclatticeserver.llms.tools.core_tools.Document``
 # directly, so these names must remain accessible on the package namespace.
 from doclatticeserver.annotations.models import Note, NoteRevision  # noqa: F401
-from doclatticeserver.corpuses.models import (  # noqa: F401
-    Corpus,
-    CorpusDescriptionRevision,
-)
+from doclatticeserver.corpuses.models import Corpus  # noqa: F401
 from doclatticeserver.documents.models import Document  # noqa: F401
 
 from ._helpers import (  # noqa: F401
@@ -134,7 +131,6 @@ __all__ = [
     "_token_count",
     # Re-exported model classes (test patch targets)
     "Corpus",
-    "CorpusDescriptionRevision",
     "Document",
     "Note",
     "NoteRevision",
