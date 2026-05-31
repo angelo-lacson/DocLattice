@@ -1,4 +1,3 @@
-from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from doclatticeserver.analyzer.models import Analysis, Analyzer
@@ -6,16 +5,17 @@ from doclatticeserver.annotations.models import Annotation, LabelSet, Relationsh
 from doclatticeserver.corpuses.models import Corpus, CorpusFolder
 from doclatticeserver.documents.models import Document, DocumentPath
 from doclatticeserver.extracts.models import Column, Datacell, Fieldset
+from doclatticeserver.users.models import User
 from doclatticeserver.utils.corpus_collector import (
     CorpusObjectCollection,
     collect_corpus_objects,
 )
 
-User = get_user_model()
-
 
 class TestCollectCorpusObjects(TestCase):
     """Tests for the shared collect_corpus_objects utility."""
+
+    user: User
 
     @classmethod
     def setUpTestData(cls):
