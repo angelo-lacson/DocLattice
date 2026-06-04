@@ -18,6 +18,7 @@ from unittest import mock
 
 from asgiref.sync import async_to_sync
 from django.test import TestCase
+from pydantic_ai.models import Model
 
 from doclatticeserver.documents.models import PipelineSettings
 from doclatticeserver.llms.model_factory import (
@@ -89,6 +90,7 @@ class TestBuildAgentModelEnvFallback(TestCase):
         reset_registry()
         self.addCleanup(reset_registry)
         PipelineSettings.clear_cache()
+        self.addCleanup(PipelineSettings.clear_cache)
 
     def test_no_db_creds_returns_bare_spec_string(self):
         # A fresh singleton has no provider creds → env fallback (string).
@@ -124,6 +126,7 @@ class TestBuildAgentModelDbWins(TestCase):
         reset_registry()
         self.addCleanup(reset_registry)
         PipelineSettings.clear_cache()
+        self.addCleanup(PipelineSettings.clear_cache)
         openai_defn = get_llm_provider_by_key_cached("openai")
         assert openai_defn is not None
         self.openai_path = openai_defn.class_name
@@ -133,8 +136,8 @@ class TestBuildAgentModelDbWins(TestCase):
         instance.set_secrets({self.openai_path: {"api_key": api_key}})
         if base_url is not None:
             instance.component_settings = {self.openai_path: {"base_url": base_url}}
-        # save() eagerly invalidates the singleton cache, so the subsequent
-        # get_instance() in build_agent_model() re-reads these creds from the DB.
+        # save() auto-invalidates the PipelineSettings cache, so no explicit
+        # clear_cache() is needed here.
         instance.save()
 
     def test_db_creds_route_through_construct_model(self):
@@ -167,15 +170,13 @@ class TestBuildAgentModelDbWins(TestCase):
 
     def test_db_creds_build_real_pydantic_ai_model(self):
         """End-to-end: a non-string credentialed pydantic-ai model is returned."""
-        from pydantic_ai.models import Model
-
         self._configure_openai_creds(
             api_key="sk-db-key", base_url="http://gateway.local/v1"
         )
         result = build_agent_model("openai:gpt-4o")
-        self.assertNotIsInstance(result, str)
         # Assert against pydantic-ai's exported abstract base class, not a
         # class-name string: robust to a future rename of OpenAIChatModel.
+        # (A Model instance is necessarily not the bare spec string.)
         self.assertIsInstance(result, Model)
 
     def test_abuild_agent_model_async_wrapper(self):
@@ -191,6 +192,7 @@ class TestProviderSecretStatusSurface(TestCase):
         reset_registry()
         self.addCleanup(reset_registry)
         PipelineSettings.clear_cache()
+        self.addCleanup(PipelineSettings.clear_cache)
         anthropic_defn = get_llm_provider_by_key_cached("anthropic")
         assert anthropic_defn is not None
         self.anthropic_path = anthropic_defn.class_name
