@@ -16,13 +16,17 @@ from doclatticeserver.constants.annotations import OC_SECTION_LABEL
 from doclatticeserver.documents.models import Document
 from doclatticeserver.pipeline.enrichers.pdf_outline_enricher import (
     PdfOutlineEnricher,
-    _match_title_to_tokens,
-    _page_text_tokens,
     _walk_outline,
 )
 from doclatticeserver.tests.fixtures.pdf_generator import create_pdf_with_outline
 from doclatticeserver.types.dicts import DocLatticeDocExport, PawlsPagePythonType
 from doclatticeserver.users.models import User
+from doclatticeserver.utils.pdf_token_matching import (
+    match_title_to_tokens as _match_title_to_tokens,
+)
+from doclatticeserver.utils.pdf_token_matching import (
+    page_text_tokens as _page_text_tokens,
+)
 
 
 class PdfOutlineEnricherTests(TestCase):
