@@ -20,6 +20,7 @@ failure in one never blocks the other, and neither aborts corpus creation
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, cast
 
@@ -37,7 +38,15 @@ async def run_corpus_branding_async(corpus_id: int, user_id: int) -> dict:
     re-checks repeat the signal-time guards because the corpus may have
     changed between enqueue and execution.
     """
+    from django.conf import settings
+
     from doclatticeserver.corpuses.models import Corpus
+
+    # Re-check the install-wide kill-switch: an admin may have disabled
+    # branding between signal fire and task execution. Mirrors the per-corpus
+    # re-checks below and the signal-time guard.
+    if not getattr(settings, "CORPUS_AUTO_BRANDING_ENABLED", False):
+        return {"status": "skipped", "reason": "globally_disabled"}
 
     try:
         corpus = await Corpus.objects.select_related("creator").aget(id=corpus_id)
@@ -65,8 +74,6 @@ async def _generate_readme(corpus: Corpus, user_id: int) -> str:
     # Don't overwrite an existing article (e.g. a forked/imported corpus).
     if corpus.readme_caml_document_id:
         return "skipped_exists"
-
-    import asyncio
 
     from doclatticeserver.constants.corpus_branding import (
         CORPUS_BRANDING_ACTIVATION_MESSAGE,
@@ -143,7 +150,13 @@ async def _generate_logo(corpus: Corpus, user_id: int) -> str:
         from doclatticeserver.corpuses.services.corpus_service import CorpusService
 
         # Re-fetch to honour any icon set after enqueue and to write a fresh row.
-        fresh = Corpus.objects.select_related("creator").get(pk=corpus.pk)
+        # The corpus may have been hard-deleted between image generation and
+        # this save; treat that like the orchestrator's top-level guard rather
+        # than letting DoesNotExist bubble into the task's noisy retry loop.
+        try:
+            fresh = Corpus.objects.select_related("creator").get(pk=corpus.pk)
+        except Corpus.DoesNotExist:
+            return "skipped_corpus_missing"
         if fresh.icon:
             return "skipped_icon_present"
         # Honour an opt-out that landed between _generate_logo's check and this
@@ -171,10 +184,17 @@ async def _generate_logo(corpus: Corpus, user_id: int) -> str:
 def _build_branding_system_prompt(corpus: Corpus, tools: list[str]) -> str:
     """System prompt for the README-writing agent.
 
+    Reuses the canonical ``CAML_AUTHORING_GUIDE`` (the same CAML syntax /
+    editorial reference the seeded "CAML Article Writer" corpus action uses) so
+    auto-branding produces a real CAML article — not ad-hoc markdown — then
+    layers the branding-specific framing on top: a freshly-created (possibly
+    empty) corpus, researched via ``web_search`` rather than document tools.
+
     SECURITY: the corpus title/description are user-generated, so they are
     wrapped in ``<user_content>`` fences to keep the model from treating them
     as instructions. See ``doclatticeserver/utils/prompt_sanitization.py``.
     """
+    from doclatticeserver.corpuses.caml_authoring import CAML_AUTHORING_GUIDE
     from doclatticeserver.utils.prompt_sanitization import (
         UNTRUSTED_CONTENT_NOTICE,
         fence_user_content,
@@ -190,9 +210,9 @@ def _build_branding_system_prompt(corpus: Corpus, tools: list[str]) -> str:
     tool_list = ", ".join(tools) if tools else "none"
 
     parts = [
-        "You are an automated corpus-branding agent. You write a concise, "
-        "accurate README for a newly created document collection without human "
-        "interaction.",
+        "You are an automated corpus-branding agent. You write the "
+        "``Readme.CAML`` article for a newly created document collection, "
+        "without human interaction, following the CAML authoring guide below.",
         f"\n{UNTRUSTED_CONTENT_NOTICE}",
         "",
         "## Collection",
@@ -208,27 +228,27 @@ def _build_branding_system_prompt(corpus: Corpus, tools: list[str]) -> str:
     parts.extend(
         [
             "",
-            "## Rules",
-            "1. You MUST use tools. Use web_search to research the "
-            "collection's subject, then call update_corpus_description to save "
-            "the README. Describing what you would do is NOT sufficient.",
-            "2. Do NOT ask clarifying questions. Execute the task.",
-            "3. Ground the README in the title/description above and what you "
-            "find via web_search. Do not fabricate documents or contents you "
-            "cannot verify — the collection may be empty so far.",
-            "4. Keep it concise and skimmable.",
+            "## Branding rules (override the guide where they conflict)",
+            "1. You MUST use tools. Research the collection's subject with "
+            "web_search, then call update_corpus_description with the raw CAML "
+            "as ``new_content`` to SAVE the article. Merely printing it is NOT "
+            "sufficient — the guide's 'output ONLY the raw CAML' rule refers to "
+            "what you pass to that tool.",
+            "2. You have NO document-analysis tools (only web_search + "
+            "update_corpus_description). Wherever the guide says to use "
+            "ask_document / load_document_text, substitute your web_search "
+            "findings and the collection metadata above.",
+            "3. Ground every claim in the title/description above and what you "
+            "verify via web_search. Never fabricate documents, statistics, or "
+            "quotes — the collection may be empty so far, so favour a concise "
+            "article over invented data blocks (pills/maps/timelines).",
+            "4. Do NOT ask clarifying questions. Execute the task.",
             "",
-            "## README format",
-            "- Write GitHub-flavored markdown (a valid CAML article).",
-            "- Start with a single H1 title.",
-            "- Include a short overview paragraph, then sections such as "
-            '"What\'s inside", "Key topics", and "How to use this '
-            'collection".',
-            "- Prefer bullet lists; link to authoritative sources you found.",
+            CAML_AUTHORING_GUIDE,
             "",
             "## Task",
-            "Produce and SAVE (via update_corpus_description) a README that "
-            "helps a new reader quickly understand what this collection is "
+            "Produce and SAVE (via update_corpus_description) a CAML article "
+            "that helps a new reader quickly understand what this collection is "
             "about.",
         ]
     )
