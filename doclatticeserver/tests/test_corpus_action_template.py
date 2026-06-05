@@ -2,13 +2,13 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from doclatticeserver.agents.models import AgentConfiguration
+from doclatticeserver.corpuses.caml_authoring import (
+    CAML_ARTICLE_SYSTEM_INSTRUCTIONS as _CAML_ARTICLE_SYSTEM_INSTRUCTIONS,
+)
 from doclatticeserver.corpuses.models import (
     Corpus,
     CorpusActionTemplate,
     CorpusActionTrigger,
-)
-from doclatticeserver.corpuses.template_seeds import (
-    _CAML_ARTICLE_SYSTEM_INSTRUCTIONS,
 )
 from doclatticeserver.corpuses.template_seeds import (
     create_default_action_templates as _create_default_action_templates,
