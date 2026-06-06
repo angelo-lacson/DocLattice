@@ -32,6 +32,7 @@ from config.graphql.ratelimits import get_user_tier_rate, graphql_ratelimit_dyna
 from doclatticeserver.constants.annotations import (
     DOCUMENT_RELATIONSHIP_QUERY_MAX_LIMIT,
 )
+from doclatticeserver.constants.search import MAX_SELECT_ALL_DOCUMENT_IDS
 from doclatticeserver.constants.zip_import import BULK_UPLOAD_OWNER_CACHE_PREFIX
 from doclatticeserver.documents.models import (
     Document,
@@ -153,6 +154,19 @@ class DocumentQueryMixin:
         filtered = DocumentFilter(
             data=filter_data, queryset=base, request=info.context
         ).qs
+
+        # Cap the response so a Select-All on a very large corpus cannot return
+        # an unbounded multi-megabyte id list (the READ_LIGHT limiter throttles
+        # frequency, not payload size). Raise rather than truncate: a truncated
+        # id set would make the follow-up bulk-remove silently miss documents.
+        matched = filtered.count()
+        if matched > MAX_SELECT_ALL_DOCUMENT_IDS:
+            raise GraphQLError(
+                f"This selection matches {matched:,} documents, which exceeds "
+                f"the {MAX_SELECT_ALL_DOCUMENT_IDS:,}-document Select-All limit. "
+                "Narrow the filter (folder, search, or label) and try again."
+            )
+
         return [
             to_global_id("DocumentType", pk)
             for pk in filtered.values_list("pk", flat=True)
