@@ -292,15 +292,36 @@ def _import_document_with_annotations(
         to new PKs. In reingest mode annotations are created asynchronously, so
         the returned map is always empty. Returns (None, {}) on failure.
     """
+    # Reingest mode is only meaningful for documents whose *original source
+    # file* the export preserved — i.e. PDFs (and other binaries with a real
+    # ``pdf_file``). For text/markdown/source-less documents the V2 exporter
+    # writes a single-NUL placeholder in place of the file (``etl.py`` —
+    # ``b64encode(b"\\x00")``), because the document's content lives only in the
+    # baked ``content`` / ``pawls_file_content``. Re-parsing that placeholder
+    # would feed ``\\x00`` to the parser. So in reingest mode we peek the source
+    # bytes and fall back to the standard baked import for placeholder docs,
+    # still recording a DONE ``PendingDocumentAnnotations`` row so the
+    # relationship fan-in can resolve this doc's annotation ids.
+    reingest_fallback = False
     if reingest_and_remap:
-        return _reingest_document_with_deferred_remap(
+        with import_zip.open(doc_filename) as fh:
+            source_bytes = fh.read()
+        if _source_is_reingestable(source_bytes):
+            return _reingest_document_with_deferred_remap(
+                doc_filename,
+                doc_data,
+                source_bytes,
+                user_obj,
+                corpus_obj,
+                import_run_id,
+                label_lookup,
+            )
+        reingest_fallback = True
+        logger.info(
+            "Reingest: document %s has no preserved source file (placeholder); "
+            "importing its baked layer instead and recording its id_map for "
+            "the relationship fan-in.",
             doc_filename,
-            doc_data,
-            import_zip,
-            user_obj,
-            corpus_obj,
-            import_run_id,
-            label_lookup,
         )
 
     try:
@@ -343,6 +364,22 @@ def _import_document_with_annotations(
             doc_obj.backend_lock = False
             doc_obj.save(update_fields=["backend_lock"])
 
+            # Reingest fallback: this source-less doc was imported baked rather
+            # than reingested. Record a DONE pending row carrying its id_map so
+            # the relationship fan-in aggregates its annotation ids alongside the
+            # genuinely-reingested docs' maps (otherwise cross-doc relationships
+            # touching this doc would be silently dropped at finalize).
+            if reingest_fallback and import_run_id is not None:
+                PendingDocumentAnnotations.objects.create(
+                    document=corpus_doc,
+                    corpus=corpus_obj,
+                    creator=user_obj,
+                    ingestion_run_id=import_run_id,
+                    payload={},
+                    id_map={str(k): v for k, v in annot_id_map.items()},
+                    status=PendingDocumentAnnotations.Status.DONE,
+                )
+
             return corpus_doc, annot_id_map
 
     except Exception as e:
@@ -350,10 +387,21 @@ def _import_document_with_annotations(
         return None, {}
 
 
+def _source_is_reingestable(source_bytes: bytes) -> bool:
+    """True when the export preserved a real source file for reingest.
+
+    The V2 exporter writes a single NUL byte (``b"\\x00"``) as the file for any
+    document without a real ``pdf_file`` (text/markdown/source-less docs); their
+    content survives only as baked ``content`` / ``pawls_file_content``. Such a
+    placeholder cannot be re-parsed, so those docs fall back to the baked import.
+    """
+    return source_bytes not in (b"", b"\x00")
+
+
 def _reingest_document_with_deferred_remap(
     doc_filename: str,
     doc_data: dict[str, Any],
-    import_zip: zipfile.ZipFile,
+    source_bytes: bytes,
     user_obj: UserModel,
     corpus_obj: Corpus,
     import_run_id: uuid.UUID | None,
@@ -389,12 +437,9 @@ def _reingest_document_with_deferred_remap(
         str(label_id): lbl.text for label_id, lbl in label_lookup.items()
     }
     try:
-        with import_zip.open(doc_filename) as fh:
-            file_bytes = fh.read()
-
         with transaction.atomic():
             corpus_doc, _status, _path = corpus_obj.import_content(
-                content=file_bytes,
+                content=source_bytes,
                 user=user_obj,
                 filename=doc_filename,
                 title=doc_data["title"],
@@ -511,6 +556,18 @@ def _import_corpus(
         reingest_relationships: list = []
         if reingest_and_remap:
             import_run_id = uuid.uuid4()
+            # The relationship fan-in is async and the orphaned-row sweeper is
+            # still deferred (see the design doc §9). Until it lands, a worker
+            # crash mid-import leaves PendingCorpusImport / PendingDocumentAnnotations
+            # rows stranded with relationships never wired — log the run id so an
+            # operator can find and clean up stuck rows by hand.
+            logger.warning(
+                "[ImportV2] reingest_and_remap enabled for corpus %s "
+                "(import_run_id=%s); coordination rows are swept manually until "
+                "the orphaned-row sweeper lands.",
+                corpus_obj.id,
+                import_run_id,
+            )
             if is_v2:
                 reingest_relationships = (
                     cast(DocLatticeExportDataJsonV2Type, data_json).get(
@@ -596,13 +653,22 @@ def _import_corpus(
         # is then a clean no-op). The last remap to finish wins the race
         # otherwise; the exactly-once claim guarantees a single finalize.
         if reingest_and_remap and reingest_relationships:
+            # Deferred import: ``doc_tasks`` imports from this module, so a
+            # top-level import here would form a circular import at module load.
             from doclatticeserver.tasks.doc_tasks import (
                 _maybe_finalize_corpus_import,
             )
 
             # ``import_run_id`` is always set when reingest mode created a
             # coordination row (which only happens when relationships exist).
-            assert import_run_id is not None
+            # Use an explicit guard, not ``assert``: assertions are stripped
+            # under ``python -O`` / a ``-O`` Celery worker, which would let a
+            # ``filter(import_run_id=None)`` silently mis-target rows.
+            if import_run_id is None:
+                raise RuntimeError(
+                    "_import_corpus: import_run_id must be set in reingest mode "
+                    "when relationships exist — this is a bug."
+                )
             expected = PendingDocumentAnnotations.objects.filter(
                 ingestion_run_id=import_run_id
             ).count()
