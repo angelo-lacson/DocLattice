@@ -308,8 +308,6 @@ const PageHeader = styled(BasePageHeader)`
   align-items: flex-start;
 `;
 
-const PageTitleGroup = styled.div``;
-
 const PageTitle = styled.h1`
   display: flex;
   align-items: center;
@@ -479,7 +477,8 @@ const Pagination: React.FC<{
   page: PageInfo | undefined;
   offset: number;
   onOffsetChange: (offset: number) => void;
-}> = ({ page, offset, onOffsetChange }) => {
+  testId?: string;
+}> = ({ page, offset, onOffsetChange, testId }) => {
   if (!page) return null;
   const { totalCount, limit } = page;
   const shownStart = totalCount === 0 ? 0 : offset + 1;
@@ -487,7 +486,7 @@ const Pagination: React.FC<{
   const hasPrev = offset > 0;
   const hasNext = offset + limit < totalCount;
   return (
-    <PaginationBar>
+    <PaginationBar data-testid={testId}>
       <span>
         {shownStart}–{shownEnd} of {totalCount}
       </span>
@@ -511,19 +510,26 @@ const Pagination: React.FC<{
   );
 };
 
-// Status option sets (values are what the backend filters on)
+// Status option sets — each `value` is sent verbatim as the backend status
+// filter. The casing intentionally mirrors each underlying model's stored
+// values (so the values read true to the data even though the service layer
+// normalises case per subject: `.lower()` for documents/corpus-imports,
+// `.upper()` for worker uploads/bulk sessions). Keep them mirroring the model.
+// DocumentProcessingStatus values are lowercase.
 const DOC_STATUS_OPTIONS = [
   { value: "pending", label: "Pending" },
   { value: "processing", label: "Processing" },
   { value: "completed", label: "Completed" },
   { value: "failed", label: "Failed" },
 ];
+// UploadStatus values are uppercase.
 const WORKER_STATUS_OPTIONS = [
   { value: "PENDING", label: "Pending" },
   { value: "PROCESSING", label: "Processing" },
   { value: "COMPLETED", label: "Completed" },
   { value: "FAILED", label: "Failed" },
 ];
+// PendingCorpusImport.Status values are lowercase.
 const CORPUS_IMPORT_STATUS_OPTIONS = [
   { value: "enumerating", label: "Enumerating" },
   { value: "ready", label: "Ready" },
@@ -531,6 +537,7 @@ const CORPUS_IMPORT_STATUS_OPTIONS = [
   { value: "done", label: "Done" },
   { value: "failed", label: "Failed" },
 ];
+// ChunkedUploadStatus values are uppercase.
 const BULK_SESSION_STATUS_OPTIONS = [
   { value: "PENDING", label: "Pending" },
   { value: "ASSEMBLING", label: "Assembling" },
@@ -602,6 +609,14 @@ export const IngestionMonitor: React.FC = () => {
       setOffset(0);
     };
 
+  // ``backendUserObj`` is null both while the reactive var is still loading
+  // and for anonymous users. Render nothing until it resolves so the "Access
+  // Denied" warning never flashes for an admin whose user object simply hasn't
+  // populated yet (it appears only once we know the user is a non-superuser).
+  if (currentUser === null) {
+    return null;
+  }
+
   if (!isSuperuser) {
     return (
       <Container>
@@ -635,7 +650,7 @@ export const IngestionMonitor: React.FC = () => {
       </BackLink>
 
       <PageHeader>
-        <PageTitleGroup>
+        <div>
           <PageTitle>
             <Activity size={28} color={OS_LEGAL_COLORS.accent} />
             Ingestion Monitor
@@ -645,7 +660,7 @@ export const IngestionMonitor: React.FC = () => {
             status, owners, file metadata and elapsed time — never document
             contents.
           </PageSubtitle>
-        </PageTitleGroup>
+        </div>
         <Button variant="secondary" onClick={handleRefresh}>
           <RefreshCw size={14} style={{ marginRight: 6 }} />
           Refresh
@@ -759,6 +774,7 @@ export const IngestionMonitor: React.FC = () => {
                 page={docPage}
                 offset={docOffset}
                 onOffsetChange={setDocOffset}
+                testId="documents-pagination"
               />
             </StyledSegment>
           </SectionWrapper>
@@ -846,6 +862,7 @@ export const IngestionMonitor: React.FC = () => {
                 page={workerPage}
                 offset={workerOffset}
                 onOffsetChange={setWorkerOffset}
+                testId="worker-uploads-pagination"
               />
             </StyledSegment>
           </SectionWrapper>
@@ -931,6 +948,7 @@ export const IngestionMonitor: React.FC = () => {
                 page={importPage}
                 offset={importOffset}
                 onOffsetChange={setImportOffset}
+                testId="corpus-imports-pagination"
               />
             </StyledSegment>
           </SectionWrapper>
@@ -1018,6 +1036,7 @@ export const IngestionMonitor: React.FC = () => {
                 page={sessionPage}
                 offset={sessionOffset}
                 onOffsetChange={setSessionOffset}
+                testId="bulk-sessions-pagination"
               />
             </StyledSegment>
           </SectionWrapper>
