@@ -9,11 +9,17 @@ Structural annotations created by the parse-within-corpus pipeline carry
 
 Because a ``StructuralAnnotationSet`` is deduplicated by content hash, the
 same set is shared across the standalone import source AND every
-corpus-isolated copy (potentially in different corpuses).
-``AnnotationType.resolve_document`` previously resolved these via an
-unscoped, non-deterministic ``structural_set.documents.first()``, so the
-corpus cards named the wrong document ("Unknown Document") and the deep
-links broke. The fix scopes resolution to the corpus being queried — see
+corpus-isolated copy (potentially in different corpuses). Two bugs combined
+to break the cards. First, ``AnnotationType.resolve_document`` was never run
+for the ``document`` field at all: because ``DocumentType`` overrides
+``get_queryset``, graphene-django's FK converter installs a resolver that
+reads the FK straight from ``root.document_id`` (NULL for structural
+annotations) and ignores the type's ``resolve_*`` method, so the field
+returned ``None`` ("Unknown Document"). Decorating ``resolve_document`` with
+``@bypass_get_queryset`` makes graphene-django run it. Second, once it runs,
+``resolve_document`` resolved structural annotations via an unscoped,
+non-deterministic ``structural_set.documents.first()``. The fix scopes
+resolution to the corpus being queried — see
 ``AnnotationService.structural_document_prefetch`` and
 ``config/graphql/annotation_queries.py::resolve_annotations``.
 
@@ -224,3 +230,30 @@ class CorpusCardsStructuralDocumentResolutionTests(TestCase):
                 foreign_doc_ids,
                 "resolve_document returned a document with no path in corpus A",
             )
+
+    def test_prefetch_document_id_takes_precedence_over_corpus_id(self):
+        """``document_id`` scopes to that exact document, even with a corpus_id.
+
+        The document-knowledge-base view passes both ids; the resolved
+        structural document must be the one being viewed, not an arbitrary
+        corpus-local copy.
+        """
+        from doclatticeserver.annotations.services import AnnotationService
+
+        annotations = self._make_structural_annotations(self.corpus_a, "A")
+        # corpus_id points at A, but document_id pins doc_b — document_id wins.
+        prefetch = AnnotationService.structural_document_prefetch(
+            corpus_id=self.corpus_a.id, document_id=self.doc_b.id
+        )
+        fetched = (
+            Annotation.objects.filter(id=annotations[0].id)
+            .select_related("structural_set")
+            .prefetch_related(prefetch)
+            .first()
+        )
+        resolved = list(fetched.structural_set.documents.all())
+        self.assertEqual(
+            [d.id for d in resolved],
+            [self.doc_b.id],
+            "document_id must take precedence over corpus_id in the prefetch",
+        )
