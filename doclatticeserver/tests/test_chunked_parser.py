@@ -24,6 +24,7 @@ from doclatticeserver.pipeline.base.file_types import FileTypeEnum
 from doclatticeserver.pipeline.base.parser import BaseParser
 from doclatticeserver.pipeline.parsers.docling_parser_rest import DoclingParser
 from doclatticeserver.pipeline.parsers.oc_text_parser import TxtParser
+from doclatticeserver.pipeline.utils import get_all_parsers
 from doclatticeserver.tests.helpers import make_test_pdf
 from doclatticeserver.types.dicts import (
     DocLatticeDocExport,
@@ -35,7 +36,6 @@ User = get_user_model()
 
 
 def _make_chunk_result(
-    page_offset: int = 0,
     num_pages: int = 2,
     annotations: list | None = None,
     relationships: list | None = None,
@@ -632,7 +632,7 @@ class TestBaseChunkedParserIntegration(TestCase):
 
 
 # ======================================================================
-# supports_chunking capability flag tests
+# Reassembly determinism / golden equivalence tests
 # ======================================================================
 
 
@@ -641,9 +641,11 @@ class TestReassemblyGoldenEquivalence(TestCase):
 
     def test_global_page_indices_are_contiguous(self):
         # Three chunks of 2 pages each -> a 6-page document, indices 0..5.
-        chunk_a = _make_chunk_result(page_offset=0, num_pages=2)
-        chunk_b = _make_chunk_result(page_offset=2, num_pages=2)
-        chunk_c = _make_chunk_result(page_offset=4, num_pages=2)
+        # Global page offsets are supplied to _reassemble_chunk_results below;
+        # _make_chunk_result always emits local 0-based pages.
+        chunk_a = _make_chunk_result(num_pages=2)
+        chunk_b = _make_chunk_result(num_pages=2)
+        chunk_c = _make_chunk_result(num_pages=2)
 
         result = _reassemble_chunk_results(
             [chunk_a, chunk_b, chunk_c], page_offsets=[0, 2, 4]
@@ -654,8 +656,8 @@ class TestReassemblyGoldenEquivalence(TestCase):
         self.assertEqual(result["page_count"], 6)
 
     def test_all_annotations_preserved_with_unique_ids(self):
-        chunk_a = _make_chunk_result(page_offset=0, num_pages=2)
-        chunk_b = _make_chunk_result(page_offset=2, num_pages=2)
+        chunk_a = _make_chunk_result(num_pages=2)
+        chunk_b = _make_chunk_result(num_pages=2)
 
         result = _reassemble_chunk_results([chunk_a, chunk_b], page_offsets=[0, 2])
 
@@ -671,7 +673,7 @@ class TestReassemblyGoldenEquivalence(TestCase):
     def test_single_chunk_reassembly_is_stable(self):
         # A below-threshold document routes through reassembly as one chunk;
         # global indices must equal local indices.
-        chunk = _make_chunk_result(page_offset=0, num_pages=3)
+        chunk = _make_chunk_result(num_pages=3)
         result = _reassemble_chunk_results([chunk], page_offsets=[0])
         indices = [p["page"]["index"] for p in result["pawls_file_content"]]
         self.assertEqual(indices, [0, 1, 2])
@@ -698,3 +700,22 @@ class TestSupportsChunkingFlag(TestCase):
     def test_non_paginated_parser_does_not_support_chunking(self):
         # TxtParser extends BaseParser directly and must not opt in.
         self.assertFalse(TxtParser.supports_chunking)
+
+    def test_all_registered_parsers_flag_matches_chunked_lineage(self):
+        # Registry-driven: prove the orchestrator's introspection is correct for
+        # *every* registered parser (current and future), not just the two
+        # enumerated above. The flag must be True iff the parser is a
+        # BaseChunkedParser subclass.
+        parsers = get_all_parsers()
+        self.assertTrue(parsers, "no parsers discovered by get_all_parsers()")
+        for parser_cls in parsers:
+            expected = issubclass(parser_cls, BaseChunkedParser)
+            self.assertEqual(
+                parser_cls.supports_chunking,
+                expected,
+                msg=(
+                    f"{parser_cls.__name__}.supports_chunking="
+                    f"{parser_cls.supports_chunking} but chunked-lineage="
+                    f"{expected}"
+                ),
+            )
