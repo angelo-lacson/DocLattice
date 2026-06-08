@@ -38,13 +38,13 @@ from doclatticeserver.pipeline.base.chunk_reassembler import (  # noqa: F401  ba
 from doclatticeserver.pipeline.base.chunk_reassembler import (  # noqa: F401  back-compat re-export
     offset_relationship as _offset_relationship,
 )
+from doclatticeserver.pipeline.base.exceptions import DocumentParsingError
+from doclatticeserver.pipeline.base.parser import BaseParser
 from doclatticeserver.pipeline.chunk_artifacts import (
     cleanup_chunk_artifacts,
     read_chunk_result,
     write_chunk_pdf,
 )
-from doclatticeserver.pipeline.base.exceptions import DocumentParsingError
-from doclatticeserver.pipeline.base.parser import BaseParser
 from doclatticeserver.types.dicts import DocLatticeDocExport
 from doclatticeserver.utils.pdf_splitting import (
     calculate_page_chunks,
@@ -223,9 +223,7 @@ class BaseChunkedParser(BaseParser):
         reassembler = ChunkReassembler()
         for idx, key in enumerate(out_keys):
             chunk = read_chunk_result(key)
-            reassembler.add_chunk(
-                chunk, page_offset=page_offsets[idx], chunk_index=idx
-            )
+            reassembler.add_chunk(chunk, page_offset=page_offsets[idx], chunk_index=idx)
         combined = reassembler.finalize()
 
         document = Document.objects.get(pk=doc_id)
