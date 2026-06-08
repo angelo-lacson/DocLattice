@@ -21,6 +21,9 @@ from doclatticeserver.pipeline.base.chunked_parser import (
 )
 from doclatticeserver.pipeline.base.exceptions import DocumentParsingError
 from doclatticeserver.pipeline.base.file_types import FileTypeEnum
+from doclatticeserver.pipeline.base.parser import BaseParser
+from doclatticeserver.pipeline.parsers.docling_parser_rest import DoclingParser
+from doclatticeserver.pipeline.parsers.oc_text_parser import TxtParser
 from doclatticeserver.tests.helpers import make_test_pdf
 from doclatticeserver.types.dicts import (
     DocLatticeDocExport,
@@ -626,3 +629,25 @@ class TestBaseChunkedParserIntegration(TestCase):
         slow_chunks_started.wait(timeout=2)
         # Confirm at least one slow chunk was dispatched before the error propagated
         self.assertTrue(slow_chunks_started.is_set())
+
+
+# ======================================================================
+# supports_chunking capability flag tests
+# ======================================================================
+
+
+class TestSupportsChunkingFlag(TestCase):
+    """The supports_chunking capability flag is set correctly per parser."""
+
+    def test_base_parser_defaults_to_false(self):
+        self.assertFalse(BaseParser.supports_chunking)
+
+    def test_chunked_base_is_true(self):
+        self.assertTrue(BaseChunkedParser.supports_chunking)
+
+    def test_docling_parser_supports_chunking(self):
+        self.assertTrue(DoclingParser.supports_chunking)
+
+    def test_non_paginated_parser_does_not_support_chunking(self):
+        # TxtParser extends BaseParser directly and must not opt in.
+        self.assertFalse(TxtParser.supports_chunking)
