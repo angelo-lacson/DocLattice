@@ -35,7 +35,7 @@ test.describe("ModernLoadingDisplay", () => {
 
     const statusRegion = page.getByRole("status");
     await expect(statusRegion).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText("Loading cite")).toBeVisible();
+    await expect(page.getByText("Loading DocLattice")).toBeVisible();
 
     // The accessibility contract: live region announces busy state.
     await expect(statusRegion).toHaveAttribute("aria-live", "polite");

@@ -1,6 +1,6 @@
 {
-  "short_name": "cite",
-  "name": "cite — the citation layer underneath the public record",
+  "short_name": "DocLattice",
+  "name": "DocLattice — open-source document intelligence",
   "icons": [
     {
       "src": "favicon.svg",
