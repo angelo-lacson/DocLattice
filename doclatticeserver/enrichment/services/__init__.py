@@ -9,5 +9,8 @@ from doclatticeserver.enrichment.services.corpus_reference_service import (
     CorpusReferenceService,
 )
 from doclatticeserver.enrichment.services.enrichment_service import EnrichmentService
+from doclatticeserver.enrichment.services.governance_graph_service import (
+    GovernanceGraphService,
+)
 
-__all__ = ["CorpusReferenceService", "EnrichmentService"]
+__all__ = ["CorpusReferenceService", "EnrichmentService", "GovernanceGraphService"]
