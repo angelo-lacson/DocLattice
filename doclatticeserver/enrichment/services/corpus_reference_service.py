@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from doclatticeserver.annotations.models import CorpusReference
 from doclatticeserver.corpuses.models import Corpus
+from doclatticeserver.shared.services.base import BaseService
 
 
-class CorpusReferenceService:
+class CorpusReferenceService(BaseService):
     """Read surface for CorpusReference rows."""
 
     @staticmethod
