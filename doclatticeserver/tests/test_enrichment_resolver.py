@@ -6,7 +6,7 @@ from django.test import TestCase
 from doclatticeserver.documents.models import Document
 from doclatticeserver.enrichment import constants as C
 from doclatticeserver.enrichment.extractor import Candidate
-from doclatticeserver.enrichment.resolver import ReferenceResolver, _SectionAnno
+from doclatticeserver.enrichment.resolver import ReferenceResolver, SectionAnno
 
 User = get_user_model()
 
@@ -66,7 +66,7 @@ class ResolverTests(TestCase):
             raw_text='see "Risk Factors"',
             normalized_data={"heading": "Risk Factors"},
         )
-        sections = [_SectionAnno(id=42, raw_text="Risk Factors")]
+        sections = [SectionAnno(id=42, raw_text="Risk Factors")]
         r = self.resolver.resolve_section(
             cand, self.primary.id, doc_text="...", sections=sections
         )
