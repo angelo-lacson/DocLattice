@@ -12,6 +12,9 @@ from doclatticeserver.constants import (
     DEFAULT_MAX_PAGES_PER_CHUNK,
     DEFAULT_MIN_PAGES_FOR_CHUNKING,
 )
+from doclatticeserver.constants.document_processing import (
+    DOCLING_PARSER_REQUEST_TIMEOUT_SECONDS,
+)
 from doclatticeserver.pipeline.base.chunked_parser import BaseChunkedParser
 from doclatticeserver.pipeline.base.exceptions import DocumentParsingError
 from doclatticeserver.pipeline.base.file_types import FileTypeEnum
@@ -91,7 +94,7 @@ class DoclingParser(BaseChunkedParser):
             },
         )
         request_timeout: int = field(
-            default=300,
+            default=DOCLING_PARSER_REQUEST_TIMEOUT_SECONDS,
             metadata={
                 "pipeline_setting": PipelineSetting(
                     setting_type=SettingType.OPTIONAL,
