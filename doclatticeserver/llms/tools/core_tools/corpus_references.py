@@ -24,7 +24,7 @@ def scan_corpus_references(
     reports counts by type and sample resolved/unresolved candidates so the user
     can review before applying enrichment.
     """
-    from doclatticeserver.enrichment.service import EnrichmentService
+    from doclatticeserver.enrichment.services import EnrichmentService
 
     return EnrichmentService().scan(
         corpus_id=corpus_id, creator_id=creator_id, types=types, sample_n=sample_n
@@ -44,7 +44,7 @@ def apply_corpus_reference_enrichment(
     records law citations as cross-corpus-trackable stubs. Idempotent:
     re-running enriches only newly-found references.
     """
-    from doclatticeserver.enrichment.service import EnrichmentService
+    from doclatticeserver.enrichment.services import EnrichmentService
 
     return EnrichmentService().apply(
         corpus_id=corpus_id, creator_id=creator_id, types=types

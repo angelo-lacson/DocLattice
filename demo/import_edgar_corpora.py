@@ -22,7 +22,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 
 from doclatticeserver.corpuses.models import Corpus, TemporaryFileHandle
-from doclatticeserver.enrichment.service import EnrichmentService
+from doclatticeserver.enrichment.services import EnrichmentService
 from doclatticeserver.tasks.import_tasks import import_corpus
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user

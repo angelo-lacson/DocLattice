@@ -48,7 +48,7 @@ def corpus_reference_enrichment(
     references.
     """
     from doclatticeserver.analyzer.models import Analysis
-    from doclatticeserver.enrichment.service import EnrichmentService
+    from doclatticeserver.enrichment.services import EnrichmentService
 
     analysis = Analysis.objects.get(id=analysis_id)
     assert analysis.creator_id is not None  # non-null FK; narrows for mypy

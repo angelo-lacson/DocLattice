@@ -151,7 +151,7 @@ class AuthorityAliasRegistryTests(TestCase):
     def test_new_authority_extracted_and_linked_end_to_end(self):
         """A filing citing the DB-declared authority resolves with zero code."""
         from doclatticeserver.annotations.models import CorpusReference
-        from doclatticeserver.enrichment.service import EnrichmentService
+        from doclatticeserver.enrichment.services import EnrichmentService
 
         filing_corpus = Corpus.objects.create(title="NY Filings", creator=self.user)
         doc = Document.objects.create(title="Acme merger proxy", creator=self.user)

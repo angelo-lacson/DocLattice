@@ -43,7 +43,7 @@ document/exhibit references (as in-app links), and internal section references.
    ```bash
    docker compose -f local.yml run --rm django python manage.py shell -c "
    import warnings; warnings.simplefilter('ignore')
-   from doclatticeserver.enrichment.service import EnrichmentService
+   from doclatticeserver.enrichment.services import EnrichmentService
    out = EnrichmentService().scan(corpus_id=<CID>, creator_id=<UID>, sample_n=10)
    print('scanned', out['documents_scanned'], 'candidates', out['total_candidates'])
    print('by_type', out['counts_by_type'])
@@ -55,7 +55,7 @@ document/exhibit references (as in-app links), and internal section references.
    ```bash
    docker compose -f local.yml run --rm django python manage.py shell -c "
    import warnings; warnings.simplefilter('ignore')
-   from doclatticeserver.enrichment.service import EnrichmentService
+   from doclatticeserver.enrichment.services import EnrichmentService
    from doclatticeserver.annotations.models import Annotation, CorpusReference
    out = EnrichmentService().apply(corpus_id=<CID>, creator_id=<UID>)
    print(out)

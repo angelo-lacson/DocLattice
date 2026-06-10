@@ -62,7 +62,7 @@ class AnnotationQueryMixin:
         Visibility is enforced by ``CorpusReferenceService`` (corpus-derived);
         no inline Tier-0 permission fusion here.
         """
-        from doclatticeserver.enrichment.service import CorpusReferenceService
+        from doclatticeserver.enrichment.services import CorpusReferenceService
 
         pk = int(from_global_id(corpus_id)[1])
         qs = CorpusReferenceService.for_corpus(info.context.user, pk)

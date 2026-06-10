@@ -13,7 +13,7 @@ from doclatticeserver.annotations.models import (
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document, DocumentRelationship
 from doclatticeserver.enrichment import constants as C
-from doclatticeserver.enrichment.service import (
+from doclatticeserver.enrichment.services import (
     CorpusReferenceService,
     EnrichmentService,
 )
