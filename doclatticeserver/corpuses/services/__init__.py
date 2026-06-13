@@ -43,12 +43,20 @@ from doclatticeserver.corpuses.services.folder_documents import (
     FolderDocumentService,
 )
 from doclatticeserver.corpuses.services.folders import FolderCRUDService
+from doclatticeserver.corpuses.services.intelligence_setup import (
+    CorpusIntelligenceSetupService,
+    IntelligenceSetupStatus,
+    IntelligenceSetupSummary,
+)
 from doclatticeserver.corpuses.services.lifecycle import DocumentLifecycleService
 from doclatticeserver.corpuses.services.paths import CorpusPathService
 from doclatticeserver.corpuses.services.votes import CorpusVoteService
 
 __all__ = [
     "BatchRunSummary",
+    "CorpusIntelligenceSetupService",
+    "IntelligenceSetupStatus",
+    "IntelligenceSetupSummary",
     "CorpusActionService",
     "CorpusCategoryService",
     "FolderCRUDService",
