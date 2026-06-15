@@ -98,34 +98,54 @@ class EnrichmentService:
 
             llm_extractor = LLMCitationExtractor()
         sections_by_doc = self._sections_by_doc(documents)
-        resolutions: list[Resolution] = []
+
+        # Read each document's text once (isolating per-doc read failures).
+        doc_texts: dict[int, str] = {}
         for doc in documents:
             try:
                 text = read_field_file_text(doc.txt_extract_file)
-            except Exception as exc:  # isolate per-document failures
+            except Exception as exc:
                 logger.warning(
                     "Enrichment: skip doc %s (text read failed: %s)", doc.id, exc
                 )
                 continue
-            if not text:
+            if text:
+                doc_texts[doc.id] = text
+
+        # Batch the LLM tier in ONE event loop (avoids per-document loop churn).
+        # Safe under both sync and _db_sync_to_async-wrapped async callers.
+        llm_by_doc: dict[int, list] = {}
+        if llm_extractor is not None and doc_texts:
+
+            async def _extract_all() -> dict[int, list]:
+                out: dict[int, list] = {}
+                for did, txt in doc_texts.items():
+                    out[did] = await llm_extractor.aextract(txt)
+                return out
+
+            llm_by_doc = async_to_sync(_extract_all)()
+
+        resolutions: list[Resolution] = []
+        for doc in documents:
+            doc_text = doc_texts.get(doc.id)
+            if doc_text is None:
                 continue
             sections = sections_by_doc.get(doc.id, [])
             meta = doc.custom_meta if isinstance(doc.custom_meta, dict) else {}
             primary = list(
-                extractor.extract(text, default_authority=meta.get("authority"))
+                extractor.extract(doc_text, default_authority=meta.get("authority"))
             )
             if generic is not None:
                 # Registry wins on overlap; generic adds the open-vocabulary tail.
-                cands = reconcile(primary, generic.extract(text))
+                cands = reconcile(primary, generic.extract(doc_text))
             else:
                 cands = primary
             if llm_extractor is not None:
-                llm_cands = async_to_sync(llm_extractor.aextract)(text)
-                cands = reconcile(cands, llm_cands)
+                cands = reconcile(cands, llm_by_doc.get(doc.id, []))
             for cand in cands:
                 if cand.reference_type not in wanted:
                     continue
-                resolutions.append(resolver.resolve(cand, doc.id, text, sections))
+                resolutions.append(resolver.resolve(cand, doc.id, doc_text, sections))
         return resolutions
 
     # -- public API -------------------------------------------------------- #
