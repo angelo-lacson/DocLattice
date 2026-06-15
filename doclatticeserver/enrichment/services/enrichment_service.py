@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 from collections import Counter
 
+from asgiref.sync import async_to_sync
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
@@ -89,32 +90,62 @@ class EnrichmentService:
             if C.DETECTION_TIER_GRAMMAR in active_tiers
             else None
         )
+        llm_extractor = None
+        if C.DETECTION_TIER_LLM in active_tiers:
+            from doclatticeserver.enrichment.llm_citation_extractor import (
+                LLMCitationExtractor,
+            )
+
+            llm_extractor = LLMCitationExtractor()
         sections_by_doc = self._sections_by_doc(documents)
-        resolutions: list[Resolution] = []
+
+        # Read each document's text once (isolating per-doc read failures).
+        doc_texts: dict[int, str] = {}
         for doc in documents:
             try:
                 text = read_field_file_text(doc.txt_extract_file)
-            except Exception as exc:  # isolate per-document failures
+            except Exception as exc:
                 logger.warning(
                     "Enrichment: skip doc %s (text read failed: %s)", doc.id, exc
                 )
                 continue
-            if not text:
+            if text:
+                doc_texts[doc.id] = text
+
+        # Batch the LLM tier in ONE event loop (avoids per-document loop churn).
+        # Safe under both sync and _db_sync_to_async-wrapped async callers.
+        llm_by_doc: dict[int, list] = {}
+        if llm_extractor is not None and doc_texts:
+
+            async def _extract_all() -> dict[int, list]:
+                out: dict[int, list] = {}
+                for did, txt in doc_texts.items():
+                    out[did] = await llm_extractor.aextract(txt)
+                return out
+
+            llm_by_doc = async_to_sync(_extract_all)()
+
+        resolutions: list[Resolution] = []
+        for doc in documents:
+            doc_text = doc_texts.get(doc.id)
+            if doc_text is None:
                 continue
             sections = sections_by_doc.get(doc.id, [])
             meta = doc.custom_meta if isinstance(doc.custom_meta, dict) else {}
             primary = list(
-                extractor.extract(text, default_authority=meta.get("authority"))
+                extractor.extract(doc_text, default_authority=meta.get("authority"))
             )
             if generic is not None:
                 # Registry wins on overlap; generic adds the open-vocabulary tail.
-                cands = reconcile(primary, generic.extract(text))
+                cands = reconcile(primary, generic.extract(doc_text))
             else:
                 cands = primary
+            if llm_extractor is not None:
+                cands = reconcile(cands, llm_by_doc.get(doc.id, []))
             for cand in cands:
                 if cand.reference_type not in wanted:
                     continue
-                resolutions.append(resolver.resolve(cand, doc.id, text, sections))
+                resolutions.append(resolver.resolve(cand, doc.id, doc_text, sections))
         return resolutions
 
     # -- public API -------------------------------------------------------- #
@@ -172,6 +203,7 @@ class EnrichmentService:
         corpus_id: int,
         creator_id: int,
         max_documents: int | None = None,
+        use_llm: bool = False,
     ) -> dict:
         """Read-only open-vocabulary inventory (registry + grammar tiers).
 
@@ -193,12 +225,15 @@ class EnrichmentService:
         )
         if documents_truncated:
             documents = documents[:max_documents]
+        extra = [C.DETECTION_TIER_GRAMMAR]
+        if use_llm:
+            extra.append(C.DETECTION_TIER_LLM)
         resolutions = self._resolutions(
             corpus,
             documents,
             [C.REF_LAW],
             user,
-            extra_tiers=[C.DETECTION_TIER_GRAMMAR],
+            extra_tiers=extra,
         )
 
         # Registry-tier candidates carry no jurisdiction/authority_type (the
@@ -222,6 +257,17 @@ class EnrichmentService:
         known = {prefix for prefix, _j, _t in ns_rows}
         ns_class = {prefix: (jur, typ) for prefix, jur, typ in ns_rows}
 
+        review_resolutions = [
+            r
+            for r in resolutions
+            if (r.candidate.normalized_data or {}).get("needs_review")
+        ]
+        main_resolutions = [
+            r
+            for r in resolutions
+            if not (r.candidate.normalized_data or {}).get("needs_review")
+        ]
+
         def _classify(prefix: str, cand) -> tuple:
             ns_jur, ns_typ = ns_class.get(
                 prefix, C.PREFIX_CLASSIFICATION.get(prefix, (None, None))
@@ -231,7 +277,7 @@ class EnrichmentService:
         by_key: dict[str, dict] = {}
         by_jurisdiction: Counter = Counter()
         by_type: Counter = Counter()
-        for r in resolutions:
+        for r in main_resolutions:
             key = r.canonical_key
             if not key:
                 continue
@@ -284,6 +330,15 @@ class EnrichmentService:
             "by_jurisdiction": dict(by_jurisdiction),
             "by_authority_type": dict(by_type),
             "new_namespaces": new_namespaces,
+            "review_candidates": [
+                {
+                    "canonical_key": r.canonical_key,
+                    "raw_text": r.candidate.raw_text[:120],
+                    "detection_tier": r.candidate.detection_tier,
+                    "detection_confidence": r.candidate.detection_confidence,
+                }
+                for r in review_resolutions
+            ],
         }
 
     @staticmethod
@@ -355,6 +410,11 @@ class EnrichmentService:
         resolutions = self._resolutions(
             corpus, documents, types, user, extra_tiers=extra_tiers
         )
+        resolutions = [
+            r
+            for r in resolutions
+            if not (r.candidate.normalized_data or {}).get("needs_review")
+        ]
         if analysis is None:
             analysis = self._get_analysis(corpus, creator_id)
         writer = EnrichmentWriter(corpus, creator_id, analysis=analysis)
