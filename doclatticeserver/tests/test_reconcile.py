@@ -9,8 +9,12 @@ from doclatticeserver.enrichment.reconcile import reconcile
 
 def _c(start, end, key, tier):
     return Candidate(
-        reference_type=C.REF_LAW, start=start, end=end, raw_text=key,
-        canonical_key=key, detection_tier=tier,
+        reference_type=C.REF_LAW,
+        start=start,
+        end=end,
+        raw_text=key,
+        canonical_key=key,
+        detection_tier=tier,
     )
 
 
@@ -29,7 +33,7 @@ class ReconcileTests(SimpleTestCase):
         assert {c.canonical_key for c in out} == {"dgcl:145", "cfr-40:261.4"}
 
     def test_grammar_self_overlap_first_wins(self):
-        primary = []
+        primary: list = []
         secondary = [
             _c(0, 20, "usc-15:78j(b)", C.DETECTION_TIER_GRAMMAR),
             _c(5, 25, "usc-15:78j", C.DETECTION_TIER_GRAMMAR),
@@ -41,3 +45,19 @@ class ReconcileTests(SimpleTestCase):
         primary = [_c(0, 10, "dgcl:145", C.DETECTION_TIER_REGISTRY)]
         out = reconcile(primary, [])
         assert len(out) == 1
+
+    def test_cross_type_overlap_does_not_suppress(self):
+        # A registry SECTION span overlapping a grammar LAW span must NOT
+        # suppress the law — suppression is scoped to matching reference_type.
+        primary = [
+            Candidate(
+                reference_type=C.REF_SECTION,
+                start=0,
+                end=30,
+                raw_text="see ...",
+                detection_tier=C.DETECTION_TIER_REGISTRY,
+            )
+        ]
+        secondary = [_c(5, 25, "usc-15:78j(b)", C.DETECTION_TIER_GRAMMAR)]
+        out = reconcile(primary, secondary)
+        assert "usc-15:78j(b)" in {c.canonical_key for c in out}

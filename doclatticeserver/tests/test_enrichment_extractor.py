@@ -186,8 +186,8 @@ class ReferenceExtractorTests(SimpleTestCase):
 
 class CandidateClassificationTests(SimpleTestCase):
     def test_candidate_has_classification_defaults(self):
-        from doclatticeserver.enrichment.extractor import Candidate
         from doclatticeserver.enrichment import constants as C
+        from doclatticeserver.enrichment.extractor import Candidate
 
         c = Candidate(reference_type=C.REF_LAW, start=0, end=3, raw_text="x")
         assert c.jurisdiction is None
