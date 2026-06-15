@@ -14,10 +14,10 @@ from doclatticeserver.enrichment.services.authority_frontier_service import (
 from doclatticeserver.enrichment.services.corpus_reference_service import (
     CorpusReferenceService,
 )
-from doclatticeserver.enrichment.services.enrichment_service import EnrichmentService
 from doclatticeserver.enrichment.services.crawl_authorities_service import (
     CrawlAuthoritiesService,
 )
+from doclatticeserver.enrichment.services.enrichment_service import EnrichmentService
 from doclatticeserver.enrichment.services.governance_graph_service import (
     GovernanceGraphService,
 )
