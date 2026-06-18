@@ -111,6 +111,11 @@ row is already finalized):
 > half-finished run can never trigger an authority ingest. `isProvisional` is
 > exposed on `CorpusReferenceType` for the frontend.
 
+The document References panel badges in-flight references **In progress** (taking
+precedence over their preliminary Linked / Awaiting state) until the run finalizes:
+
+![References panel — an in-flight reference badged In progress](../assets/images/screenshots/auto/annotations--references-panel--in-progress.png)
+
 ---
 
 ## Cross-document LLM concurrency
@@ -251,3 +256,11 @@ queries are superuser-gated at the node level.
   distinct spans yield distinct mention annotations).
 - **Versioning.** Amendments do not yet re-point already-`RESOLVED` references to
   the new section version — see `docs/architecture/reference-web-versioning.md`.
+- **Live per-document progress counter (deferred).** Progress during a run is
+  conveyed today by the RUNNING job status, the incrementally-appearing refs, and
+  the "In progress" badge. A live per-document counter on the enrichment runner
+  (e.g. "12 / 75 documents · 31 references") would need a transient
+  `ENRICHMENT_PROGRESS` WebSocket message emitted from both `apply` paths and a
+  new handler in `useNotificationWebSocket` → `useEnrichmentJobs` →
+  `EnrichmentJobList`. Deferred as its own change (the WS path is not
+  component-test-exercisable, so it needs a live verification pass).
