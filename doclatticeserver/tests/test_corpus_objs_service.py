@@ -968,6 +968,30 @@ class TestEmptyCorpus(_CorpusObjsServiceFolderTestBase):
             ).exists()
         )
 
+    def test_empty_corpus_routes_through_bulk_primitive(self):
+        """empty_corpus delegates the soft-delete to bulk_soft_delete_documents
+        with the corpus' active doc ids — guards against a regression back to a
+        per-document loop (which the outcome-only tests would not catch)."""
+        folder, _ = FolderCRUDService.create_folder(
+            user=self.owner, corpus=self.corpus, name="F"
+        )
+        assert folder is not None
+        root_doc = self._make_doc_in_folder("root", "r.pdf", None, "/r.pdf")
+        folder_doc = self._make_doc_in_folder("infolder", "f.pdf", folder, "/F/f.pdf")
+
+        with patch.object(
+            DocumentLifecycleService,
+            "bulk_soft_delete_documents",
+            return_value=2,
+        ) as mock_bulk:
+            DocumentLifecycleService.empty_corpus(user=self.owner, corpus=self.corpus)
+
+        mock_bulk.assert_called_once()
+        args = mock_bulk.call_args.args
+        self.assertEqual(args[0], self.corpus)
+        self.assertCountEqual(args[1], [root_doc.id, folder_doc.id])
+        self.assertEqual(args[2], self.owner)
+
 
 class TestBulkSoftDeletePrimitive(_CorpusObjsServiceFolderTestBase):
     """
@@ -1050,6 +1074,30 @@ class TestBulkSoftDeletePrimitive(_CorpusObjsServiceFolderTestBase):
             )
             # Document itself survives — restorable from trash.
             self.assertTrue(Document.objects.filter(id=doc_id).exists())
+
+    def test_soft_delete_node_inherits_folder_id_from_superseded_head(self):
+        """The successor node copies ``folder_id`` from the head it supersedes —
+        the caller's folder-tree teardown relies on that FK being present so the
+        SET_NULL cascade clears it (a document trashed from a folder then shows
+        no original folder, like one trashed from root)."""
+        folder, _ = FolderCRUDService.create_folder(
+            user=self.owner, corpus=self.corpus, name="F"
+        )
+        assert folder is not None
+        doc = self._make_doc_in_folder("d", "d.pdf", folder, "/F/d.pdf")
+
+        DocumentLifecycleService.bulk_soft_delete_documents(
+            self.corpus, [doc.id], self.owner
+        )
+
+        old_head = DocumentPath.objects.get(
+            document_id=doc.id, corpus=self.corpus, is_current=False
+        )
+        new_head = DocumentPath.objects.get(
+            document_id=doc.id, corpus=self.corpus, is_current=True
+        )
+        self.assertEqual(old_head.folder_id, folder.id)
+        self.assertEqual(new_head.folder_id, folder.id)
 
     def test_returns_distinct_document_count(self):
         """Count is distinct documents trashed; re-trashing trashed ids is 0."""
@@ -1136,6 +1184,10 @@ class TestBulkSoftDeletePrimitive(_CorpusObjsServiceFolderTestBase):
                 large, large_ids, self.owner
             )
 
+        # Floor so the equality below isn't vacuously satisfied by 0 == 0 (a
+        # regression that silently skips all work): real trashing always runs at
+        # least the SELECT-FOR-UPDATE + is_current UPDATE + bulk_create.
+        self.assertGreaterEqual(len(small_ctx), 3)
         self.assertEqual(len(small_ctx), len(large_ctx))
 
         # The ``is_public`` revocation branch is skipped for private corpora
