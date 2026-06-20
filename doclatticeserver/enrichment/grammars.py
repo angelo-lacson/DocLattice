@@ -88,8 +88,9 @@ _MUNI_GENERIC_RE = re.compile(
     + r")"
 )
 
-# Ordinance form: "[City] Ordinance No. 2021-15", "Ord. No. 126000". The "No." +
-# number is required so a bare "Ordinance" never matches.
+# Ordinance form: "[City] Ordinance No. 2021-15", "Ord. No 126000". A "No"/"No."
+# token + number is required (the trailing dot is optional, so "No 7" matches too)
+# so a bare "Ordinance" never matches.
 _MUNI_ORDINANCE_RE = re.compile(
     r"(?P<city>(?:[A-Z][A-Za-z.'&-]*\s+){0,3})"
     r"(?:Ordinance|Ord\.)\s+No\.?\s*(?P<num>\d+(?:[.\-–]\d+)*)"
@@ -105,7 +106,16 @@ _MUNI_ORDINANCE_RE = re.compile(
 # reaches here as "city": the lowercase "of" breaks the capitalised run, so regex
 # backtracking starts the match at the real city ("City of Portland ..." captures
 # "Portland", keying ``muni-portland``).
-_CITY_STOPWORDS = frozenset({"the", "this", "said", "a", "an", "city", "county"})
+# "see"/"under" are common capitalised citation/sentence leads that would
+# otherwise be absorbed into the slug ("See Oakland Municipal Code § 5" ->
+# ``muni-see-oakland``). The list is deliberately MINIMAL: only leads that are
+# unambiguous non-place-names qualify. Bluebook signals that collide with real
+# jurisdictions are EXCLUDED — "contra" would corrupt "Contra Costa [County]"
+# into ``muni-costa``, and "accord" collides with Accord, NY. The open-vocab
+# capture stays heuristic/provisional (0.6) for the residual long tail.
+_CITY_STOPWORDS = frozenset(
+    {"the", "this", "said", "a", "an", "city", "county", "see", "under"}
+)
 
 
 def _slugify(name: str) -> str:
