@@ -309,6 +309,13 @@ class GenericCitationExtractor:
         self._muni_canon = {
             re.sub(r"\s+", " ", a): v for a, v in MUNICIPAL_CODE_ABBREVIATIONS.items()
         }
+        # NOTE the ``§`` is OPTIONAL here (``(?:§+\s*)?``) — intentional and the
+        # SAME as ``_state_re`` above: a table-matched code is already a KNOWN
+        # authority (the named abbreviation is the precision guard), and Bluebook
+        # cites for known codes sometimes drop the ``§``. This is deliberately
+        # ASYMMETRIC with the open-vocab ``_MUNI_CONN`` (which REQUIRES ``§``/
+        # Section/Sec.): there the anchor is the only thing separating a real
+        # citation from prose, so do not "unify" the two by making this required.
         self._muni_re = (
             re.compile(
                 r"(?P<abbr>"
@@ -376,6 +383,14 @@ class GenericCitationExtractor:
         section), so unlike the code-section form it is NOT table-upgradeable —
         the table maps code names, not ordinance numbers. It exists to surface
         the citation at low confidence, not to resolve to a known authority.
+
+        Downstream note: every candidate from this open-vocab pass carries a
+        ``detection_confidence`` below the table tier and (for non-table cities)
+        ``jurisdiction=None``. Those two signals are the filter — consumers
+        should treat such mentions as PROVISIONAL (surfaced for discovery/review,
+        never promoted to the trusted tier) until corroborated, e.g. the city is
+        tabled. This matters most for the anchorless ordinance form, where any
+        capitalised lead word becomes a pseudo-city ("Employee Ordinance No. 7").
         """
 
         def _is_claimed(start: int, end: int) -> bool:
