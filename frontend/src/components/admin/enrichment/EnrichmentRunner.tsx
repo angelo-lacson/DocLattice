@@ -311,11 +311,22 @@ export const EnrichmentRunner: React.FC<EnrichmentRunnerProps> = ({
 
     try {
       const { data } = await run({ variables });
-      if (data?.runCorpusEnrichment.ok) {
-        toast.success("Enrichment started");
-        onRan?.(data.runCorpusEnrichment.analyses);
+      const payload = data?.runCorpusEnrichment;
+      if (payload?.ok) {
+        // Partial success (e.g. enrichment dispatched but the authority crawl
+        // failed) comes back ok=true with partial=true and a descriptive
+        // message — surface it as a warning so the failed half isn't silently
+        // swallowed, while still recording the running job below. Keying off the
+        // `partial` flag (not the message text) keeps the UI decoupled from the
+        // backend's exact success string.
+        if (payload.partial) {
+          toast.warning(payload.message ?? "Some jobs could not be dispatched");
+        } else {
+          toast.success("Enrichment started");
+        }
+        onRan?.(payload.analyses);
       } else {
-        toast.error(data?.runCorpusEnrichment.message ?? "Enrichment failed");
+        toast.error(payload?.message ?? "Enrichment failed");
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Enrichment failed";
@@ -443,6 +454,7 @@ export const EnrichmentRunner: React.FC<EnrichmentRunnerProps> = ({
                 id={`enrichment-${id}`}
                 type="number"
                 min={0}
+                step={1}
                 placeholder={placeholder}
                 value={value}
                 onChange={(e) => setter(e.target.value)}
