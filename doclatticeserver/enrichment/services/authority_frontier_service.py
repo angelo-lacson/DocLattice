@@ -14,6 +14,9 @@ from django.utils import timezone
 
 from doclatticeserver.annotations.models import AuthorityFrontier
 from doclatticeserver.enrichment import constants as C
+from doclatticeserver.enrichment.services.authority_permissions import (
+    is_authority_admin,
+)
 from doclatticeserver.enrichment.services.corpus_reference_service import (
     CorpusReferenceService,
 )
@@ -92,9 +95,7 @@ class AuthorityFrontierService(BaseService):
         empty for non-superusers (the frontier is a system-managed global queue
         with no per-object permissions).
         """
-        if not (
-            user and getattr(user, "is_authenticated", False) and user.is_superuser
-        ):
+        if not is_authority_admin(user):
             return {"total_count": 0, "by_state": []}
 
         qs = AuthorityFrontier.objects.all()
