@@ -11,6 +11,9 @@ from doclatticeserver.enrichment.services.authority_discovery_service import (
 from doclatticeserver.enrichment.services.authority_frontier_service import (
     AuthorityFrontierService,
 )
+from doclatticeserver.enrichment.services.authority_mapping_service import (
+    AuthorityKeyEquivalenceService,
+)
 from doclatticeserver.enrichment.services.corpus_reference_service import (
     CorpusReferenceService,
 )
@@ -25,6 +28,7 @@ from doclatticeserver.enrichment.services.governance_graph_service import (
 __all__ = [
     "AuthorityDiscoveryService",
     "AuthorityFrontierService",
+    "AuthorityKeyEquivalenceService",
     "CrawlAuthoritiesService",
     "CorpusReferenceService",
     "EnrichmentService",
