@@ -33,7 +33,9 @@ class DocumentImportSerializer(serializers.Serializer):
         required=False, allow_blank=True, allow_null=True
     )
     # POSIX folder path (e.g. ``a/b/c``) — created/reused on import. Mutually
-    # exclusive with ``add_to_folder_id`` (path wins when both are supplied).
+    # exclusive with ``add_to_folder_id``; supplying both is rejected in the
+    # service layer (``import_document_for_user``) so every entrypoint — this
+    # endpoint, the chunked path, and GraphQL — enforces it, not just here.
     add_to_folder_path = serializers.CharField(
         required=False, allow_blank=True, allow_null=True, max_length=2048
     )
