@@ -183,6 +183,17 @@ def safe_fetch_bytes(
     - Follows up to ``MAX_REDIRECTS`` redirects MANUALLY, re-validating each hop.
     - Streams the body and aborts past *max_bytes* (Content-Length AND actual bytes).
     - Enforces connect + read timeouts via the module-level ``_DEFAULT_TIMEOUT``.
+
+    Caller params note: *params* are forwarded only on the INITIAL request. On any
+    redirect (same-host or cross-host) the redirect Location is the authoritative
+    next URL, so *params* are NOT re-appended — a caller whose params are a
+    required filter (e.g. the eCFR section/part filter) is relying on that endpoint
+    not redirecting.
+
+    Caller headers note: on a cross-host redirect only the STANDARD credential
+    headers (``CROSS_HOST_STRIPPED_HEADERS``) are stripped. Do NOT pass a
+    non-standard per-service credential header (``X-Api-Key``, ``X-Auth-Token``,
+    …) — it would be forwarded to the redirect target host.
     """
     # Default User-Agent so fetches identify DocLattice to .gov servers
     # rather than going out as an anonymous httpx client; a caller-supplied
@@ -234,7 +245,15 @@ def safe_fetch_bytes(
                             }
                         )
                     current = str(next_url)
-                    params = None  # only the first hop carries query params
+                    # Drop the caller's query params on EVERY redirect (not just
+                    # cross-host): the redirect Location is the authoritative next
+                    # URL and carries its own query string, so re-appending the
+                    # original params would corrupt it. A caller whose params are a
+                    # required filter (e.g. the eCFR section/part filter) therefore
+                    # relies on that endpoint NOT redirecting; if it ever did, the
+                    # filter would not carry to the target — by design, since the
+                    # target may not accept it.
+                    params = None
                     # Exiting this ``with`` on ``continue`` closes the response
                     # and releases the connection. We deliberately do NOT call
                     # ``r.read()`` first: the redirect body is unused, and
@@ -283,6 +302,8 @@ def safe_fetch_text(
 
     Thin wrapper around ``safe_fetch_bytes`` that decodes the body as UTF-8
     (replacing undecodable bytes) and returns the text alongside the final host.
+    Inherits ``safe_fetch_bytes``' behaviour, including the default ``User-Agent``
+    and the cross-host credential-header stripping (see its docstring).
     """
     body, final_host = safe_fetch_bytes(
         url,
