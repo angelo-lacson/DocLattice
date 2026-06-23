@@ -52,7 +52,7 @@ DEFAULT_USER_AGENT: str = (
 # providers cannot drift the contact address / URL apart.
 AUTHORITY_PROVIDER_USER_AGENT: str = (
     "DocLattice-authority-provider/1.0 "
-    "(https://github.com/angelo-lacson/DocLattice; "
+    "(+https://github.com/angelo-lacson/DocLattice; "
     "contact: opensource@doclattice.dev)"
 )
 
