@@ -30,6 +30,7 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 from pydantic_ai.toolsets import FunctionToolset
+from pydantic_ai.usage import UsageLimits
 from pydantic_graph import End
 
 from doclatticeserver.constants.context_guardrails import (
@@ -38,7 +39,10 @@ from doclatticeserver.constants.context_guardrails import (
     LARGE_IMPLICIT_CHUNK_WARN_RATIO,
     MIN_IMPLICIT_DOCUMENT_CHUNK_CHARS,
 )
-from doclatticeserver.constants.llm import STRUCTURED_OUTPUT_RETRIES
+from doclatticeserver.constants.llm import (
+    EXTRACT_AGENT_REQUEST_LIMIT,
+    STRUCTURED_OUTPUT_RETRIES,
+)
 from doclatticeserver.conversations.models import Conversation
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
@@ -1801,11 +1805,20 @@ class PydanticAICoreAgent(CoreAgentBase, TimelineStreamMixin):
             if history_result.messages:
                 run_kwargs["message_history"] = history_result.messages
 
-            # Run the agent with the user's prompt and full dependencies
-            run_result = await structured_agent.run(
-                prompt,
-                **run_kwargs,
+            # Default request budget for structured runs: caps model requests so
+            # a weak model cannot run away making dozens-to-hundreds of redundant
+            # tool calls on a hard or absent value (the ``tool_loop_no_output``
+            # pathology); a capable model commits well within it. Applied via
+            # ``setdefault`` so a caller may override it — ``usage_limits`` is
+            # whitelisted in ``_run_accepted`` — and so the explicit value can
+            # never collide with a pass-through one into a duplicate-keyword
+            # ``TypeError`` (which the broad ``except`` below would mask as a
+            # silent ``None``).
+            run_kwargs.setdefault(
+                "usage_limits",
+                UsageLimits(request_limit=EXTRACT_AGENT_REQUEST_LIMIT),
             )
+            run_result = await structured_agent.run(prompt, **run_kwargs)
 
             # Extract the structured result
             return run_result.output

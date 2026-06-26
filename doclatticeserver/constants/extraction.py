@@ -53,3 +53,15 @@ DATACELL_DATA_KEY = "data"
 # Default LLM identifier used by doc_extract_query_task when no explicit
 # model_override is supplied.  Any string pydantic-ai accepts is valid.
 DEFAULT_EXTRACT_MODEL = "openai:gpt-4o-mini"
+
+# When a document's extracted text is at or below this character budget, the
+# extract task injects the FULL text into the prompt (fenced) so the agent can
+# answer directly and — critically — confirm the ABSENCE of a clause in a
+# single read, instead of issuing many low-signal ``similarity_search`` calls
+# (the loop behind ``tool_loop_no_output`` / ``no_final_response`` failures on
+# short contracts). ~24K chars ≈ ~6K tokens — well inside the agent's token
+# budget even with the system prompt + per-column query, and the full text is
+# re-sent once per column so this also bounds redundant token cost. Documents
+# above this fall back to retrieval (where the request budget backstops any
+# looping). Raise cautiously and in tandem with the model context window.
+EXTRACT_FULL_TEXT_CHAR_LIMIT = 24_000
