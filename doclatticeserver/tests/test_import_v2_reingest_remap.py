@@ -24,7 +24,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
 from doclatticeserver.annotations.models import (
@@ -135,6 +135,78 @@ class TestSourceReingestability(TestCase):
 
         self.assertTrue(_source_is_reingestable(b"%PDF-1.4 ..."))
         self.assertTrue(_source_is_reingestable(b"plain text body"))
+
+    @override_settings(MAX_CORPUS_REINGEST_SOURCE_BYTES=4)
+    def test_read_reingest_source_bytes_rejects_oversized_zip_member(self):
+        import io
+        import zipfile
+
+        from doclatticeserver.tasks.import_tasks_v2 import (
+            _read_reingest_source_bytes,
+        )
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("documents/large.pdf", b"%PDF-1.4 large")
+        buf.seek(0)
+
+        with zipfile.ZipFile(buf) as zf:
+            self.assertIsNone(_read_reingest_source_bytes(zf, "documents/large.pdf"))
+
+    @override_settings(MAX_CORPUS_REINGEST_SOURCE_BYTES=32)
+    def test_read_reingest_source_bytes_allows_member_under_limit(self):
+        import io
+        import zipfile
+
+        from doclatticeserver.tasks.import_tasks_v2 import (
+            _read_reingest_source_bytes,
+        )
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("documents/small.pdf", b"%PDF-1.4 small")
+        buf.seek(0)
+
+        with zipfile.ZipFile(buf) as zf:
+            self.assertEqual(
+                _read_reingest_source_bytes(zf, "documents/small.pdf"),
+                b"%PDF-1.4 small",
+            )
+
+    @override_settings(MAX_CORPUS_REINGEST_SOURCE_BYTES=4)
+    def test_read_reingest_source_bytes_rejects_metadata_lie_on_read(self):
+        """Second guard fires when ZIP metadata under-reports file_size but the
+        actual read returns more than MAX_CORPUS_REINGEST_SOURCE_BYTES bytes.
+
+        A crafted ZIP can set a small file_size in the central directory while
+        storing larger data, bypassing the first (metadata) guard.  The second
+        guard catches this by checking len(source_bytes) after the bounded read.
+        """
+        import io
+        import zipfile
+
+        from doclatticeserver.tasks.import_tasks_v2 import (
+            _read_reingest_source_bytes,
+        )
+
+        # 10-byte stored entry: compress_size == 10.
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_STORED) as zf:
+            zf.writestr("documents/liar.pdf", b"%PDF-1.4 x")
+        buf.seek(0)
+
+        with zipfile.ZipFile(buf) as real_zf:
+            # ZipFile.getinfo() returns the live ZipInfo from NameToInfo, so
+            # modifying it in-place is seen by the subsequent getinfo() call
+            # inside _read_reingest_source_bytes.
+            real_info = real_zf.getinfo("documents/liar.pdf")
+            # Lie: shrink reported file_size to 3 so the first guard (3 > 4)
+            # is skipped.  compress_size stays at 10, so fh.read(5) still
+            # yields 5 bytes and the second guard (5 > 4) fires → None.
+            real_info.file_size = 3
+            result = _read_reingest_source_bytes(real_zf, "documents/liar.pdf")
+
+        self.assertIsNone(result)
 
 
 class TestCorpusImportFanIn(TestCase):
