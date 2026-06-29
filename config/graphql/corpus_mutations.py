@@ -1879,8 +1879,10 @@ class SetArtifactImage(graphene.Mutation):
     def mutate(root, info, slug, base64_png) -> "SetArtifactImage":
         import base64
 
-        from doclatticeserver.corpuses.services.artifact_service import (
+        from doclatticeserver.constants.artifacts import (
             MAX_ARTIFACT_IMAGE_BASE64_BYTES,
+        )
+        from doclatticeserver.corpuses.services.artifact_service import (
             ArtifactService,
         )
 
