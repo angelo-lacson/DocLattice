@@ -61,6 +61,7 @@ class TestEnrichmentLLMIntegration(TransactionTestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(username="llmtest", password="p")
+        self.other_user = User.objects.create_user(username="llmother", password="p")
         self.corpus = Corpus.objects.create(title="LLMTestCorpus", creator=self.user)
         self.doc = Document.objects.create(title="LLMDoc", creator=self.user)
         self.doc.txt_extract_file.save("llmdoc.txt", ContentFile(_TEXT.encode("utf-8")))
@@ -274,6 +275,85 @@ class TestEnrichmentLLMIntegration(TransactionTestCase):
         assert (
             llm_overlap_keys == []
         ), f"LLM candidate for grammar-detected span leaked into by_key: {llm_overlap_keys}"
+
+    def test_discover_uses_document_visibility_for_shared_corpus(self):
+        """A user who can READ a corpus but not a private document inside it must
+        not have that document scanned or leaked through review_candidates.
+
+        The corpus is *shared* (corpus-level READ granted) rather than public:
+        adding a document to a public corpus auto-propagates public status onto
+        the corpus-isolated copy (``Corpus.add_document``: ``is_public =
+        corpus.is_public or document.is_public``), which would make the document
+        legitimately visible and defeat the scenario. A shared, non-public
+        corpus keeps the copy ``is_public=False`` so document-level visibility —
+        the document side of ``MIN(corpus, document)`` — is what excludes it.
+        """
+        from pydantic_ai.models.test import TestModel
+
+        import doclatticeserver.enrichment.llm_citation_extractor as mod
+        from doclatticeserver.corpuses.services.corpus_documents import (
+            CorpusDocumentService,
+        )
+        from doclatticeserver.types.enums import PermissionTypes
+        from doclatticeserver.utils.permissioning import (
+            set_permissions_for_obj_to_user,
+        )
+
+        shared_corpus = Corpus.objects.create(
+            title="SharedCorpusWithPrivateDoc", creator=self.user, is_public=False
+        )
+        # other_user can READ the corpus (the corpus side of MIN) ...
+        set_permissions_for_obj_to_user(
+            self.other_user, shared_corpus, [PermissionTypes.READ]
+        )
+
+        private_doc = Document.objects.create(
+            title="PrivateLLMDoc", creator=self.user, is_public=False
+        )
+        private_doc.txt_extract_file.save(
+            "private-llm-doc.txt", ContentFile(_TEXT.encode("utf-8"))
+        )
+        # ... but NOT the document. Because the corpus is private, the
+        # corpus-isolated copy stays is_public=False, so other_user lacks
+        # document-level READ on it.
+        shared_corpus.add_document(document=private_doc, user=self.user)
+
+        # Sanity: the corpus genuinely contains a document under corpus-as-gate,
+        # so documents_scanned == 0 below reflects the visibility filter rather
+        # than an empty corpus — while the visible-to-user variant hides it from
+        # other_user.
+        assert CorpusDocumentService.get_corpus_documents(
+            self.user, shared_corpus, include_caml=False
+        ).exists()
+        assert not CorpusDocumentService.get_corpus_documents_visible_to_user(
+            self.other_user, shared_corpus, include_caml=False
+        ).exists()
+
+        canned = _make_llm_citation(0.4)
+        test_model = TestModel(custom_output_args={"citations": [canned]})
+        original = mod.abuild_agent_model
+        call_count = 0
+
+        async def fake_build(spec):
+            nonlocal call_count
+            call_count += 1
+            return test_model
+
+        mod.abuild_agent_model = fake_build
+        try:
+            out = EnrichmentService().discover(
+                corpus_id=shared_corpus.id,
+                creator_id=self.other_user.id,
+                use_llm=True,
+            )
+        finally:
+            mod.abuild_agent_model = original
+
+        assert out["documents_scanned"] == 0
+        assert out["documents_total"] == 0
+        assert out["total_candidates"] == 0
+        assert out["review_candidates"] == []
+        assert call_count == 0, "LLM was called for a document hidden from the user"
 
     def test_apply_skips_review_bucket(self):
         """apply() never writes a CorpusReference for a low-confidence (review-
