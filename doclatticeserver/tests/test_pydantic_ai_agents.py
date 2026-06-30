@@ -17,10 +17,10 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.tools import RunContext
 from pydantic_ai.usage import UsageLimits
 
-import doclatticeserver.llms.agents.pydantic_ai_agents as pa_mod
 from doclatticeserver.annotations.models import Annotation, AnnotationLabel
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document, DocumentPath
+from doclatticeserver.llms.agents import pydantic_ai_agents as pa_mod
 from doclatticeserver.llms.agents.agent_factory import UnifiedAgentFactory
 from doclatticeserver.llms.agents.core_agents import AgentConfig, UnifiedChatResponse
 from doclatticeserver.llms.agents.pydantic_ai_agents import PydanticAIDocumentAgent
