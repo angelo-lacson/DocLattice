@@ -123,6 +123,7 @@ def get_document_references(
     guard.
     """
     from doclatticeserver.enrichment.services import CorpusReferenceService
+    from doclatticeserver.shared.services.base import BaseService
 
     if document_id is None:
         return {
@@ -140,6 +141,29 @@ def get_document_references(
         }
 
     user = get_user_or_none(user_id)
+
+    # IDOR-safe existence/visibility check via the shared service layer
+    # (CLAUDE.md rule #7) — mirrors read_reference_target's target_document_id
+    # lookup. Without this, a bad/unrelated document_id (e.g. an agent passing
+    # a corpus_id where a document_id was expected) silently resolves to an
+    # empty-but-"successful" envelope instead of surfacing the mistake, which
+    # has caused agents to confidently report "no such citation" when the
+    # citation actually exists under the correct document_id.
+    if BaseService.get_or_none(Document, document_id, user) is None:
+        return {
+            "error": (
+                f"document_id {document_id} was not found (or is not visible to "
+                "you). Use similarity_search to find a valid document_id first."
+            ),
+            "document_id": document_id,
+            "corpus_id": corpus_id,
+            "direction": direction,
+            "outbound": [],
+            "inbound": [],
+            "outbound_count": 0,
+            "inbound_count": 0,
+        }
+
     limit = clamp_limit(limit, C.NAV_DEFAULT_MAX_REFERENCES, C.NAV_MAX_REFERENCES)
     if direction not in ("outbound", "inbound", "both"):
         direction = "both"
@@ -284,6 +308,8 @@ def find_documents_citing(
     if not canonical_key and document_id is None:
         return {
             "error": "Provide either canonical_key or document_id.",
+            "anchor": {"canonical_key": None, "document_id": None},
+            "citing_document_count": 0,
             "citing_documents": [],
         }
 
@@ -292,12 +318,37 @@ def find_documents_citing(
 
     from django.db.models import Count
 
+    from doclatticeserver.enrichment.authorities import candidate_keys
     from doclatticeserver.shared.services.base import BaseService
+
+    # Same IDOR-safe existence check get_document_references applies: a
+    # document_id anchor that doesn't resolve to a visible document must error,
+    # not return a false-empty "nobody cites this" envelope (an agent passing a
+    # corpus_id where a document_id belongs would otherwise be misled). Only
+    # guards the document_id anchor; a canonical_key anchor is validated by
+    # candidate_keys resolution below.
+    if (
+        not canonical_key
+        and BaseService.get_or_none(Document, document_id, user) is None
+    ):
+        return {
+            "error": (
+                f"document_id {document_id} was not found (or is not visible to "
+                "you). Use similarity_search to find a valid document_id first."
+            ),
+            "anchor": {"canonical_key": None, "document_id": document_id},
+            "citing_document_count": 0,
+            "citing_documents": [],
+        }
 
     base = CorpusReferenceService.visible_to_user(user)
     # canonical_key wins when both are supplied (the more specific anchor).
+    # Route through candidate_keys() — the same helper find_authority_target
+    # uses — so an underscore-typo'd or subsection-precise key still finds the
+    # documents citing the real (hyphenated / section-root) key, instead of
+    # only matching an exact string.
     anchored = (
-        base.filter(canonical_key=canonical_key)
+        base.filter(canonical_key__in=candidate_keys(canonical_key))
         if canonical_key
         else base.filter(target_document_id=document_id)
     ).filter(source_annotation__document__isnull=False)
@@ -337,6 +388,9 @@ def find_documents_citing(
     ):
         src = ref.source_annotation
         did = src.document_id
+        # Deterministic (not "first scanned"): the order_by above sorts rows by
+        # (document_id, id), so a document reachable via several corpus-forked
+        # reference rows always reports its LOWEST-id reference's corpus.
         corpus_by_doc.setdefault(did, ref.corpus_id)
         bucket = samples.setdefault(did, [])
         if len(bucket) < C.NAV_MAX_SAMPLE_CITATIONS:

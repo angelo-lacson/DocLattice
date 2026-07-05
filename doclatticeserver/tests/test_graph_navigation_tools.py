@@ -130,6 +130,25 @@ class GraphNavigationToolTests(TestCase):
         res = get_document_references(corpus_id=self.corpus.id, user_id=self.user.id)
         self.assertIn("error", res)
 
+    def test_unresolvable_document_id_returns_error(self):
+        """A document_id that doesn't resolve must error, not silently succeed.
+
+        Regression: an agent confused a corpus_id for a document_id and got a
+        well-formed empty (outbound_count=0, inbound_count=0) envelope back,
+        then confidently told the user "no such citation exists" — when the
+        pk simply didn't identify a real/visible document at all. A wrong-but-
+        colliding pk (e.g. some unrelated document with no references) must
+        surface the same error, not a false-empty success.
+        """
+        res = get_document_references(
+            corpus_id=self.corpus.id,
+            user_id=self.user.id,
+            document_id=999999999,
+        )
+        self.assertIn("error", res)
+        self.assertEqual(res["outbound"], [])
+        self.assertEqual(res["inbound"], [])
+
     # ---- read_reference_target ---------------------------------------- #
     def test_read_reference_target_by_key(self):
         res = read_reference_target(
@@ -193,9 +212,42 @@ class GraphNavigationToolTests(TestCase):
         docs = {d["document_id"] for d in res["citing_documents"]}
         self.assertIn(self.primary_id, docs)
 
+    def test_find_documents_citing_by_subsection_key_falls_back_to_root(self):
+        """A subsection key not present verbatim still finds root-key citers.
+
+        The fixture's CorpusReference rows only carry "dgcl:145" (no
+        subsection). Anchoring on "dgcl:145(a)" must still surface the primary
+        filing — proving find_documents_citing now routes through
+        candidate_keys()'s subsection-root fallback instead of doing a bare
+        exact-match filter.
+        """
+        res = find_documents_citing(
+            corpus_id=self.corpus.id,
+            user_id=self.user.id,
+            canonical_key="dgcl:145(a)",
+        )
+        docs = {d["document_id"] for d in res["citing_documents"]}
+        self.assertIn(self.primary_id, docs)
+
     def test_find_documents_citing_requires_anchor(self):
         res = find_documents_citing(corpus_id=self.corpus.id, user_id=self.user.id)
         self.assertIn("error", res)
+
+    def test_find_documents_citing_unresolvable_document_id_errors(self):
+        """A document_id anchor that doesn't resolve must error, not false-empty.
+
+        Mirrors get_document_references: an agent passing a corpus_id (or any
+        bad/invisible pk) where a document_id belongs must be told the id is
+        unknown, not handed a well-formed 'nobody cites this' result.
+        """
+        res = find_documents_citing(
+            corpus_id=self.corpus.id,
+            user_id=self.user.id,
+            document_id=999999999,
+        )
+        self.assertIn("error", res)
+        self.assertEqual(res["citing_documents"], [])
+        self.assertEqual(res["citing_document_count"], 0)
 
     # ---- get_reference_neighborhood ----------------------------------- #
     def test_neighborhood_whole_corpus(self):
