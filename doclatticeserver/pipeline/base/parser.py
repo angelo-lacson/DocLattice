@@ -18,6 +18,7 @@ from doclatticeserver.utils.importing import (
     import_relationships,
     load_or_create_labels,
 )
+from doclatticeserver.utils.logging import redact_sensitive_kwargs
 from doclatticeserver.utils.structural_sets import create_structural_annotation_set
 from doclatticeserver.utils.subtree_groups import build_subtree_groups_for_document
 
@@ -118,7 +119,8 @@ class BaseParser(PipelineComponentBase, ABC):
             **{k: v for k, v in component_settings.items() if v not in (None, "")},
         }
         logger.info(
-            f"Calling _parse_document_impl for doc_id {doc_id} with merged kwargs: {merged_kwargs}"
+            f"Calling _parse_document_impl for doc_id {doc_id} with merged kwargs: "
+            f"{redact_sensitive_kwargs(merged_kwargs)}"
         )
         return self._parse_document_impl(user_id, doc_id, **merged_kwargs)
 
@@ -416,7 +418,8 @@ class BaseParser(PipelineComponentBase, ABC):
         corpus_id = kwargs.pop("corpus_id", None)
 
         logger.info(
-            f"Processing document {doc_id} with possible parser kwargs: {kwargs}"
+            f"Processing document {doc_id} with possible parser kwargs: "
+            f"{redact_sensitive_kwargs(kwargs)}"
             + (f" (corpus_id={corpus_id})" if corpus_id else "")
         )
 
