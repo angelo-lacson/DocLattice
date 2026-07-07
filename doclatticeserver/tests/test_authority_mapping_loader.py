@@ -35,6 +35,9 @@ _FIXTURE_TO = "usc-99:1"
 _FIXTURE_FROM_2 = "test-act:2"
 _FIXTURE_TO_2 = "usc-99:2"
 
+# Logger the loader emits its ownership/collision warnings on (assertLogs target).
+_LOADER_LOGGER = "doclatticeserver.enrichment.services.authority_mapping_loader"
+
 
 class AuthorityKeyEquivalenceBaselineChoiceTests(TestCase):
     def test_baseline_is_a_valid_source(self):
@@ -272,7 +275,6 @@ class BaselineOriginGuardTests(TestCase):
     (``update_or_create`` with no writer partition).
     """
 
-    _LOADER_LOGGER = "doclatticeserver.enrichment.services.authority_mapping_loader"
     _PACK_A_YAML = (
         "prefixes:\n"
         "  test-pack-a:\n"
@@ -330,7 +332,7 @@ class BaselineOriginGuardTests(TestCase):
         AuthorityMappingLoader.load_namespaces(
             path=_write_yaml(self._PACK_A_YAML), origin="pack-a"
         )
-        with self.assertLogs(self._LOADER_LOGGER, level="WARNING"):
+        with self.assertLogs(_LOADER_LOGGER, level="WARNING"):
             summary = AuthorityMappingLoader.load_namespaces(
                 path=_write_yaml(self._PACK_B_CLAIMS_A_YAML), origin="pack-b"
             )
@@ -502,6 +504,116 @@ class LoadInstalledTests(TestCase):
         assert "error" in results[long_name]
         assert not AuthorityNamespace.objects.filter(prefix="test-longname").exists()
         assert AuthorityNamespace.objects.filter(prefix="exchange-act").exists()
+
+    def test_load_installed_warns_on_case_different_duplicate_names(self):
+        # "Bolivia" vs "bolivia" is almost certainly an authoring typo: the two
+        # load as distinct origins (the collision guard keeps them from
+        # clobbering each other) but the duplicate-name warning must fire,
+        # case-insensitively — matching the reserved-name check.
+        import tempfile as _tempfile
+        from pathlib import Path as _Path
+        from unittest import mock
+
+        from doclatticeserver.enrichment.services import authority_pack_config as apc
+
+        def _mk(root: _Path, dirname: str, name: str, prefix: str) -> _Path:
+            pack = root / dirname
+            pack.mkdir()
+            (pack / "pack.yaml").write_text(
+                f"name: {name}\nmappings: m.yaml\n", encoding="utf-8"
+            )
+            (pack / "m.yaml").write_text(
+                f"prefixes:\n"
+                f"  {prefix}:\n"
+                f'    display_name: "{name}"\n'
+                f'    jurisdiction: "aa"\n'
+                f'    authority_type: "statute"\n'
+                f'    aliases: ["{prefix} body"]\n',
+                encoding="utf-8",
+            )
+            return pack
+
+        with _tempfile.TemporaryDirectory() as tmp:
+            root = _Path(tmp)
+            packs = [
+                _mk(root, "dup-a", "DupPack", "test-dup-a"),
+                _mk(root, "dup-b", "duppack", "test-dup-b"),
+            ]
+            with mock.patch.object(apc, "authority_pack_dirs", return_value=packs):
+                with self.assertLogs(_LOADER_LOGGER, level="WARNING") as logs:
+                    results = AuthorityMappingLoader.load_installed()
+
+        assert any("Duplicate authority pack name" in line for line in logs.output)
+        # Both still load, as distinct origins the guard keeps apart.
+        assert results["DupPack"]["namespaces"]["created"] == 1
+        assert results["duppack"]["namespaces"]["created"] == 1
+
+    def test_load_installed_reports_a_missing_mappings_file(self):
+        # `mappings: typo.yaml` with no such file on disk — the most likely
+        # authoring mistake — must show up in the report, not silently make the
+        # pack's taxonomy never load.
+        import tempfile as _tempfile
+        from pathlib import Path as _Path
+        from unittest import mock
+
+        from doclatticeserver.enrichment.services import authority_pack_config as apc
+
+        with _tempfile.TemporaryDirectory() as tmp:
+            pack = _Path(tmp) / "typo-pack"
+            pack.mkdir()
+            (pack / "pack.yaml").write_text(
+                "name: typo-pack\nmappings: typo.yaml\n", encoding="utf-8"
+            )
+            with mock.patch.object(apc, "authority_pack_dirs", return_value=[pack]):
+                results = AuthorityMappingLoader.load_installed()
+
+        assert "not found" in results["typo-pack"]["error"]
+        assert BASELINE_ORIGIN_CORE in results
+
+    def test_load_installed_exact_duplicate_names_coown_and_warn(self):
+        # Two directories declaring the SAME manifest name are by declaration
+        # the same pack: both load under one origin (idempotent, co-owned
+        # prefixes), the duplicate warning fires, and the report carries one
+        # entry for that origin.
+        import tempfile as _tempfile
+        from pathlib import Path as _Path
+        from unittest import mock
+
+        from doclatticeserver.enrichment.services import authority_pack_config as apc
+
+        def _mk(root: _Path, dirname: str, prefix: str) -> _Path:
+            pack = root / dirname
+            pack.mkdir()
+            (pack / "pack.yaml").write_text(
+                "name: SamePack\nmappings: m.yaml\n", encoding="utf-8"
+            )
+            (pack / "m.yaml").write_text(
+                f"prefixes:\n"
+                f"  {prefix}:\n"
+                f'    display_name: "Same"\n'
+                f'    jurisdiction: "aa"\n'
+                f'    authority_type: "statute"\n'
+                f'    aliases: ["{prefix} body"]\n',
+                encoding="utf-8",
+            )
+            return pack
+
+        with _tempfile.TemporaryDirectory() as tmp:
+            root = _Path(tmp)
+            packs = [
+                _mk(root, "same-a", "test-same-a"),
+                _mk(root, "same-b", "test-same-b"),
+            ]
+            with mock.patch.object(apc, "authority_pack_dirs", return_value=packs):
+                with self.assertLogs(_LOADER_LOGGER, level="WARNING") as logs:
+                    results = AuthorityMappingLoader.load_installed()
+
+        assert any("Duplicate authority pack name" in line for line in logs.output)
+        # One shared origin: both dirs' prefixes exist, stamped identically.
+        assert "error" not in results["SamePack"]
+        for prefix in ("test-same-a", "test-same-b"):
+            ns = AuthorityNamespace.objects.get(prefix=prefix)
+            assert ns.baseline_origin == "SamePack"
 
     def test_load_installed_reports_a_reserved_core_pack_name(self):
         # An installed pack named "core" (any case) is refused — and the refusal
@@ -704,3 +816,16 @@ class AuthorityMappingsMigrationTests(TestCase):
         assert AuthorityKeyEquivalence.objects.filter(
             from_key="exchange-act:10", to_key="usc-15:78j", source="baseline"
         ).exists()
+
+
+class BaselineOriginGraphQLExposureTests(TestCase):
+    """Pin the console surface of the collision guard: ``baseline_origin`` is
+    queryable on ``AuthorityNamespaceNode`` (whose ``get_queryset`` already
+    gates the whole type behind ``is_authority_admin``), so a curator can see
+    which origin owns a prefix when a load reports a skipped collision."""
+
+    def test_baseline_origin_exposed_on_namespace_node(self):
+        from config.graphql.schema import schema
+
+        fields = schema.graphql_schema.type_map["AuthorityNamespaceNode"].fields
+        assert "baselineOrigin" in fields
