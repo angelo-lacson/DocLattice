@@ -14,6 +14,9 @@ Each service inherits :class:`doclatticeserver.shared.services.base.BaseService`
   — batch execution of agent-based corpus actions across every active doc.
 - :class:`~doclatticeserver.corpuses.services.corpus_documents.CorpusDocumentService`
   — document-in-corpus reads / writes and corpus membership.
+- :class:`~doclatticeserver.corpuses.services.corpus_groups.CorpusGroupService`
+  — corpus-group CRUD + call-time member-corpus resolution for
+  cross-corpus retrieval (issue #2056).
 - :class:`~doclatticeserver.corpuses.services.corpus_service.CorpusService`
   — Corpus-row CRUD: delete, visibility, and description versioning.
 - :class:`~doclatticeserver.corpuses.services.corpus_category_service.CorpusCategoryService`
@@ -38,6 +41,7 @@ from doclatticeserver.corpuses.services.corpus_category_service import (
 from doclatticeserver.corpuses.services.corpus_documents import (
     CorpusDocumentService,
 )
+from doclatticeserver.corpuses.services.corpus_groups import CorpusGroupService
 from doclatticeserver.corpuses.services.corpus_service import CorpusService
 from doclatticeserver.corpuses.services.folder_documents import (
     FolderDocumentService,
@@ -62,6 +66,7 @@ __all__ = [
     "FolderCRUDService",
     "FolderDocumentService",
     "CorpusDocumentService",
+    "CorpusGroupService",
     "CorpusService",
     "DocumentLifecycleService",
     "CorpusPathService",
