@@ -6,9 +6,9 @@ DRY contract that telemetry shares ``compute_values``, and the GraphQL
 """
 
 from django.test import TestCase
-from graphene.test import Client
 
 from config.graphql.schema import schema
+from config.graphql.testing import Client
 from doclatticeserver.annotations.models import Annotation, AnnotationLabel
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document

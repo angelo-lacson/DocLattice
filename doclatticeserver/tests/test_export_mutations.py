@@ -5,10 +5,10 @@ Tests the StartCorpusExport mutation functionality including analysis filtering.
 
 from django.contrib.auth import get_user_model
 from django.test import override_settings
-from graphene.test import Client
 from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
+from config.graphql.testing import Client
 from doclatticeserver.annotations.models import AnnotationLabel, LabelSet
 from doclatticeserver.tests.base import BaseFixtureTestCase
 from doclatticeserver.types.enums import ExportType, PermissionTypes

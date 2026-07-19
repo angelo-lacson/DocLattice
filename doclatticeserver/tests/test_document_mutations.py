@@ -2,10 +2,10 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from graphene.test import Client
 from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
+from config.graphql.testing import Client
 from doclatticeserver.documents.models import Document
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.files import base_64_encode_bytes

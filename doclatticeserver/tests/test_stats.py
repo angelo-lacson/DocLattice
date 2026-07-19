@@ -1,10 +1,10 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.test import TestCase
-from graphene.test import Client
 from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
+from config.graphql.testing import Client
 from doclatticeserver.analyzer.models import Analysis, Analyzer
 from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.corpuses.models import Corpus

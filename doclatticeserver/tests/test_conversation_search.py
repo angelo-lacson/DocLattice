@@ -12,10 +12,10 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
-from graphene.test import Client
 from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
+from config.graphql.testing import Client
 from doclatticeserver.annotations.models import Embedding
 from doclatticeserver.conversations.models import ChatMessage, Conversation
 from doclatticeserver.corpuses.models import Corpus

@@ -2,10 +2,10 @@ import logging
 
 from django.db import transaction
 from django.test import TestCase
-from graphene.test import Client
 from graphql_relay import from_global_id, to_global_id
 
 from config.graphql.schema import schema
+from config.graphql.testing import Client
 from doclatticeserver.annotations.models import Annotation, AnnotationLabel
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document

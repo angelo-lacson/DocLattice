@@ -2,9 +2,9 @@ import logging
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from graphene.test import Client
 
 from config.graphql.schema import schema
+from config.graphql.testing import Client
 from doclatticeserver.annotations.models import Annotation, AnnotationLabel
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document

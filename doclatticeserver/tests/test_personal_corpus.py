@@ -20,9 +20,9 @@ from unittest.mock import MagicMock, patch
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, connection
 from django.test import TestCase, TransactionTestCase
-from graphene.test import Client
 
 from config.graphql.schema import schema
+from config.graphql.testing import Client
 from doclatticeserver.annotations.models import Annotation, Embedding
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document, DocumentPath

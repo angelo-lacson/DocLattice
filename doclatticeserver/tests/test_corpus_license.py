@@ -14,10 +14,10 @@ Covers:
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
-from graphene.test import Client as GrapheneClient
 from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
+from config.graphql.testing import Client as GrapheneClient
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.users.models import User

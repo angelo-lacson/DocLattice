@@ -12,8 +12,8 @@ doesn't pollute the assertions.
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
-from graphene_django.utils.testing import GraphQLTestCase
 
+from config.graphql.testing import GraphQLTestCase
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
