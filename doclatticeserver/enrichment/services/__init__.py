@@ -17,6 +17,9 @@ from doclatticeserver.enrichment.services.authority_mapping_service import (
 from doclatticeserver.enrichment.services.authority_namespace_service import (
     AuthorityNamespaceService,
 )
+from doclatticeserver.enrichment.services.authority_pack_service import (
+    AuthorityPackService,
+)
 from doclatticeserver.enrichment.services.authority_source_provider_service import (
     AuthoritySourceProviderService,
 )
@@ -36,6 +39,7 @@ __all__ = [
     "AuthorityFrontierService",
     "AuthorityKeyEquivalenceService",
     "AuthorityNamespaceService",
+    "AuthorityPackService",
     "AuthoritySourceProviderService",
     "CrawlAuthoritiesService",
     "CorpusReferenceService",

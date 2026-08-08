@@ -55,6 +55,7 @@ from doclatticeserver.corpuses.services.intelligence_setup import (
 from doclatticeserver.corpuses.services.lifecycle import DocumentLifecycleService
 from doclatticeserver.corpuses.services.paths import CorpusPathService
 from doclatticeserver.corpuses.services.votes import CorpusVoteService
+from doclatticeserver.corpuses.services.workspace import WorkspaceService
 
 __all__ = [
     "BatchRunSummary",
@@ -71,4 +72,5 @@ __all__ = [
     "DocumentLifecycleService",
     "CorpusPathService",
     "CorpusVoteService",
+    "WorkspaceService",
 ]
