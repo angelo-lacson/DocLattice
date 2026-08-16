@@ -211,12 +211,26 @@ class DomainPackInstallTests(TestCase):
         self.assertIn("installed", out.lower())
 
     def test_check_writes_nothing(self):
-        """--check reports the plan without touching the database."""
+        """--check reports the plan without touching the database OR the disk.
+
+        The filesystem half is not redundant. This test predates materialising,
+        and installing now MOVES pack directories into the install dir — so
+        "writes nothing" acquired a second meaning that nothing asserted. The C1
+        preflight added later runs `load_authority_pack --check` per pack, which
+        does not materialise; if it ever did, or if a future preflight reached
+        for `materialise_pack` to get a stable path, `--check` would start
+        moving packs out of the extraction tree while still printing "No changes
+        were written".
+        """
         out = self._run(self._standard_registry(), check=True)
         self.assertIn("No changes were written", out)
         self.assertFalse(CorpusGroup.objects.filter(slug="test-group").exists())
         self.assertFalse(
             AgentConfiguration.objects.filter(slug="testdomain-orchestrator").exists()
+        )
+        self.assertFalse(
+            self.install_dir.exists() and any(self.install_dir.iterdir()),
+            "--check must not materialise anything into the install dir",
         )
 
     def test_install_is_idempotent(self):
@@ -636,3 +650,94 @@ class DomainPackInstallTests(TestCase):
             self._run(tarball)
         self.assertIn("corpus_group.slug", str(ctx.exception))
         self.assertFalse(CorpusGroup.objects.filter(slug="None").exists())
+
+    def test_malformed_from_key_fails_before_any_write(self):
+        """C4 checked that `to_key` RESOLVES and not that either key is WELL-FORMED.
+
+        A `from_key` missing its colon is non-empty and differs from `to_key`, so
+        it passed preflight and was rejected only at write time by
+        `upsert_equivalence` — after every base pack had been installed. The
+        sibling half of a check I had already written, missed the same way as
+        the traversal guard.
+        """
+        tarball = self._standard_registry(
+            equivalences=[{"from_key": "no-colon-here", "to_key": "aa:1"}]
+        )
+        with self.assertRaises(CommandError) as ctx:
+            self._run(tarball)
+        message = str(ctx.exception)
+        self.assertIn("C4", message)
+        self.assertIn("canonical key", message)
+        self.assertFalse(
+            (self.install_dir / "alpha").exists(),
+            "a file-decidable failure must not install anything first",
+        )
+
+    def test_unusable_preferred_llm_fails_before_any_write(self):
+        """`AgentConfiguration.save()` raises Django's ValidationError, not CommandError.
+
+        Nothing catches it, so a typo'd model spec installed every base pack and
+        then surfaced as a bare traceback from inside the wiring — the one
+        remaining path that produced a stack trace instead of a diagnosis.
+        """
+        tarball = self._standard_registry(
+            orchestrator={
+                "instructions_file": "orchestrator.txt",
+                "tools": ["search_across_corpora"],
+                "preferred_llm": "not-a-registered-provider:nope",
+            }
+        )
+        with self.assertRaises(CommandError) as ctx:
+            self._run(tarball)
+        self.assertIn("preferred_llm", str(ctx.exception))
+        self.assertFalse(
+            (self.install_dir / "alpha").exists(),
+            "the base packs must not be installed before this is caught",
+        )
+
+    def test_overlong_equivalence_note_fails_before_any_write(self):
+        """`note` is CharField(255) and the shared upsert does not truncate.
+
+        The bare `update_or_create` this replaced sliced the note to `[:255]`;
+        switching to `upsert_equivalence` dropped that without replacing it, so
+        an over-long note became a raw Postgres DataError raised mid-wiring,
+        after every base pack was installed. Invisible in this pack's own data,
+        whose longest note is 107 characters — which is exactly why it needs a
+        test rather than an eyeball.
+
+        Rejected rather than truncated: a silently shortened note no longer says
+        what its author wrote.
+        """
+        tarball = self._standard_registry(
+            equivalences=[{"from_key": "bb:1", "to_key": "aa:1", "note": "x" * 300}]
+        )
+        with self.assertRaises(CommandError) as ctx:
+            self._run(tarball)
+        self.assertIn("300 chars", str(ctx.exception))
+        self.assertFalse((self.install_dir / "alpha").exists())
+
+    def test_exclude_corpora_naming_an_unknown_corpus_is_refused(self):
+        """An exclusion is a claim; one about nothing is a typo with consequences.
+
+        The corpus the author meant to exclude silently stays in the group, and
+        the group can then exceed the cap it was trimmed to fit.
+        """
+        tarball = self._standard_registry(
+            corpus_group={
+                "slug": "test-group",
+                "title": "G",
+                "exclude_corpora": ["alpha-tow"],  # typo for alpha-two
+            }
+        )
+        with self.assertRaises(CommandError) as ctx:
+            self._run(tarball)
+        self.assertIn("alpha-tow", str(ctx.exception))
+
+    def test_corpus_group_slug_must_be_a_slug(self):
+        """The orchestrator names this in prose and passes it to the tool."""
+        tarball = self._standard_registry(
+            corpus_group={"slug": "Not A Slug", "title": "G"}
+        )
+        with self.assertRaises(CommandError) as ctx:
+            self._run(tarball)
+        self.assertIn("corpus_group.slug", str(ctx.exception))

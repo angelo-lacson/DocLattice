@@ -38,6 +38,7 @@ installer must not trust its input.
 from __future__ import annotations
 
 import json
+import re
 import tarfile
 import tempfile
 from io import StringIO
@@ -59,12 +60,21 @@ from doclatticeserver.corpuses.management.commands.install_authority_pack import
     _top_prefix,
     materialise_pack,
 )
+from doclatticeserver.enrichment.data.mappings import is_valid_canonical_key
 
 # A domain pack name and a base pack name have the same grammar and the same
 # reason for it — both become path components. One constant, imported, rather
 # than two identical regexes that could drift apart.
 DOMAIN_NAME_RE = PACK_NAME_RE
 DOMAINS_DIR = "domains"
+
+# Corpus-group slugs allow hyphens but not underscores (pack names allow both).
+SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+# AuthorityKeyEquivalence.note is CharField(max_length=255); Postgres rejects
+# anything longer with a DataError. Checked here rather than truncated, because
+# a silently shortened note is a note that no longer says what its author wrote.
+MAX_EQUIVALENCE_NOTE = 255
 
 # Tools a domain pack may grant its orchestrator. Closed on purpose, and
 # mirrored in the registry's validate_domain.py: C3 says an install FAILS if the
@@ -453,7 +463,29 @@ class Command(BaseCommand):
                 "there is no cross-corpus retrieval, which is the whole point of "
                 "the layer"
             )
-        members, _ = self._member_slugs(pack_dirs, group)
+        elif not SLUG_RE.match(group_slug):
+            # The orchestrator has to name this slug in prose and the tool takes
+            # it as an argument, so a value with spaces or punctuation is a
+            # tool call nobody can make.
+            violations.append(
+                f"C2: corpus_group.slug {group_slug!r} must be a slug — the "
+                "orchestrator names it in its instructions and passes it to "
+                "search_across_corpora"
+            )
+
+        members, excluded_slugs = self._member_slugs(pack_dirs, group)
+
+        # An exclusion is a CLAIM that a corpus is reachable without the group.
+        # One naming a corpus no required pack contributes is a claim about
+        # nothing — most likely a typo, which silently leaves the corpus that
+        # was meant to be excluded in the group.
+        contributed = set(self._member_slugs(pack_dirs, {})[0])
+        for slug in sorted(excluded_slugs - contributed):
+            violations.append(
+                f"C2: exclude_corpora names {slug!r}, which no required base "
+                "pack contributes — an exclusion that excludes nothing"
+            )
+
         if len(members) > MULTI_CORPUS_SEARCH_MAX_CORPORA:
             violations.append(
                 f"C2: the group would hold {len(members)} corpora but "
@@ -475,6 +507,26 @@ class Command(BaseCommand):
                     f"cannot grant (known: {', '.join(sorted(GRANTABLE_TOOLS))})"
                 )
 
+        # C3 — `preferred_llm` too. `AgentConfiguration.save()` validates it and
+        # raises Django's ValidationError, which is NOT a CommandError and so is
+        # caught nowhere: a typo'd model spec would install every base pack and
+        # then surface as a bare traceback from inside the wiring. Checked here
+        # instead, where it costs nothing and fails before the first write.
+        preferred_llm = (manifest.get("orchestrator") or {}).get("preferred_llm")
+        if preferred_llm:
+            from doclatticeserver.llms.llm_registry import (
+                LLMProviderNotRegistered,
+                validate_model_spec,
+            )
+
+            try:
+                validate_model_spec(str(preferred_llm))
+            except (ValueError, LLMProviderNotRegistered) as exc:
+                violations.append(
+                    f"C3: orchestrator preferred_llm {preferred_llm!r} is not "
+                    f"usable on this platform: {exc}"
+                )
+
         # C4 — every equivalence target must name a section that exists. A row
         # pointing at nothing is a silent no-op after install: the citation still
         # extracts, still folds, and still resolves to nothing.
@@ -487,6 +539,24 @@ class Command(BaseCommand):
             if not frm or not to:
                 violations.append(f"C4: malformed equivalence row {row!r}")
                 continue
+            # Format as well as existence. Checking only that `to_key` resolves
+            # left the sibling half unguarded: a `from_key` missing its colon is
+            # non-empty and differs from `to_key`, so it passed preflight and was
+            # rejected only at write time by `upsert_equivalence` — after every
+            # base pack had been installed. Same predicate the writer uses, so
+            # the two cannot disagree.
+            for label, key in (("from_key", frm), ("to_key", to)):
+                if not is_valid_canonical_key(key):
+                    violations.append(
+                        f"C4: equivalence {label} {key!r} is not a well-formed "
+                        "'<prefix>:<section>' canonical key"
+                    )
+            note = str(row.get("note") or "")
+            if len(note) > MAX_EQUIVALENCE_NOTE:
+                violations.append(
+                    f"C4: equivalence note for {frm!r} is {len(note)} chars; the "
+                    f"column holds {MAX_EQUIVALENCE_NOTE}"
+                )
             if frm == to:
                 violations.append(f"C4: equivalence row maps {frm!r} onto itself")
             elif to not in keys:
@@ -523,6 +593,12 @@ class Command(BaseCommand):
             if slug not in found:
                 unmet.append(f"C2: corpus {slug!r} was not created by its base pack")
 
+        # Unreachable once `_preflight` has run: it counts the same slugs from
+        # the files, and `corpora` can only be a subset of them. Kept because
+        # this is the count that actually reaches `group.corpora.set()`, and
+        # what the cap protects is the group — a future refactor that widened
+        # membership here without touching the preflight would otherwise
+        # reintroduce the silent truncation with nothing to catch it.
         if len(corpora) > MULTI_CORPUS_SEARCH_MAX_CORPORA:
             raise CommandError(
                 f"C2: the group would hold {len(corpora)} corpora but "
@@ -629,10 +705,13 @@ class Command(BaseCommand):
             elif outcome == SKIPPED_OWNED:
                 skipped_owned += 1
             elif outcome == SKIPPED_INVALID:
-                # _preflight rejects malformed and self-mapping rows, so this is
-                # unreachable — counted as unmet rather than as converged so a
-                # divergence between the two validators can never be reported as
-                # a successful install.
+                # _preflight now applies `is_valid_canonical_key` — the same
+                # predicate the writer uses — so reaching this means the two
+                # have diverged. Counted as unmet rather than as converged, so
+                # such a divergence can never be reported as a clean install.
+                # (The earlier comment here claimed the branch was unreachable
+                # while preflight checked only key EXISTENCE, not key FORMAT;
+                # it was reachable, and the claim hid the gap.)
                 unmet.append(
                     f"C4: equivalence row {row['from_key']} -> {row['to_key']} "
                     "was rejected by the shared upsert after passing preflight"
