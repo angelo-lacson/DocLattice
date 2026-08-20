@@ -228,6 +228,24 @@ def authority_pack_dirs() -> list[Path]:
     return unique
 
 
+def pack_component_modules(pack_dir: Path, subdir_name: str) -> list[Path]:
+    """Provider modules a single pack directory SHIPS, without importing any.
+
+    The single-directory primitive behind ``pack_provider_modules`` (which
+    folds this over every discovered pack) and behind
+    ``install_authority_pack``'s pre-install report, which needs just the
+    one freshly-fetched pack rather than every pack on the install. Mirrors
+    the filtering ``_discover_pack_component_classes`` applies (``*.py``, no
+    leading underscore) so every caller counts the same set.
+    """
+    component_dir = Path(pack_dir) / subdir_name
+    if not component_dir.is_dir():
+        return []
+    return [
+        py for py in sorted(component_dir.glob("*.py")) if not py.name.startswith("_")
+    ]
+
+
 def pack_provider_modules(subdir_name: str) -> list[Path]:
     """Provider modules a pack SHIPS, found without importing any of them.
 
@@ -239,14 +257,7 @@ def pack_provider_modules(subdir_name: str) -> list[Path]:
     """
     modules: list[Path] = []
     for pack_dir in authority_pack_dirs():
-        component_dir = pack_dir / subdir_name
-        if not component_dir.is_dir():
-            continue
-        modules.extend(
-            py
-            for py in sorted(component_dir.glob("*.py"))
-            if not py.name.startswith("_")
-        )
+        modules.extend(pack_component_modules(pack_dir, subdir_name))
     return modules
 
 
@@ -1089,20 +1100,18 @@ def get_authority_source_provider(class_name: str) -> Optional[Any]:
     so an install missing a core provider degrades to "cannot re-fetch" instead
     of breaking registry build.
     """
-    registry = get_registry()
-    definition = registry.get_by_class_name(class_name) or registry.get_by_name(
-        class_name
-    )
+    # Scoped to authority source providers throughout: ``registry.get_by_name``
+    # / ``get_by_class_name`` read dicts shared by every component family
+    # (parsers, embedders, LLM providers, ...), so an unscoped lookup here
+    # could return an instance of the wrong type on a name collision.
+    providers = get_all_authority_source_providers_cached()
+    definition = next((d for d in providers if d.class_name == class_name), None)
     if definition is None:
         # ``class_name`` is stored as a full dotted path; a pack author writes
         # the leaf. Accept either, and refuse an ambiguous leaf rather than
         # picking — two providers with the same class name in different
         # packages is exactly when silently choosing is worst.
-        matches = [
-            d
-            for d in get_all_authority_source_providers_cached()
-            if d.class_name.rsplit(".", 1)[-1] == class_name
-        ]
+        matches = [d for d in providers if d.name == class_name]
         if len(matches) > 1:
             logger.warning(
                 "Authority source provider name %r is ambiguous (%s); "
