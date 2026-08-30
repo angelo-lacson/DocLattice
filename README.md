@@ -278,7 +278,7 @@ To add a deployment-specific variant, drop a `<key>.json` file in `frontend/src/
 
 ## Documentation
 
-Browse the full documentation at [jsv4.github.io/DocLattice](https://jsv4.github.io/DocLattice/) or in the repo:
+Browse the full documentation at [open-source-legal.github.io/DocLattice](https://github.com/angelo-lacson/DocLattice/tree/main/docs/) or in the repo:
 
 | Guide                                                                       | Description                          |
 | --------------------------------------------------------------------------- | ------------------------------------ |
