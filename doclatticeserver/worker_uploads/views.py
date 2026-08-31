@@ -227,8 +227,14 @@ class WorkerAuthoritySectionBatchView(APIView):
     202 Accepted immediately. The target corpus comes from the token, never
     from the payload.
 
-    Rate limiting is best-effort with the same caveats as document uploads
-    (see WorkerDocumentUploadView).
+    Rate limiting is best-effort: the count check and subsequent create are
+    not atomic, so under concurrent burst a token holder can exceed their
+    limit by a small margin. This is acceptable because worker tokens are
+    issued to trusted internal workers, not adversarial external clients.
+    For hardened rate limiting, use a reverse proxy (e.g. nginx limit_req).
+    The capability, payload-size and rate-limit checks all run before
+    deserialization, so an oversized or malformed batch never counts against
+    the per-minute limit — same ordering as WorkerDocumentUploadView.
     """
 
     authentication_classes = [WorkerTokenAuthentication]
@@ -255,18 +261,29 @@ class WorkerAuthoritySectionBatchView(APIView):
 
         max_bytes = settings.MAX_AUTHORITY_SECTION_PAYLOAD_BYTES
         if max_bytes:
-            # Measure the ACTUAL request body (already buffered by Django,
-            # bounded by DATA_UPLOAD_MAX_MEMORY_SIZE) — re-serializing the
-            # parsed object would be approximate and no cheaper.
-            payload_size = len(request.body)
-            if payload_size > max_bytes:
-                return Response(
-                    {
-                        "error": "Payload too large.",
-                        "max_bytes": max_bytes,
-                    },
-                    status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                )
+            too_large = Response(
+                {"error": "Payload too large.", "max_bytes": max_bytes},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+            # Reject on the DECLARED size first. Touching request.body forces
+            # Django to buffer the whole request into memory, bounded only by
+            # DATA_UPLOAD_MAX_MEMORY_SIZE — which this install sets to
+            # MAX_FILE_UPLOAD_SIZE_BYTES (~5 GB) for the document-import
+            # endpoints, ~165x this endpoint's own cap. Without this early-out
+            # a worker token could make us buffer gigabytes before the 32 MB
+            # guard ever runs.
+            declared = request.META.get("CONTENT_LENGTH") or 0
+            try:
+                declared_size = int(declared)
+            except (TypeError, ValueError):
+                declared_size = 0
+            if declared_size > max_bytes:
+                return too_large
+            # Content-Length is client-supplied (absent under chunked transfer
+            # encoding, and spoofable), so it is only an early-out. The check
+            # on the ACTUAL buffered body stays authoritative.
+            if len(request.body) > max_bytes:
+                return too_large
 
         # Best-effort rate limit — same non-atomic caveat as document uploads.
         if token.rate_limit_per_minute > 0:
@@ -314,7 +331,15 @@ class WorkerAuthoritySectionBatchView(APIView):
 
 
 class WorkerAuthoritySectionBatchStatusView(RetrieveAPIView):
-    """Check the status of a specific authority-section batch."""
+    """Check the status of a specific authority-section batch.
+
+    Scoped to the REQUESTING token, not the corpus: a batch pushed under a
+    since-revoked token is no longer reportable here even by a fresh token
+    for the same corpus. That is the deliberate no-cross-token-oracle choice
+    (a miss is a 404, never a "exists but not yours"); the operational cost
+    is that a harvester which rotates its token loses the ability to poll
+    reports for batches pushed under the old one. Read those from the admin.
+    """
 
     authentication_classes = [WorkerTokenAuthentication]
     permission_classes = [IsValidWorkerToken]
@@ -330,7 +355,11 @@ class WorkerAuthoritySectionBatchStatusView(RetrieveAPIView):
 
 
 class WorkerAuthoritySectionBatchListView(ListAPIView):
-    """List authority-section batches for the authenticated token (paginated)."""
+    """List authority-section batches for the authenticated token (paginated).
+
+    Token-scoped for the same reason as the status endpoint above — see its
+    docstring for the token-rotation implication.
+    """
 
     authentication_classes = [WorkerTokenAuthentication]
     permission_classes = [IsValidWorkerToken]

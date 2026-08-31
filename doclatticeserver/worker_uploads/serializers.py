@@ -172,6 +172,12 @@ class WorkerAuthoritySectionBatchSerializer(serializers.Serializer):
                 )
             from_key = str(row.get("from_key", "")).strip()
             to_key = str(row.get("to_key", "")).strip()
+            # Normalize IN PLACE, not just for the check: the view persists
+            # validated_data as batch.payload, so stripping only locally would
+            # leave whitespace-padded keys in the stored payload that merely
+            # happen to be re-stripped by upsert_equivalence at drain time.
+            row["from_key"] = from_key
+            row["to_key"] = to_key
             if (
                 not _mappings.is_valid_canonical_key(from_key)
                 or not _mappings.is_valid_canonical_key(to_key)
@@ -180,6 +186,14 @@ class WorkerAuthoritySectionBatchSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     f"equivalences[{i}] must carry valid, distinct canonical "
                     "from_key/to_key."
+                )
+            # note lands in a TextField via upsert_equivalence; a non-string
+            # would otherwise blow up at the DB layer during the drain and
+            # fail the WHOLE batch, instead of a clean 400 at push time.
+            note = row.get("note")
+            if note is not None and not isinstance(note, str):
+                raise serializers.ValidationError(
+                    f"equivalences[{i}].note must be a string when present."
                 )
         return attrs
 
