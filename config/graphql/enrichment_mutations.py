@@ -32,7 +32,6 @@ from typing import Annotated, Any
 
 import strawberry
 from django.db import transaction
-from graphql_relay import from_global_id
 
 from config.graphql._util import strip_unset
 from config.graphql.core.auth import PermissionDenied
@@ -54,6 +53,7 @@ from doclatticeserver.enrichment.services.authority_permissions import (
 from doclatticeserver.enrichment.services.crawl_authorities_service import (
     CrawlAuthoritiesService,
 )
+from doclatticeserver.utils.ids import from_global_id
 
 logger = logging.getLogger(__name__)
 

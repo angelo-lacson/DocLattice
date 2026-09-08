@@ -31,7 +31,6 @@ import logging
 from typing import Annotated
 
 import strawberry
-from graphql_relay import from_global_id
 
 from config.graphql._util import strip_unset
 from config.graphql.core.auth import login_required
@@ -46,6 +45,7 @@ from doclatticeserver.documents.models import Document, DocumentRelationship
 from doclatticeserver.documents.services import DocumentRelationshipService
 from doclatticeserver.shared.services.base import BaseService
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.ids import from_global_id
 from doclatticeserver.utils.permissioning import get_for_user_or_none
 
 logger = logging.getLogger(__name__)

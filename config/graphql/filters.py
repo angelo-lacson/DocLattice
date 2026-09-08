@@ -10,7 +10,6 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q, QuerySet
 from django_filters import OrderingFilter
 from django_filters import rest_framework as filters
-from graphql_relay import from_global_id
 
 from doclatticeserver.analyzer.models import Analysis, Analyzer, GremlinEngine
 from doclatticeserver.annotations.models import (
@@ -37,6 +36,7 @@ from doclatticeserver.enrichment.services.authority_namespace_service import (
 )
 from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
 from doclatticeserver.users.models import Assignment, UserExport
+from doclatticeserver.utils.ids import from_global_id
 
 User = get_user_model()
 

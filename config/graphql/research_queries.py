@@ -30,7 +30,6 @@ from __future__ import annotations
 from typing import Annotated
 
 import strawberry
-from graphql_relay import from_global_id
 
 from config.graphql._util import strip_unset
 from config.graphql.core.auth import login_required
@@ -41,6 +40,7 @@ from config.graphql.core.relay import (
 from doclatticeserver.research.models import ResearchReport
 from doclatticeserver.shared.services.base import BaseService
 from doclatticeserver.types.enums import JobStatus
+from doclatticeserver.utils.ids import from_global_id
 
 
 def _decode_global_pk(global_id: str) -> int | None:

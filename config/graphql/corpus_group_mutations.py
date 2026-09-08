@@ -14,7 +14,6 @@ import logging
 from typing import Annotated
 
 import strawberry
-from graphql_relay import from_global_id
 
 from config.graphql._util import strip_unset
 from config.graphql.core.auth import PermissionDenied
@@ -23,6 +22,7 @@ from config.graphql.corpus_types import CorpusGroupType
 from config.graphql.ratelimits import RateLimits, graphql_ratelimit
 from doclatticeserver.corpuses.services import CorpusGroupService
 from doclatticeserver.corpuses.services.corpus_groups import GROUP_NOT_FOUND_MESSAGE
+from doclatticeserver.utils.ids import from_global_id
 
 logger = logging.getLogger(__name__)
 

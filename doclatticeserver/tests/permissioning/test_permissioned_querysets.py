@@ -3,7 +3,6 @@ from django.contrib.auth.models import AnonymousUser
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
-from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
 from config.graphql.testing import Client
@@ -11,6 +10,7 @@ from doclatticeserver.annotations.models import Annotation, AnnotationLabel, Not
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.ids import to_global_id
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()

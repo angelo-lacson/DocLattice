@@ -16,13 +16,13 @@ cache. Counts must respect:
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
-from graphql_relay import to_global_id
 
 from config.graphql.testing import GraphQLTestCase
 from doclatticeserver.annotations.models import Annotation, AnnotationLabel
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document, DocumentPath
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.ids import to_global_id
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()

@@ -2,13 +2,12 @@ import logging
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from graphql_relay import to_global_id
-from graphql_relay.node.node import from_global_id
 
 from config.graphql.schema import schema
 from config.graphql.testing import Client
 from doclatticeserver.extracts.models import Column, Fieldset
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.ids import from_global_id, to_global_id
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()

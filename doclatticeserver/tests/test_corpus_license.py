@@ -14,13 +14,13 @@ Covers:
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
-from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
 from config.graphql.testing import Client as GrapheneClient
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.users.models import User
+from doclatticeserver.utils.ids import to_global_id
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 

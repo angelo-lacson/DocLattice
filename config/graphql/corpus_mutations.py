@@ -34,7 +34,6 @@ import strawberry
 from django.conf import settings
 from django.db import DatabaseError, transaction
 from django.utils import timezone
-from graphql_relay import from_global_id, to_global_id
 
 from config.graphql._util import strip_unset
 from config.graphql.core.auth import PermissionDenied
@@ -66,6 +65,7 @@ from doclatticeserver.shared.services.base import BaseService
 from doclatticeserver.tasks import fork_corpus
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.corpus_collector import collect_corpus_objects
+from doclatticeserver.utils.ids import from_global_id, to_global_id
 from doclatticeserver.utils.permissioning import (
     get_for_user_or_none,
     set_permissions_for_obj_to_user,
@@ -1922,11 +1922,11 @@ def _mutate_RunCorpusAction(
     @graphql_ratelimit(rate=RateLimits.ADMIN_OPERATION)
     def mutate(root, info, corpus_action_id: str, document_id: str):
         from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
-        from graphql_relay import from_global_id
 
         from doclatticeserver.corpuses.models import CorpusActionExecution
         from doclatticeserver.documents.models import DocumentPath
         from doclatticeserver.tasks.agent_tasks import run_agent_corpus_action
+        from doclatticeserver.utils.ids import from_global_id
 
         user = info.context.user
 

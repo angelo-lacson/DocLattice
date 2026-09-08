@@ -27,12 +27,12 @@ from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from graphql_relay import to_global_id
 
 from config.graphql.core.relay import get_registry_entry
 from config.graphql.schema import schema
 from config.graphql.testing import Client
 from doclatticeserver.users.models import User, UserExport
+from doclatticeserver.utils.ids import to_global_id
 
 # ``get_user_model()`` returns the same concrete ``User`` imported above; the
 # alias keeps the ``User.objects`` calls below reading like the rest of the

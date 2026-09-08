@@ -2,13 +2,13 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.files.base import ContentFile
 from django.test import TestCase
-from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
 from config.graphql.testing import Client
 from doclatticeserver.conversations.models import ChatMessage, Conversation
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
+from doclatticeserver.utils.ids import to_global_id
 from doclatticeserver.utils.permissioning import (
     PermissionTypes,
     set_permissions_for_obj_to_user,

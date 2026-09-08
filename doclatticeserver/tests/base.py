@@ -10,9 +10,9 @@ from django.conf import settings
 from django.db import connection, connections
 from django.db.utils import OperationalError
 from django.test import TestCase, TransactionTestCase, override_settings
-from graphql_jwt.shortcuts import get_token
 
 from config.asgi import application
+from config.jwt_auth.shortcuts import get_token
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.users.models import User

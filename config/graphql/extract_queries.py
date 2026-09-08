@@ -33,7 +33,6 @@ import logging
 from typing import Annotated
 
 import strawberry
-from graphql_relay import from_global_id
 
 from config.graphql import enums
 from config.graphql._util import strip_unset
@@ -59,6 +58,7 @@ from doclatticeserver.analyzer.models import Analysis, Analyzer, GremlinEngine
 from doclatticeserver.constants.extracts import EXTRACT_LIST_MAX_PAGE_SIZE
 from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
 from doclatticeserver.shared.services.base import BaseService
+from doclatticeserver.utils.ids import from_global_id
 
 logger = logging.getLogger(__name__)
 

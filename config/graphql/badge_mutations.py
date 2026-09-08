@@ -32,7 +32,6 @@ from typing import Annotated
 
 import strawberry
 from graphql import GraphQLError
-from graphql_relay import from_global_id
 
 from config.graphql._util import strip_unset
 from config.graphql.core.auth import PermissionDenied
@@ -45,6 +44,7 @@ from doclatticeserver.badges.models import Badge, UserBadge
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.shared.services.base import BaseService
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.ids import from_global_id
 from doclatticeserver.utils.permissioning import (
     get_for_user_or_none,
     set_permissions_for_obj_to_user,

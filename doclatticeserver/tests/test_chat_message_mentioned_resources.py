@@ -13,7 +13,6 @@ Note: The Django/Graphene type ``MessageType`` is what the plan calls
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
 from config.graphql.testing import Client as GrapheneClient
@@ -21,6 +20,7 @@ from doclatticeserver.agents.models import AgentConfiguration
 from doclatticeserver.conversations.models import ChatMessage, Conversation
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.ids import to_global_id
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()

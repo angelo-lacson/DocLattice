@@ -10,7 +10,6 @@ Tests cover:
 
 from django.http import HttpRequest
 from django.test import RequestFactory, TestCase
-from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
 from config.graphql.testing import Client
@@ -18,6 +17,7 @@ from doclatticeserver.annotations.models import Annotation, AnnotationLabel, Lab
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document, DocumentPath
 from doclatticeserver.users.models import User
+from doclatticeserver.utils.ids import to_global_id
 
 
 class TestCorpusDocumentCountField(TestCase):

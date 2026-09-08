@@ -32,7 +32,6 @@ from typing import Annotated
 
 import strawberry
 from django.contrib.auth import get_user_model
-from graphql_relay import from_global_id
 
 from config.graphql._util import strip_unset
 from config.graphql.core.auth import PermissionDenied
@@ -50,6 +49,7 @@ from doclatticeserver.corpuses.services import (
 )
 from doclatticeserver.documents.models import Document
 from doclatticeserver.shared.services.base import BaseService
+from doclatticeserver.utils.ids import from_global_id
 
 User = get_user_model()
 logger = logging.getLogger(__name__)

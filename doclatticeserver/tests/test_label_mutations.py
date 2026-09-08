@@ -8,12 +8,12 @@ invocation to silently fail inside a broad ``except Exception`` swallower.
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
 from config.graphql.testing import Client
 from doclatticeserver.annotations.models import AnnotationLabel, LabelSet
 from doclatticeserver.types.enums import LabelType, PermissionTypes
+from doclatticeserver.utils.ids import to_global_id
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()

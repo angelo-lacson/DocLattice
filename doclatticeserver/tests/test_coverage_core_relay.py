@@ -32,7 +32,6 @@ from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
-from graphql_relay import offset_to_cursor, to_global_id
 
 from config.graphql.core.filtering import setup_filterset
 from config.graphql.core.relay import (
@@ -62,6 +61,7 @@ from doclatticeserver.documents.models import Document
 from doclatticeserver.extracts.models import Extract
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.users.models import User
+from doclatticeserver.utils.ids import offset_to_cursor, to_global_id
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 # A name deliberately absent from the type registry, used whenever a test

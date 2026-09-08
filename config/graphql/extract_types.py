@@ -31,7 +31,6 @@ import datetime
 from typing import Annotated, Any
 
 import strawberry
-from graphql_relay import from_global_id
 
 from config.graphql import enums
 from config.graphql._util import coerce_enum, coerce_str, strip_unset
@@ -52,6 +51,7 @@ from doclatticeserver.corpuses.models import CorpusAction, CorpusActionExecution
 from doclatticeserver.extracts.models import Column, Datacell, Extract, Fieldset
 from doclatticeserver.notifications.models import Notification
 from doclatticeserver.shared.services.base import BaseService
+from doclatticeserver.utils.ids import from_global_id
 
 
 def _get_datacell_qs(extract, user) -> Any:

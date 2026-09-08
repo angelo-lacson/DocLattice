@@ -12,7 +12,6 @@ the service layer.
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase
-from graphql_relay import to_global_id
 
 from doclatticeserver.annotations.models import AuthorityRelationship
 from doclatticeserver.corpuses.models import Corpus
@@ -23,6 +22,7 @@ from doclatticeserver.enrichment.authorities import (
     AuthoritySection,
 )
 from doclatticeserver.enrichment.services import EnrichmentService
+from doclatticeserver.utils.ids import to_global_id
 
 User = get_user_model()
 
