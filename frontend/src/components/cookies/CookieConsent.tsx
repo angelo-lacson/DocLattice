@@ -613,10 +613,9 @@ export const CookieConsentDialog = () => {
                 </DataListItem>
               </DataList>
               <AnalyticsNote>
-                Analytics data is used solely to improve <em>DocLattice</em>{" "}
-                and is never sold or shared with third parties. You can opt out
-                at any time through your browser settings or by using Do Not
-                Track.
+                Analytics data is used solely to improve <em>DocLattice</em> and
+                is never sold or shared with third parties. You can opt out at
+                any time through your browser settings or by using Do Not Track.
               </AnalyticsNote>
             </DataCard>
           )}

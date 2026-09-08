@@ -19,7 +19,6 @@ import datetime
 
 from django.test import TestCase
 from django.utils import timezone
-from graphql_relay import to_global_id
 
 from config.graphql.schema import schema
 from config.graphql.testing import Client
@@ -33,6 +32,7 @@ from doclatticeserver.documents.models import Document
 from doclatticeserver.extracts.models import Fieldset
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.users.models import User
+from doclatticeserver.utils.ids import to_global_id
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 

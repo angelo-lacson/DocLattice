@@ -15,7 +15,6 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from graphql_relay import to_global_id
 
 from config.graphql.testing import Client
 from doclatticeserver.analyzer.services.analysis_lifecycle_service import (
@@ -25,6 +24,7 @@ from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.enrichment import constants as C
 from doclatticeserver.shared.services.conventions import ServiceResult
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.ids import to_global_id
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()

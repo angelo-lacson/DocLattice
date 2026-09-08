@@ -1,7 +1,7 @@
 # Frontend `any` Baseline
 
 Tracks the `Audit and reduce \`any\` usage in frontend TypeScript` initiative
-([#1448](https://github.com/angelo-lacson/DocLattice/issues/1448)).
+(historical issue 1448).
 
 The frontend does not run ESLint today, so we enforce a count-based gate
 instead of a per-rule severity. The mechanism is intentionally minimal — a

@@ -48,11 +48,11 @@ from doclatticeserver.documents.models import (
 )
 from doclatticeserver.types.dicts import (
     CorpusFolderExport,
-    DocumentPathExport,
-    IngestionSourceExport,
     DocLatticeExportDataJsonPythonType,
     DocLatticeExportDataJsonV2Type,
     DocLatticeRelationshipPythonType,
+    DocumentPathExport,
+    IngestionSourceExport,
 )
 from doclatticeserver.types.enums import PermissionTypes
 from doclatticeserver.utils.compact_pawls import compact_pawls_pages
@@ -420,9 +420,7 @@ def import_corpus_v2(
 
 
 def _setup_corpus_and_labels(
-    data_json: (
-        DocLatticeExportDataJsonPythonType | DocLatticeExportDataJsonV2Type
-    ),
+    data_json: DocLatticeExportDataJsonPythonType | DocLatticeExportDataJsonV2Type,
     user_obj: UserModel,
     seed_corpus_id: int | None,
 ) -> tuple[
@@ -1098,9 +1096,7 @@ def _reconcile_imported_authority_metadata(
 
 
 def _import_corpus(
-    data_json: (
-        DocLatticeExportDataJsonPythonType | DocLatticeExportDataJsonV2Type
-    ),
+    data_json: DocLatticeExportDataJsonPythonType | DocLatticeExportDataJsonV2Type,
     import_zip: zipfile.ZipFile,
     user_obj: UserModel,
     seed_corpus_id: int | None,

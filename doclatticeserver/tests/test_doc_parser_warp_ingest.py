@@ -265,9 +265,7 @@ class TestWarpIngestParser(TestCase):
             self.parser,
             "get_component_settings",
             return_value={"api_key": "super-secret-key-xyz", "apply_ocr": False},
-        ), self.assertLogs(
-            "doclatticeserver.pipeline.base.parser", level="INFO"
-        ) as cm:
+        ), self.assertLogs("doclatticeserver.pipeline.base.parser", level="INFO") as cm:
             self.parser.parse_document(user_id=self.user.id, doc_id=self.doc.id)
 
         joined = "\n".join(cm.output)

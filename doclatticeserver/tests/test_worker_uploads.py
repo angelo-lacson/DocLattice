@@ -383,9 +383,7 @@ class TestWorkerUploadEndpoint(TestCase):
         self.client = APIClient()
         self.client.credentials(HTTP_AUTHORIZATION=f"WorkerKey {self.plaintext_key}")
 
-    @patch(
-        "doclatticeserver.worker_uploads.views.process_pending_uploads.apply_async"
-    )
+    @patch("doclatticeserver.worker_uploads.views.process_pending_uploads.apply_async")
     def test_upload_stages_document(self, mock_task):
         metadata = _make_metadata()
         response = self.client.post(
@@ -410,9 +408,7 @@ class TestWorkerUploadEndpoint(TestCase):
         # Verify the task nudge was sent
         mock_task.assert_called_once()
 
-    @patch(
-        "doclatticeserver.worker_uploads.views.process_pending_uploads.apply_async"
-    )
+    @patch("doclatticeserver.worker_uploads.views.process_pending_uploads.apply_async")
     def test_upload_validates_metadata(self, mock_task):
         # Missing required fields
         response = self.client.post(
@@ -425,9 +421,7 @@ class TestWorkerUploadEndpoint(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
-    @patch(
-        "doclatticeserver.worker_uploads.views.process_pending_uploads.apply_async"
-    )
+    @patch("doclatticeserver.worker_uploads.views.process_pending_uploads.apply_async")
     def test_upload_invalid_json(self, mock_task):
         with self.assertLogs(
             "doclatticeserver.worker_uploads.serializers", level="WARNING"
@@ -443,9 +437,7 @@ class TestWorkerUploadEndpoint(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertTrue(any("Invalid JSON" in m for m in log_ctx.output))
 
-    @patch(
-        "doclatticeserver.worker_uploads.views.process_pending_uploads.apply_async"
-    )
+    @patch("doclatticeserver.worker_uploads.views.process_pending_uploads.apply_async")
     def test_rate_limiting(self, mock_task):
         """Rate limiter counts uploads created by this token in the last minute."""
         self.token.rate_limit_per_minute = 1
@@ -475,9 +467,7 @@ class TestWorkerUploadEndpoint(TestCase):
         )
         self.assertEqual(response.status_code, 429)
 
-    @patch(
-        "doclatticeserver.worker_uploads.views.process_pending_uploads.apply_async"
-    )
+    @patch("doclatticeserver.worker_uploads.views.process_pending_uploads.apply_async")
     @override_settings(MAX_WORKER_UPLOAD_SIZE_BYTES=10)
     def test_file_size_limit_enforced(self, mock_task):
         """Uploads exceeding MAX_WORKER_UPLOAD_SIZE_BYTES are rejected."""
@@ -492,9 +482,7 @@ class TestWorkerUploadEndpoint(TestCase):
         )
         self.assertEqual(response.status_code, 413)
 
-    @patch(
-        "doclatticeserver.worker_uploads.views.process_pending_uploads.apply_async"
-    )
+    @patch("doclatticeserver.worker_uploads.views.process_pending_uploads.apply_async")
     @override_settings(MAX_WORKER_METADATA_SIZE_BYTES=100)
     def test_metadata_size_limit_enforced(self, mock_task):
         """Oversized metadata should be rejected."""
@@ -574,9 +562,7 @@ class TestWorkerUploadEndpoint(TestCase):
         self.assertIn("count", data)
         self.assertIn("results", data)
 
-    @patch(
-        "doclatticeserver.worker_uploads.views.process_pending_uploads.apply_async"
-    )
+    @patch("doclatticeserver.worker_uploads.views.process_pending_uploads.apply_async")
     def test_upload_rejects_unsupported_embedding_dimension(self, mock_task):
         """Serializer rejects embeddings with unsupported dimensions at upload time."""
         metadata = _make_metadata(

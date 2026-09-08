@@ -25,9 +25,9 @@ from doclatticeserver.notifications.signals import (
 from doclatticeserver.pipeline.utils import run_post_processors
 from doclatticeserver.types.dicts import (
     AnnotationLabelPythonType,
-    FunsdAnnotationType,
     DocLatticeDocExport,
     DocLatticeExportDataJsonPythonType,
+    FunsdAnnotationType,
 )
 from doclatticeserver.users.models import UserExport
 from doclatticeserver.utils.packaging import (

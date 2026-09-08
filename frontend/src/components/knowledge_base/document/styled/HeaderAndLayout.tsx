@@ -39,7 +39,7 @@ export const HeaderContainer = styled.div`
  * Brand row pinned to the very top of the document header.
  *
  * The DocumentKnowledgeBase opens as a full-screen modal that sits above — and
- * therefore hides — the global NavMenu where the cite / opensource.legal
+ * therefore hides — the global NavMenu where the DocLattice
  * branding normally lives. We re-surface that branding here so the product
  * identity stays visible while a document is open.
  */

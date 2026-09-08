@@ -921,10 +921,7 @@ class AuthorityAttachmentExtractionTests(SimpleTestCase):
         # defers PDF/DOCX extraction to the parsing pipeline.
         with patch.dict(
             sys.modules,
-            {
-                "doclatticeserver.pipeline.file_converters."
-                "gotenberg_converter": None
-            },
+            {"doclatticeserver.pipeline.file_converters." "gotenberg_converter": None},
         ):
             with patch(
                 "doclatticeserver.enrichment.authority_sources." "safe_fetch_bytes",

@@ -33,7 +33,6 @@ from typing import Annotated
 import strawberry
 from django.db import transaction
 from django.utils import timezone
-from graphql_relay import from_global_id
 
 from config.graphql._util import strip_unset
 from config.graphql.core.auth import PermissionDenied
@@ -52,6 +51,7 @@ from doclatticeserver.documents.models import Document
 from doclatticeserver.shared.services.base import BaseService
 from doclatticeserver.tasks.agent_tasks import trigger_agent_responses_for_message
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.ids import from_global_id
 from doclatticeserver.utils.mention_parser import (
     link_message_to_resources,
     parse_mentions_from_content,

@@ -20,11 +20,11 @@ test.describe("HeaderBar", () => {
       />
     );
 
-    // The cite / opensource.legal brand row is re-surfaced here because the
+    // The DocLattice brand row is re-surfaced here because the
     // knowledge-base modal hides the global NavMenu (see HeaderBrandRow).
     const brand = page.getByTestId("document-header-brand");
     await expect(brand).toBeVisible();
-    await expect(brand).toContainText("cite.opensource.legal");
+    await expect(brand).toContainText("DocLattice");
 
     await expect(page.getByText("Quarterly Earnings Report")).toBeVisible();
     await expect(page.getByText("application/pdf")).toBeVisible();

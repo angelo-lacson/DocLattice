@@ -1,10 +1,10 @@
 site_name: DocLattice
 site_description: Open, Extensible Document Analytics Platform
-site_author: John Scrudato IV
-site_url: https://github.com/angelo-lacson/DocLattice/tree/main/docs/
+site_author: Angelo Lacson
+# Set site_url when deploying the generated documentation to a public host.
 repo_name: angelo-lacson/DocLattice
 repo_url: https://github.com/angelo-lacson/DocLattice
-edit_uri: blob/main/docs
+edit_uri: edit/main/docs/
 copyright: 'Copyright &copy; John Scrudato 2022-present'
 
 docs_dir: docs
@@ -14,8 +14,8 @@ theme:
   name: material
   custom_dir: docs/.overrides
   language: en
-  favicon: assets/images/logos/favicon.ico
-  logo: assets/images/logos/os_legal_128_inverted.png
+  favicon: assets/images/brand/icon_mark.svg
+  logo: assets/images/brand/icon_mark.svg
   font:
     text: Roboto
     code: Roboto Mono
@@ -49,6 +49,7 @@ nav:
       - System Requirements: requirements.md
       - Acknowledgements: acknowledgements.md
   - Releases:
+      - DocLattice Migration: migrations/doclattice_rebrand.md
       - v3.0.0: releases/v3.0.0.md
       - v3.0.0.b4: releases/v3.0.0.b4.md
       - v3.0.0.b3: releases/v3.0.0.b3.md
@@ -293,7 +294,7 @@ markdown_extensions:
       social_url_shorthand: true
       normalize_issue_symbols: true
       provider: github
-      user: Open-Source-Legal
+      user: angelo-lacson
       repo: DocLattice
   - pymdownx.mark:
   - pymdownx.progressbar:

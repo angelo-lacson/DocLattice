@@ -2,7 +2,7 @@
   <img src="docs/assets/images/brand/icon_mark.svg" alt="DocLattice" height="84">
 </p>
 
-# DocLattice ([Demo](https://contracts.opensource.legal))
+# DocLattice
 
 **Open-source document intelligence you can build on.**
 
@@ -10,12 +10,9 @@ Point DocLattice at a repository of documents and get a programmable citation gr
 
 > Same graph, three surfaces: a **GraphQL + REST API** for your apps, a **Model Context Protocol** server for your agents, and a **React UI** for your team.
 
-[![Sponsor](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/JSv4)
 
 |                   |                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Backend coverage  | [![backend](https://codecov.io/gh/angelo-lacson/DocLattice/branch/main/graph/badge.svg?flag=backend)](https://app.codecov.io/gh/angelo-lacson/DocLattice?flags%5B0%5D=backend)                                                                                                                                                                                                                             |
-| Frontend coverage | [![frontend](https://codecov.io/gh/angelo-lacson/DocLattice/branch/main/graph/badge.svg?flag=frontend)](https://app.codecov.io/gh/angelo-lacson/DocLattice?flags%5B0%5D=frontend)                                                                                                                                                                                                                          |
 | Meta              | [![code style - black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) [![types - Mypy](https://img.shields.io/badge/types-Mypy-blue.svg)](https://github.com/python/mypy) [![imports - isort](https://img.shields.io/badge/imports-isort-ef8336.svg)](https://github.com/pycqa/isort) [![License - MIT](https://img.shields.io/badge/license-MIT-green)](https://opensource.org/licenses/MIT) |
 
 ---
@@ -220,6 +217,8 @@ The human side of the graph — precise, layout-faithful annotation on PDFs and 
 
 ## Quick Start
 
+Upgrading an existing installation? Follow the [DocLattice migration guide](docs/migrations/doclattice_rebrand.md) before starting the new containers.
+
 ### Development
 
 ```bash
@@ -278,7 +277,7 @@ To add a deployment-specific variant, drop a `<key>.json` file in `frontend/src/
 
 ## Documentation
 
-Browse the full documentation at [open-source-legal.github.io/DocLattice](https://github.com/angelo-lacson/DocLattice/tree/main/docs/) or in the repo:
+Browse the [DocLattice documentation](https://github.com/angelo-lacson/DocLattice/tree/main/docs) or start with these guides:
 
 | Guide                                                                       | Description                          |
 | --------------------------------------------------------------------------- | ------------------------------------ |

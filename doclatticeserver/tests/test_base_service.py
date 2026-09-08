@@ -337,9 +337,7 @@ class TestServicesPackageExports(SimpleTestCase):
     """
 
     def test_package_reexports_public_names(self):
-        from doclatticeserver.shared.services import (
-            BaseService as ExportedBaseService,
-        )
+        from doclatticeserver.shared.services import BaseService as ExportedBaseService
         from doclatticeserver.shared.services import (
             ServiceResult as ExportedServiceResult,
         )

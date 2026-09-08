@@ -20,8 +20,7 @@ const mockLabelSet = {
 };
 
 const mockEmbedder = {
-  className:
-    "doclatticeserver.pipeline.embedders.SentenceTransformerEmbedder",
+  className: "doclatticeserver.pipeline.embedders.SentenceTransformerEmbedder",
   name: "SentenceTransformer",
   title: "Sentence Transformer",
   description: "Default text embedder",

@@ -215,7 +215,7 @@ exports.onExecutePostLogin = async (event, api) => {
     are written into the access token. The Django backend reads claims at
     `AUTH0_ADMIN_CLAIM_NAMESPACE` (default `https://contracts.opensource.legal/`).
     If the two strings differ by even one character — including a typo
-    (`doclattice` vs `contracts`), a missing trailing slash, or `http` vs
+    (for example, a missing character), a missing trailing slash, or `http` vs
     `https` — the backend will not find the claims, will treat them as missing,
     and will **set `is_staff` / `is_superuser` to `False` on the user on each
     sync cycle** (fail-closed sync; cached for 30 seconds per user via
@@ -531,10 +531,10 @@ Django shell keeps flipping back to `False` after each sync cycle.
 
 1. **Namespace mismatch between the Action and the backend**: The Post-Login
    Action's `namespace` constant must match `AUTH0_ADMIN_CLAIM_NAMESPACE`
-   byte-for-byte. A common pitfall is using `https://doclattice.opensource.legal/`
-   in the Action while the backend default is `https://contracts.opensource.legal/`
-   (note: `doclattice` vs `contracts`). Other common typos: missing trailing
-   slash, `http` vs `https`. Decode your access token at jwt.io and confirm
+   byte-for-byte. The backend default is `https://contracts.opensource.legal/`;
+   keep your configured namespace identical in both places. Common typos include
+   a missing trailing slash or `http` instead of `https`. Decode your access token
+   at jwt.io and confirm
    the claim key matches exactly.
 2. **Post-Login Action not deployed or not in the flow**: Go to
    **Actions > Flows > Login** and verify the Action is dragged into the flow

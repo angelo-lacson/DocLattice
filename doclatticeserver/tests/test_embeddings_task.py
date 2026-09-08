@@ -629,9 +629,7 @@ class TestEmbeddingTask(unittest.TestCase):
 class TestMultimodalEmbeddingTask(unittest.TestCase):
     """Tests for multimodal embedding paths in embedding tasks."""
 
-    @patch(
-        "doclatticeserver.utils.multimodal_embeddings.generate_multimodal_embedding"
-    )
+    @patch("doclatticeserver.utils.multimodal_embeddings.generate_multimodal_embedding")
     def test_annotation_with_images_uses_multimodal_embedding(
         self, mock_multimodal_embed
     ):
@@ -705,9 +703,7 @@ class TestMultimodalEmbeddingTask(unittest.TestCase):
 
         self.assertTrue(result)
 
-    @patch(
-        "doclatticeserver.utils.multimodal_embeddings.generate_multimodal_embedding"
-    )
+    @patch("doclatticeserver.utils.multimodal_embeddings.generate_multimodal_embedding")
     def test_annotation_multimodal_returns_none_fails(self, mock_multimodal_embed):
         """Test that multimodal embedding returning None causes failure."""
         from doclatticeserver.tasks.embeddings_task import (
@@ -741,9 +737,7 @@ class TestMultimodalEmbeddingTask(unittest.TestCase):
         # Should return False
         self.assertFalse(result)
 
-    @patch(
-        "doclatticeserver.utils.multimodal_embeddings.generate_multimodal_embedding"
-    )
+    @patch("doclatticeserver.utils.multimodal_embeddings.generate_multimodal_embedding")
     def test_annotation_multimodal_add_embedding_fails(self, mock_multimodal_embed):
         """Test that add_embedding returning None causes failure."""
         from doclatticeserver.tasks.embeddings_task import (
@@ -780,9 +774,7 @@ class TestMultimodalEmbeddingTask(unittest.TestCase):
         # Should return False because add_embedding returned None
         self.assertFalse(result)
 
-    @patch(
-        "doclatticeserver.utils.multimodal_embeddings.generate_multimodal_embedding"
-    )
+    @patch("doclatticeserver.utils.multimodal_embeddings.generate_multimodal_embedding")
     def test_annotation_multimodal_failure_falls_back_to_text(
         self, mock_multimodal_embed
     ):
@@ -1555,9 +1547,7 @@ class TestEmbedRelationship(unittest.TestCase):
         self.assertTrue(result)
         mock_embedder.embed_text.assert_called_once_with("HEAD\nT1")
 
-    @patch(
-        "doclatticeserver.tasks.embeddings_task.synthesize_relationship_block_text"
-    )
+    @patch("doclatticeserver.tasks.embeddings_task.synthesize_relationship_block_text")
     def test_synthesizes_text_when_not_precomputed(self, mock_synth):
         from doclatticeserver.tasks.embeddings_task import _embed_relationship
 
@@ -1574,9 +1564,7 @@ class TestEmbedRelationship(unittest.TestCase):
         mock_synth.assert_called_once_with(mock_rel)
         mock_embedder.embed_text.assert_called_once_with("synthesized")
 
-    @patch(
-        "doclatticeserver.tasks.embeddings_task.synthesize_relationship_block_text"
-    )
+    @patch("doclatticeserver.tasks.embeddings_task.synthesize_relationship_block_text")
     def test_precomputed_text_skips_synthesize(self, mock_synth):
         from doclatticeserver.tasks.embeddings_task import _embed_relationship
 
@@ -1647,9 +1635,7 @@ class TestCalculateEmbeddingsForRelationshipBatch(unittest.TestCase):
         self.assertEqual(result["failed"], 3)
         self.assertTrue(any("Failed to load embedder" in e for e in result["errors"]))
 
-    @patch(
-        "doclatticeserver.tasks.embeddings_task.synthesize_relationship_block_text"
-    )
+    @patch("doclatticeserver.tasks.embeddings_task.synthesize_relationship_block_text")
     @patch("doclatticeserver.tasks.embeddings_task.get_component_by_name")
     @patch("doclatticeserver.tasks.embeddings_task.Relationship")
     def test_explicit_embedder_counts_outcomes(
@@ -1700,9 +1686,7 @@ class TestCalculateEmbeddingsForRelationshipBatch(unittest.TestCase):
         filtered.select_related.assert_called_once_with("creator")
         filtered.select_related.return_value.prefetch_related.assert_called_once()
 
-    @patch(
-        "doclatticeserver.tasks.embeddings_task.synthesize_relationship_block_text"
-    )
+    @patch("doclatticeserver.tasks.embeddings_task.synthesize_relationship_block_text")
     @patch("doclatticeserver.tasks.embeddings_task.get_component_by_name")
     @patch("doclatticeserver.tasks.embeddings_task.Relationship")
     def test_explicit_embedder_sub_batches_and_skips_empty_text(
@@ -1741,9 +1725,7 @@ class TestCalculateEmbeddingsForRelationshipBatch(unittest.TestCase):
         )
 
     @patch("doclatticeserver.tasks.embeddings_task._apply_dual_embedding_strategy")
-    @patch(
-        "doclatticeserver.tasks.embeddings_task.synthesize_relationship_block_text"
-    )
+    @patch("doclatticeserver.tasks.embeddings_task.synthesize_relationship_block_text")
     @patch("doclatticeserver.tasks.embeddings_task.Relationship")
     def test_dual_embedding_path_invoked_when_no_explicit_embedder(
         self, mock_rel_model, mock_synth, mock_dual
@@ -1769,9 +1751,7 @@ class TestCalculateEmbeddingsForRelationshipBatch(unittest.TestCase):
             self.assertEqual(call.kwargs["obj_type"], "relationship")
 
     @patch("doclatticeserver.tasks.embeddings_task._apply_dual_embedding_strategy")
-    @patch(
-        "doclatticeserver.tasks.embeddings_task.synthesize_relationship_block_text"
-    )
+    @patch("doclatticeserver.tasks.embeddings_task.synthesize_relationship_block_text")
     @patch("doclatticeserver.tasks.embeddings_task.Relationship")
     def test_dual_embedding_records_individual_failures(
         self, mock_rel_model, mock_synth, mock_dual

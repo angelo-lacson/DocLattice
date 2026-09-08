@@ -136,7 +136,9 @@ class TestCFRCanHandle(SimpleTestCase):
         self.assertFalse(self.provider.can_handle("cfr-abc:1.1"))
 
 
-_SAFE_FETCH_PATH = "doclatticeserver.pipeline.authority_source_providers.cfr_provider.safe_fetch_bytes"
+_SAFE_FETCH_PATH = (
+    "doclatticeserver.pipeline.authority_source_providers.cfr_provider.safe_fetch_bytes"
+)
 
 
 class TestCFRFetchImpl(SimpleTestCase):

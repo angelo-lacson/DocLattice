@@ -261,10 +261,7 @@ test.describe("NavMenu Component", () => {
       await component.unmount();
     });
 
-    test("should display the DocLattice icon mark", async ({
-      mount,
-      page,
-    }) => {
+    test("should display the DocLattice icon mark", async ({ mount, page }) => {
       const component = await mount(<NavMenuTestWrapper />);
 
       await expect(

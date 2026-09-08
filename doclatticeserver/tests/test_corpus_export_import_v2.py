@@ -57,9 +57,9 @@ from doclatticeserver.tests._corpus_snapshot import snapshot_corpus
 from doclatticeserver.types.dicts import (
     AgentConfigExport,
     CorpusFolderExport,
-    DocumentPathExport,
     DocLatticeExportDataJsonV2Type,
     DocLatticeRelationshipPythonType,
+    DocumentPathExport,
     StructuralAnnotationSetExport,
 )
 from doclatticeserver.types.enums import AnnotationFilterMode, PermissionTypes
@@ -2798,9 +2798,7 @@ class TestReconstructDocumentPaths(TestCase):
 
         # The miss is also logged as a warning now; suppress it so this
         # test's intent (path applied, folder stays NULL) stays focused.
-        with self.assertLogs(
-            "doclatticeserver.tasks.import_tasks_v2", level="WARNING"
-        ):
+        with self.assertLogs("doclatticeserver.tasks.import_tasks_v2", level="WARNING"):
             _reconstruct_document_paths(
                 cast(list[DocumentPathExport], document_paths_data),
                 self.corpus,

@@ -16,7 +16,6 @@ from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
-from graphql_relay import to_global_id
 from rest_framework.test import APIClient
 
 from doclatticeserver.annotations.models import LabelSet
@@ -33,6 +32,7 @@ from doclatticeserver.document_imports.services import (
     store_chunk,
 )
 from doclatticeserver.users.models import User
+from doclatticeserver.utils.ids import to_global_id
 from doclatticeserver.worker_uploads.models import CorpusAccessToken, WorkerAccount
 
 _PDF = b"%PDF-1.4 test document\n%%EOF\n"

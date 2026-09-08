@@ -280,9 +280,7 @@ class PrivacyFilterClientMultiChunkTests(TestCase):
         is order-independent — without the explicit reset another test
         could flip the flag first and we'd never observe the warning.
         """
-        from doclatticeserver.llms.tools.core_tools import (
-            _privacy_filter_client as pf,
-        )
+        from doclatticeserver.llms.tools.core_tools import _privacy_filter_client as pf
 
         original = pf._warned_about_missing_api_key
         pf._warned_about_missing_api_key = False

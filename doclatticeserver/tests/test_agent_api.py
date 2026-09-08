@@ -147,9 +147,7 @@ class TestEmbeddingAPI(TestCase):
 
     def test_simple_embedding_generation(self):
         """Test simple embedding generation."""
-        with patch(
-            "doclatticeserver.llms.embeddings.generate"
-        ) as mock_module_generate:
+        with patch("doclatticeserver.llms.embeddings.generate") as mock_module_generate:
             mock_module_generate.return_value = ("test-embedder", [0.1, 0.2, 0.3])
 
             embedder_path, vector = embeddings.generate("Hello world")
@@ -162,9 +160,7 @@ class TestEmbeddingAPI(TestCase):
 
     def test_contextual_embedding_generation(self):
         """Test embedding generation with context."""
-        with patch(
-            "doclatticeserver.llms.embeddings.generate"
-        ) as mock_module_generate:
+        with patch("doclatticeserver.llms.embeddings.generate") as mock_module_generate:
             mock_module_generate.return_value = ("legal-embedder", [0.4, 0.5, 0.6])
 
             embedder_path, vector = embeddings.generate(

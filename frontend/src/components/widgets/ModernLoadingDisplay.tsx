@@ -232,7 +232,7 @@ const renderBrandMark = (size?: "small" | "medium" | "large") => (
     size={size === "small" ? 44 : 60}
     bracketColor={color.N10}
     nodeColor={OS_LEGAL_COLORS.accent}
-    ariaLabel="cite"
+    ariaLabel="DocLattice"
   />
 );
 

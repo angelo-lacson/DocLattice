@@ -32,7 +32,6 @@ import logging
 from typing import Annotated, Any
 
 import strawberry
-from graphql_relay import to_global_id
 
 from config.graphql import enums
 from config.graphql._util import coerce_enum, coerce_str, strip_unset
@@ -61,6 +60,7 @@ from doclatticeserver.llms.agents.mention_extractor import (
 )
 from doclatticeserver.notifications.models import Notification
 from doclatticeserver.shared.services.base import BaseService
+from doclatticeserver.utils.ids import to_global_id
 
 logger = logging.getLogger(__name__)
 

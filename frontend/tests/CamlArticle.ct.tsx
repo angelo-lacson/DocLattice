@@ -28,9 +28,9 @@ test.describe("CamlArticle - Full Rendering", () => {
     const component = await mount(<CamlArticleTestWrapper />);
 
     // Verify hero section renders (use .first() for text that appears in multiple blocks)
-    await expect(page.getByText("DocLattice · Corpus Analysis")).toBeVisible(
-      { timeout: 5000 }
-    );
+    await expect(page.getByText("DocLattice · Corpus Analysis")).toBeVisible({
+      timeout: 5000,
+    });
     await expect(page.getByText("Understanding the")).toBeVisible();
     await expect(page.getByText("42 Documents").first()).toBeVisible();
 
@@ -58,9 +58,9 @@ test.describe("CamlArticle - Hero Section", () => {
     const component = await mount(<CamlArticleTestWrapper />);
 
     // Kicker
-    await expect(page.getByText("DocLattice · Corpus Analysis")).toBeVisible(
-      { timeout: 5000 }
-    );
+    await expect(page.getByText("DocLattice · Corpus Analysis")).toBeVisible({
+      timeout: 5000,
+    });
 
     // Title with accent text (the {Supply Chain} should be rendered with accent styling)
     await expect(page.getByText("Understanding the")).toBeVisible();

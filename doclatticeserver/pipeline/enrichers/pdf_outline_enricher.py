@@ -37,8 +37,8 @@ from doclatticeserver.pipeline.base.settings_schema import (
     SettingType,
 )
 from doclatticeserver.types.dicts import (
-    DocLatticeDocExport,
     DocLatticeAnnotationPythonType,
+    DocLatticeDocExport,
     DocLatticeSinglePageAnnotationType,
     TokenIdPythonType,
 )

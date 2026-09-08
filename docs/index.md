@@ -1,4 +1,4 @@
-![DocLattice](assets/images/logos/OS_Legal_Logo.png)
+![DocLattice](assets/images/brand/icon_mark.svg)
 
 # DocLattice
 
@@ -8,8 +8,6 @@
 
 | | |
 | --- | --- |
-| Backend coverage | [![backend](https://codecov.io/gh/angelo-lacson/DocLattice/branch/main/graph/badge.svg?flag=backend)](https://app.codecov.io/gh/angelo-lacson/DocLattice?flags%5B0%5D=backend) |
-| Frontend coverage | [![frontend](https://codecov.io/gh/angelo-lacson/DocLattice/branch/main/graph/badge.svg?flag=frontend)](https://app.codecov.io/gh/angelo-lacson/DocLattice?flags%5B0%5D=frontend) |
 | Meta | [![code style - black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) [![types - Mypy](https://img.shields.io/badge/types-Mypy-blue.svg)](https://github.com/python/mypy) [![imports - isort](https://img.shields.io/badge/imports-isort-ef8336.svg)](https://github.com/pycqa/isort) [![License - MIT](https://img.shields.io/badge/license-MIT-green)](https://opensource.org/licenses/MIT) |
 
 DocLattice is an MIT-licensed, self-hosted document analytics platform. Teams build knowledge bases from their documents and AI agents work alongside humans to search, analyze, and extend that knowledge.

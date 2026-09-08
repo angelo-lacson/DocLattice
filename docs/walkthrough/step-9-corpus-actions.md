@@ -39,7 +39,7 @@ DocLattice supports three types of automated actions:
 2. Click the **Settings** tab
 3. Scroll to the **Corpus Actions** section
 
-![Corpus Actions Settings](../assets/images/screenshots/Corpus_Action_Settings.png)
+![Corpus Actions Settings](../assets/images/screenshots/auto/corpus-settings--actions-with-template-badge.png)
 
 ### Creating a New Action
 

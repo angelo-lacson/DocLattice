@@ -237,9 +237,7 @@ class TestPostProcessor(BasePostProcessor):
 
         # Reload and then directly import the modules to force discovery
         importlib.reload(importlib.import_module("doclatticeserver.pipeline.parsers"))
-        importlib.reload(
-            importlib.import_module("doclatticeserver.pipeline.embedders")
-        )
+        importlib.reload(importlib.import_module("doclatticeserver.pipeline.embedders"))
         importlib.reload(
             importlib.import_module("doclatticeserver.pipeline.thumbnailers")
         )

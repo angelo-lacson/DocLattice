@@ -1624,8 +1624,7 @@ test.describe("SystemSettings Component", () => {
           name: "docling",
           title: "Docling Parser",
           description: "ML-based document parser (PDF only)",
-          className:
-            "doclatticeserver.pipeline.parsers.docling.DoclingParser",
+          className: "doclatticeserver.pipeline.parsers.docling.DoclingParser",
           supportedFileTypes: ["PDF"],
           enabled: true,
           settingsSchema: [],
@@ -1634,8 +1633,7 @@ test.describe("SystemSettings Component", () => {
           name: "text_parser",
           title: "Text Parser",
           description: "Plain text parser",
-          className:
-            "doclatticeserver.pipeline.parsers.text_parser.TextParser",
+          className: "doclatticeserver.pipeline.parsers.text_parser.TextParser",
           supportedFileTypes: ["TXT"],
           enabled: true,
           settingsSchema: [],
@@ -1654,8 +1652,7 @@ test.describe("SystemSettings Component", () => {
           name: "docx_parser",
           title: "Word Document Parser",
           description: "Microsoft Word parser",
-          className:
-            "doclatticeserver.pipeline.parsers.docx_parser.DocxParser",
+          className: "doclatticeserver.pipeline.parsers.docx_parser.DocxParser",
           supportedFileTypes: ["DOCX"],
           enabled: true,
           settingsSchema: [],

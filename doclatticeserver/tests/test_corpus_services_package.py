@@ -112,9 +112,7 @@ class TestServicesPackageStructure(SimpleTestCase):
         for service in SEGMENTED_SERVICES:
             with self.subTest(service=service.__name__):
                 self.assertTrue(
-                    service.__module__.startswith(
-                        "doclatticeserver.corpuses.services."
-                    )
+                    service.__module__.startswith("doclatticeserver.corpuses.services.")
                 )
 
     def test_corpus_objs_service_shim_is_deleted(self):

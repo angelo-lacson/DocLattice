@@ -33,7 +33,6 @@ from typing import Annotated, Any, Literal
 import strawberry
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from graphql_relay import from_global_id
 
 from config.graphql import enums
 from config.graphql._util import strip_unset
@@ -71,6 +70,7 @@ from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document, DocumentPath
 from doclatticeserver.shared.services.base import BaseService
 from doclatticeserver.types.enums import LabelType, PermissionTypes
+from doclatticeserver.utils.ids import from_global_id
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 logger = logging.getLogger(__name__)

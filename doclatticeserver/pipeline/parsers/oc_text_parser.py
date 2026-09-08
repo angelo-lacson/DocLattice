@@ -21,8 +21,8 @@ from doclatticeserver.pipeline.parsers.text_chunkers import (
 )
 from doclatticeserver.types.dicts import (
     AnnotationLabelPythonType,
-    DocLatticeDocExport,
     DocLatticeAnnotationPythonType,
+    DocLatticeDocExport,
     TextSpanData,
 )
 from doclatticeserver.types.enums import LabelType

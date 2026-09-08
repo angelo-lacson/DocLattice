@@ -6,7 +6,6 @@ DocLattice supports both exporting and importing corpuses. This functionality is
 demo as it can be bandwidth intensive. If you want to experiment with these features on your own, you'll see
 the export action when you right-click on a corpus:
 
-![](../../assets/images/screenshots/Corpus_Context_Menu.png)
 
 ### Running an Export
 

@@ -169,8 +169,7 @@ class TestSyncToAsyncListEvaluation(TestCase):
         the worker thread."""
         modules = [
             _PROJECT_ROOT / "doclatticeserver/llms/agents/pydantic_ai_agents.py",
-            _PROJECT_ROOT
-            / "doclatticeserver/llms/vector_stores/core_vector_stores.py",
+            _PROJECT_ROOT / "doclatticeserver/llms/vector_stores/core_vector_stores.py",
             _PROJECT_ROOT
             / "doclatticeserver/llms/vector_stores/core_conversation_vector_stores.py",
             _PROJECT_ROOT

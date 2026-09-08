@@ -81,9 +81,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
     # Text Embedding Tests
     # =========================================================================
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_text_success(self, mock_post):
         """Test successful text embedding."""
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768]})
@@ -96,9 +94,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         self.assertEqual(len(result), 768)
         mock_post.assert_called_once()
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_text_no_service_url(self, mock_post):
         """Test text embedding returns None when no service URL configured."""
         # Mock the Settings dataclass to have empty URL
@@ -108,9 +104,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         self.assertIsNone(result)
         mock_post.assert_not_called()
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_text_bad_status_code(self, mock_post):
         """Test text embedding handles bad status codes."""
         mock_post.return_value = MockResponse(500, {"error": "Server error"})
@@ -121,9 +115,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_text_timeout(self, mock_post):
         """Test text embedding handles timeout gracefully."""
         mock_post.side_effect = Timeout()
@@ -134,9 +126,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_text_connection_error(self, mock_post):
         """Test text embedding handles connection error gracefully."""
         mock_post.side_effect = ConnectionError()
@@ -147,9 +137,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_text_generic_exception(self, mock_post):
         """Test text embedding handles generic exceptions gracefully."""
         mock_post.side_effect = Exception("Unexpected error")
@@ -160,9 +148,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_text_nan_values(self, mock_post):
         """Test text embedding returns None when embeddings contain NaN."""
         embeddings_with_nan = [[0.1] * 767 + [float("nan")]]
@@ -178,9 +164,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
     # Image Embedding Tests
     # =========================================================================
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_image_success(self, mock_post):
         """Test successful image embedding."""
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.2] * 768]})
@@ -193,9 +177,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(len(result), 768)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_image_no_service_url(self, mock_post):
         """Test image embedding returns None when no service URL configured."""
         # Mock the Settings dataclass to have empty URL
@@ -206,9 +188,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         self.assertIsNone(result)
         mock_post.assert_not_called()
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_image_invalid_base64(self, mock_post):
         """Test image embedding handles invalid base64 gracefully."""
         result = self.embedder.embed_image(
@@ -218,9 +198,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         self.assertIsNone(result)
         mock_post.assert_not_called()
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_image_bad_status_code(self, mock_post):
         """Test image embedding handles bad status codes."""
         mock_post.return_value = MockResponse(500, {"error": "Server error"})
@@ -232,9 +210,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_image_timeout(self, mock_post):
         """Test image embedding handles timeout gracefully."""
         mock_post.side_effect = Timeout()
@@ -246,9 +222,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_image_connection_error(self, mock_post):
         """Test image embedding handles connection error gracefully."""
         mock_post.side_effect = ConnectionError()
@@ -260,9 +234,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_image_generic_exception(self, mock_post):
         """Test image embedding handles generic exceptions gracefully."""
         mock_post.side_effect = Exception("Unexpected error")
@@ -274,9 +246,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_image_nan_values(self, mock_post):
         """Test image embedding returns None when embeddings contain NaN."""
         embeddings_with_nan = [[0.2] * 767 + [float("nan")]]
@@ -293,9 +263,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
     # Batch Text Embedding Tests
     # =========================================================================
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_texts_batch_success(self, mock_post):
         """Test successful batch text embedding."""
         mock_post.return_value = MockResponse(
@@ -312,9 +280,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         for embedding in result:
             self.assertEqual(len(embedding), 768)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_texts_batch_truncates_over_100(self, mock_post):
         """Test batch text embedding truncates to max 100 items."""
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768] * 100})
@@ -329,9 +295,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         sent_texts = call_args.kwargs["json"]["texts"]
         self.assertEqual(len(sent_texts), 100)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_texts_batch_no_service_url(self, mock_post):
         """Test batch text embedding returns None when no service URL."""
         # Mock the Settings dataclass to have empty URL
@@ -341,9 +305,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         self.assertIsNone(result)
         mock_post.assert_not_called()
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_texts_batch_bad_status_code(self, mock_post):
         """Test batch text embedding raises EmbeddingServerError on 5xx.
 
@@ -359,9 +321,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
                 ["Text 1"], multimodal_embedder_url="http://test:8000"
             )
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_texts_batch_nan_values(self, mock_post):
         """Test batch text embedding returns None when embeddings contain NaN."""
         embeddings_with_nan = [[0.1] * 768, [0.2] * 767 + [float("nan")]]
@@ -373,9 +333,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_texts_batch_3d_array_squeeze(self, mock_post):
         """Test batch text embedding handles 3D array response by squeezing."""
         # Service returns 3D array (each embedding wrapped)
@@ -391,9 +349,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         for embedding in result:
             self.assertEqual(len(embedding), 768)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_texts_batch_3d_array_bad_shape(self, mock_post):
         """Test batch text embedding returns None for 3D array with shape[1] != 1."""
         # Each embedding wrapped in a list of 2 elements (unsqueezable)
@@ -406,9 +362,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_texts_batch_exception(self, mock_post):
         """Test batch text embedding handles exceptions gracefully."""
         mock_post.side_effect = Exception("Network error")
@@ -423,9 +377,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
     # Batch Image Embedding Tests
     # =========================================================================
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_images_batch_success(self, mock_post):
         """Test successful batch image embedding."""
         mock_post.return_value = MockResponse(
@@ -442,9 +394,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         for embedding in result:
             self.assertEqual(len(embedding), 768)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_images_batch_truncates_over_20(self, mock_post):
         """Test batch image embedding truncates to max 20 items."""
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768] * 20})
@@ -459,9 +409,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         sent_images = call_args.kwargs["json"]["images"]
         self.assertEqual(len(sent_images), 20)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_images_batch_no_service_url(self, mock_post):
         """Test batch image embedding returns None when no service URL."""
         # Mock the Settings dataclass to have empty URL
@@ -471,9 +419,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         self.assertIsNone(result)
         mock_post.assert_not_called()
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_images_batch_bad_status_code(self, mock_post):
         """Test batch image embedding raises EmbeddingServerError on 5xx.
 
@@ -488,9 +434,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
                 [create_test_image_base64()], multimodal_embedder_url="http://test:8000"
             )
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_images_batch_nan_values(self, mock_post):
         """Test batch image embedding returns None when embeddings contain NaN."""
         embeddings_with_nan = [[0.1] * 768, [0.2] * 767 + [float("nan")]]
@@ -503,9 +447,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_images_batch_3d_array_squeeze(self, mock_post):
         """Test batch image embedding handles 3D array response by squeezing."""
         # Service returns 3D array (each embedding wrapped)
@@ -522,9 +464,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         for embedding in result:
             self.assertEqual(len(embedding), 768)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_images_batch_3d_array_bad_shape(self, mock_post):
         """Test batch image embedding returns None for 3D array with shape[1] != 1."""
         # Each embedding wrapped in a list of 2 elements (unsqueezable)
@@ -538,9 +478,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_images_batch_exception(self, mock_post):
         """Test batch image embedding handles exceptions gracefully."""
         mock_post.side_effect = Exception("Network error")
@@ -555,9 +493,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
     # Service Config Tests
     # =========================================================================
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_service_config_from_settings(self, mock_post):
         """Test that service config is loaded from Settings dataclass (PipelineSettings DB)."""
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768]})
@@ -576,9 +512,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         # Check API key header
         self.assertEqual(call_args.kwargs["headers"]["X-API-Key"], "settings-api-key")
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_service_config_direct_kwargs_override(self, mock_post):
         """Test that direct kwargs override Settings dataclass values."""
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768]})
@@ -605,9 +539,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
     @patch(
         "doclatticeserver.pipeline.embedders.multimodal_microservice.maybe_add_cloud_run_auth"
     )
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_cloud_run_iam_auth_enabled(self, mock_post, mock_cloud_auth):
         """Test Cloud Run IAM auth is applied when enabled."""
         mock_cloud_auth.return_value = {
@@ -650,9 +582,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
     # 4xx Client Error Tests
     # =========================================================================
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_image_client_error_4xx(self, mock_post):
         """Test image embedding handles 4xx client errors (non-retriable)."""
         mock_post.return_value = MockResponse(400, {"error": "Bad request"})
@@ -664,9 +594,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_text_client_error_4xx(self, mock_post):
         """Test text embedding handles 4xx client errors (non-retriable)."""
         mock_post.return_value = MockResponse(422, {"error": "Validation error"})
@@ -677,9 +605,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
 
         self.assertIsNone(result)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_texts_batch_client_error_4xx(self, mock_post):
         """Test batch text embedding raises EmbeddingClientError on 4xx.
 
@@ -695,9 +621,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
                 ["Text 1", "Text 2"], multimodal_embedder_url="http://test:8000"
             )
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_embed_images_batch_client_error_4xx(self, mock_post):
         """Test batch image embedding raises EmbeddingClientError on 4xx.
 
@@ -714,9 +638,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
     # New-Style Service Config Tests (clip_embedder_url, clip_embedder_api_key)
     # =========================================================================
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_service_config_new_style_kwargs(self, mock_post):
         """Test that new-style kwargs (clip_embedder_url) work correctly."""
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768]})
@@ -733,9 +655,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
         # Check API key header
         self.assertEqual(call_args.kwargs["headers"]["X-API-Key"], "new-style-api-key")
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_service_config_new_style_settings(self, mock_post):
         """Test that Settings dataclass values are used correctly."""
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768]})
@@ -756,9 +676,7 @@ class TestCLIPMicroserviceEmbedderUnit(TestCase):
             call_args.kwargs["headers"]["X-API-Key"], "new-settings-api-key"
         )
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_service_config_new_style_kwargs_override_legacy(self, mock_post):
         """Test new-style kwargs take precedence over legacy kwargs."""
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 768]})
@@ -798,9 +716,7 @@ class TestQwenMicroserviceEmbedderUnit(TestCase):
         """Test Qwen embedder has correct default URL."""
         self.assertEqual(self.embedder._default_url, "http://qwen-embedder:8000")
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_qwen_embed_text_success(self, mock_post):
         """Test successful text embedding with Qwen embedder."""
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.1] * 1024]})
@@ -813,9 +729,7 @@ class TestQwenMicroserviceEmbedderUnit(TestCase):
         self.assertEqual(len(result), 1024)
         mock_post.assert_called_once()
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_qwen_embed_image_success(self, mock_post):
         """Test successful image embedding with Qwen embedder."""
         mock_post.return_value = MockResponse(200, {"embeddings": [[0.2] * 1024]})
@@ -828,9 +742,7 @@ class TestQwenMicroserviceEmbedderUnit(TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(len(result), 1024)
 
-    @patch(
-        "doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post"
-    )
+    @patch("doclatticeserver.pipeline.embedders.multimodal_microservice.requests.post")
     def test_qwen_service_config_from_settings(self, mock_post):
         """
         Test Qwen embedder loads config from Settings dataclass (PipelineSettings DB).

@@ -33,7 +33,6 @@ from typing import Annotated, Any
 import strawberry
 from django.db.models import Count, Q, Subquery
 from django.db.models.functions import Coalesce
-from graphql_relay import from_global_id, to_global_id
 
 from config.graphql._util import strip_unset
 from config.graphql.core.filtering import setup_filterset
@@ -73,6 +72,7 @@ from doclatticeserver.corpuses.services.corpus_documents import (
 from doclatticeserver.documents.models import Document
 from doclatticeserver.feedback.models import UserFeedback
 from doclatticeserver.shared.services.base import BaseService
+from doclatticeserver.utils.ids import from_global_id, to_global_id
 
 logger = logging.getLogger(__name__)
 

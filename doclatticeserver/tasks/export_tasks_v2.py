@@ -41,10 +41,10 @@ from doclatticeserver.tasks.export_tasks import finalize_export
 from doclatticeserver.types.dicts import (
     ChatMessageExport,
     ConversationExport,
-    MessageVoteExport,
     DocLatticeCorpusV2Type,
     DocLatticeDocExport,
     DocLatticeExportDataJsonPythonTypeV3,
+    MessageVoteExport,
     StructuralAnnotationSetExport,
 )
 from doclatticeserver.types.enums import AnnotationFilterMode

@@ -15,8 +15,8 @@ from doclatticeserver.annotations.models import (
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.documents.models import Document
 from doclatticeserver.types.dicts import (
-    DocLatticeDocExport,
     DocLatticeAnnotationPythonType,
+    DocLatticeDocExport,
     DocLatticeRelationshipPythonType,
 )
 from doclatticeserver.types.enums import PermissionTypes

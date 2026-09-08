@@ -9,7 +9,7 @@ interface CiteMarkProps {
   nodeColor?: string;
   /** Override stroke weight. Default scales: 1.2px@16, 1.8px@32, 2.4px@48+. */
   strokeWidth?: number;
-  /** Accessible label. Defaults to "cite mark". */
+  /** Accessible label. Defaults to "DocLattice mark". */
   ariaLabel?: string;
   className?: string;
   style?: React.CSSProperties;
@@ -23,7 +23,7 @@ const strokeFor = (size: number) => {
 };
 
 /**
- * Bracketed teal node — the cite icon mark.
+ * Bracketed teal node — the DocLattice icon mark.
  * Renders inline; viewBox is 64×64 and the geometry matches the
  * production SVG in /assets/brand/icon_mark.svg.
  *
@@ -36,7 +36,7 @@ const CiteMarkInner: React.FC<CiteMarkProps> = ({
   bracketColor = "#1E293B",
   nodeColor = "#0F766E",
   strokeWidth,
-  ariaLabel = "cite mark",
+  ariaLabel = "DocLattice mark",
   className,
   style,
 }) => {
@@ -44,7 +44,7 @@ const CiteMarkInner: React.FC<CiteMarkProps> = ({
   // An empty `ariaLabel` marks the mark as decorative — render it
   // `aria-hidden` and drop the `role="img"` slot so screen readers skip
   // it entirely. Callers that pass a real label keep the labelled image
-  // semantics so the mark stays announceable as the cite brand glyph.
+  // semantics so the mark stays announceable as the DocLattice brand glyph.
   const decorative = !ariaLabel;
   return (
     <svg

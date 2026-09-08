@@ -13,11 +13,8 @@ Let's say we want to add some labels for "Parties", "Termination Clause", and "E
 first create a LabelSet to hold the labels.
 
 1. Go to the labelset view and click the action button to bring up the action menu:
-   ![](../assets/images/screenshots/Create_Label_Set.png)
 2. Clicking on the "Create Label Set" item will bring up a modal to let you create labels:
-   ![](../assets/images/screenshots/Edit_Label_Set.png)
 3. Now click on the new label set to edit the labels:
-   ![](../assets/images/screenshots/Select_Label_Set.png)
 4. A modal comes up that lets you edit three types of labels:
      1. **Text Labels** - are meant to label spans of text ("highlights")
      2. **Relationship Labels** - this feature is still under development, but it labels relationships bewteen text label
@@ -35,10 +32,8 @@ first create a LabelSet to hold the labels.
 8. Click the edit icon on the label to edit the label title, description, color
    and/or icon. To edit the icon or highlight color, hover over or click the giant
    tag icon on the left side of the label:
-   ![](../assets/images/screenshots/Editing_Label_View.png)
 9. Hit save to commit the changes to the database. Repeat for the other labels - "Parties",
    "Termination Clause", and "Effective Date":
-   ![](../assets/images/screenshots/Created_Labels.png)
 
 ## Create Document-Type Labels
 
@@ -47,10 +42,7 @@ document or addressing a certain subject. In this example, let's say we want to 
 as "contracts" and others as "not contracts".
 
 1. Let's also create two example document type labels. Click the "Doc Type Labels" tab:
-   ![](../assets/images/screenshots/Doc_Type_Views.png)
 2. As before, click the action button and the "Create Document Type Label" item to create a
    blank document type label:
-   ![](../assets/images/screenshots/Create_Doc_Type_Label.png)
 3. Repeat to create two doc type labels - "Contract" and "Not Contract":
-   ![](../assets/images/screenshots/Doc_Type_Labels_Overview.png)
 4. Hit "Close" to close the editor.

@@ -33,8 +33,7 @@ export const MetaTags: React.FC<MetaTagsProps> = ({
 
   // Derive meta values from entity if not explicitly provided
   let pageTitle =
-    title ||
-    "DocLattice — open-source document intelligence you can build on";
+    title || "DocLattice — open-source document intelligence you can build on";
   let pageDescription =
     description ||
     "DocLattice turns a repository of documents into an open citation graph that humans and AI agents can read, reason over, and contribute back to.";

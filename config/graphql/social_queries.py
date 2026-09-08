@@ -35,7 +35,6 @@ import strawberry
 from django.core.cache import cache
 from django.db.models import Q
 from graphql import GraphQLError
-from graphql_relay import from_global_id
 
 from config.graphql import enums
 from config.graphql._util import strip_unset
@@ -69,6 +68,7 @@ from doclatticeserver.conversations.models import (
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.notifications.models import Notification
 from doclatticeserver.shared.services.base import BaseService
+from doclatticeserver.utils.ids import from_global_id
 
 logger = logging.getLogger(__name__)
 

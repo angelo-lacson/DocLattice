@@ -262,9 +262,7 @@ class SyncAnalyzersOnStartupTests(TestCase):
         with patch(
             "doclatticeserver.analyzer.utils.auto_create_doc_analyzers",
             side_effect=RuntimeError("boom"),
-        ), self.assertLogs(
-            "doclatticeserver.analyzer.startup", level="WARNING"
-        ) as cm:
+        ), self.assertLogs("doclatticeserver.analyzer.startup", level="WARNING") as cm:
             # Should not propagate the exception
             analyzer_startup.sync_analyzers_on_startup()
         self.assertTrue(
@@ -426,14 +424,10 @@ class AutoCreateDocAnalyzersEdgeCases(TestCase):
         fake_task._oc_doc_analyzer_input_schema = None
         fake_task.is_doc_analyzer_task = True
 
-        with patch(
-            "doclatticeserver.analyzer.utils.celery_app"
-        ) as mock_celery, patch(
+        with patch("doclatticeserver.analyzer.utils.celery_app") as mock_celery, patch(
             "doclatticeserver.analyzer.utils.get_analyzer_task_by_name",
             return_value=fake_task,
-        ), self.assertLogs(
-            "doclatticeserver.analyzer.utils", level="WARNING"
-        ) as cm:
+        ), self.assertLogs("doclatticeserver.analyzer.utils", level="WARNING") as cm:
             mock_celery.tasks = {"any.task": fake_task}
             user_model = MagicMock()
             user_model.objects.filter.return_value.first.return_value = None
@@ -461,9 +455,7 @@ class AutoCreateDocAnalyzersEdgeCases(TestCase):
         fake_task._oc_doc_analyzer_input_schema = {"new": "schema"}
         fake_task.is_doc_analyzer_task = True
 
-        with patch(
-            "doclatticeserver.analyzer.utils.celery_app"
-        ) as mock_celery, patch(
+        with patch("doclatticeserver.analyzer.utils.celery_app") as mock_celery, patch(
             "doclatticeserver.analyzer.utils.get_analyzer_task_by_name",
             return_value=fake_task,
         ):

@@ -57,9 +57,9 @@ class DocumentPipelineRoutingTestCase(SimpleTestCase):
             "set_doc_lock_state",
         ):
             self.assertEqual(
-                settings.CELERY_TASK_ROUTES[
-                    f"doclatticeserver.tasks.doc_tasks.{task}"
-                ]["queue"],
+                settings.CELERY_TASK_ROUTES[f"doclatticeserver.tasks.doc_tasks.{task}"][
+                    "queue"
+                ],
                 "doc_parse",
                 task,
             )
@@ -603,9 +603,7 @@ class SetDocLockStateTestCase(TestCase):
         "doclatticeserver.tasks.embeddings_task.calculate_embedding_for_doc_text.delay"
     )
     @patch("doclatticeserver.tasks.corpus_tasks.process_corpus_action.delay")
-    @patch(
-        "doclatticeserver.tasks.doc_tasks._create_document_processed_notifications"
-    )
+    @patch("doclatticeserver.tasks.doc_tasks._create_document_processed_notifications")
     @patch("doclatticeserver.tasks.doc_tasks.transaction.on_commit")
     def test_unlock_queues_embeddings_for_every_current_corpus(
         self,
@@ -780,8 +778,7 @@ class EmbeddingDispatchFailureTests(SimpleTestCase):
             "calculate_embedding_for_doc_text.delay",
             side_effect=RuntimeError("broker down"),
         ), patch(
-            "doclatticeserver.tasks.corpus_tasks."
-            "ensure_embeddings_for_corpus.delay",
+            "doclatticeserver.tasks.corpus_tasks." "ensure_embeddings_for_corpus.delay",
             side_effect=RuntimeError("broker down"),
         ):
             # Must not raise despite both dispatches failing.
@@ -798,8 +795,7 @@ class EmbeddingDispatchFailureTests(SimpleTestCase):
             "doclatticeserver.tasks.embeddings_task."
             "calculate_embedding_for_doc_text.delay"
         ) as doc_delay, patch(
-            "doclatticeserver.tasks.corpus_tasks."
-            "ensure_embeddings_for_corpus.delay"
+            "doclatticeserver.tasks.corpus_tasks." "ensure_embeddings_for_corpus.delay"
         ) as structural_delay:
             _queue_embeddings_for_unlocked_document(
                 doc_id=1, corpus_ids=[2], structural_set_id=None

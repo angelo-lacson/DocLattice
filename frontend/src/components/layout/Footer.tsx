@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import useWindowDimensions from "../hooks/WindowDimensionHook";
 import { OS_LEGAL_TYPOGRAPHY } from "../../assets/configurations/osLegalStyles";
 
-// Stacked opensource.legal + [cite] lockup used in the footer. Matches the
+// Stacked DocLattice name and document-intelligence lockup used in the footer. Matches the
 // production SVG in /assets/brand/lockup.svg but inlined so it inherits the
 // dark footer background color via CSS rather than the SVG's hard-coded fill.
 const Lockup = styled.div<{ $small?: boolean }>`
@@ -118,9 +118,9 @@ export function Footer() {
   const isSmall = width <= 400;
 
   const lockup = (
-    <Lockup $small={isSmall} aria-label="opensource.legal [cite]">
-      <LockupHandle $small={isSmall}>opensource.legal</LockupHandle>
-      <LockupWordmark $small={isSmall}>[cite]</LockupWordmark>
+    <Lockup $small={isSmall} aria-label="DocLattice">
+      <LockupHandle $small={isSmall}>Document intelligence</LockupHandle>
+      <LockupWordmark $small={isSmall}>[DocLattice]</LockupWordmark>
     </Lockup>
   );
 
@@ -141,11 +141,11 @@ export function Footer() {
   const orgBlock = (
     <>
       <div>
-        <FooterHeading>opensource.legal</FooterHeading>
+        <FooterHeading>DocLattice</FooterHeading>
         <FooterLinkList>
           <li>
             <a
-              href="https://github.com/Open-Source-Legal"
+              href="https://github.com/angelo-lacson/DocLattice"
               target="_blank"
               rel="noopener noreferrer"
             >

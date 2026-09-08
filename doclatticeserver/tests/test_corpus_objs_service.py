@@ -1322,9 +1322,7 @@ class TestBulkSoftDeletePrimitive(_CorpusObjsServiceFolderTestBase):
         )
         doc_ids = self._seed_docs(public_corpus, 8, is_public=True)
 
-        with patch(
-            "doclatticeserver.corpuses.services.paths.post_save"
-        ) as mock_signal:
+        with patch("doclatticeserver.corpuses.services.paths.post_save") as mock_signal:
             trashed = DocumentLifecycleService.bulk_soft_delete_documents(
                 public_corpus, doc_ids, self.owner
             )

@@ -274,9 +274,7 @@ class MaybeVcrCassetteTests(TestCase):
 
     def test_record_mode_without_cassette_path_warns_and_bypasses(self):
         with env_vars(OC_LLM_VCR_MODE="record", OC_LLM_VCR_CASSETTE=None):
-            with mock.patch(
-                "doclatticeserver.utils.vcr_replay.logger"
-            ) as mock_logger:
+            with mock.patch("doclatticeserver.utils.vcr_replay.logger") as mock_logger:
                 with maybe_vcr_cassette() as ctx:
                     self.assertIsNone(ctx)
                 self.assertTrue(mock_logger.warning.called)
@@ -286,9 +284,7 @@ class MaybeVcrCassetteTests(TestCase):
             OC_LLM_VCR_MODE="oops",
             OC_LLM_VCR_CASSETTE="/tmp/x.yaml",
         ):
-            with mock.patch(
-                "doclatticeserver.utils.vcr_replay.logger"
-            ) as mock_logger:
+            with mock.patch("doclatticeserver.utils.vcr_replay.logger") as mock_logger:
                 with maybe_vcr_cassette() as ctx:
                     self.assertIsNone(ctx)
                 self.assertTrue(mock_logger.warning.called)

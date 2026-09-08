@@ -40,9 +40,7 @@ class PipelineComponentQueriesTestCase(TestCase):
         # Reload the importlib caches and modules
         importlib.invalidate_caches()
         importlib.reload(importlib.import_module("doclatticeserver.pipeline.parsers"))
-        importlib.reload(
-            importlib.import_module("doclatticeserver.pipeline.embedders")
-        )
+        importlib.reload(importlib.import_module("doclatticeserver.pipeline.embedders"))
         importlib.reload(
             importlib.import_module("doclatticeserver.pipeline.thumbnailers")
         )

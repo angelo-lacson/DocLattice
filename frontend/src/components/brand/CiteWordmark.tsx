@@ -10,14 +10,14 @@ interface CiteWordmarkProps {
   size?: number;
   /** Variant. "dark" = slate on transparent, "light" = warm-paper on transparent (for navy chrome). */
   variant?: "dark" | "light";
-  /** Accessible label. Defaults to "cite". */
+  /** Accessible label. Defaults to "DocLattice". */
   ariaLabel?: string;
   className?: string;
   style?: React.CSSProperties;
 }
 
 /**
- * The `[cite]` wordmark, set in Source Serif 4 with the bracket characters
+ * The `[DocLattice]` wordmark, set in Source Serif 4 with the bracket characters
  * preserved (per the brand system, the brackets are part of the wordmark,
  * not decoration).
  *
@@ -30,7 +30,7 @@ interface CiteWordmarkProps {
 const CiteWordmarkInner: React.FC<CiteWordmarkProps> = ({
   size = 28,
   variant = "dark",
-  ariaLabel = "cite",
+  ariaLabel = "DocLattice",
   className,
   style,
 }) => {
@@ -38,13 +38,13 @@ const CiteWordmarkInner: React.FC<CiteWordmarkProps> = ({
     variant === "light"
       ? OS_LEGAL_COLORS.warmPaper
       : OS_LEGAL_COLORS.textPrimary;
-  // Source SVG viewBox is 200×80 (aspect 2.5). Width scales accordingly.
+  // Source SVG viewBox is 360×80 (aspect 4.5). Width scales accordingly.
   const height = size;
-  const width = size * 2.5;
+  const width = size * 4.5;
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 200 80"
+      viewBox="0 0 360 80"
       width={width}
       height={height}
       role="img"
@@ -53,7 +53,7 @@ const CiteWordmarkInner: React.FC<CiteWordmarkProps> = ({
       style={style}
     >
       <text
-        x="100"
+        x="180"
         y="56"
         textAnchor="middle"
         style={{
@@ -64,7 +64,7 @@ const CiteWordmarkInner: React.FC<CiteWordmarkProps> = ({
           letterSpacing: "-1px",
         }}
       >
-        [cite]
+        [DocLattice]
       </text>
     </svg>
   );

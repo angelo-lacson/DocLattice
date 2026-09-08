@@ -8,7 +8,7 @@ import { FooterHarness } from "./FooterTestWrapper";
 import { test, expect } from "./utils/coverage";
 import { docScreenshot } from "./utils/docScreenshot";
 
-test.describe("Footer (cite rebrand)", () => {
+test.describe("Footer (DocLattice branding)", () => {
   test("renders the full-width layout above the 1000px breakpoint", async ({
     mount,
     page,
@@ -19,17 +19,17 @@ test.describe("Footer (cite rebrand)", () => {
 
     await mount(<FooterHarness />);
 
-    // Brand lockup, opensource.legal handle, and [cite] wordmark all visible.
-    await expect(page.getByLabel("opensource.legal [cite]")).toBeVisible({
+    // Brand lockup, document-intelligence tagline, and [DocLattice] wordmark all visible.
+    await expect(page.getByLabel("DocLattice")).toBeVisible({
       timeout: 5000,
     });
-    await expect(page.getByText("[cite]").first()).toBeVisible();
+    await expect(page.getByText("[DocLattice]").first()).toBeVisible();
 
     // Footer headings + GitHub external link + About internal link.
     await expect(page.getByText("opensource.legal").first()).toBeVisible();
     await expect(page.getByRole("link", { name: "GitHub" })).toHaveAttribute(
       "href",
-      "https://github.com/Open-Source-Legal"
+      "https://github.com/angelo-lacson/DocLattice"
     );
     await expect(
       page.getByRole("link", { name: "About DocLattice" })
@@ -64,7 +64,7 @@ test.describe("Footer (cite rebrand)", () => {
 
     // Brand lockup remains accessible; the compact layout renders it first
     // in DOM order (above the org grid) rather than at the bottom.
-    await expect(page.getByLabel("opensource.legal [cite]")).toBeVisible({
+    await expect(page.getByLabel("DocLattice")).toBeVisible({
       timeout: 5000,
     });
 
@@ -92,9 +92,9 @@ test.describe("Footer (cite rebrand)", () => {
 
     await mount(<FooterHarness />);
 
-    await expect(page.getByLabel("opensource.legal [cite]")).toBeVisible({
+    await expect(page.getByLabel("DocLattice")).toBeVisible({
       timeout: 5000,
     });
-    await expect(page.getByText("[cite]").first()).toBeVisible();
+    await expect(page.getByText("[DocLattice]").first()).toBeVisible();
   });
 });

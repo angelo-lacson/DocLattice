@@ -1724,9 +1724,7 @@ class TestPersistCompactionOptimisticLock(SimpleTestCase):
         manager.conversation = mock_conv
 
         # Patch Conversation.objects.filter().aupdate()
-        with patch(
-            "doclatticeserver.llms.agents.core_agents.Conversation"
-        ) as MockConv:
+        with patch("doclatticeserver.llms.agents.core_agents.Conversation") as MockConv:
             # First call: filter matches → updated=1
             mock_qs = MagicMock()
             mock_qs.aupdate = AsyncMock(return_value=1)
@@ -1741,9 +1739,7 @@ class TestPersistCompactionOptimisticLock(SimpleTestCase):
         # Now simulate the second concurrent request: bookmark already moved
         mock_conv.compacted_before_message_id = 100
 
-        with patch(
-            "doclatticeserver.llms.agents.core_agents.Conversation"
-        ) as MockConv:
+        with patch("doclatticeserver.llms.agents.core_agents.Conversation") as MockConv:
             # Second call: filter doesn't match → updated=0
             mock_qs = MagicMock()
             mock_qs.aupdate = AsyncMock(return_value=0)

@@ -31,7 +31,6 @@ import logging
 from typing import Annotated
 
 import strawberry
-from graphql_relay import from_global_id
 
 from config.graphql._util import strip_unset
 from config.graphql.og_metadata_types import (
@@ -46,6 +45,7 @@ from doclatticeserver.conversations.models import Conversation
 from doclatticeserver.corpuses.models import Corpus
 from doclatticeserver.corpuses.services import CorpusDocumentService
 from doclatticeserver.documents.models import Document
+from doclatticeserver.utils.ids import from_global_id
 
 logger = logging.getLogger(__name__)
 

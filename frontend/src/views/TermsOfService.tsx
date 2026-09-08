@@ -66,9 +66,9 @@ export class TermsOfService extends Component {
                 and for any reason, without liability, and
               </li>
               <li>
-                you understand that the DocLattice service is provided as-is
-                and with no gaurantees on reliability, uptime, fitness for
-                purpose or any other warranties, express or implied.
+                you understand that the DocLattice service is provided as-is and
+                with no gaurantees on reliability, uptime, fitness for purpose
+                or any other warranties, express or implied.
               </li>
             </ol>
           </div>
@@ -236,11 +236,10 @@ export class TermsOfService extends Component {
           <div style={{ marginBottom: "1em" }}>
             <h2>Privacy Policy</h2>
             For information about our data protection practices, please read our
-            privacy policy available{" "}
-            <a href="/privacy">here</a>. This
-            policy explains how we treat your personal information, and how we
-            protect your privacy when you use the Service. You agree to the use
-            of your data in accordance with our privacy policy.
+            privacy policy available <a href="/privacy">here</a>. This policy
+            explains how we treat your personal information, and how we protect
+            your privacy when you use the Service. You agree to the use of your
+            data in accordance with our privacy policy.
           </div>
           <div style={{ marginBottom: "1em" }}>
             <h2>No Warranties</h2>

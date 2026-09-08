@@ -173,7 +173,7 @@ export const Login = () => {
             <CiteMark size={56} />
           </LogoSlot>
           <WordmarkSlot>
-            <CiteWordmark size={32} ariaLabel="cite" />
+            <CiteWordmark size={32} ariaLabel="DocLattice" />
           </WordmarkSlot>
           <Subtitle>Sign in to continue.</Subtitle>
         </div>

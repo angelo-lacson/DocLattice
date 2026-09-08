@@ -31,8 +31,8 @@ from doclatticeserver.pipeline.parsers.oc_text_parser import TxtParser
 from doclatticeserver.pipeline.utils import get_all_parsers
 from doclatticeserver.tests.helpers import make_test_pdf
 from doclatticeserver.types.dicts import (
-    DocLatticeDocExport,
     DocLatticeAnnotationPythonType,
+    DocLatticeDocExport,
     DocLatticeRelationshipPythonType,
 )
 from doclatticeserver.utils.pdf_splitting import get_pdf_page_count

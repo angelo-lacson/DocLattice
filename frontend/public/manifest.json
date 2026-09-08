@@ -9,19 +9,19 @@
       "purpose": "any"
     },
     {
-      "src": "cite-192.png",
+      "src": "doclattice-192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any"
     },
     {
-      "src": "cite-512.png",
+      "src": "doclattice-512.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any"
     },
     {
-      "src": "cite-maskable.png",
+      "src": "doclattice-maskable.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "maskable"

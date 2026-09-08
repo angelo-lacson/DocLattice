@@ -6,19 +6,19 @@ The DocLattice Corpus Collaboration System enables rich, community-driven intera
 
 ## Epic Issue
 
-This system was implemented as part of Epic [#581 - Corpus Interactivity: Discussion Collaboration System](https://github.com/angelo-lacson/DocLattice/issues/581).
+This system was implemented as part of Epic historical issue 581 - Corpus Interactivity: Discussion Collaboration System.
 
 ## Implemented Sub-Epics
 
 The following sub-epics have been completed:
 
-1. **[#549](https://github.com/angelo-lacson/DocLattice/issues/549)** - Update GraphQL schema and mutations for thread support
-2. **[#550](https://github.com/angelo-lacson/DocLattice/issues/550)** - Epic: Voting System & Reputation
-3. **[#554](https://github.com/angelo-lacson/DocLattice/issues/554)** - Create GraphQL mutations for voting with rate limiting
-4. **[#557](https://github.com/angelo-lacson/DocLattice/issues/557)** - Create GraphQL mutations for moderation actions
-5. **[#558](https://github.com/angelo-lacson/DocLattice/issues/558)** - Epic: Badge System
-6. **[#562](https://github.com/angelo-lacson/DocLattice/issues/562)** - Epic: Notification System
-7. **[#565](https://github.com/angelo-lacson/DocLattice/issues/565)** - Epic: Corpus Engagement Metrics & Analytics
+1. **historical issue 549** - Update GraphQL schema and mutations for thread support
+2. **historical issue 550** - Epic: Voting System & Reputation
+3. **historical issue 554** - Create GraphQL mutations for voting with rate limiting
+4. **historical issue 557** - Create GraphQL mutations for moderation actions
+5. **historical issue 558** - Epic: Badge System
+6. **historical issue 562** - Epic: Notification System
+7. **historical issue 565** - Epic: Corpus Engagement Metrics & Analytics
 
 ## Current Implementation Status
 

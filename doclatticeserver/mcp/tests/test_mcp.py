@@ -1896,9 +1896,7 @@ class MCPSSETransportTest(TestCase):
             with patch(
                 "doclatticeserver.mcp.server.sse_transport.connect_sse",
                 return_value=mock_connect,
-            ), patch(
-                "doclatticeserver.mcp.server.mcp_server.run", mock_mcp_run
-            ), patch(
+            ), patch("doclatticeserver.mcp.server.mcp_server.run", mock_mcp_run), patch(
                 "doclatticeserver.mcp.server.mcp_server.create_initialization_options",
                 return_value={},
             ):
@@ -2430,9 +2428,7 @@ class MCPTelemetryTest(TestCase):
 
         set_request_context(client_ip="10.0.0.1", transport="streamable_http")
 
-        with patch(
-            "doclatticeserver.mcp.telemetry.record_event"
-        ) as mock_record_event:
+        with patch("doclatticeserver.mcp.telemetry.record_event") as mock_record_event:
             mock_record_event.return_value = True
 
             result = record_mcp_tool_call("list_documents", success=True)
@@ -2464,9 +2460,7 @@ class MCPTelemetryTest(TestCase):
 
         set_request_context(client_ip="10.0.0.2", transport="sse")
 
-        with patch(
-            "doclatticeserver.mcp.telemetry.record_event"
-        ) as mock_record_event:
+        with patch("doclatticeserver.mcp.telemetry.record_event") as mock_record_event:
             mock_record_event.return_value = True
 
             result = record_mcp_tool_call(
@@ -2487,9 +2481,7 @@ class MCPTelemetryTest(TestCase):
 
         from doclatticeserver.mcp.telemetry import record_mcp_tool_call
 
-        with patch(
-            "doclatticeserver.mcp.telemetry.record_event"
-        ) as mock_record_event:
+        with patch("doclatticeserver.mcp.telemetry.record_event") as mock_record_event:
             mock_record_event.return_value = True
 
             result = record_mcp_tool_call("list_public_corpuses", success=True)
@@ -2511,9 +2503,7 @@ class MCPTelemetryTest(TestCase):
 
         set_request_context(client_ip="172.16.0.1", transport="streamable_http")
 
-        with patch(
-            "doclatticeserver.mcp.telemetry.record_event"
-        ) as mock_record_event:
+        with patch("doclatticeserver.mcp.telemetry.record_event") as mock_record_event:
             mock_record_event.return_value = True
 
             result = record_mcp_resource_read("document", success=True)
@@ -2543,9 +2533,7 @@ class MCPTelemetryTest(TestCase):
 
         set_request_context(client_ip="10.0.0.3", transport="sse")
 
-        with patch(
-            "doclatticeserver.mcp.telemetry.record_event"
-        ) as mock_record_event:
+        with patch("doclatticeserver.mcp.telemetry.record_event") as mock_record_event:
             mock_record_event.return_value = True
 
             result = record_mcp_resource_read(
@@ -2569,9 +2557,7 @@ class MCPTelemetryTest(TestCase):
 
         set_request_context(client_ip="10.0.0.4", transport="streamable_http")
 
-        with patch(
-            "doclatticeserver.mcp.telemetry.record_event"
-        ) as mock_record_event:
+        with patch("doclatticeserver.mcp.telemetry.record_event") as mock_record_event:
             mock_record_event.return_value = True
 
             result = record_mcp_request("/mcp", method="POST", success=True)

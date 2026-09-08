@@ -615,9 +615,7 @@ class TestDoclingParserImageExtraction(TestCase):
         # Should be unchanged
         self.assertEqual(len(result["pawls_file_content"][0]["tokens"]), 1)
 
-    @patch(
-        "doclatticeserver.pipeline.parsers.docling_parser_rest.crop_image_from_pdf"
-    )
+    @patch("doclatticeserver.pipeline.parsers.docling_parser_rest.crop_image_from_pdf")
     def test_add_image_refs_to_annotation_with_crop(self, mock_crop):
         """Test _add_image_refs_to_annotation crops when no embedded image."""
         mock_crop.return_value = {

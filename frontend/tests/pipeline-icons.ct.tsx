@@ -188,13 +188,11 @@ test.describe("PipelineIcons — getComponentDisplayName", () => {
       },
       // Acronym replacement: "openai" -> "OpenAI".
       {
-        className:
-          "doclatticeserver.pipeline.embedders.openai.OpenaiEmbedder",
+        className: "doclatticeserver.pipeline.embedders.openai.OpenaiEmbedder",
       },
       // Acronym replacement: "pdf" -> "PDF".
       {
-        className:
-          "doclatticeserver.pipeline.thumbnailers.pdf.PdfThumbnailer",
+        className: "doclatticeserver.pipeline.thumbnailers.pdf.PdfThumbnailer",
       },
       // Plain class path with no acronyms or title — hits final `trim`.
       {

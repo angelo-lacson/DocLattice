@@ -34,7 +34,6 @@ from typing import Annotated
 import strawberry
 from django.conf import settings
 from django.core.files.base import ContentFile
-from graphql_relay import from_global_id, to_global_id
 
 from config.graphql._util import strip_unset
 from config.graphql.annotation_serializers import AnnotationLabelSerializer
@@ -49,6 +48,7 @@ from config.graphql.validation_utils import validate_color
 from doclatticeserver.annotations.models import AnnotationLabel, LabelSet
 from doclatticeserver.shared.services.base import BaseService
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.ids import from_global_id, to_global_id
 from doclatticeserver.utils.permissioning import (
     get_for_user_or_none,
     set_permissions_for_obj_to_user,

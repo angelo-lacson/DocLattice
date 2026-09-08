@@ -9,7 +9,7 @@ describe("CiteMark", () => {
     const svg = container.querySelector("svg");
     expect(svg).not.toBeNull();
     expect(svg).toHaveAttribute("role", "img");
-    expect(svg).toHaveAttribute("aria-label", "cite mark");
+    expect(svg).toHaveAttribute("aria-label", "DocLattice mark");
     expect(svg).toHaveAttribute("width", "24");
     expect(svg).toHaveAttribute("height", "24");
     expect(svg).toHaveAttribute("viewBox", "0 0 64 64");

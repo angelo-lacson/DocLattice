@@ -28,9 +28,8 @@ from channels.db import database_sync_to_async
 from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
 from django.test.utils import override_settings
-from graphql_jwt.shortcuts import get_token
-from graphql_relay import to_global_id
 
+from config.jwt_auth.shortcuts import get_token
 from config.websocket.middleware import WS_AUTH_SUBPROTOCOL
 from doclatticeserver.agents.models import AgentConfiguration
 from doclatticeserver.corpuses.models import Corpus
@@ -42,6 +41,7 @@ from doclatticeserver.llms.agents.core_agents import (
 from doclatticeserver.llms.tools.tool_registry import AVAILABLE_TOOLS
 from doclatticeserver.tests.base import WebsocketFixtureBaseTestCase
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.utils.ids import to_global_id
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
 
 User = get_user_model()

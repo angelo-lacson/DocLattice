@@ -60,12 +60,12 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
       <HeaderBrandRow>
         <BrandLink
           to="/"
-          aria-label="cite — opensource.legal home"
+          aria-label="DocLattice home"
           data-testid="document-header-brand"
         >
           <CiteMark size={22} ariaLabel="" />
           <BrandDomain>
-            <BrandAccent>cite</BrandAccent>.opensource.legal
+            <BrandAccent>DocLattice</BrandAccent>
           </BrandDomain>
         </BrandLink>
       </HeaderBrandRow>

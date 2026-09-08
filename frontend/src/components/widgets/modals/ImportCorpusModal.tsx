@@ -285,8 +285,8 @@ export const ImportCorpusModal: React.FC<ImportCorpusModalProps> = ({
           </p>
           <ul>
             <li>
-              Only files produced by the DocLattice corpus export are
-              supported (use bulk document upload for raw PDFs/DOCX)
+              Only files produced by the DocLattice corpus export are supported
+              (use bulk document upload for raw PDFs/DOCX)
             </li>
             <li>
               Documents, annotations, label sets, and analyses are restored
@@ -305,9 +305,7 @@ export const ImportCorpusModal: React.FC<ImportCorpusModalProps> = ({
         <Info />
         <AlertBody>
           <AlertTitle>Supported Format</AlertTitle>
-          <p>
-            Upload a ZIP produced by the DocLattice corpus export feature.
-          </p>
+          <p>Upload a ZIP produced by the DocLattice corpus export feature.</p>
         </AlertBody>
       </AlertBox>
     </div>

@@ -23,7 +23,6 @@ import pytest
 from channels.db import database_sync_to_async
 from channels.testing import WebsocketCommunicator
 from django.test.utils import override_settings
-from graphql_relay import to_global_id
 
 from config.websocket.middleware import WS_AUTH_SUBPROTOCOL
 from doclatticeserver.agents.models import AgentConfiguration
@@ -39,6 +38,7 @@ from doclatticeserver.llms.agents.core_agents import (
     FinalEvent,
 )
 from doclatticeserver.tests.base import WebsocketFixtureBaseTestCase
+from doclatticeserver.utils.ids import to_global_id
 
 logger = logging.getLogger(__name__)
 

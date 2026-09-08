@@ -31,9 +31,9 @@ from doclatticeserver.documents.models import Document
 from doclatticeserver.types.dicts import (
     AnnotationLabelPythonType,
     BoundingBoxPythonType,
-    LabelLookupPythonType,
-    DocLatticeDocExport,
     DocLatticeAnnotationPythonType,
+    DocLatticeDocExport,
+    LabelLookupPythonType,
     PawlsPagePythonType,
 )
 from doclatticeserver.types.enums import AnnotationFilterMode, LabelType

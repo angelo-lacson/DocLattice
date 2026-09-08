@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 /**
- * Generate brand-correct PNG assets for the cite v3 rebrand:
+ * Generate brand-correct PNG assets for the DocLattice branding:
  *
- *   - public/cite-192.png        (PWA "any" purpose, 192×192)
- *   - public/cite-512.png        (PWA "any" purpose, 512×512)
- *   - public/cite-maskable.png   (PWA "maskable" purpose, 512×512, with
+ *   - public/doclattice-192.png        (PWA "any" purpose, 192×192)
+ *   - public/doclattice-512.png        (PWA "any" purpose, 512×512)
+ *   - public/doclattice-maskable.png   (PWA "maskable" purpose, 512×512, with
  *                                 the mark inside the central ~80% safe
  *                                 area on the brand background colour)
  *   - public/DocLatticeScreenshot.png  (OG / Twitter card, 1200×630,
  *                                 wordmark + tagline on warm-paper bg —
- *                                 retains the legacy filename so the
- *                                 existing <meta og:image> reference
- *                                 keeps resolving)
+ *                                 uses the product name referenced by
+ *                                 the <meta og:image> tag)
  *
  * Uses Chromium via Playwright (already a dev dep for CT tests) instead
  * of pulling in librsvg / sharp / inkscape just for this one task.
@@ -19,6 +18,8 @@
  * Run from the frontend/ directory:
  *
  *   node scripts/generate-brand-pngs.js
+ *
+ * Set PLAYWRIGHT_CDP_URL to reuse an existing Chromium session.
  */
 const fs = require("fs");
 const path = require("path");
@@ -26,7 +27,7 @@ const { chromium } = require("playwright");
 
 const PUBLIC_DIR = path.resolve(__dirname, "..", "public");
 
-// Cite brand palette — kept in lockstep with OS_LEGAL_COLORS in
+// DocLattice brand palette — kept in lockstep with OS_LEGAL_COLORS in
 // src/assets/configurations/osLegalStyles. Re-declared here as plain
 // strings so the script (Node, no transpile) doesn't depend on the TS
 // constants module.
@@ -48,7 +49,7 @@ const MASKABLE_SAFE_AREA = Math.round(MASKABLE_FRAME * 0.8);
 const OG_WIDTH = 1200;
 const OG_HEIGHT = 630;
 
-// Cite icon mark — matches frontend/public/favicon.svg and the inline
+// DocLattice icon mark — matches frontend/public/favicon.svg and the inline
 // geometry in src/components/brand/CiteMark.tsx. Re-declared here as
 // a string template so the script doesn't depend on the React component
 // at build time.
@@ -110,20 +111,22 @@ async function snap(browser, { name, width, height, body, background }) {
 }
 
 async function main() {
-  const browser = await chromium.launch();
+  const browser = process.env.PLAYWRIGHT_CDP_URL
+    ? await chromium.connectOverCDP(process.env.PLAYWRIGHT_CDP_URL)
+    : await chromium.launch();
   try {
     // ───────────────────────────────────────────────────────────────
     // PWA "any" icons — transparent background so the OS chrome /
     // launcher can place them on any surface.
     // ───────────────────────────────────────────────────────────────
     await snap(browser, {
-      name: "cite-192.png",
+      name: "doclattice-192.png",
       width: 192,
       height: 192,
       body: citeMarkSvg({ size: 192, strokeWidth: 2.4 }),
     });
     await snap(browser, {
-      name: "cite-512.png",
+      name: "doclattice-512.png",
       width: 512,
       height: 512,
       body: citeMarkSvg({ size: 512, strokeWidth: 2.4 }),
@@ -135,7 +138,7 @@ async function main() {
     // adaptive-icon shapes don't crop into the mark.
     // ───────────────────────────────────────────────────────────────
     await snap(browser, {
-      name: "cite-maskable.png",
+      name: "doclattice-maskable.png",
       width: MASKABLE_FRAME,
       height: MASKABLE_FRAME,
       background: BRAND_COLORS.paper,
@@ -149,9 +152,7 @@ async function main() {
 
     // ───────────────────────────────────────────────────────────────
     // Open Graph / Twitter card — 1200×630, brand wordmark + the
-    // public-record tagline. Keep the legacy filename so the existing
-    // <meta og:image content="/DocLatticeScreenshot.png"> resolves
-    // to the new cite-branded card without an index.html change.
+    // document-intelligence tagline, matching the <meta og:image> tag.
     // ───────────────────────────────────────────────────────────────
     const ogBody = `
       <div style="
@@ -165,15 +166,15 @@ async function main() {
         gap: 36px;
       ">
         <div style="display: flex; align-items: center; gap: 28px;">
-          ${citeMarkSvg({ size: 140, strokeWidth: 2.4 })}
+          ${citeMarkSvg({ size: 110, strokeWidth: 2.4 })}
           <span style="
             font-family: 'Source Serif 4', 'Source Serif Pro', Georgia, serif;
-            font-size: 140px;
+            font-size: 110px;
             font-weight: 400;
             color: ${BRAND_COLORS.ink};
             letter-spacing: -3px;
             line-height: 1;
-          ">[cite]</span>
+          ">[DocLattice]</span>
         </div>
         <div style="
           font-family: 'Source Serif 4', 'Source Serif Pro', Georgia, serif;
@@ -185,7 +186,7 @@ async function main() {
           text-align: center;
           line-height: 1.35;
         ">
-          The citation layer<br/>underneath the public record.
+          Document intelligence<br/>you can build on.
         </div>
         <div style="
           font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -196,7 +197,7 @@ async function main() {
           text-transform: uppercase;
           margin-top: 12px;
         ">
-          opensource.legal
+          github.com/angelo-lacson/DocLattice
         </div>
       </div>`;
     await snap(browser, {

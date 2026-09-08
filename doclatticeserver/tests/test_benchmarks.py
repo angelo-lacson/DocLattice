@@ -981,8 +981,7 @@ class RunBenchmarkCommandTest(TestCase):
             )
 
     @patch(
-        "doclatticeserver.benchmarks.management.commands.run_benchmark."
-        "run_benchmark"
+        "doclatticeserver.benchmarks.management.commands.run_benchmark." "run_benchmark"
     )
     def test_happy_path_invokes_runner_and_prints_aggregates(self, mock_run):
         from io import StringIO
@@ -1040,8 +1039,7 @@ class RunBenchmarkCommandTest(TestCase):
         self.assertIn("answer_token_f1", text)
 
     @patch(
-        "doclatticeserver.benchmarks.management.commands.run_benchmark."
-        "run_benchmark"
+        "doclatticeserver.benchmarks.management.commands.run_benchmark." "run_benchmark"
     )
     def test_retrieval_only_and_corpus_wide_flags_pass_through(self, mock_run):
         from django.core.management import call_command

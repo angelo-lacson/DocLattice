@@ -31,7 +31,6 @@ import logging
 from typing import Annotated
 
 import strawberry
-from graphql_relay import from_global_id
 
 from config.graphql._util import strip_unset
 from config.graphql.core.auth import PermissionDenied
@@ -40,6 +39,7 @@ from config.graphql.core.relay import (
 )
 from doclatticeserver.enrichment.services import AuthorityFrontierService
 from doclatticeserver.enrichment.services.authority_permissions import DENIED
+from doclatticeserver.utils.ids import from_global_id
 
 logger = logging.getLogger(__name__)
 

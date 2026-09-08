@@ -284,7 +284,6 @@ WHERE (document_id IS NULL AND structural_set_id IS NULL)
 
 - **Documentation**: https://github.com/angelo-lacson/DocLattice/tree/main/docs
 - **GitHub Issues**: https://github.com/angelo-lacson/DocLattice/issues
-- **Community Forum**: https://github.com/angelo-lacson/DocLattice/issues
 
 ---
 

@@ -15,8 +15,8 @@ from doclatticeserver.annotations.compact_json import (
     offset_annotation_json,
 )
 from doclatticeserver.types.dicts import (
-    DocLatticeDocExport,
     DocLatticeAnnotationPythonType,
+    DocLatticeDocExport,
     DocLatticeRelationshipPythonType,
     PawlsPagePythonType,
 )

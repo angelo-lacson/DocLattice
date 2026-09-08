@@ -5,21 +5,21 @@ import { CiteWordmark } from "../CiteWordmark";
 import { OS_LEGAL_COLORS } from "../../../assets/configurations/osLegalStyles";
 
 describe("CiteWordmark", () => {
-  it("renders the bracketed [cite] text as inline SVG", () => {
+  it("renders the bracketed [DocLattice] text as inline SVG", () => {
     const { container } = render(<CiteWordmark />);
     const svg = container.querySelector("svg");
     expect(svg).not.toBeNull();
     expect(svg).toHaveAttribute("role", "img");
-    expect(svg).toHaveAttribute("aria-label", "cite");
-    expect(svg).toHaveAttribute("viewBox", "0 0 200 80");
-    expect(svg?.textContent).toBe("[cite]");
+    expect(svg).toHaveAttribute("aria-label", "DocLattice");
+    expect(svg).toHaveAttribute("viewBox", "0 0 360 80");
+    expect(svg?.textContent).toBe("[DocLattice]");
   });
 
-  it("scales width to 2.5x size to match the source viewBox aspect", () => {
+  it("scales width to 4.5x size to match the source viewBox aspect", () => {
     const { container } = render(<CiteWordmark size={40} />);
     const svg = container.querySelector("svg");
     expect(svg).toHaveAttribute("height", "40");
-    expect(svg).toHaveAttribute("width", "100");
+    expect(svg).toHaveAttribute("width", "180");
   });
 
   // The dark/light split is the only conditional in the component — exercise
@@ -43,11 +43,11 @@ describe("CiteWordmark", () => {
       <CiteWordmark
         className="brand-wordmark"
         style={{ opacity: 0.75 }}
-        ariaLabel="cite (brand)"
+        ariaLabel="DocLattice (brand)"
       />
     );
     const svg = container.querySelector("svg");
-    expect(svg).toHaveAttribute("aria-label", "cite (brand)");
+    expect(svg).toHaveAttribute("aria-label", "DocLattice (brand)");
     expect(svg).toHaveClass("brand-wordmark");
     expect(svg).toHaveStyle({ opacity: "0.75" });
   });

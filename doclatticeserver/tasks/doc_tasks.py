@@ -64,12 +64,12 @@ from doclatticeserver.pipeline.utils import (
 from doclatticeserver.types.dicts import (
     AnnotationLabelPythonType,
     BoundingBoxPythonType,
+    DocLatticeAnnotationPythonType,
+    DocLatticeDocExport,
+    DocLatticeRelationshipPythonType,
     FunsdAnnotationType,
     FunsdTokenType,
     LabelLookupPythonType,
-    DocLatticeDocExport,
-    DocLatticeAnnotationPythonType,
-    DocLatticeRelationshipPythonType,
     PawlsTokenPythonType,
 )
 from doclatticeserver.types.enums import (
@@ -1638,9 +1638,7 @@ def _wire_pending_relationships(
             user_id=user_id,
             doc_obj=doc,
             corpus_obj=corpus,
-            relationships_data=cast(
-                list[DocLatticeRelationshipPythonType], importable
-            ),
+            relationships_data=cast(list[DocLatticeRelationshipPythonType], importable),
             label_lookup=rel_label_lookup,
             annotation_id_map=resolvable,
         )

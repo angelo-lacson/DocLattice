@@ -23,12 +23,10 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from asgiref.sync import async_to_sync
-from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.test import TestCase, TransactionTestCase
-from graphene_django.utils.testing import GraphQLTestCase
-from graphql_relay import to_global_id
 
+from config.graphql.testing import GraphQLTestCase
 from doclatticeserver.agents.models import AgentConfiguration
 from doclatticeserver.annotations.models import Annotation
 from doclatticeserver.constants.tools import (
@@ -40,9 +38,9 @@ from doclatticeserver.corpuses.services import CorpusGroupService
 from doclatticeserver.corpuses.services.corpus_groups import GROUP_NOT_FOUND_MESSAGE
 from doclatticeserver.documents.models import Document
 from doclatticeserver.types.enums import PermissionTypes
+from doclatticeserver.users.models import User
+from doclatticeserver.utils.ids import to_global_id
 from doclatticeserver.utils.permissioning import set_permissions_for_obj_to_user
-
-User = get_user_model()
 
 
 class CorpusGroupModelTests(TestCase):
@@ -731,6 +729,10 @@ class CorpusGroupMineFilterTests(GraphQLTestCase):
     """
 
     GRAPHQL_URL = "/graphql/"
+    me: User
+    other: User
+    my_group: CorpusGroup
+    other_public_group: CorpusGroup
 
     @classmethod
     def setUpTestData(cls):
@@ -796,6 +798,11 @@ class CorpusGroupGraphQLTests(GraphQLTestCase):
     """Permission boundaries on the GraphQL surface."""
 
     GRAPHQL_URL = "/graphql/"
+    owner: User
+    stranger: User
+    owner_corpus: Corpus
+    public_corpus: Corpus
+    group: CorpusGroup
 
     @classmethod
     def setUpTestData(cls):

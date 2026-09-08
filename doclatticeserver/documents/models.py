@@ -1296,7 +1296,8 @@ class PipelineSettings(django.db.models.Model):
         return "PipelineSettings (Singleton)"
 
     # Cache settings
-    CACHE_KEY = "pipeline_settings_singleton"
+    # The package rename invalidates previously pickled model instances.
+    CACHE_KEY = "doclattice_pipeline_settings_singleton"
 
     @classmethod
     def _get_cache_ttl(cls) -> int:

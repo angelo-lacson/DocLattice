@@ -29,8 +29,8 @@ from doclatticeserver.pipeline.base.settings_schema import (
 )
 from doclatticeserver.types.dicts import (
     BoundingBoxPythonType,
-    DocLatticeDocExport,
     DocLatticeAnnotationPythonType,
+    DocLatticeDocExport,
     DocLatticeSinglePageAnnotationType,
     PawlsPagePythonType,
     PawlsTokenPythonType,
@@ -1262,9 +1262,7 @@ class LlamaParseParser(BaseParser):
         if has_image_tokens:
             content_modalities.append("IMAGE")
 
-        annotation_json: dict[
-            Union[int, str], DocLatticeSinglePageAnnotationType
-        ] = {
+        annotation_json: dict[Union[int, str], DocLatticeSinglePageAnnotationType] = {
             str(page_idx): page_annotation,
         }
         annotation: DocLatticeAnnotationPythonType = {

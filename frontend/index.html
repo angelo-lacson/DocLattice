@@ -30,20 +30,8 @@
       content="Every document cites other documents. DocLattice turns that graph into open infrastructure for research tools, drafting tools, and AI agents."
       key="Description"
     />
-    <!-- TODO(brand-rename): og:url and the JSON-LD @id/url below still point at
-         cite.opensource.legal. Align them with the DocLattice canonical
-         (contracts.opensource.legal) once the DNS migration lands — tracked as
-         an out-of-scope follow-up to the cite→DocLattice rename. -->
-    <meta
-      property="og:url"
-      content="https://cite.opensource.legal/"
-      key="Url"
-    />
-    <meta
-      property="og:image"
-      content="/DocLatticeScreenshot.png"
-      key="Image"
-    />
+    <!-- The mounted MetaTags component supplies this deployment's canonical URL. -->
+    <meta property="og:image" content="/DocLatticeScreenshot.png" key="Image" />
     <meta property="og:site_name" content="DocLattice" key="Site" />
 
     <!-- Google Fonts - Inter (UI) + Source Serif 4 (display / wordmark / body) -->
@@ -75,11 +63,10 @@
         "@graph": [
           {
             "@type": "WebApplication",
-            "@id": "https://cite.opensource.legal/#app",
+            "@id": "/#app",
             "name": "DocLattice",
-            "alternateName": "cite",
             "description": "Open-source document intelligence you can build on. DocLattice turns a repository of documents into an open, traversable citation graph that humans and AI agents can read, reason over, and contribute back to.",
-            "url": "https://cite.opensource.legal/",
+            "url": "/",
             "license": "https://opensource.org/licenses/MIT",
             "applicationCategory": "BusinessApplication",
             "applicationSubCategory": "Citation Graph",
@@ -138,7 +125,6 @@
           {
             "@type": "SoftwareSourceCode",
             "name": "DocLattice",
-            "alternateName": "cite",
             "description": "Open commons of the citation graph. The codebase released as DocLattice.",
             "codeRepository": "https://github.com/angelo-lacson/DocLattice",
             "programmingLanguage": ["Python", "TypeScript"],
@@ -154,10 +140,10 @@
     </script>
 
     <!-- iOS does not support SVG apple-touch-icon reliably; use the 192px
-         cite PNG. The full PWA install icon set (192/512 + maskable) lives
-         in manifest.json. Both files are generated from the cite icon mark
+         DocLattice PNG. The full PWA install icon set (192/512 + maskable) lives
+         in manifest.json. Both files are generated from the DocLattice icon mark
          SVG via scripts/generate-brand-pngs.js. -->
-    <link rel="apple-touch-icon" href="/cite-192.png" />
+    <link rel="apple-touch-icon" href="/doclattice-192.png" />
     <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
